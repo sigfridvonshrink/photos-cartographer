@@ -68,6 +68,8 @@ def _make(tmp_path, *, guard=True, config=True, library_in_config=True, bless_li
           "depends_on": {"cache": {"fingerprint_algorithm_version": fingerprint_method}}}
     if fingerprint_method is None:
         del ho["depends_on"]["cache"]["fingerprint_algorithm_version"]
+    # Prep's ImageMagick the one in use, so a plan takes no fingerprint again (BLD-merge_engine_recheck).
+    ho["depends_on"]["cache"]["image_engine_version"] = utils.get_imagemagick_version()
     if prep_log:
         (ctl / "photos-15-prep-log.json").write_text(json.dumps({"photos": {}}))
         ho["depends_on"]["prep_log"] = {"sha256": utils.sha256_file(str(ctl / "photos-15-prep-log.json"))}
@@ -142,6 +144,30 @@ def test_clean_workspace_passes(tmp_path):
     assert info["library_root"] == str(lib)
     assert info["by_dest_photos"] == 1
     assert info["handoff_sha256"]
+
+
+@pytest.mark.parametrize("command", ["plan", "dry-run", "execute"])
+@pytest.mark.parametrize("present", [(), ("identify",), ("magick",)])
+@pytest.mark.spec("RUL-imagemagick_absent_stops_merge", "BLD-merge_preflight",
+                  test="TST-merge_preflight-imagemagick_absent_stops_merge")
+def test_imagemagick_absent_stops_merge(tmp_path, monkeypatch, capsys, command, present):
+    """With neither `magick` nor the older `identify` on the PATH, merge's plan, dry run and execute stop (exit 2) as
+    they start, naming ImageMagick, nothing written and the library not locked; either one of them is enough."""
+    ws, lib = _make(tmp_path)
+    monkeypatch.setattr("photos_utils.missing_tools", lambda tools: [t for t in tools if t not in present])
+    blockers, _, _ = _pf(ws)
+    if present:
+        assert not any("ImageMagick" in b for b in blockers), blockers
+        return
+    assert len(blockers) == 1 and "ImageMagick" in blockers[0], blockers
+    before = sorted(str(p) for p in tmp_path.rglob("*"))
+    assert merge._run_locked_workflow(command, str(ws)) == 2
+    out = capsys.readouterr()
+    assert "ImageMagick" in out.out + out.err
+    assert not os.path.exists(merge.merge_plan_path(str(ws)))
+    assert not os.path.exists(utils.library_lock_path(str(lib)))
+    assert sorted(str(p) for p in tmp_path.rglob("*") if not p.name.endswith(".lock")) == \
+        [p for p in before if not p.endswith(".lock")]
 
 
 # --- lifecycle / structural guards (return early) ----------------------------
@@ -488,6 +514,34 @@ def test_init_library_in_workspace_with_path_blesses_and_writes_config(tmp_path)
     assert utils.is_library(str(lib))
     written = json.loads((ws / ".photos-ingest" / "photos-00-config.json").read_text())
     assert written["merge"]["library_root"] == str(lib)   # the one narrow config write
+
+
+@pytest.mark.spec("RUL-library_setup_writes_one_setting", "BLD-init_library_writes_library_root",
+                  test="TST-merge_preflight-init_library_keeps_every_other_setting")
+def test_init_library_keeps_every_other_setting(tmp_path):
+    """`init-library <path>` in a workspace records the library and keeps every other setting as the user wrote it —
+    a folder named beyond ASCII, a tuned value, the keys in the user's order — while the file's layout becomes the
+    control records' own: keys sorted, characters beyond ASCII escaped."""
+    ws = tmp_path / "ws"
+    (ws / ".photos-ingest").mkdir(parents=True)
+    (ws / ".photos-ingest" / "photos-00-workspace-guard").touch()
+    cfg = {k: v for k, v in reversed(list(utils.CONFIG.items())) if k != "jobs"}      # not in sorted order
+    cfg["folders"] = dict(cfg["folders"], photos_by_dest="6-fotos-por-destinación")
+    cfg["gpx_interpolation_max_gap_seconds"] = 1234
+    cfg_p = ws / ".photos-ingest" / "photos-00-config.json"
+    cfg_p.write_text(json.dumps(cfg, ensure_ascii=False))
+    for name in cfg["folders"].values():
+        (ws / name).mkdir()
+    lib = tmp_path / "lib"
+    lib.mkdir()
+    assert merge.do_init_library(str(lib), str(ws)) == 0
+    text = cfg_p.read_text()
+    written = json.loads(text)
+    assert written["merge"].pop("library_root") == str(lib)
+    cfg["merge"] = dict(cfg["merge"])
+    cfg["merge"].pop("library_root")
+    assert written == cfg                                             # every other setting as it was
+    assert "destinaci\\u00f3n" in text and list(written) == sorted(written)   # the layout is the writer's
 
 
 @pytest.mark.spec("RUL-sealed_refuses", "RUL-sealed_no_library_recorded", test="TST-merge_preflight-init_library_refuses_to_record_a_library_in_a_sealed_workspace")

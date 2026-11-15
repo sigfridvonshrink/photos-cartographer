@@ -88,6 +88,17 @@ Merge SHALL NOT plan or execute while a photo in photos by destination has no fi
 Merge SHALL NOT proceed while photos by destination holds a hidden file or folder.
 :::
 
+:::{rul} Merge stops without ImageMagick
+:id: RUL-imagemagick_absent_stops_merge
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+:uses: DEF-merge, DEF-fingerprint
+
+Merge SHALL NOT plan, dry-run or execute while ImageMagick, by which it fingerprints a file, is absent.
+:::
+
 
 ## 4. Destination-to-library mapping
 
@@ -200,6 +211,18 @@ A photo gone from photos by destination whose library place does not hold it SHA
 A run in which a photo gone from photos by destination blocks SHALL be partial.
 :::
 
+:::{rul} A record of merge's own that cannot be read stops it
+:id: RUL-merge_unreadable_record_stops
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+:uses: DEF-merge
+
+Merge SHALL stop, naming the file and changing nothing, on a plan or journal of its own that it cannot read — never
+taking it for an empty one.
+:::
+
 ## 6. User-visible outputs and the merge summary
 
 :::{rul} Merge records how its run ended
@@ -211,6 +234,18 @@ A run in which a photo gone from photos by destination blocks SHALL be partial.
 :uses: DEF-merge
 
 Merge SHALL record whether its run succeeded whole, in part or not at all, or was refused before changing anything.
+:::
+
+:::{rul} Merge's summary is written only for an execution
+:id: RUL-merge_summary_only_for_execution
+:status: ruled
+:criticality: low
+:verify: required
+:refines: RUL-merge_outcome_recorded
+:uses: DEF-merge
+
+Merge SHALL write no summary for a run stopped before its execution began — by a precondition, or a plan or journal it
+would not use — nor for a run interrupted, leaving the summary an earlier run wrote as it was.
 :::
 
 :::{rul} Merge tells how its run ended

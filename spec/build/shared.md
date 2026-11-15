@@ -14,6 +14,21 @@ The phases SHALL be the commands `photos-cartographer prep`, `geotag` and `merge
 records, `photos-1-prep`, `photos-2-geotag` and `photos-3-merge`.
 :::
 
+:::{bld} The exit statuses
+:id: BLD-exit_statuses
+:status: ruled
+:realises: RUL-exit_status_says_how_it_ended, RUL-blocked_plan_ends_refused
+
+Geotag's and merge's commands SHALL exit 0 for a run that did what it was asked; 1 for a workspace or a library found
+locked; 2 for a refusal — no control directory, the seal, a precondition, a plan missing or stale, a plan or
+journal of merge's own it cannot read, a required snapshot not taken, and a plan, or merge's dry run, that reports a
+blocker; 3 for an execution that ended partial or failed; and 130 for an interrupt. An error the build did not foresee ends a command with 1, as Python ends
+it. Prep's plan, dry run and execute end the same, but for: its plan with exiftool absent, 3; a dry run or execute
+whose plan fails its checks — a plan holding a blocker among them — and an execute one of whose operations fails, 1;
+an execute or dry run with nothing to do, 0. `merge init-library` ends 0, 1 or 2 alike, and a phase named with no
+command prints what it does and ends 0.
+:::
+
 ## 1. One run at a time
 
 :::{bld} The lock is taken first
@@ -149,7 +164,10 @@ so is the deployment's concern, not the specification's.
 :realises: RUL-library_setup_writes_one_setting
 
 The setup command `init-library` ({need}`BLD-init_library_cases`), run inside a workspace with an explicit library path,
-MAY write the `library_root` key into the configuration, and only that key. It is not part of merge's data path.
+MAY write the `library_root` key into the configuration, and only that key, writing the file again whole through
+`write_json_artifact`: every other setting keeps its value, while the file's layout — the order of its keys, its
+indentation, characters beyond ASCII written as escapes — becomes that of the control records. It is not part of
+merge's data path.
 :::
 
 :::{bld} Field-scoped fingerprints, and one whole-file SHA-256
@@ -852,6 +870,19 @@ and requiring a ready plan whose execution succeeded ({need}`BLD-finalize_precon
 into `photos-35-archive-manifest.json` and `photos-35-archive.tar.gz` ({need}`BLD-merge_success_sequence`).
 :::
 
+:::{bld} Merge's package manifest
+:id: BLD-merge_archive_manifest
+:status: ruled
+:realises: RUL-package_self_describing, RUL-merge_reseals
+:uses: BLD-archive_manifest
+
+`photos-35-archive-manifest.json` SHALL hold `artifact_type` `archive_manifest`, its `artifact_name`, `schema_version`
+1, the workspace's folder name as `workspace` and its identity as `workspace_id`, the merge plan's `plan_id`, the merge
+run's id as both `execution_id` and `merge_run_id`, `supersedes` naming `photos-26-archive-manifest.json`, `contents` —
+each file it lists keyed by its path in the control directory, with its path in the workspace (`path`) and its
+`sha256` — and `run_metadata.generated_at`, the merge run's start.
+:::
+
 :::{bld} The log's format
 :id: BLD-log_format
 :status: ruled
@@ -883,12 +914,25 @@ each naming its `run`; finalize takes them from every executed pass — each sup
 ran, oldest first, matched by fingerprint — before the current plan's, from the provenance each time write carries.
 :::
 
+:::{bld} Merge's step in the log
+:id: BLD-merge_log_steps
+:status: ruled
+:realises: RUL-log_entry_grows, RUL-log_step_names_run, RUL-merge_records_landing
+:uses: BLD-log_format, BLD-phase_logs
+
+Merge SHALL append to the `journey` of each photo it placed or found already in the library one step: `phase`
+`merge`; its `run`, the merge plan that placed it — the earlier one for a photo a re-plan carried forward
+({need}`BLD-merge_carry_forward`); `action` `placed`, or `already_present`; `from`, its path in photos by destination;
+`library_path`, its place in the library; and `renamed_for_library`, whether it took a name of its own there — setting
+the entry's `library_path` to the same place.
+:::
+
 :::{bld} The journals and the decisions each execution used are kept
 :id: BLD-history_kept
 :status: ruled
 :realises: RUL-history_retained, RUL-log_cites_decisions
 
-Each run's journal SHALL be kept as its own `journal-<run>.json`, each geotag execution keeping the decision records its
+Each plan's journal SHALL be kept as its own `journal-<plan id>.json`, each geotag execution keeping the decision records its
 plan depended on, verified by hash, in `executed/<plan id>/`, which a step's `because_record` and
 `because_record_sha256` name.
 :::
@@ -957,13 +1001,25 @@ whose name differs from the target's only in case is such a file: the same conte
 Only planning writes these rows; execute fingerprints afresh and writes no row.
 :::
 
-:::{bld} A different photo under a taken name takes the next suffix
+:::{bld} A different photo under a taken name takes the suffix above the highest
 :id: BLD-collision_suffix
 :status: ruled
 :realises: RUL-collision_different_content, RUL-merge_suffix_above_highest
 
-An incoming photo whose name is taken by different content SHALL take the shared suffix convention's next free suffix
-({need}`BLD-name_suffix`), the library's own name keeping its bare form.
+An incoming photo whose name is taken by different content SHALL take, in the shared suffix convention
+({need}`BLD-name_suffix`), the suffix one above the highest its name's root carries — the root its own name less any
+`-NNN` it already carries — among the names in its library folder and those of every incoming photo bound for that
+folder, passing over one taken there without regard to case; the library's own name keeps its bare form.
+:::
+
+:::{bld} One library file is compared per photo
+:id: BLD-one_library_file_compared
+:status: ruled
+:realises: RUL-collision_by_content
+
+Merge SHALL compare one library file with each photo: the one under the photo's own name where there is one, otherwise
+the first, in sorted order, of those whose names differ from it only in case — so that a photo the library holds under
+another of those names is not found there, and takes a name of its own beside it.
 :::
 
 :::{bld} The library's mark
@@ -1021,10 +1077,12 @@ blocks the photo — the plan's alternative name used only where the plan record
 :status: ruled
 :realises: RUL-merge_resumable, RUL-resume_rechecks_library
 
-The journal SHALL record each confirmed photo, a re-run taking a place already holding the planned content,
-fingerprinted again, as done, and removing the workspace copy if it remains; a photo whose workspace copy is gone
-counts as done only once its place is fingerprinted again and found to hold it, and is blocked otherwise — the journal
-is the run's record, never what decides it.
+The journal — one per plan, `journal-<plan id>.json`, a later execute of the same plan carrying the earlier's
+confirmations into it and writing it again whole with each of its own, `updated_at` that execute's start — SHALL record
+each confirmed photo, a re-run taking a place already holding the planned content, fingerprinted again, as done, and
+removing the workspace copy if it remains; a photo whose workspace copy is gone counts as done only once its place is
+fingerprinted again and found to hold it, and is blocked otherwise — the journal is the record of what ran, never what
+decides it.
 :::
 
 :::{bld} A photo already present is removed once the library's copy is checked
@@ -1039,10 +1097,12 @@ found to hold its content. Its bytes are compared with the workspace copy's firs
 :::{bld} The merge summary
 :id: BLD-merge_records
 :status: ruled
-:realises: RUL-merge_records_landing, RUL-nothing_built_from_merge_records, RUL-merge_outcome_recorded
+:realises: RUL-merge_records_landing, RUL-nothing_built_from_merge_records, RUL-merge_outcome_recorded, RUL-merge_summary_only_for_execution
 :uses: BLD-archive_manifest, BLD-workspace_database
 
-Merge SHALL write `photos-31-merge-summary.json` on every outcome but a stale plan or a failed precondition: per photo,
+Merge SHALL write `photos-31-merge-summary.json` when its execute ends — `success`, `partial` or `failed` — or refuses
+for a required snapshot, and on no other outcome: not for a failed precondition, a plan missing, unreadable or stale,
+a journal unreadable, or an interrupt, the file then left as it was. It holds, per photo,
 grouped by destination, where it landed, whether it was renamed for the library or already present, whether it left
 photos by destination, and, blocked, why — with no library path; in total, the photos placed new, renamed, already
 present and blocked, the removed the sum of the first three; the status `success`, `partial`, `failed` (every photo
@@ -1054,11 +1114,11 @@ geotag plan and execution ids, the photos it newly moved and those an earlier ru
 :::{bld} What a whole merge writes, and the seal last
 :id: BLD-merge_success_sequence
 :status: ruled
-:realises: RUL-merge_reseals, RUL-seal_on_success_only, RUL-reseal_rederives_nothing
+:realises: RUL-merge_reseals, RUL-seal_on_success_only, RUL-reseal_rederives_nothing, RUL-empty_merge_seals
 
-Only on success — every photo placed or already present, none left — SHALL merge then, in order, write
-`photos-35-merge-log.json`, `photos-35-merge-ingest.db`, the package's `photos-35-archive-manifest.json` and
-`photos-35-archive.tar.gz`, and last the seal.
+Only on success — every photo placed or already present, none left, a plan of no photo among them — SHALL merge then,
+in order, write `photos-35-merge-log.json`, `photos-35-merge-ingest.db`, the package's
+`photos-35-archive-manifest.json` and `photos-35-archive.tar.gz`, and last the seal.
 :::
 
 :::{bld} The seal
@@ -1144,6 +1204,17 @@ across filesystems, for merge alone, `_move_cross_fs_no_clobber`. A refused name
 failed and stops; geotag and merge record a blocker and leave the photo where it is. Merge also tests its target before
 moving, and geotag compares names ignoring case ({need}`BLD-rename_planning`). The rename that completes an operation is
 thus itself the check that its name is free ({need}`RUL-target_free_at_execute`).
+:::
+
+:::{bld} Names that differ only in case are one name, on every filesystem
+:id: BLD-names_case_folded
+:status: ruled
+:realises: RUL-target_free_ignores_case, RUL-suffix_case_insensitive
+
+Every phase SHALL take two names that differ only in case for one, on every filesystem, whether or not it tells them
+apart: prep's execute refuses a move onto a name that differs only in case from one there or planned before it;
+geotag's renames and merge's placements are planned with names compared ignoring case, merge settling a library file
+under such a name by its content ({need}`BLD-library_file_fingerprinted`).
 :::
 
 :::{bld} Each run checks the workspace's devices

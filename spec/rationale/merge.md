@@ -49,6 +49,19 @@ the first change makes a refusal free — fix the cause, run merge again — and
 merges that ran.
 :::
 
+:::{rat} Without its fingerprints merge can settle nothing
+:id: RAT-merge_needs_its_fingerprints
+:status: ruled
+:forced: yes
+:follows_from: RAT-decoded_pixel_identity, RAT-library_is_evidence_of_move
+:justifies: RUL-imagemagick_absent_stops_merge
+
+A place merge finds taken is settled by fingerprinting the file there, and a photo gone from the workspace counts as
+merged only once its place is fingerprinted again. Without ImageMagick no fingerprint can be taken: every collision
+would block, no photo already moved could be confirmed, and a merge left half done could not be finished. Run so, it
+would turn a merge that could be whole into a partial one; stopped, it changes nothing until the tool is back.
+:::
+
 ## 4. Destination-to-library mapping
 
 :::{rat} The destination tree is the library's organisation
@@ -95,6 +108,19 @@ photo — a record the user would rely on to find it. Fingerprinting the place a
 a resume.
 :::
 
+:::{rat} A record that cannot be read is not an empty one
+:id: RAT-unreadable_record_not_empty
+:status: ruled
+:forced: yes
+:follows_from: RAT-library_is_evidence_of_move, RAT-durable_record
+:justifies: RUL-merge_unreadable_record_stops
+
+Merge's earlier plans say where its photos went, and its journal what it confirmed. Read as empty, an earlier plan
+drops out and a photo it placed blocks for a reason that is not true — that no merge placed it; a journal read as
+empty is written over by the run's first confirmation, and what it held is gone. Stopped, merge names the file to
+repair or restore, and has lost nothing.
+:::
+
 :::{rat} Another library's photos are not in this one
 :id: RAT-merged_means_in_this_library
 :status: ruled
@@ -118,6 +144,19 @@ The seal says the workspace's photos are in the library it names. A photo placed
 What the user does after a merge turns on how it ended: nothing after a whole success, a fix and another run after a
 partial one or a failed one, and after a refusal a fix with nothing to undo, the library untouched. Counts alone cannot
 tell a refusal from a run that found nothing to do; a recorded outcome says which, long after the terminal has gone.
+:::
+
+:::{rat} The summary records an execution
+:id: RAT-summary_records_an_execution
+:status: ruled
+:forced: no
+:follows_from: RAT-merge_outcome_decides_next, RAT-refused_merge_clean
+:justifies: RUL-merge_summary_only_for_execution
+
+The summary is the record of an execution: what it placed, what it left and how it ended. A run stopped at the door
+executed nothing, and the terminal has said why; a summary written for it would put a record of nothing over that of
+the last merge that ran. An interrupted run reached no end to record: its journal holds what it confirmed, and the
+run that finishes it writes the summary.
 :::
 
 :::{rat} Merge is the step the user watches

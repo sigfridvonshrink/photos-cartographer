@@ -22,12 +22,12 @@ by-dest photo it plans to place, blocking one whose value is not the handoff's; 
 :::{bld} Merge's preflight
 :id: BLD-merge_preflight
 :status: ruled
-:realises: RUL-merge_rechecks_gates, RUL-merge_blocked_changes_nothing, RUL-merge_takes_finalized_current, RUL-merge_refuses_changed_since_finalize, RUL-unfingerprinted_photo_stops_merge, RUL-hidden_among_photos_stops_merge
+:realises: RUL-merge_rechecks_gates, RUL-merge_blocked_changes_nothing, RUL-merge_takes_finalized_current, RUL-merge_refuses_changed_since_finalize, RUL-unfingerprinted_photo_stops_merge, RUL-hidden_among_photos_stops_merge, RUL-imagemagick_absent_stops_merge
 
 Merge's `preflight` SHALL run, under the workspace lock and before the library's, stopping at the first that fails:
 the seal; the initialization mark; a link at the top level; a missing managed folder; a misplaced top-level entry; the
 configuration, read and checked; the library's place and mark; the handoff, read; its filename format. It then gathers
-the rest and reports them together: the inbox empty; `photos-24-executable-plan.json` present with
+the rest and reports them together: ImageMagick on the `PATH`, as `magick` or `identify`; the inbox empty; `photos-24-executable-plan.json` present with
 `photos-25-execution-summary.json` at `success`; the handoff's content fingerprint the one `photos-24` pinned; prep's
 log as the handoff vouches for it ({need}`BLD-prep_log_checked`); `photos-26-complete-log.json` and the archive
 manifest present, the complete log carrying prep's; photos by date holding no photo; photos by destination holding
@@ -71,13 +71,15 @@ its own name where geotag renamed nothing; the entries sorted by their path in t
 :::{bld} A fresh plan carries forward from the earlier plans
 :id: BLD-merge_carry_forward
 :status: ruled
-:realises: RUL-replan_carries_placed, RUL-earlier_place_in_this_library
+:realises: RUL-replan_carries_placed, RUL-earlier_place_in_this_library, RUL-merge_unreadable_record_stops
 
 Merge's `build_merge_plan` SHALL give a finalized photo no longer under `6-photos-by-dest` the record of the latest
 plan — `photos-30-merge-plan.json`, then its `-NNN` backups newest first — holding a record for its content fingerprint
 not blocked whose `library_target` fingerprints, through `_fingerprint_library_file`, to it, adding `carried_from_plan`
 (the plan that first placed it); no such record makes it a blocked record whose reason names the places tried, or that
 no earlier plan placed it. A record's place counts only inside the configured `library_root`; a photo found at an earlier place outside it blocks, unless it is found, by its fingerprint, at the same place under the configured library, where the user moved it.
+One of those plans that cannot be read, does not parse as a JSON object or holds no `plan_id` stops the plan with exit
+status 2, naming it, no plan written.
 :::
 
 ## 7. Plan / dry-run / execute lifecycle
@@ -99,11 +101,13 @@ fingerprint, the ImageMagick version, and the fingerprints of the folder names a
 :::{bld} Merge's execute, in order
 :id: BLD-merge_execute
 :status: ruled
-:realises: RUL-execution_jobs_change_nothing, RUL-execution_only_the_plan
+:realises: RUL-execution_jobs_change_nothing, RUL-execution_only_the_plan, RUL-merge_unreadable_record_stops
 :uses: BLD-merge_plan, BLD-merge_move, BLD-merge_journal_resume
 
-Merge's execute SHALL, on its main thread, revalidate the plan's `depends_on`, take the snapshots and sweep the
-temporaries a crash left; then move the photos on a pool of `jobs` workers, each touching only its own photo and
+Merge's execute SHALL, on its main thread, read the plan, revalidate its `depends_on` and read the journal an earlier
+execute of the plan left — a plan or journal that cannot be read, does not parse as a JSON object or lacks its
+`plan_id` or `operations` stopping it with exit status 2, nothing changed, as such a plan stops the dry run — then
+take the snapshots and sweep the temporaries a crash left; then move the photos on a pool of `jobs` workers, each touching only its own photo and
 returning a result; the main thread alone writing the journal, as each result arrives, and sorting the results by path
 before the summary is built.
 :::

@@ -3,6 +3,21 @@
 **Not normative.** Each item here is the reasoning behind the [intent](../intent/shared.md) or [build](../build/shared.md)
 items it `justifies`, under the same section numbers. Where the two differ, the intent wins and this is stale.
 
+## 0. The pipeline
+
+:::{rat} How a run ended is what runs it next
+:id: RAT-exit_status_decides_next
+:status: ruled
+:forced: no
+:follows_from: RAT-discrete_stages
+:justifies: RUL-exit_status_says_how_it_ended, RUL-blocked_plan_ends_refused
+
+A command is run from a terminal, but also by a script or the console, which see only how it ended. Each end asks for
+something else: nothing; the same command again once the other run is done; a fix, with nothing to undo; a look at the
+summary for what was left; the command again to finish. A plan that reports a blocker cannot be carried out whole as
+it stands, and ended as a success it would let a script go on as if it could.
+:::
+
 ## 1. One run at a time
 
 :::{rat} A plan made beside another run cannot be trusted
@@ -1376,6 +1391,19 @@ command because geotag is freely re-run, and re-packaging after every pass would
 Photos by destination is empty both in a workspace just sorted and in one merged and finished, so its state cannot say
 which a workspace is. A mark written only when merge succeeds whole can — and a merge that left a photo behind writes
 none, so it can be finished by running it again.
+:::
+
+:::{rat} Nothing left to merge is a whole merge
+:id: RAT-empty_merge_is_whole
+:status: ruled
+:forced: no
+:follows_from: RAT-seal_not_folder_state, RAT-workspace_not_recycled
+:justifies: RUL-empty_merge_seals
+
+A merge is whole when it leaves no photo behind, and one with none to merge leaves none. A workspace whose photos the
+user took out, or whose dump held only videos, is as finished as one whose photos went to the library; left unsealed,
+it would wait for a merge that has nothing to do, and invite the next dump into a workspace whose records describe
+this one.
 :::
 
 :::{rat} A finished workspace is read, not reprocessed
