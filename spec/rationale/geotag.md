@@ -1021,6 +1021,20 @@ log without a word — each loss silent, and none recoverable from the photos. A
 at; stopping and naming it keeps it as it is until they have.
 :::
 
+:::{rat} Geotag's summary, too, records an execution
+:id: RAT-geotag_summary_records_an_execution
+:status: ruled
+:forced: no
+:follows_from: RAT-summary_records_an_execution, RAT-unreadable_record_not_empty
+:justifies: RUL-geotag_summary_only_for_execution
+
+Geotag's summary is what merge's is: the record of an execution, and the one place the user's acceptance of a
+changed picture is kept. A run turned away at the door executed nothing, and the terminal has said why; a summary
+written for it would put a record of nothing over the last execution's — and with it the acceptances finalize and the
+next run read. An interrupted run reached no end to record: its journal holds what it confirmed, and the run that
+finishes it writes the summary.
+:::
+
 ## 21. Finalize
 
 :::{rat} The package records what was done

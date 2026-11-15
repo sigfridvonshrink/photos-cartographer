@@ -1766,6 +1766,18 @@ Geotag's execution and finalize SHALL NOT take a record of an earlier execution 
 stop before they change or write anything, naming it.
 :::
 
+:::{rul} Geotag's summary is written only for an execution
+:id: RUL-geotag_summary_only_for_execution
+:status: ruled
+:criticality: low
+:verify: required
+:uses: DEF-geotag
+
+Geotag SHALL write no execution summary for a run stopped before its execution began — by a precondition, a plan no
+longer current, or a record of an earlier execution it cannot read — nor for a run interrupted, leaving the summary an
+earlier run wrote as it was.
+:::
+
 
 ## 21. Finalize
 

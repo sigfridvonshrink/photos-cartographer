@@ -637,7 +637,7 @@ edit since the plan ({need}`BLD-geotag_execution`).
 :::{bld} When the execution summary is written
 :id: BLD-execution_summary_written
 :status: ruled
-:realises: RUL-failure_recorded, RUL-content_acceptance_stays_open
+:realises: RUL-failure_recorded, RUL-content_acceptance_stays_open, RUL-geotag_summary_only_for_execution
 :uses: BLD-execution_summary
 
 `geotag execute` SHALL write `photos-25-execution-summary.json` only once its plan is revalidated and the records of
