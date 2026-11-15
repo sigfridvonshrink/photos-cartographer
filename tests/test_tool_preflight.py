@@ -115,4 +115,4 @@ def test_prep_plan_exits_when_exiftool_absent(tmp_path, monkeypatch):
     args = types.SimpleNamespace(command="plan", jobs=1)
     with pytest.raises(SystemExit) as ei:
         prep.run(args)
-    assert ei.value.code == 3
+    assert ei.value.code == 2

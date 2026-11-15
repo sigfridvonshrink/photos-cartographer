@@ -161,7 +161,7 @@ def test_required_snapshot_with_no_dataset_aborts(tmp_path, monkeypatch, seed_fr
     ws = _ws(tmp_path)
     (ws / "0-sources" / "a.jpg").write_bytes(b"AAAA")
     plan = _plan(ws)
-    with pytest.raises(RuntimeError, match="no dataset found"):
+    with pytest.raises(prep.ExecuteRefused, match="no dataset found"):
         prep.PlanExecutor(str(ws)).execute(plan)
     assert os.path.exists(ws / "0-sources" / "a.jpg")                  # no mutation
 

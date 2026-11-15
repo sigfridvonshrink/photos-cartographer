@@ -506,6 +506,16 @@ def _rescan_inventory(workspace_root):
     return sorted(files + wf._collect_dump_dotfiles(blockers)), blockers
 
 
+class ExecuteRefused(ValueError):
+    """Prep's execute stopped before changing anything: its plan failed its checks, or a snapshot it requires was
+    not taken. The command ends as a refusal (BLD-exit_statuses)."""
+
+
+class ExecuteFailed(RuntimeError):
+    """Prep's execute began carrying out its plan and did not finish it: an operation failed, or the records that
+    close the run could not be written. The command ends as an execution that failed (BLD-exit_statuses)."""
+
+
 class PlanExecutor:
     def __init__(self, workspace_root: str):
         self.workspace_root = workspace_root
@@ -543,7 +553,7 @@ class PlanExecutor:
                 self.coordinator.finish_phase()
             except ValueError as e:
                 get_reporter().error(f"Preflight validation failed: {e}", stream="stdout")
-                raise
+                raise ExecuteRefused(str(e)) from e
 
             # 2. Start Journal (version-stamped so a stale/foreign journal is detectable, BLD-prep_dependencies)
             journal = JournalWriter(journal_path)
@@ -568,7 +578,7 @@ class PlanExecutor:
                 if not snap["ok"]:
                     if snap["required"]:
                         journal.finish_journal("aborted_before_mutation")
-                        raise RuntimeError(f"ZFS snapshot required but failed: {snap['stderr']}")
+                        raise ExecuteRefused(f"ZFS snapshot required but failed: {snap['stderr']}")
                     get_reporter().warn(f"Warning: {snap['stderr'] or 'ZFS snapshot failed'}; skipping snapshot.",
                                         stream="stdout")
 
@@ -728,7 +738,7 @@ class PlanExecutor:
                 journal.journal.details = getattr(journal.journal, 'details', {})
                 journal.save()
                 journal.finish_journal("failed_intervention_required")
-                raise RuntimeError(f"Execution failed; intervention required. See journal. Failed ops: {failed_ops}")
+                raise ExecuteFailed(f"Execution failed; intervention required. See journal. Failed ops: {failed_ops}")
             else:
                 journal.finish_journal("success")
 
@@ -937,7 +947,7 @@ class PlanExecutor:
                     try:
                         prior_photos = read_prior_prep_log(self.workspace_root)
                     except ValueError as e:
-                        raise RuntimeError(str(e))
+                        raise ExecuteFailed(str(e))
                     log_photos, log_warnings = build_prep_log(
                         prior_photos, plan.operations, cache.get_all_files(),
                         quarantine_evidence, plan.plan_id)
@@ -960,7 +970,7 @@ class PlanExecutor:
                                 os.remove(ltmp)
                             except Exception:
                                 pass
-                        raise RuntimeError(f"Failed to write prep log: {e}")
+                        raise ExecuteFailed(f"Failed to write prep log: {e}")
 
                     # 2. Re-hash journal
                     journal_hash = OperationPlanner._hash_file(journal_path).value
@@ -1058,7 +1068,7 @@ class PlanExecutor:
                             plan.summary["performance_and_cache"]["handoff_written_after_successful_validation"] = True
                         self.coordinator.finish_phase()
                     except Exception as e:
-                        raise RuntimeError(f"Failed to write handoff manifest: {e}")
+                        raise ExecuteFailed(f"Failed to write handoff manifest: {e}")
                 # End-of-prep DB backup snapshot (BLD-database_images): a transactionally
                 # consistent image of the live cache, captured at the same success gate as the
                 # handoff and written atomically over the earlier one — VACUUM INTO a temp name, then atomic
@@ -3097,6 +3107,18 @@ def run(args):
         reporter.log("Lock released.")
 
 
+def _read_saved_plan(pp, reporter) -> Plan:
+    """The saved plan a dry run or an execute carries out; one that cannot be read refuses the command, nothing
+    changed (BLD-exit_statuses)."""
+    try:
+        with open(pp, "r") as f:
+            return Plan.from_dict(json.load(f))
+    except Exception as e:
+        reporter.error(f"The saved plan {os.path.basename(pp)} cannot be read ({e}). Nothing was changed.")
+        emit_next_step(reporter, "re-run `prep plan` to rebuild the plan.")
+        sys.exit(2)
+
+
 def _shape_blockers(workspace_root) -> list:
     """What is wrong with an initialized workspace's shape, as its top level shows it (RUL-shape_checked_first);
     [] for one not yet initialized, whose first run builds the shape, or one whose configuration cannot be read —
@@ -3169,7 +3191,7 @@ def _run_locked(args, workspace_root, reporter):
         if miss:
             reporter.error(f"Required external tool not found on PATH: {', '.join(miss)}. "
                            "Install exiftool and re-run `photos-cartographer prep plan`.")
-            sys.exit(3)
+            sys.exit(2)                                     # a refusal (BLD-exit_statuses)
         soft = missing_tools(["magick", "ffmpeg"])
         if soft:
             reporter.warn(f"Warning: {', '.join(soft)} not found on PATH — content fingerprinting will be "
@@ -3183,6 +3205,13 @@ def _run_locked(args, workspace_root, reporter):
         _config_was_seeded = not os.path.exists(_config_path(workspace_root))
 
         cache = WorkspaceCache(workspace_root, read_only=True)
+        # A database of another schema is never migrated: the plan is refused, nothing planned (BLD-exit_statuses).
+        from .photos_utils import cache_schema_mismatch
+        _schema_stop = cache_schema_mismatch(cache)
+        if _schema_stop:
+            cache.close()
+            reporter.error(_schema_stop)
+            sys.exit(2)
         workflow = WorkspacePrepWorkflow(workspace_root, cache)
         plan = workflow.plan()
         cache.close()
@@ -3231,16 +3260,14 @@ def _run_locked(args, workspace_root, reporter):
         # has nothing to validate — the saved plan is stale (its moves are already applied).
         if _prep_nothing_to_do(workspace_root, reporter):
             sys.exit(0)
-        with open(pp, "r") as f:
-            plan_data = json.load(f)
-        plan = Plan.from_dict(plan_data)
+        plan = _read_saved_plan(pp, reporter)
 
         try:
             PlanValidator.validate_plan_preflight(plan, workspace_root)
         except ValueError as e:
             reporter.error(f"Preflight validation failed: {e}")
             emit_next_step(reporter, "re-run `prep plan` to rebuild the plan against the current state.")
-            sys.exit(1)
+            sys.exit(2)                                     # a refusal (BLD-exit_statuses)
 
         # Dry-run is not a simulation: it validates the REAL saved plan (no virtual-filesystem
         # walk) and reports a SUMMARY of it. The full exact plan is the saved artifact at `pp`,
@@ -3282,19 +3309,24 @@ def _run_locked(args, workspace_root, reporter):
         # dry-run, gated on a plan existing so a missing plan still takes the "run plan first" path.
         if _prep_nothing_to_do(workspace_root, reporter):
             sys.exit(0)
-        with open(pp, "r") as f:
-            plan_data = json.load(f)
-        plan = Plan.from_dict(plan_data)
+        plan = _read_saved_plan(pp, reporter)
 
         executor = PlanExecutor(workspace_root)
 
+        # How execute ended decides its exit status (BLD-exit_statuses): refused before anything changed, 2; an
+        # operation failed or the run's closing records could not be written, 3; an error not foreseen, 1.
         try:
             executor.execute(plan)
+        except ExecuteRefused as e:
+            reporter.error(f"Execution refused: {e}. Nothing was changed.")
+            emit_next_step(reporter, "resolve the error above — for a stale plan, re-run `prep plan` — then "
+                                     "re-run `prep execute`.")
+            sys.exit(2)
         except Exception as e:
             reporter.error(f"Execution failed: {e}")
             emit_next_step(reporter, "resolve the error above and re-run `prep execute` "
                                      "(execute is idempotent — safe to re-run).")
-            sys.exit(1)
+            sys.exit(3 if isinstance(e, ExecuteFailed) else 1)
 
         # Next step depends on whether sorting is still pending: an empty by-dest means this was a
         # first ingest (sort, re-prep, then geotag); a populated by-dest means the move is recorded
