@@ -389,7 +389,7 @@ def two_days(tmp_path):
     return root
 
 
-@pytest.mark.spec("RUL-track_points_kept", "BLD-track_catalogue",
+@pytest.mark.spec("RUL-track_points_kept", "RUL-unused_points_not_kept", "BLD-track_catalogue",
                   test="TST-kept_tracks-a_narrower_window_prunes_the_points_outside_it")
 def test_a_narrower_window_prunes_the_points_outside_it(two_days, tmp_path):
     """A plan whose window narrows — a photo moved out, a setting tightened — leaves the record holding only its
@@ -409,7 +409,7 @@ def test_a_narrower_window_prunes_the_points_outside_it(two_days, tmp_path):
     assert _build(two_days, record, window=FOURTH).read == 2           # pruned, so read again when reached
 
 
-@pytest.mark.spec("RUL-withdrawn_track_points_kept", "BLD-track_catalogue", "BLD-withdrawn_track_points",
+@pytest.mark.spec("RUL-unused_points_not_kept", "RUL-withdrawn_track_points_kept", "BLD-track_catalogue", "BLD-withdrawn_track_points",
                   test="TST-kept_tracks-points_an_executed_plan_used_survive_a_narrower_window")
 def test_points_an_executed_plan_used_survive_a_narrower_window(two_days, tmp_path):
     """The points of a track an executed plan placed or timed photos by, in the window that plan was made in, stay

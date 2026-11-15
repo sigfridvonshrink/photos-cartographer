@@ -747,6 +747,17 @@ A change to the tracks at times no decision of geotag's reaches SHALL NOT make a
 Geotag SHALL keep in the workspace database each track point its decisions reach, as it decided by it.
 :::
 
+:::{rul} No point is kept that nothing rests on
+:id: RUL-unused_points_not_kept
+:status: ruled
+:criticality: low
+:anti: yes
+:verify: required
+:refines: RUL-track_points_kept
+
+Geotag SHALL keep no track point that lies outside the window of its latest plan, unless an executed plan used it.
+:::
+
 :::{rul} A track file gone is told
 :id: RUL-gone_track_told
 :status: ruled

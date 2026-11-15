@@ -17902,7 +17902,8 @@
       "RUL-gone_track_told",
       "RUL-reuse_valid_work",
       "RUL-track_points_kept",
-      "RUL-unlisted_tracks_stop_geotag"
+      "RUL-unlisted_tracks_stop_geotag",
+      "RUL-unused_points_not_kept"
      ],
      "realises_back": [],
      "refines": [],
@@ -20443,7 +20444,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 1114,
+     "lineno": 1125,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -34510,7 +34511,8 @@
      "is_modified": false,
      "jinja_content": false,
      "justifies": [
-      "BLD-track_catalogue"
+      "BLD-track_catalogue",
+      "RUL-unused_points_not_kept"
      ],
      "justifies_back": [],
      "layout": null,
@@ -51916,7 +51918,7 @@
       "RAT-fallback_acceptance_follows"
      ],
      "layout": null,
-     "lineno": 1486,
+     "lineno": 1497,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -52173,7 +52175,7 @@
       "RAT-two_readings_no_guess"
      ],
      "layout": null,
-     "lineno": 1104,
+     "lineno": 1115,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -52259,7 +52261,7 @@
       "RAT-anchor_agreement"
      ],
      "layout": null,
-     "lineno": 988,
+     "lineno": 999,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -52440,7 +52442,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 1058,
+     "lineno": 1069,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -52525,7 +52527,7 @@
       "RAT-clock_error_window"
      ],
      "layout": null,
-     "lineno": 964,
+     "lineno": 975,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -52777,7 +52779,7 @@
       "RAT-record_covers_broken_runs"
      ],
      "layout": null,
-     "lineno": 1693,
+     "lineno": 1704,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -54117,7 +54119,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 1161,
+     "lineno": 1172,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -54366,7 +54368,7 @@
       "RAT-confirmed_on_those_tracks"
      ],
      "layout": null,
-     "lineno": 1183,
+     "lineno": 1194,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -55645,7 +55647,7 @@
       "RAT-chosen_offset_has_evidence"
      ],
      "layout": null,
-     "lineno": 1024,
+     "lineno": 1035,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -55897,7 +55899,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 827,
+     "lineno": 838,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -57321,7 +57323,7 @@
       "RAT-confirmed_one_offset"
      ],
      "layout": null,
-     "lineno": 1150,
+     "lineno": 1161,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -57406,7 +57408,7 @@
       "RAT-confirmed_on_those_tracks"
      ],
      "layout": null,
-     "lineno": 1171,
+     "lineno": 1182,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -57580,7 +57582,7 @@
       "RAT-acceptance_is_of_what_was_shown"
      ],
      "layout": null,
-     "lineno": 1714,
+     "lineno": 1725,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -57664,7 +57666,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 1735,
+     "lineno": 1746,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -57746,7 +57748,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 1725,
+     "lineno": 1736,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -57827,7 +57829,7 @@
       "RAT-content_changed_held"
      ],
      "layout": null,
-     "lineno": 1651,
+     "lineno": 1662,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -58425,7 +58427,7 @@
       "RAT-time_written_as_lived"
      ],
      "layout": null,
-     "lineno": 1499,
+     "lineno": 1510,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -59882,7 +59884,7 @@
       "RAT-day_offset_is_the_cameras"
      ],
      "layout": null,
-     "lineno": 1569,
+     "lineno": 1580,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -60987,7 +60989,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 1381,
+     "lineno": 1392,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -61070,7 +61072,7 @@
       "RAT-track_is_one_device"
      ],
      "layout": null,
-     "lineno": 1369,
+     "lineno": 1380,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -62067,7 +62069,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 1640,
+     "lineno": 1651,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -62903,7 +62905,7 @@
       "RAT-record_covers_broken_runs"
      ],
      "layout": null,
-     "lineno": 1745,
+     "lineno": 1756,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -64100,7 +64102,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 1683,
+     "lineno": 1694,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -64354,7 +64356,7 @@
       "RAT-fallback_nested"
      ],
      "layout": null,
-     "lineno": 1314,
+     "lineno": 1325,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -64441,7 +64443,7 @@
       "RAT-fallback_optional"
      ],
      "layout": null,
-     "lineno": 1325,
+     "lineno": 1336,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -64772,7 +64774,7 @@
       "RAT-finalize_signs_for_the_photos"
      ],
      "layout": null,
-     "lineno": 1806,
+     "lineno": 1817,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -64937,7 +64939,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 1829,
+     "lineno": 1840,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -65020,7 +65022,7 @@
       "RAT-refusal_for_what_is_needed"
      ],
      "layout": null,
-     "lineno": 1862,
+     "lineno": 1873,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -65268,7 +65270,7 @@
       "RAT-finalize_signs_for_the_photos"
      ],
      "layout": null,
-     "lineno": 1818,
+     "lineno": 1829,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -65353,7 +65355,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 1795,
+     "lineno": 1806,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -65437,7 +65439,7 @@
       "RAT-package_records_what_was_done"
      ],
      "layout": null,
-     "lineno": 1784,
+     "lineno": 1795,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -66535,7 +66537,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 1704,
+     "lineno": 1715,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -66704,7 +66706,7 @@
       "RAT-same_photo_new_fingerprint"
      ],
      "layout": null,
-     "lineno": 1245,
+     "lineno": 1256,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -66787,7 +66789,7 @@
       "RAT-execution_resumable"
      ],
      "layout": null,
-     "lineno": 1629,
+     "lineno": 1640,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -66877,7 +66879,7 @@
       "RAT-geotag_finishes_extension_spelling"
      ],
      "layout": null,
-     "lineno": 1535,
+     "lineno": 1546,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -67480,7 +67482,7 @@
       "RAT-same_photo_new_fingerprint"
      ],
      "layout": null,
-     "lineno": 1233,
+     "lineno": 1244,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -67832,7 +67834,7 @@
       "RAT-run_records_outlive_the_next"
      ],
      "layout": null,
-     "lineno": 1850,
+     "lineno": 1861,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -67915,7 +67917,7 @@
       "RAT-geotag_summary_records_an_execution"
      ],
      "layout": null,
-     "lineno": 1769,
+     "lineno": 1780,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -68084,7 +68086,7 @@
       "RAT-gone_track_withdrawn"
      ],
      "layout": null,
-     "lineno": 760,
+     "lineno": 771,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -68167,7 +68169,7 @@
       "RAT-gone_track_withdrawn"
      ],
      "layout": null,
-     "lineno": 750,
+     "lineno": 761,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -68249,7 +68251,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 910,
+     "lineno": 921,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -69329,7 +69331,7 @@
       "RAT-better_device_first"
      ],
      "layout": null,
-     "lineno": 1357,
+     "lineno": 1368,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -70255,7 +70257,7 @@
       "RAT-trips_revisit"
      ],
      "layout": null,
-     "lineno": 1013,
+     "lineno": 1024,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -71697,7 +71699,7 @@
       "RAT-kept_offset_needs_its_evidence"
      ],
      "layout": null,
-     "lineno": 1580,
+     "lineno": 1591,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -71780,7 +71782,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 1592,
+     "lineno": 1603,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -75590,7 +75592,7 @@
       "RAT-better_device_first"
      ],
      "layout": null,
-     "lineno": 976,
+     "lineno": 987,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -75673,7 +75675,7 @@
       "RAT-outranked_distance_measured"
      ],
      "layout": null,
-     "lineno": 1422,
+     "lineno": 1433,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -75756,7 +75758,7 @@
       "RAT-outranked_distance_measured"
      ],
      "layout": null,
-     "lineno": 1411,
+     "lineno": 1422,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -79240,7 +79242,7 @@
       "RAT-modified_time_is_another_clock"
      ],
      "layout": null,
-     "lineno": 885,
+     "lineno": 896,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -79325,7 +79327,7 @@
       "RAT-modified_time_is_another_clock"
      ],
      "layout": null,
-     "lineno": 897,
+     "lineno": 908,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -79411,7 +79413,7 @@
       "RAT-modified_time_is_another_clock"
      ],
      "layout": null,
-     "lineno": 873,
+     "lineno": 884,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -79922,7 +79924,7 @@
       "RAT-destination_is_an_input"
      ],
      "layout": null,
-     "lineno": 935,
+     "lineno": 946,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -80006,7 +80008,7 @@
       "RAT-position_answered_for_its_destination"
      ],
      "layout": null,
-     "lineno": 947,
+     "lineno": 958,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -81094,7 +81096,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 1604,
+     "lineno": 1615,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -81685,7 +81687,7 @@
       "RAT-null_island_no_fix"
      ],
      "layout": null,
-     "lineno": 1270,
+     "lineno": 1281,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -82138,7 +82140,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 1083,
+     "lineno": 1094,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -82221,7 +82223,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 1094,
+     "lineno": 1105,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -82740,7 +82742,7 @@
       "RAT-record_covers_broken_runs"
      ],
      "layout": null,
-     "lineno": 1672,
+     "lineno": 1683,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -83245,7 +83247,7 @@
       "RAT-every_field_one_time"
      ],
      "layout": null,
-     "lineno": 1520,
+     "lineno": 1531,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -83503,7 +83505,7 @@
       "RAT-own_position_best"
      ],
      "layout": null,
-     "lineno": 1260,
+     "lineno": 1271,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -83588,7 +83590,7 @@
       "RAT-same_photo_new_fingerprint"
      ],
      "layout": null,
-     "lineno": 1221,
+     "lineno": 1232,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -84108,7 +84110,7 @@
       "RAT-phone_records_its_offset"
      ],
      "layout": null,
-     "lineno": 1071,
+     "lineno": 1082,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -84194,7 +84196,7 @@
       "RAT-decision_keyed_by_identity"
      ],
      "layout": null,
-     "lineno": 1464,
+     "lineno": 1475,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -84277,7 +84279,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 1475,
+     "lineno": 1486,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -84446,7 +84448,7 @@
       "RAT-placement_most_specific_first"
      ],
      "layout": null,
-     "lineno": 1293,
+     "lineno": 1304,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -84537,7 +84539,7 @@
       "RAT-method_in_the_photo"
      ],
      "layout": null,
-     "lineno": 1400,
+     "lineno": 1411,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -84796,7 +84798,7 @@
       "RAT-remainder_says_why"
      ],
      "layout": null,
-     "lineno": 1616,
+     "lineno": 1627,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -85213,7 +85215,7 @@
       "RAT-method_in_the_photo"
      ],
      "layout": null,
-     "lineno": 1391,
+     "lineno": 1402,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -85292,7 +85294,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 1559,
+     "lineno": 1570,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -85373,7 +85375,7 @@
       "RAT-position_whole"
      ],
      "layout": null,
-     "lineno": 1549,
+     "lineno": 1560,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -88971,7 +88973,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 1662,
+     "lineno": 1673,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -90658,7 +90660,7 @@
       "RAT-trips_revisit"
      ],
      "layout": null,
-     "lineno": 1000,
+     "lineno": 1011,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -91947,7 +91949,7 @@
       "RAT-tracks_kept_with_workspace"
      ],
      "layout": null,
-     "lineno": 793,
+     "lineno": 804,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -93614,7 +93616,7 @@
       "RAT-confirmed_on_those_tracks"
      ],
      "layout": null,
-     "lineno": 1206,
+     "lineno": 1217,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -93947,7 +93949,7 @@
       "RAT-stay_tells_no_time"
      ],
      "layout": null,
-     "lineno": 1035,
+     "lineno": 1046,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -94032,7 +94034,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 1047,
+     "lineno": 1058,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -95561,7 +95563,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 1509,
+     "lineno": 1520,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -95820,7 +95822,7 @@
       "RAT-nearest_timezone"
      ],
      "layout": null,
-     "lineno": 924,
+     "lineno": 935,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -96420,7 +96422,7 @@
       "RAT-projection_bounded"
      ],
      "layout": null,
-     "lineno": 1347,
+     "lineno": 1358,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -96759,7 +96761,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 1433,
+     "lineno": 1444,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -96840,7 +96842,7 @@
       "RAT-projection_bounded"
      ],
      "layout": null,
-     "lineno": 1335,
+     "lineno": 1346,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -96954,6 +96956,7 @@
      ],
      "refines": [],
      "refines_back": [
+      "RUL-unused_points_not_kept",
       "RUL-withdrawn_track_points_kept"
      ],
      "section_name": "8. Reading the tracks",
@@ -97191,7 +97194,7 @@
       "RAT-confirmed_on_those_tracks"
      ],
      "layout": null,
-     "lineno": 1194,
+     "lineno": 1205,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -97880,7 +97883,7 @@
       "RAT-drift_invisible"
      ],
      "layout": null,
-     "lineno": 1126,
+     "lineno": 1137,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -98487,7 +98490,7 @@
       "RAT-no_identity_no_group"
      ],
      "layout": null,
-     "lineno": 837,
+     "lineno": 848,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -98572,7 +98575,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 849,
+     "lineno": 860,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -98653,7 +98656,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 861,
+     "lineno": 872,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -98736,7 +98739,7 @@
       "RAT-class_decides_time_model"
      ],
      "layout": null,
-     "lineno": 817,
+     "lineno": 828,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -98822,7 +98825,7 @@
       "RAT-class_decides_time_model"
      ],
      "layout": null,
-     "lineno": 806,
+     "lineno": 817,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -99073,7 +99076,7 @@
       "RAT-missing_tracks_are_not_no_tracks"
      ],
      "layout": null,
-     "lineno": 782,
+     "lineno": 793,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -99158,7 +99161,7 @@
       "RAT-finalize_signs_for_the_photos"
      ],
      "layout": null,
-     "lineno": 1840,
+     "lineno": 1851,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -99241,7 +99244,7 @@
       "RAT-unlocated_null_island_cleared"
      ],
      "layout": null,
-     "lineno": 1281,
+     "lineno": 1292,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -99328,7 +99331,7 @@
       "RAT-remainder_says_why"
      ],
      "layout": null,
-     "lineno": 1443,
+     "lineno": 1454,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -99491,7 +99494,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 1454,
+     "lineno": 1465,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -99657,7 +99660,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 1304,
+     "lineno": 1315,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -99739,7 +99742,7 @@
       "RAT-unreadable_record_not_empty"
      ],
      "layout": null,
-     "lineno": 1756,
+     "lineno": 1767,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -100832,7 +100835,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 1138,
+     "lineno": 1149,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -100876,6 +100879,90 @@
       "TST-drift_validation-a_confirmation_naming_no_offset_confirms_nothing",
       "TST-drift_validation-e2e_drift_gate_blocks_then_resumes",
       "TST-drift_validation-zero_scrub_must_be_explicit"
+     ],
+     "verify": "required"
+    },
+    "RUL-unused_points_not_kept": {
+     "aliases": null,
+     "anti": "yes",
+     "arch": {},
+     "assumes": [],
+     "assumes_back": [],
+     "choice_kind": null,
+     "completion": null,
+     "constraints": [],
+     "constraints_error": null,
+     "constraints_passed": true,
+     "constraints_results": {},
+     "content": "Geotag SHALL keep no track point that lies outside the window of its latest plan, unless an executed plan used it.",
+     "criticality": "low",
+     "docname": "intent/geotag",
+     "doctype": ".md",
+     "duration": null,
+     "excepts": [],
+     "excepts_back": [],
+     "external_css": "external_link",
+     "external_url": null,
+     "follows_from": [],
+     "follows_from_back": [],
+     "forced": null,
+     "has_dead_links": false,
+     "has_forbidden_dead_links": false,
+     "id": "RUL-unused_points_not_kept",
+     "illustrates": [],
+     "illustrates_back": [],
+     "is_external": false,
+     "is_import": false,
+     "is_modified": false,
+     "jinja_content": false,
+     "justifies": [],
+     "justifies_back": [
+      "RAT-kept_points_are_the_windows"
+     ],
+     "layout": null,
+     "lineno": 750,
+     "links": [],
+     "links_back": [],
+     "modifications": 0,
+     "nodeid": null,
+     "omit_reason": null,
+     "parent_need": null,
+     "parent_needs": [],
+     "parent_needs_back": [],
+     "parts": {},
+     "post_content": null,
+     "post_template": null,
+     "pre_content": null,
+     "pre_template": null,
+     "realises": [],
+     "realises_back": [
+      "BLD-track_catalogue"
+     ],
+     "refines": [
+      "RUL-track_points_kept"
+     ],
+     "refines_back": [],
+     "section_name": "8. Reading the tracks",
+     "sections": [
+      "8. Reading the tracks",
+      "Geotag — what it guarantees"
+     ],
+     "signature": null,
+     "status": "ruled",
+     "style": null,
+     "tags": [],
+     "template": null,
+     "title": "No point is kept that nothing rests on",
+     "type": "rul",
+     "type_name": "Rule",
+     "upholds": [],
+     "upholds_back": [],
+     "uses": [],
+     "uses_back": [],
+     "verifies": [],
+     "verifies_back": [
+      "TST-kept_tracks-a_narrower_window_prunes_the_points_outside_it",
+      "TST-kept_tracks-points_an_executed_plan_used_survive_a_narrower_window"
      ],
      "verify": "required"
     },
@@ -101590,7 +101677,7 @@
       "RAT-tracks_kept_with_workspace"
      ],
      "layout": null,
-     "lineno": 771,
+     "lineno": 782,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -140786,7 +140873,8 @@
      "uses_back": [],
      "verifies": [
       "BLD-track_catalogue",
-      "RUL-track_points_kept"
+      "RUL-track_points_kept",
+      "RUL-unused_points_not_kept"
      ],
      "verifies_back": [],
      "verify": null
@@ -141324,6 +141412,7 @@
      "verifies": [
       "BLD-track_catalogue",
       "BLD-withdrawn_track_points",
+      "RUL-unused_points_not_kept",
       "RUL-withdrawn_track_points_kept"
      ],
      "verifies_back": [],
@@ -169112,7 +169201,7 @@
      "verify": null
     }
    },
-   "needs_amount": 2093,
+   "needs_amount": 2094,
    "needs_schema": {
     "$schema": "http://json-schema.org/draft-07/schema#",
     "properties": {

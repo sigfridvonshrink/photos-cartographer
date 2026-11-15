@@ -456,7 +456,7 @@ evidence of what was written into the photos: the points stay, withdrawn.
 :status: ruled
 :forced: no
 :follows_from: RAT-tracks_kept_with_workspace, RAT-tracks_read_where_reached
-:justifies: BLD-track_catalogue
+:justifies: BLD-track_catalogue, RUL-unused_points_not_kept
 
 The points are kept because decisions rest on them; a point no decision of the latest planning reaches is evidence of
 nothing, and kept it would grow the record by every window a trip's planning ever passed through — a photo sorted
