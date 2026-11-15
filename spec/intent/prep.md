@@ -634,6 +634,18 @@ wherever it lies, photos by destination included.
 Prep SHALL record each duplicate it quarantines with the copy it kept, in the handoff.
 :::
 
+:::{rul} Only a duplicate is recorded as one
+:id: RUL-only_duplicates_recorded_as_duplicates
+:status: ruled
+:criticality: med
+:anti: yes
+:verify: required
+:refines: RUL-duplicate_recorded_with_kept
+
+A file prep quarantines for another reason than being a copy — a leftover of an interrupted write, a hidden file of a
+dump — SHALL be recorded as no duplicate: neither in its summary, nor its handoff, nor its log.
+:::
+
 :::{rul} The quarantine manifest records a duplicate with the copy kept
 :id: RUL-duplicate_in_manifest_with_kept
 :status: ruled
@@ -1106,4 +1118,15 @@ what it only reads: its media
 operations, the files already in place, the moves it recognized, the files of photos by destination it read, the
 duplicates of files it may change apart from those of photos by destination, the metadata reused, extracted, carried
 and failed, the blockers and warnings, and which records it wrote.
+:::
+
+:::{rul} What prep quarantines is counted by why
+:id: RUL-set_aside_counted_by_reason
+:status: ruled
+:criticality: low
+:verify: required
+:refines: RUL-prep_run_summarised
+
+Prep's summary SHALL count the files it quarantines by the reason for each — duplicates, leftovers of an interrupted
+write, hidden files of a dump — apart.
 :::

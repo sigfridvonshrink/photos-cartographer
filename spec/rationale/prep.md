@@ -503,6 +503,19 @@ A file set aside as a copy is recoverable only if one can tell which file it cop
 user can check the pair, and a photo already sorted into a destination is seen to have had its copy set aside.
 :::
 
+:::{rat} A file set aside is not a copy unless it has a twin
+:id: RAT-set_aside_not_a_copy
+:status: ruled
+:forced: no
+:follows_from: RAT-duplicate_points_at_twin, RAT-reviewer_sees_what_was_touched
+:justifies: RUL-only_duplicates_recorded_as_duplicates, RUL-set_aside_counted_by_reason
+
+The quarantine takes more than copies: what an interrupted write left beside a photo, and the hidden files a dump
+brings. These have no twin. Recorded as duplicates, they would read as copies whose kept file is missing, and a count of
+duplicates would report copies never found — the reviewer checking the dedup against what they dumped would find it
+wrong. Counted apart by why each went, each figure means what it says.
+:::
+
 
 ## 11. The metadata prep keeps for geotag
 

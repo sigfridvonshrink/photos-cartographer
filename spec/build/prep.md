@@ -325,6 +325,18 @@ the quarantine manifest and the handoff record, the handoff also under the desti
 `6-photos-by-dest`.
 :::
 
+:::{bld} Each quarantine move names its kind
+:id: BLD-quarantine_reasons
+:status: ruled
+:realises: RUL-only_duplicates_recorded_as_duplicates, RUL-set_aside_counted_by_reason
+
+Each quarantine move SHALL carry its `kind` — `duplicate`, `exiftool_leftover` or `dump_dotfile` — into its manifest
+entry; the plan's report counts the moves by kind in `quarantined_by_reason`, its duplicate counts taking only
+`duplicate`; the handoff's `diagnostics.duplicates_or_conflicts` and each destination folder's duplicates hold the
+duplicates alone, the others listed under `diagnostics.quarantined_not_duplicates` with their kind; and prep's log
+records the duplicates alone.
+:::
+
 
 ## 11. The metadata prep keeps for geotag
 
@@ -447,7 +459,7 @@ file renamed over it, holding: `schema_version`, `tool`, `run_metadata` (plan an
 `folders_scanned` (the managed folders but `1-strays`, each with whether prep may change it), `files` (sorted, each with
 its path, size, `mtime_ns`, media class, fingerprint and its status, folder and metadata),
 `filename_timestamp_format`, `camera_groups`, `destination_folders` ({need}`BLD-handoff_grouping_facts`),
-`diagnostics` (duplicates, blockers, warnings, quarantine footprint), `depends_on` (configuration, prep log, journal,
+`diagnostics` (duplicates, the other files quarantined, blockers, warnings, quarantine footprint), `depends_on` (configuration, prep log, journal,
 final inventory, metadata extractor, plan and database versions, image engine) and `content_fingerprint`.
 :::
 

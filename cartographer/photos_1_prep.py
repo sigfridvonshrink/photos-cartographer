@@ -869,9 +869,16 @@ class PlanExecutor:
                         })
 
                     # Real duplicate/conflict evidence from the quarantine ops (BLD-handoff_grouping_facts).
+                    # Only a duplicate is recorded as one; a file set aside for another reason is listed apart, with
+                    # its kind (RUL-only_duplicates_recorded_as_duplicates).
                     quarantine_evidence = []
+                    quarantined_other = []
                     for op in plan.operations:
-                        if op.type == "quarantine_move":
+                        if op.type == "quarantine_move" and (op.verification or {}).get("kind") != "duplicate":
+                            v = op.verification or {}
+                            quarantined_other.append({"kind": v.get("kind"), "original_path": v.get("original_path"),
+                                                      "quarantine_path": v.get("quarantine_path")})
+                        elif op.type == "quarantine_move":
                             v = op.verification or {}
                             ev = v.get("duplicate_evidence") or {}
                             retained = v.get("retained_counterpart", "") or ""
@@ -985,6 +992,7 @@ class PlanExecutor:
                         "destination_folders": destination_folders,
                         "diagnostics": {
                             "duplicates_or_conflicts": quarantine_evidence,
+                            "quarantined_not_duplicates": quarantined_other,
                             "blockers": plan.blockers,
                             "warnings": plan.warnings,
                             "quarantine_footprint": plan.summary.get("quarantine_footprint"),
@@ -1435,7 +1443,11 @@ class WorkspacePrepWorkflow:
         import collections as _collections
         _media_op_types = {"mkdir", "move_no_clobber", "rename_no_clobber", "quarantine_move"}
         _q_ops = [op for op in operations if op.type == "quarantine_move"]
-        _dup_by_dest = sum(1 for op in _q_ops
+        # Each quarantine move is counted by its reason; only a duplicate counts as one (RUL-set_aside_counted_by_reason,
+        # RUL-only_duplicates_recorded_as_duplicates).
+        _by_reason = _collections.Counter((op.verification or {}).get("kind") for op in _q_ops)
+        _dup_ops = [op for op in _q_ops if (op.verification or {}).get("kind") == "duplicate"]
+        _dup_by_dest = sum(1 for op in _dup_ops
                            if str((op.verification or {}).get("retained_counterpart", "")).startswith(folder_name('photos_by_dest') + "/"))
         _md_counts = _collections.Counter(metadata_plan_status.values())
         _cg_keys = set()
@@ -1457,7 +1469,8 @@ class WorkspacePrepWorkflow:
             "recognized_moves": len(recognized_moves),
             "by_dest_files_scanned_read_only": len(by_dest_files),
             "duplicates_against_by_dest": _dup_by_dest,
-            "duplicates_against_mutable": len(_q_ops) - _dup_by_dest,
+            "duplicates_against_mutable": len(_dup_ops) - _dup_by_dest,
+            "quarantined_by_reason": {k: _by_reason.get(k, 0) for k in QUARANTINE_KINDS},
             "metadata_reused": _md_counts.get("reused_from_cache", 0),
             "metadata_extracted": _md_counts.get("extracted_ok", 0),
             "metadata_carried_forward": _md_counts.get("carried_forward", 0),
@@ -2133,6 +2146,7 @@ class WorkspacePrepWorkflow:
                         "retained_counterpart": st.current_paths.get(retained['relative_path'], retained['relative_path']),
                         "duplicate_evidence": json.loads(ch_str),
                         "plan_id": plan_id_for_quarantine,
+                        "kind": "duplicate",
                     }
                     st.media_mutated_originals.add(dup["relative_path"])
 

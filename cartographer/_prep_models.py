@@ -51,6 +51,7 @@ __all__ = [
     'empty_cache_freshness_counts',
     'STATUS_TO_CACHE_FRESHNESS_KEY',
     'PREP_ALLOWED_OPERATION_TYPES',
+    'QUARANTINE_KINDS',
     'PLAN_SCHEMA_VERSION',
     'Fingerprint',
     'Operation',
@@ -70,6 +71,10 @@ def empty_cache_freshness_counts() -> dict:
         "metadata_carried_forward": 0,
         "metadata_missing": 0,
     }
+
+# Why a file is quarantined, as each quarantine move's `kind` records it (BLD-quarantine_reasons): a copy of a file
+# kept, a leftover of an interrupted metadata write, a hidden file of a dump.
+QUARANTINE_KINDS = ("duplicate", "exiftool_leftover", "dump_dotfile")
 
 STATUS_TO_CACHE_FRESHNESS_KEY = {
     "reused_from_cache": "metadata_reused_from_cache",

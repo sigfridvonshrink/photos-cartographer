@@ -322,6 +322,9 @@ class TtySink(Sink):
         print(f"  By-dest files scanned read-only   : {r.get('by_dest_files_scanned_read_only', 0)}", file=out)
         print(f"  Duplicates -> quarantine          : {r.get('duplicates_against_mutable', 0)} vs mutable, "
               f"{r.get('duplicates_against_by_dest', 0)} vs by-dest", file=out)
+        _qr = r.get("quarantined_by_reason") or {}
+        print(f"  Other files -> quarantine         : {_qr.get('exiftool_leftover', 0)} write leftover(s), "
+              f"{_qr.get('dump_dotfile', 0)} hidden dump file(s)", file=out)
         print(f"  Metadata reused/extracted/carried/failed : "
               f"{r.get('metadata_reused', 0)}/{r.get('metadata_extracted', 0)}/"
               f"{r.get('metadata_carried_forward', 0)}/{r.get('metadata_failed', 0)}  "

@@ -156,3 +156,34 @@ def test_progress_coordinator_non_quiet_paths():
     c.print_summary({"performance_and_cache": {"metadata_extracted": 2}})
     # counters fallback (no performance_and_cache, no report)
     c.print_summary({})
+
+
+@pytest.mark.spec("RUL-set_aside_counted_by_reason", "RUL-only_duplicates_recorded_as_duplicates", "BLD-quarantine_reasons", test="TST-report-quarantine_moves_counted_by_reason")
+def test_quarantine_moves_counted_by_reason(tmp_path, monkeypatch):
+    """A duplicate, a write leftover and a hidden dump file all go to the quarantine; each is counted by why, only the
+    duplicate as a duplicate — in the summary, the handoff, the manifest and the log."""
+    import json
+    _mock(monkeypatch)
+    prep.CONFIG["zfs"] = {"enabled": False}
+    ws = _ws(tmp_path)
+    (ws / "0-sources" / "dupA.jpg").write_bytes(b"SAME")
+    (ws / "0-sources" / "dupB.jpg").write_bytes(b"SAME")
+    (ws / "0-sources" / "dupA.jpg_exiftool_tmp").write_bytes(b"half-written")
+    (ws / "0-sources" / ".DS_Store").write_bytes(b"junk")
+    plan = _plan(ws)
+    r = plan.summary["report"]
+    assert r["quarantined_by_reason"] == {"duplicate": 1, "exiftool_leftover": 1, "dump_dotfile": 1}
+    assert (r["duplicates_against_mutable"], r["duplicates_against_by_dest"]) == (1, 0)
+    prep.PlanExecutor(str(ws)).execute(plan)
+    with open(utils.handoff_path(str(ws))) as f:
+        diag = json.load(f)["diagnostics"]
+    assert [d["original_path"] for d in diag["duplicates_or_conflicts"]] == ["0-sources/dupB.jpg"]
+    assert sorted((d["kind"], d["original_path"]) for d in diag["quarantined_not_duplicates"]) == [
+        ("dump_dotfile", "0-sources/.DS_Store"), ("exiftool_leftover", "0-sources/dupA.jpg_exiftool_tmp")]
+    (manifest,) = glob.glob(str(ws / ".photos-ingest-quarantine" / "*" / "manifest.json"))
+    with open(manifest) as f:
+        assert sorted(e["kind"] for e in json.load(f)) == ["dump_dotfile", "duplicate", "exiftool_leftover"]
+    with open(utils.prep_log_path(str(ws))) as f:
+        photos = json.load(f)["photos"]
+    quarantined = [q["origin"] for e in photos.values() for q in (e.get("deduplicated") or {}).get("quarantined", [])]
+    assert quarantined == ["0-sources/dupB.jpg"]
