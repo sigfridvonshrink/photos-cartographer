@@ -2211,6 +2211,18 @@ def metadata_field(item, field, valid=None):
     return held[0] if held else (None, None)
 
 
+def has_own_position(lat, lon):
+    """Whether a latitude and longitude, as `exiftool -n` reads them, are a position of the photo's own
+    (BLD-own_position_test): both present, and not both exactly 0 — what a device writes with no fix
+    (RUL-null_island_is_no_position). Only exact zero: a value merely near it may be a real place."""
+    if lat is None or lon is None:
+        return False
+    try:
+        return not (float(lat) == 0 and float(lon) == 0)
+    except (TypeError, ValueError):
+        return True             # not a number, yet held: only the zero point is no fix
+
+
 def recorded_time(parsed):
     """A file's recorded time: `(tag, value)` of the first of RECORDED_TIME_TAGS whose value holds a valid
     time, or `(None, None)`."""
@@ -2265,7 +2277,7 @@ class MetadataReader:
         else:
             parsed["extraction_status"] = "extracted_empty"
 
-        parsed["has_native_gps"] = bool(parsed.get("GPSLatitude") is not None and parsed.get("GPSLongitude") is not None)
+        parsed["has_native_gps"] = has_own_position(parsed.get("GPSLatitude"), parsed.get("GPSLongitude"))
         parsed["has_timestamp"] = recorded_time(parsed)[0] is not None
 
         # Timestamp provenance: the first field holding a valid time, not merely the first present, named

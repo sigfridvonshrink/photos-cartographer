@@ -53,7 +53,7 @@ from .photos_utils import (fingerprint_method_blocker, links_under, replace_dura
     CONFIG, CONTROL_DIR, control_dir, FINALIZED_MEDIA_ARTIFACT, track_memo_db_path, finalized_media_path, workspace_volume_error, config_path, handoff_path, guard_path, is_sealed, likely_new_dump,
     validate_config, load_config, sha256_file, sha256_text, media_class_for_ext, folder_name,
     folders_fingerprint, media_extensions_fingerprint,
-    selected_gpx_root, NO_IDENTITY_KEY, FIELD_SET_VERSION, CAMERA_GROUP_KEY_VERSION, FOLDER_ROLES,
+    selected_gpx_root, NO_IDENTITY_KEY, has_own_position, FIELD_SET_VERSION, CAMERA_GROUP_KEY_VERSION, FOLDER_ROLES,
     missing_managed_folders, top_level_links, misplaced_top_level_entries, by_dest_reprep_pending,
     json_dependency, verify_json_dependency, handoff_content_fingerprint, handoff_filename_format_blocker, write_json_artifact, write_versioned_json, db_path, ensure_control_dir,
     journal_path, ContentHasher, _move_no_clobber, get_imagemagick_version,
@@ -639,6 +639,9 @@ class GeotagWorkflow:
                     parsed = {}
             fp = _recorded_fingerprint(rec)   # the preflight stops on a photo without one
             rel = rec.get("relative_path")
+            # its own position, by the one test (BLD-own_position_test): latitude 0 and longitude 0 is none
+            own_gps = has_own_position(parsed.get("GPSLatitude"), parsed.get("GPSLongitude"))
+            held_gps = parsed.get("GPSLatitude") is not None and parsed.get("GPSLongitude") is not None
             files.append({
                 "relative_path": rel,
                 "destination": os.path.dirname(rel),         # immediate containing folder (BLD-geotag_destinations)
@@ -654,17 +657,16 @@ class GeotagWorkflow:
                                "OffsetTimeOriginal", "OffsetTimeDigitized", "OffsetTime", "TimeZone")
                               if parsed.get(k) is not None},
                 "has_timestamp": _has_recorded_time(rec),
+                # what the file holds — a position that is none included, for the comparison and the log
                 "native_gps": ({"lat": parsed.get("GPSLatitude"), "lon": parsed.get("GPSLongitude"),
                                 "processing_method": parsed.get("GPSProcessingMethod")}
-                               if (md.get("has_native_gps") or parsed.get("has_native_gps")) else None),
+                               if held_gps else None),
                 # A position geotag wrote is not the file's own: a re-run places the file again.
-                "has_native_gps": bool(md.get("has_native_gps") if md.get("has_native_gps") is not None
-                                       else parsed.get("has_native_gps"))
+                "has_native_gps": own_gps
                                   and geotag_marker(parsed.get("GPSProcessingMethod")) not in POSITION_MARKERS,
                 "geotag_marker": geotag_marker(parsed.get("GPSProcessingMethod")),
                 "processing_method": parsed.get("GPSProcessingMethod"),   # the value a time mark extends
-                "own_values": own_values(dict(parsed, has_native_gps=bool(md.get("has_native_gps")
-                                                                           or parsed.get("has_native_gps")))),
+                "own_values": own_values(dict(parsed, has_native_gps=own_gps)),
                 "metadata_field_set_version": md.get("field_set_version", FIELD_SET_VERSION),
                 "folder_class": rec.get("folder_class"),
                 "planned_filename": None,                    # set during the rename lookahead (Phase 6)
@@ -1591,6 +1593,8 @@ class GeotagWorkflow:
                     elif o["type"] == "metadata_gps_write" and o.get("gps_origin") == "recompute_automated":
                         # the track that placed it, and the instant it was placed at: what the position rests on
                         o["provenance"] = {"gpx_file": track_of.get(rel), "resolved_utc": ru}
+                        if holds_no_fix(f):                   # the device's no-fix value it replaces, for the log
+                            o["pre_state"] = held_pre_state(f)   # (RUL-log_records_null_island_replaced)
                     elif o["type"] == "metadata_gps_write" and o.get("gps_origin") == "apply_manual":
                         o["provenance"] = {"because": manual_gps_pointer(cat, dest, rel, g_d.get("folder_fallback"))}
                         o["pre_state"] = held_pre_state(f)        # the position it replaces, for the log

@@ -569,6 +569,21 @@ from a track and a corrected time, from a folder — and so weaker evidence: rep
 the photo less right, not more.
 :::
 
+:::{rat} Latitude 0, longitude 0 is a device without a fix
+:id: RAT-null_island_no_fix
+:status: ruled
+:forced: no
+:follows_from: RAT-own_position_best, CHC-total_placement, CHC-ask_only_what_data_cannot_settle
+:justifies: RUL-null_island_is_no_position, RUL-log_records_null_island_replaced
+
+A device that has no fix and writes a position anyway writes latitude 0 and longitude 0: a point in the Gulf of Guinea
+no photo of a trip is taken at. Kept as the photo's own, it would never be placed, be counted as placed, and be matched
+against the tracks as evidence of the camera's clock. It was measured nowhere, so it is no measurement to keep: the
+photo is placed as one without a position, and asking about each would ask what the data settles. Only the exact
+point counts — a position merely near it, or far from the others, may be real. The value the device wrote is replaced,
+so the log keeps it, and the photo's history still shows what it carried.
+:::
+
 :::{rat} Most specific first
 :id: RAT-placement_most_specific_first
 :status: ruled

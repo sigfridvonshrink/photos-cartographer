@@ -389,7 +389,9 @@ is to take the track that is not this trip's out of `gpx_root`.
 
 `files_total`, `preserve_native_gps`, `automatic_gpx_interpolation`, `automatic_gpx_extrapolation`,
 `automatic_folder_fallback`, `manual_locked`, `manual_review_required`, `blocked`,
-`no_gps_change_needed`. Useful for a per-destination progress display; the editor never writes these.
+`no_gps_change_needed`. Useful for a per-destination progress display; the editor never writes these. A photo
+whose position is exactly latitude 0, longitude 0 — what a device writes with no fix — counts as having none: it is
+never in `preserve_native_gps`, and is placed like any photo without a position.
 
 ---
 

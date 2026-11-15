@@ -40,7 +40,7 @@ from .photos_utils import (
     validate_config, sha256_file, sha256_text, media_class_for_ext, folder_name,
     folders_fingerprint, media_extensions_fingerprint,
     selected_gpx_root, is_gpx_file, FIELD_SET_VERSION, CAMERA_GROUP_KEY_VERSION, FOLDER_ROLES,
-    parse_naive_time,
+    parse_naive_time, has_own_position,
     missing_managed_folders, by_dest_reprep_pending,
     json_dependency, verify_json_dependency, handoff_content_fingerprint, write_json_artifact, write_versioned_json, db_path, ensure_control_dir,
     journal_path, ContentHasher, _move_no_clobber, allocate_suffix, carries_stem, track_memo_db_path,
@@ -97,6 +97,7 @@ __all__ = [
     '_GPS_PLACE_CATEGORY',
     'classify_gps',
     'held_pre_state',
+    'holds_no_fix',
     'held_time_pre_state',
     '_coordinate_tags',
     '_CLEARED_POSITION',
@@ -1084,6 +1085,14 @@ def held_pre_state(file):
     return {"present": False}
 
 
+def holds_no_fix(file):
+    """Whether `file` holds a position that is none of its own — latitude 0 and longitude 0
+    (RUL-null_island_is_no_position): a position written over it is logged with it
+    (RUL-log_records_null_island_replaced)."""
+    h = held_values(file)
+    return h.get("lat") is not None and h.get("lon") is not None and not has_own_position(h["lat"], h["lon"])
+
+
 def _coordinate_tags(lat, lon):
     """The complete EXIF coordinate tag set for a signed decimal position (BLD-position_tags).
 
@@ -1262,13 +1271,14 @@ def from_originals(file, original):
         if original.get(k) is not None:
             rt[k] = original[k]
     method = original.get("GPSProcessingMethod")
-    # A pin is taken only of a file carrying no geotag mark (BLD-original_values_pinned): its position is the device's.
-    has_gps = bool(original.get("has_native_gps"))
+    # A pin is taken only of a file carrying no geotag mark (BLD-original_values_pinned): its position is the
+    # device's — its own by the one test (BLD-own_position_test), latitude 0 and longitude 0 being none.
+    has_gps = has_own_position(original.get("GPSLatitude"), original.get("GPSLongitude"))
     f.update(raw_times=rt, source_naive_time=original.get("selected_source_naive_timestamp"),
              source_time_tag=original.get("selected_source_timestamp_tag"),
              has_timestamp=original.get("selected_source_naive_timestamp") is not None,
              native_gps=({"lat": original.get("GPSLatitude"), "lon": original.get("GPSLongitude"),
-                          "processing_method": method} if original.get("has_native_gps") else None),
+                          "processing_method": method} if has_gps else None),
              has_native_gps=has_gps, geotag_marker=geotag_marker(method), processing_method=method)
     return f
 
@@ -1482,7 +1492,7 @@ def _gps_and_rename_steps(ops, native):
         step = {"phase": "geotag", "action": "gps_written", "lat": w.get("GPSLatitude"),
                 "lon": w.get("GPSLongitude"), "origin": gps_op.get("gps_origin"),
                 "gps_processing_method": (marker.get("writes") or {}).get("GPSProcessingMethod") if marker else None}
-        if gps_op.get("gps_origin") == "apply_manual" and gps_op.get("pre_state") is not None:
+        if gps_op.get("pre_state") is not None:     # a manual position's, or one written over no fix
             step["pre_state"] = gps_op["pre_state"]
         if (gps_op.get("provenance") or {}).get("because"):
             step["because"] = gps_op["provenance"]["because"]

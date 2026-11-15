@@ -936,6 +936,17 @@ one, so long as the change maps one value to one.
 Geotag SHALL never replace a photo's own GPS position.
 :::
 
+:::{rul} A position at latitude 0 and longitude 0 is none
+:id: RUL-null_island_is_no_position
+:status: ruled
+:criticality: high
+:verify: required
+:refines: RUL-own_position_kept
+
+A photo whose position is latitude 0 and longitude 0 SHALL count, wherever geotag judges a photo's own position, as
+having none.
+:::
+
 :::{rul} A photo is placed by the most specific source it has
 :id: RUL-placement_order
 :status: ruled
