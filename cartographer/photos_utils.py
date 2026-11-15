@@ -1100,7 +1100,8 @@ _LOGGED_KINDS = ("deleted", "moved_back", "time_given", "copied")
 _UNEXPECTED_KINDS = ("changed", "appeared", "removed", "moved")
 _CHANGE_TITLES = {"changed": "changed in place", "appeared": "appeared", "removed": "removed", "moved": "moved",
                   "deleted": "deleted", "moved_back": "moved back", "time_given": "changed by hand",
-                  "copied": "the same size and time under a new inode (a copy)"}
+                  "copied": "the same size and time under a new inode (a copy)",
+                  "interrupted_run": "left by the interrupted execution"}
 
 
 def add_accept_changes_argument(parser) -> None:
@@ -1182,14 +1183,17 @@ def write_workspace_record(ws: str, cache_rows=None, carried=None) -> str:
     last step, prep's, geotag's and merge's alike, whether or not each of its operations succeeded: it is the state
     the run leaves (RUL-execution_records_state). Each file's fingerprint is prep's database row for it where that row
     still describes it (`cache_rows`), else the earlier record's for the same file: at the path it was recorded at
-    (`carried` maps a path to the one a run of the tool's own moved or rewrote it from), or anywhere under the same
-    size, time and inode. One transaction. Returns the new record's id."""
+    (`carried` maps a path to the one a run of the tool's own moved or rewrote it from), at the one an interrupted
+    execution's work took it to (BLD-interrupted_run_recognised), or anywhere under the same size, time and inode.
+    One transaction, which also clears the executions noted as begun. Returns the new record's id."""
     import uuid
-    _, prior = read_workspace_record(ws)
+    prior_id, prior = read_workspace_record(ws)
+    entries = workspace_entries(ws)
+    prior = {**prior, **recognise_interrupted_work(ws, prior_id, prior, entries)[0]}
     by_stat = {(r["size"], r["mtime_ns"], r["inode"]): r for r in prior.values()}
     carried = carried or {}
     rows = []
-    for rel, (size, mtime, ino) in sorted(workspace_entries(ws).items()):
+    for rel, (size, mtime, ino) in sorted(entries.items()):
         fp = None
         crow = (cache_rows or {}).get(rel)
         if crow is not None and (crow.get("size"), crow.get("mtime_ns")) == (size, mtime):
@@ -1210,9 +1214,242 @@ def write_workspace_record(ws: str, cache_rows=None, carried=None) -> str:
             conn.executemany("INSERT INTO workspace_record (relative_path, size, mtime_ns, inode, fingerprint) "
                              "VALUES (?, ?, ?, ?, ?)", rows)
             conn.execute("INSERT OR REPLACE INTO meta (key, value) VALUES ('workspace_record_id', ?)", (record_id,))
+            conn.execute("DELETE FROM meta WHERE key = ?", (_BEGUN_KEY,))
     finally:
         conn.close()
     return record_id
+
+
+# --- An execution interrupted before it recorded its state (RUL-interrupted_work_passes, BLD-interrupted_run_recognised)
+# An execution notes itself as begun before its first change; the record its end writes clears the note. A hard kill
+# (power loss, a killed process) leaves the note behind, newer than the record by construction — the one way the check
+# knows whose work the changes since may be, then recognised from what that run left in writing: its plan and journal.
+_BEGUN_KEY = "executions_unrecorded"
+_PHASE_PLAN_ARTIFACTS = {"prep": PREP_PLAN_ARTIFACT, "geotag": "photos-24-executable-plan.json",
+                         "merge": "photos-30-merge-plan.json"}
+_PREP_MOVES = ("move_no_clobber", "rename_no_clobber", "quarantine_move")
+
+
+def note_execution_begun(ws: str, phase: str, plan_id: str) -> None:
+    """Note, before an execution's first change, that it began on the current record (BLD-interrupted_run_recognised):
+    `{phase, plan_id, record_id}` added to the list `meta.executions_unrecorded`, which the record its end writes
+    clears. Where no record was written yet — prep's first run — there is nothing for a later check to compare with,
+    so nothing is noted."""
+    record_id, _ = read_workspace_record(ws)
+    if record_id is None:
+        return
+    conn = sqlite3.connect(db_path(ws))
+    try:
+        with conn:
+            begun = _begun_list(conn)
+            begun.append({"phase": phase, "plan_id": plan_id, "record_id": record_id})
+            conn.execute("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)", (_BEGUN_KEY, json.dumps(begun)))
+    finally:
+        conn.close()
+
+
+def _begun_list(conn) -> list:
+    row = conn.execute("SELECT value FROM meta WHERE key = ?", (_BEGUN_KEY,)).fetchone()
+    try:
+        begun = json.loads(row[0]) if row else []
+    except ValueError:
+        return []
+    return [b for b in begun if isinstance(b, dict)] if isinstance(begun, list) else []
+
+
+def executions_begun(ws: str, record_id) -> list:
+    """The executions noted as begun on the record `record_id` and never recorded — interrupted — each
+    `{phase, plan_id, record_id}`, in the order they began; [] where there is none. Read only."""
+    p = db_path(ws)
+    if record_id is None or not os.path.exists(p):
+        return []
+    try:
+        conn = sqlite3.connect(f"file:{p}?mode=ro", uri=True)
+    except sqlite3.Error:
+        return []
+    try:
+        return [b for b in _begun_list(conn) if b.get("record_id") == record_id]
+    except sqlite3.Error:
+        return []
+    finally:
+        conn.close()
+
+
+def _read_json_quietly(path):
+    try:
+        with open(path) as f:
+            return json.load(f)
+    except (OSError, ValueError):
+        return None
+
+
+def _plan_of_run(ws: str, phase: str, plan_id: str):
+    """The plan `plan_id` of `phase`: its canonical file, or the version of it a re-plan kept under `-NNN`; None where
+    none is it."""
+    import glob as _glob
+    path = os.path.join(ws, CONTROL_DIR, _PHASE_PLAN_ARTIFACTS[phase])
+    stem, ext = os.path.splitext(path)
+    for p in [path] + sorted(_glob.glob(_glob.escape(stem) + "-[0-9][0-9][0-9]*" + ext), reverse=True):
+        plan = _read_json_quietly(p)
+        if isinstance(plan, dict) and plan.get("plan_id") == plan_id:
+            return plan
+    return None
+
+
+def _settle(candidates, apply):
+    """Apply each candidate `apply` accepts, again over those left while any is accepted — a place one frees may be
+    the one another goes to — and return the accepted ones in the order they were."""
+    done, left = [], list(candidates)
+    while left:
+        kept = []
+        for c in left:
+            (done if apply(c) else kept).append(c)
+        if len(kept) == len(left):
+            break
+        left = kept
+    return done
+
+
+def _prep_own_work(ws, plan, journal, work, cur):
+    """Prep's work an interrupted run left (BLD-interrupted_run_recognised): each file its plan moves, followed through
+    the plan's moves in order, found at exactly one place they take it with its entry — the recorded file's size, time
+    and inode, or, from the inbox, the size and time the plan found it with — and gone from where it was; and the
+    quarantine manifest of the plan's run, holding entries of its own quarantine moves only."""
+    chains, at = [], {}
+    for o in plan.get("operations") or []:
+        if o.get("type") not in _PREP_MOVES or not o.get("source") or not o.get("destination"):
+            continue
+        src, dst = o["source"], o["destination"]
+        ch = at.pop(src, None)
+        if ch is None:
+            r, pre = work.get(src), o.get("preconditions") or {}
+            if r is not None:
+                exp = (r["size"], r["mtime_ns"], r["inode"])
+            elif _change_role(src) == "sources" and pre.get("size") is not None and pre.get("mtime_ns") is not None:
+                exp = (pre["size"], pre["mtime_ns"], None)
+            else:
+                continue
+            ch = {"from": src, "exp": exp, "places": []}
+            chains.append(ch)
+        fp = next((fx["data"].get("content_hash") for fx in o.get("database_effects_after_verification") or []
+                   if fx.get("action") == "upsert" and (fx.get("data") or {}).get("relative_path") == dst), None)
+        ch["places"].append((dst, fp))
+        at[dst] = ch
+
+    def apply(ch):
+        src, exp = ch["from"], ch["exp"]
+        if src in cur:
+            return False                                  # still where it was, or another file there now
+        hits = [(p, fp) for p, fp in ch["places"] if p in cur and p not in work and cur[p][:2] == exp[:2]
+                and (exp[2] is None or cur[p][2] == exp[2])]
+        if len(hits) != 1 or (exp[2] is not None and src not in work):
+            return False
+        p, fp = hits[0]
+        was = work.pop(src, None)
+        work[p] = {"size": cur[p][0], "mtime_ns": cur[p][1], "inode": cur[p][2],
+                   "fingerprint": was["fingerprint"] if was else (fp if isinstance(fp, str) else None)}
+        ch["moved"] = {"path": p, "from": src}
+        return True
+    out = [ch["moved"] for ch in _settle(chains, apply)]
+
+    manifests = {}
+    for o in plan.get("operations") or []:
+        if o.get("type") == "quarantine_move" and (o.get("verification") or {}).get("plan_id"):
+            m = f"{QUARANTINE_DIR}/{o['verification']['plan_id']}/manifest.json"
+            manifests.setdefault(m, set()).add(o.get("operation_id"))
+    for m, ids in sorted(manifests.items()):
+        r = work.get(m)
+        if m not in cur or (r is not None and (r["size"], r["mtime_ns"], r["inode"]) == cur[m]):
+            continue
+        held = _read_json_quietly(os.path.join(ws, m))
+        if isinstance(held, list) and held and all(isinstance(e, dict) and e.get("operation_id") in ids for e in held):
+            work[m] = {"size": cur[m][0], "mtime_ns": cur[m][1], "inode": cur[m][2], "fingerprint": None}
+            out.append({"path": m})
+    return out
+
+
+def _geotag_own_work(ws, plan, journal, work, cur):
+    """Geotag's work an interrupted run left (BLD-interrupted_run_recognised): each photo of its plan whose journal notes
+    the state the run left it in (`media_after`, by the path it left it at — the plan's rename target, or its own) and
+    found there with exactly that size and time, gone from the path it was recorded at where it was renamed."""
+    after = journal.get("media_after") or {}
+    final = {}
+    for dd in (plan.get("destinations") or {}).values():
+        for o in dd.get("operations") or []:
+            rel = o["relative_path"]
+            final.setdefault(rel, rel)
+            if o["type"] == "rename_no_clobber":
+                final[rel] = rel.rsplit("/", 1)[0] + "/" + o["to"] if "/" in rel else o["to"]
+
+    def apply(item):
+        rel, to = item
+        a = after.get(to)
+        if not isinstance(a, dict) or rel not in work or to not in cur:
+            return False
+        if cur[to][:2] != (a.get("size"), a.get("mtime_ns")):
+            return False
+        if to != rel and (rel in cur or to in work):
+            return False
+        r = work[rel]
+        if to == rel and (r["size"], r["mtime_ns"], r["inode"]) == cur[to]:
+            return False                                  # as recorded: nothing to recognise
+        work.pop(rel)
+        work[to] = {"size": cur[to][0], "mtime_ns": cur[to][1], "inode": cur[to][2], "fingerprint": r["fingerprint"]}
+        return True
+    return [{"path": to, **({"from": rel} if to != rel else {})}
+            for rel, to in _settle(sorted(final.items()), apply)]
+
+
+def _merge_own_work(ws, plan, journal, work, cur):
+    """Merge's work an interrupted run left (BLD-interrupted_run_recognised): each photo of its plan gone from photos by
+    destination that its journal confirms moved, or whose library place holds a file of its recorded size and time."""
+    done = journal.get("operations") or {}
+    out = []
+    for d in (plan.get("destinations") or {}).values():
+        for f in d.get("files") or []:
+            src, target = f.get("by_dest_source"), f.get("library_target")
+            if src not in work or src in cur:
+                continue
+            ok = done.get(src) == "confirmed"
+            if not ok and target:
+                try:
+                    st = os.lstat(target)
+                    ok = (st.st_size, st.st_mtime_ns) == (work[src]["size"], work[src]["mtime_ns"])
+                except OSError:
+                    ok = False
+            if ok:
+                work.pop(src)
+                out.append({"path": src})
+    return out
+
+
+_OWN_WORK = {"prep": _prep_own_work, "geotag": _geotag_own_work, "merge": _merge_own_work}
+
+
+def recognise_interrupted_work(ws: str, record_id, record: dict, current: dict):
+    """`(record, recognised)`: the record as the executions begun on it and interrupted before recording left the
+    workspace's files (BLD-interrupted_run_recognised) — each change that is exactly what an operation of such a run's
+    plan, by its journal, would leave taken into it — and those changes, each `{path, from?, phase, plan_id}`. A run
+    whose plan cannot be found or read is recognised in nothing; anything not recognised stays a change."""
+    work = {p: dict(r) for p, r in record.items()}
+    found, seen = [], set()
+    for run in executions_begun(ws, record_id):
+        key = (run.get("phase"), run.get("plan_id"))
+        if key in seen or key[0] not in _OWN_WORK or not key[1]:
+            continue
+        seen.add(key)
+        plan = _plan_of_run(ws, *key)
+        if plan is None:
+            continue
+        journal = _read_json_quietly(journal_path(ws, key[1]))
+        trial = {p: dict(r) for p, r in work.items()}
+        try:
+            own = _OWN_WORK[key[0]](ws, plan, journal if isinstance(journal, dict) else {}, trial, current)
+        except (KeyError, TypeError, AttributeError, ValueError):
+            continue                                       # a plan or journal of another shape tells nothing
+        work = trial
+        found.extend(dict(c, phase=key[0], plan_id=key[1]) for c in own)
+    return work, found
 
 
 def forget_in_workspace_record(ws: str, prefixes) -> None:
@@ -1361,7 +1598,11 @@ def check_workspace(ws: str, phase: str, command: str, accept_code=None, record_
         emit_next_step(reporter, "`prep plan` and `prep execute` — each execution records the state it leaves — "
                                  f"then re-run `{phase} {command}`.")
         return None, 2
-    changes = compare_workspace(record, workspace_entries(ws))
+    current = workspace_entries(ws)
+    # The work of an execution interrupted before it recorded the state it left is that run's, not a change by hand:
+    # taken into the record compared with, and named (RUL-interrupted_work_passes, BLD-interrupted_run_recognised).
+    as_left, own = recognise_interrupted_work(ws, record_id, record, current)
+    changes = compare_workspace(as_left, current)
     try:
         acceptances = read_accepted_changes(ws)
     except ValueError as e:
@@ -1414,10 +1655,17 @@ def check_workspace(ws: str, phase: str, command: str, accept_code=None, record_
         reporter.log("Changed by hand since the last execution, as a workspace allows:")
         for line in format_changes(logged):
             reporter.log(line)
+    runs = sorted({(c["phase"], c["plan_id"]) for c in own})
+    for phase_of, plan_id in runs:
+        mine = [dict(c, kind="interrupted_run") for c in own if (c["phase"], c["plan_id"]) == (phase_of, plan_id)]
+        reporter.log(f"Left by {phase_of}'s execution of plan {plan_id}, interrupted before it recorded the state it "
+                     f"left, and recognised as its own work ({len(mine)} file(s)):")
+        for line in format_changes(mine):
+            reporter.log(line)
     out = []
-    for c in logged + earlier + accepted_now:
-        e = {k: c[k] for k in ("kind", "path", "from", "accepted") if c.get(k) is not None}
-        fp = (record.get(c.get("from") or c["path"]) or {}).get("fingerprint")
+    for c in logged + earlier + accepted_now + [dict(c, kind="interrupted_run") for c in own]:
+        e = {k: c[k] for k in ("kind", "path", "from", "accepted", "phase", "plan_id") if c.get(k) is not None}
+        fp = (record.get(c.get("from") or c["path"]) or as_left.get(c["path"]) or {}).get("fingerprint")
         try:
             fpv = json.loads(fp).get("value") if fp else None
         except (ValueError, AttributeError):

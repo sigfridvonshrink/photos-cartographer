@@ -41,7 +41,7 @@ import errno
 # ==============================================================================
 from .photos_utils import CONFIG, CAMERA_IDENTITY_FIELDS, folder_name, managed_folder_names, dedup_priority, is_track_file, missing_managed_folders, misplaced_top_level_entries, FOLDER_ROLES, UNTIMED_PREFIX, untimed_stem, carries_stem, filename_format_changed, code_fingerprint, hidden_folder_holds_files
 from .photos_utils import (add_accept_changes_argument, check_workspace, read_workspace_record, write_workspace_record,
-                          forget_in_workspace_record)
+                          forget_in_workspace_record, note_execution_begun)
 from .reporting import get_reporter, emit_next_step
 from .photos_utils import (replace_durably, _move_no_clobber, _move_link_unlink, _get_renameat2,
                           WorkspaceCache, WorkspaceLock, ContentHasher, PlanFingerprintMemo,
@@ -631,6 +631,9 @@ class PlanExecutor:
             # 4. Execute Operations. The preflight above has refused a plan of another command, an operation of a
             #    kind prep does not carry out or one in photos by destination, and a plan holding a blocker.
             self.coordinator.start_phase("executing - applying operations", len(plan.operations))
+            # Noted as begun before the first change, so a hard kill's work is recognised by the next check from this
+            # plan (BLD-interrupted_run_recognised); the record this run's end writes clears the note.
+            note_execution_begun(self.workspace_root, "prep", plan.plan_id)
             self._changing = True
 
             # Apply all post-verification cache effects as one transaction (BLD-workspace_database): create the

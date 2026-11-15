@@ -577,3 +577,187 @@ def test_a_workspace_with_no_record_is_work_for_prep(tmp_path):
     assert not prep._prep_nothing_to_do(str(ws), rep)
     utils.write_workspace_record(str(ws))
     assert prep._prep_nothing_to_do(str(ws), rep)
+
+
+# --- an execution interrupted before it recorded its state ---------------
+
+class _Killed(BaseException):
+    """The process killed outright: nothing after it runs, so the record an execution's end writes — in its `finally` —
+    is left out by hand around it."""
+
+
+def _killed(*a, **k):
+    raise _Killed()
+
+
+def _kill_prep_at_its_last_move(monkeypatch, ws):
+    """Prep's execution killed just after its last move — before that move is journaled, the handoff written or the
+    state recorded. Returns the places it moved files to."""
+    plan = json.load(open(utils.prep_plan_path(str(ws))))
+    n = sum(o["type"] in ("move_no_clobber", "rename_no_clobber", "quarantine_move") for o in plan["operations"])
+    real_move, real_record, moves = prep._move_no_clobber, prep.write_workspace_record, []
+
+    def move(src, dst):
+        real_move(src, dst)
+        moves.append(dst)
+        if len(moves) == n:
+            raise _Killed()
+    monkeypatch.setattr(prep, "_move_no_clobber", move)
+    monkeypatch.setattr(prep, "write_workspace_record", lambda *a, **k: None)
+    with pytest.raises(_Killed):
+        _prep(monkeypatch, ws, "execute")
+    monkeypatch.setattr(prep, "_move_no_clobber", real_move)
+    monkeypatch.setattr(prep, "write_workspace_record", real_record)
+    return [os.path.relpath(m, ws) for m in moves]
+
+
+def _killed_prep(monkeypatch, tmp_path):
+    """A recorded workspace, a new dump planned — a new photo and a duplicate of one prepped — and its execution killed
+    after its last move: (workspace, the record's id, the places the run moved files to)."""
+    ws = _fresh(monkeypatch, tmp_path)
+    (ws / "0-sources" / "d.jpg").write_bytes(b"DDDD")
+    (ws / "0-sources" / "again.jpg").write_bytes(b"AAAA")
+    rc, said, _ = _prep(monkeypatch, ws, "plan")
+    assert rc == 0, said
+    rid = utils.read_workspace_record(str(ws))[0]
+    moved = _kill_prep_at_its_last_move(monkeypatch, ws)
+    assert utils.read_workspace_record(str(ws))[0] == rid                       # nothing recorded
+    assert [b["phase"] for b in utils.executions_begun(str(ws), rid)] == ["prep"]
+    return ws, rid, moved
+
+
+@pytest.mark.spec("RUL-interrupted_work_passes", "RUL-allowed_changes_named", "BLD-interrupted_run_recognised",
+                  "BLD-workspace_changes_logged", test="TST-workspace_check-a_hard_killed_prep_execution_is_recognised")
+def test_a_hard_killed_prep_execution_is_recognised(tmp_path, monkeypatch):
+    """Prep's execution killed outright after its moves — a photo filed from the inbox into photos by date, a duplicate
+    set aside into the quarantine with its manifest, the last move not even journaled — records nothing. The next plan
+    finds each where the killed run's plan put it, with the entry it had: its own work, passing unasked and named; the
+    execution after it names it in prep's log and records the state, the note of the killed run cleared with it."""
+    ws, rid, moved = _killed_prep(monkeypatch, tmp_path)
+    assert any(m.startswith(BY_DATE) for m in moved) and any(m.startswith(".photos-ingest-quarantine") for m in moved)
+    rc, said, stop = _prep(monkeypatch, ws, "plan")
+    assert rc == 0 and stop is None and "--accept-changes" not in said, said
+    assert "interrupted" in said and all(m in said for m in moved), said
+    rc, said, _ = _prep(monkeypatch, ws, "execute")
+    assert rc == 0, said
+    own = [c for c in _log(ws)["workspace_changes"] if c["kind"] == "interrupted_run"]
+    assert {c["phase"] for c in own} == {"prep"}
+    paths = {c["path"] for c in own}
+    assert set(moved) <= paths and any(p.endswith("/manifest.json") for p in paths - set(moved)), own
+    rid2, _ = utils.read_workspace_record(str(ws))
+    assert rid2 != rid and utils.executions_begun(str(ws), rid2) == []
+    rc, said, _ = _prep(monkeypatch, ws, "plan")
+    assert rc == 0 and "interrupted" not in said, said
+
+
+def _killed_geotag(tmp_path, monkeypatch):
+    """A geotag execution killed once every photo is written, renamed and journaled, before its summary and the record:
+    (workspace, control directory, the record before it)."""
+    import test_geotag_execution as gx
+    ws, ctl = gx._ready_ws(tmp_path, monkeypatch)
+    gx._mock_tools(monkeypatch, ws)
+    real_write = cal.GeotagWorkflow._exiftool_write
+
+    def rewrite(self, p, tags):                       # as exiftool -o and the rename over the photo do
+        tmp = p + "_exiftool_tmp"
+        with open(p, "rb") as src, open(tmp, "wb") as dst:
+            dst.write(src.read() + b" tagged")
+        os.replace(tmp, p)
+        return real_write(self, p, tags)
+    monkeypatch.setattr(cal.GeotagWorkflow, "_exiftool_write", rewrite)
+    handoff = json.load(open(ctl / "photos-11-handoff.json"))
+    utils.write_workspace_record(str(ws), cache_rows={f["relative_path"]: f for f in handoff["files"]})   # as prep's
+    rid, before = utils.read_workspace_record(str(ws))
+    real_summary, real_record = cal.GeotagWorkflow._build_summary, cal.write_workspace_record
+    monkeypatch.setattr(cal.GeotagWorkflow, "_build_summary", _killed)
+    monkeypatch.setattr(cal, "write_workspace_record", lambda *a, **k: None)
+    with pytest.raises(_Killed):
+        gx._execute(monkeypatch, ws)
+    monkeypatch.setattr(cal.GeotagWorkflow, "_build_summary", real_summary)
+    monkeypatch.setattr(cal, "write_workspace_record", real_record)
+    assert utils.read_workspace_record(str(ws))[0] == rid
+    return ws, ctl, before
+
+
+def _check(ws, phase, command):
+    sink = CaptureSink()
+    with use_reporter(Reporter([sink])):
+        out = utils.check_workspace(str(ws), phase, command)
+    return out, "\n".join(e.msg for e in sink.logs())
+
+
+@pytest.mark.spec("RUL-interrupted_work_passes", "RUL-allowed_changes_named", "BLD-interrupted_run_recognised",
+                  "BLD-workspace_changes_logged", test="TST-workspace_check-a_hard_killed_geotag_execution_is_recognised")
+def test_a_hard_killed_geotag_execution_is_recognised(tmp_path, monkeypatch):
+    """Geotag's execution killed outright once its photos are written — each a new inode, size and time — and renamed:
+    nothing recorded, the photos are where and as its journal notes it left them, so the next command passes them
+    unasked as the killed run's work; the execution that resumes the plan names them in its summary and records them,
+    each keeping its fingerprint under its new name."""
+    import test_geotag_execution as gx
+    ws, ctl, before = _killed_geotag(tmp_path, monkeypatch)
+    renamed = sorted(p for p in utils.workspace_entries(str(ws)) if p.startswith(BY_DEST))
+    assert renamed and not set(renamed) & set(before)
+    (changes, stop), said = _check(ws, "geotag", "finalize")
+    assert stop is None and "interrupted" in said, said
+    assert sorted(c["path"] for c in changes) == renamed
+    assert {(c["kind"], c["phase"]) for c in changes} == {("interrupted_run", "geotag")}
+    assert {c["from"] for c in changes} == {p for p in before if p.startswith(BY_DEST)}
+    assert gx._execute(monkeypatch, ws) == 0
+    summary = json.load(open(ctl / "photos-25-execution-summary.json"))
+    assert sorted(c["path"] for c in summary["workspace_changes"] if c["kind"] == "interrupted_run") == renamed
+    _rid, record = utils.read_workspace_record(str(ws))
+    assert {record[p]["fingerprint"] for p in renamed} == {before[p]["fingerprint"] for p in before
+                                                           if p.startswith(BY_DEST)}
+    assert _check(ws, "geotag", "finalize")[0] == ([], None)
+
+
+@pytest.mark.spec("RUL-interrupted_work_passes", "BLD-interrupted_run_recognised",
+                  test="TST-workspace_check-a_hard_killed_merge_execution_is_recognised")
+def test_a_hard_killed_merge_execution_is_recognised(tmp_path, monkeypatch):
+    """Merge's execution killed outright after moving its photos into the library, before the record: the photos gone
+    from photos by destination are its journaled moves, named as the killed run's work — not as photos culled."""
+    import test_merge_execute as mx
+
+    def fake(self, abs_path):
+        v = mx._parse_fp(abs_path)
+        return {"status": "valid", "value": v, "strategy": "image-content-hash-v2", "engine_version": "test"}
+    monkeypatch.setattr(merge.MergeWorkflow, "_fingerprint_library_file", fake)
+    ws, _lib = mx._ws(tmp_path, [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"},
+                                 {"fp": "B", "dest": "Trip", "final_name": "b.jpg"}])
+    assert merge._run_locked_workflow("plan", str(ws)) == 0
+    rid = utils.read_workspace_record(str(ws))[0]
+    monkeypatch.setattr(merge.MergeWorkflow, "_build_summary", _killed)
+    monkeypatch.setattr(merge, "write_workspace_record", lambda *a, **k: None)
+    with pytest.raises(_Killed):
+        merge._run_locked_workflow("execute", str(ws))
+    assert utils.read_workspace_record(str(ws))[0] == rid
+    assert not any(p.startswith(BY_DEST) for p in utils.workspace_entries(str(ws)))
+    (changes, stop), said = _check(ws, "merge", "plan")
+    assert stop is None and "deleted" not in said, said
+    assert [(c["kind"], c["path"]) for c in changes] == [("interrupted_run", f"{BY_DEST}/Trip/a.jpg"),
+                                                         ("interrupted_run", f"{BY_DEST}/Trip/b.jpg")]
+
+
+@pytest.mark.spec("RUL-interrupted_work_exact", "RUL-unexpected_change_stops", "BLD-interrupted_run_recognised",
+                  test="TST-workspace_check-a_change_the_killed_run_did_not_leave_still_stops")
+def test_a_change_the_killed_run_did_not_leave_still_stops(tmp_path, monkeypatch):
+    """After a hard kill, a file not as the killed run's records say it left it — prep's photo with another
+    modification time than the plan found it with, geotag's with another size than its journal notes — is no work of
+    that run: the command stops, naming that file and only it, the rest of the run's work passing as its own."""
+    ws, _rid, moved = _killed_prep(monkeypatch, tmp_path)
+    touched = next(m for m in moved if m.startswith(BY_DATE))
+    st = os.stat(ws / touched)
+    os.utime(ws / touched, ns=(st.st_atime_ns, st.st_mtime_ns + 1_000_000_000))
+    rc, said, stop = _prep(monkeypatch, ws, "plan")
+    assert rc == 2 and stop is not None, said
+    listed = "\n".join(stop.lines)
+    assert touched in listed and not any(m in listed for m in moved if m != touched), listed
+
+    (tmp_path / "g").mkdir()
+    gws, _ctl, _before = _killed_geotag(tmp_path / "g", monkeypatch)
+    edited = sorted(p for p in utils.workspace_entries(str(gws)) if p.startswith(BY_DEST))
+    with open(gws / edited[0], "ab") as f:
+        f.write(b" edited since")
+    (changes, stop), said = _check(gws, "geotag", "finalize")
+    stopped_on = said.split("--accept-changes")[0]
+    assert changes is None and stop == 2 and edited[0] in stopped_on and edited[1] not in stopped_on, said

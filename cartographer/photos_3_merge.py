@@ -47,7 +47,7 @@ from .photos_utils import (links_under, fingerprint_method_blocker,
     library_marker_path, allocate_suffix, suffix_root, max_suffix, ContentHasher, WorkspaceCache,
     journal_path, take_zfs_snapshot, zfs_dataset, _move_no_clobber, get_imagemagick_version, write_db_snapshot, reseal_archival_package,
     write_sealed_marker, likely_new_dump, entries_not_carried, prep_log_path, prep_log_blocker, WorkspaceLock, LibraryLock, XDEV_TMP_PREFIX, XDEV_TMP_SUFFIX,
-    workspace_volume_error, add_accept_changes_argument, check_workspace, write_workspace_record,
+    workspace_volume_error, add_accept_changes_argument, check_workspace, write_workspace_record, note_execution_begun,
 )
 from .reporting import get_reporter, emit_next_step
 
@@ -1078,6 +1078,9 @@ class MergeWorkflow:
         recs = sorted((f for d in plan.get("destinations", {}).values() for f in d.get("files", [])),
                       key=lambda r: r["by_dest_source"])
         results = []
+        # Noted as begun before the first move, so a hard kill's work is recognised by the next check from this plan's
+        # journal (BLD-interrupted_run_recognised); the record the finally writes clears the note.
+        note_execution_begun(ws, "merge", plan["plan_id"])
         try:
             with concurrent.futures.ThreadPoolExecutor(max_workers=max(1, jobs)) as ex:
                 futs = [ex.submit(self._move_file, ws, library_root, rec) for rec in recs]

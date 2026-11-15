@@ -1763,6 +1763,23 @@ nothing; geotag and merge build on what prep recorded, and without a record a ch
 is the one way the quarantine changes, so what it removes is taken out of the record with it.
 :::
 
+:::{rat} A run killed outright left its work in writing
+:id: RAT-interrupted_run_left_in_writing
+:status: ruled
+:forced: no
+:follows_from: RAT-tool_leaves_its_state, RAT-idempotent_reruns
+:justifies: RUL-interrupted_work_passes, RUL-interrupted_work_exact
+
+An execution records the state it leaves at its end, a failed one included — but a run killed outright, by a power
+loss or a killed process, never reaches its end, and the next run would list its half-finished work as changes by
+hand, to be accepted once by a user who made none of them. The run did leave its work in writing: its plan says where
+each file goes, and its journal notes what it did and, for geotag, the state each photo was in after its write. A
+change that is exactly what an operation of that run leaves is the tool's own work and passes unasked; the owner ruled
+it so (*"both recommended"*). Exactly, because the check exists to catch what no command made: a file anywhere else, or
+with another entry, is not that run's work however near it comes, and stops as any other change does. What a killed run
+did after its last note — a photo written while the journal was not yet — is not in writing, so it is asked.
+:::
+
 :::{rat} Accepted once, by the code of the list
 :id: RAT-accept_once_by_code
 :status: ruled

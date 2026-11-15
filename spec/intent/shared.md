@@ -3766,6 +3766,29 @@ files in, whether or not each of its operations succeeded.
 No plan, dry run or finalize SHALL change the recorded state of the workspace's files.
 :::
 
+:::{rul} An interrupted execution's own work passes
+:id: RUL-interrupted_work_passes
+:status: ruled
+:criticality: high
+:verify: required
+:refines: RUL-workspace_checked_first
+
+A change made by an execution that ended before it recorded the state it left — a file where and as that run's plan
+or journal says an operation of it leaves the file — SHALL pass the comparison as that run's work.
+:::
+
+:::{rul} Only what the interrupted run's records say passes as its work
+:id: RUL-interrupted_work_exact
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+:refines: RUL-interrupted_work_passes
+
+No change SHALL pass as an interrupted execution's work unless it is exactly what an operation of that run's plan or
+journal leaves: the file at the path the operation takes it to, with the entry the run's records give it there.
+:::
+
 :::{rul} Geotag and merge need a recorded state
 :id: RUL-record_needed
 :status: ruled

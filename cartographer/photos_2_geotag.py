@@ -61,7 +61,7 @@ from .photos_utils import (fingerprint_method_blocker, links_under, replace_dura
     prep_log_path, prep_log_blocker, entries_not_carried, retaken_fingerprints, write_db_snapshot, take_zfs_snapshot,
     control_archive_members, write_control_archive, workspace_id,
     WorkspaceLock, ProgressCoordinator,
-    add_accept_changes_argument, check_workspace, write_workspace_record,
+    add_accept_changes_argument, check_workspace, write_workspace_record, note_execution_begun,
 )
 from .reporting import get_reporter, emit_next_step, next_steps_muted
 
@@ -2274,6 +2274,9 @@ class GeotagWorkflow:
                 by_file.setdefault(op["relative_path"], []).append(op)
 
         results = []
+        # Noted as begun before the first photo is touched, so a hard kill's work is recognised by the next check from
+        # this plan's journal (BLD-interrupted_run_recognised); the record the finally writes clears the note.
+        note_execution_begun(ws, "geotag", plan["plan_id"])
         try:
             return self._apply_plan(plan, gpx, journal, media_after, jpath, accepted, by_file, results, snapshot,
                                     jobs, now_iso, execution_id, workspace_changes)
