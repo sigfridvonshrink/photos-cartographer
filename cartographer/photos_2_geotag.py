@@ -1058,7 +1058,9 @@ class GeotagWorkflow:
                       if isinstance(c.get("effective_time_anchor"), dict)
                       and c["effective_time_anchor"].get("source") in self._OWN_GPS_SOURCES]
             off = lambda c: c["effective_time_anchor"]["offset_seconds"]
-            found = [m for m in donors if not hand(m[2])]      # what the GPS alone gave
+            # what the GPS alone gave — a proposal accepted as it stood among them: accepting vouches for the
+            # reading, it chooses no number (RUL-accepted_offset_is_the_positions_own)
+            found = [m for m in donors if not hand(m[2])]
             chosen = [m for m in donors if hand(m[2])]         # what the user picked from it
             # An offset the user chose is held against what the GPS gave by itself, as two of those are against
             # each other (RUL-chosen_offset_checked_same_day); two the user chose are both their word, and are not.

@@ -532,6 +532,18 @@ user chose from those positions that day in another destination, SHALL NOT take 
 right.
 :::
 
+:::{rul} An offset accepted as proposed is the positions' own
+:id: RUL-accepted_offset_is_the_positions_own
+:status: ruled
+:criticality: high
+:verify: required
+:refines: RUL-chosen_offset_checked_same_day
+
+An offset the user accepted as the camera's own positions proposed it SHALL count, wherever offsets of one day in
+different destinations are held against each other, as one those positions gave by themselves, not as one the user
+chose.
+:::
+
 :::{rul} The user's choice is not set aside by an offset it was not asked about
 :id: RUL-chosen_offset_not_withheld
 :status: ruled

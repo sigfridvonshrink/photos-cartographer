@@ -239,6 +239,20 @@ their knowledge. Both are shown, each naming the other; and while they disagree 
 would decide a third destination from one side of an open question.
 :::
 
+:::{rat} Accepting a proposal vouches for the reading, not for a number
+:id: RAT-accepted_offset_is_the_positions_own
+:status: ruled
+:forced: no
+:follows_from: RAT-chosen_offset_evidence_and_word
+:justifies: RUL-accepted_offset_is_the_positions_own
+
+An offset the camera's own positions proposed, accepted as it stood, is still what those positions gave: accepting
+says the GPS's reading is fine, not "I chose this number". The user picked nothing against the evidence, so there is
+no word of theirs that a disagreement elsewhere that day would set aside unasked — it is held against another
+destination's offset as an offset that applied itself is, and waits for the user where those would. The owner's
+ruling: *"proposal counts as automatic today - keep it automatic"*.
+:::
+
 :::{rat} A camera that records its offset says which zone its clock was on
 :id: RAT-camera_records_its_clock_zone
 :status: ruled
