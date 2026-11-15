@@ -2,6 +2,32 @@
 
 *What was decided and why, newest first. A record: never corrected forward. Per-commit detail is `git log`.*
 
+## 2026-11-15 — seven ways a wrong value reached the originals (BACKLOG 24, 26, 36, 37, 38, 42, 44)
+
+Each was a value the tool could write into a photo while looking settled. Ruled *"42 a; 38 a; 24 a; 37 ok; 36 a;
+44 a; 26 a"*:
+
+- **a clock reset to its factory date** (42) — a guessed offset (the destination's zone, or the camera's recorded
+  offset) that puts every photo of a cell farther than the largest clock error from every other device's photo of the
+  destination — phones, cameras settled by their own GPS or by the user — takes no effect, accepted or not; only an
+  offset written by hand resolves it. Tracks alone never set it off: under years of tracks, a trip with none of its
+  own is far from all of them too. The editor takes the true time of one photo and writes the offset from it.
+- **the camera's recorded offset** (36) — where a camera cell's photos all record one `OffsetTimeOriginal`, it is
+  proposed ahead of the zone's, a guess like it, accepted or checked against the tracks; photos recording different
+  offsets propose none and are listed.
+- **a drift confirmation** (37) — it names the tracks it was made against, by fingerprint, and holds only while each is
+  there unchanged; otherwise it is asked again, the answer kept as written.
+- **a time from the modification field** (38) — a photo whose only time is `ModifyDate` is the editing computer's
+  clock: solved like a file naming no camera, never given its camera's offset nor opening its days.
+- **a position at (0, 0)** (24) — no position: placed like a photo without one, never an anchor; the write over it is
+  logged with what it replaced.
+- **a time changed by hand after geotag wrote it** (44) — geotag records every time it writes; a photo holding a time
+  that is neither its original nor one geotag wrote stops the plan, named, never written back over.
+- **the other time fields** (26) — `CreateDate` with its offset, `XMP:DateCreated` and the IPTC date and time, where
+  the photo holds them, are written the corrected time too; none is added. `ModifyDate` stays (the edit time), and the
+  sub-second fields stay: an offset is whole seconds, so the fraction holds. Prep reads these fields now
+  (`FIELD_SET_VERSION` 3), so a workspace prepped before is prepped again.
+
 ## 2026-11-15 — tracks ranked by the device that recorded them (BACKLOG 29)
 
 **The better device is believed first.** The owner records each trip on a phone and a standalone receiver, and the

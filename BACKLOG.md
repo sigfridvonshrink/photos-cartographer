@@ -4,7 +4,7 @@
 
 - **What this is:** [`README.md`](README.md). **The record:** [`HISTORY.md`](HISTORY.md).
 
-*Open items: **35** — 2, 6 to 7, 11, 13 to 16, 18, 20 to 28, 30 to 32, 35 to 40, 42 to 49.* 🛑 Numbers are never reused; the next is **50**.
+*Open items: **28** — 2, 6 to 7, 11, 13 to 16, 18, 20 to 23, 25, 27, 28, 30 to 32, 35, 39, 40, 43, 45 to 49.* 🛑 Numbers are never reused; the next is **50**.
 
 ---
 
@@ -69,7 +69,7 @@ saves only over what it loaded; tracks none of which can be read stop geotag.
 - *limits:* the tolerance in recognising geotag's own interrupted write; how anchor offsets are clustered and a tie
   falls; a projection with no heading point lands on the track's end; coordinates rounded to six places; track
   times parsed as the host's Python parses them; a decode killed after ten seconds; blank camera-identity values;
-  what counts as a photo's own position (item 24); one library file compared per photo; the suffix above the
+  what counts as a photo's own position beyond (0, 0), which is none (`RUL-null_island_is_no_position`); one library file compared per photo; the suffix above the
   highest of library and batch (`BLD-collision_suffix` says "next free"); case-only collisions refused on every
   filesystem; a redundant JPEG paired with case; an uppercase extension left in photos by destination; and the
   exit statuses (1 locked, 2 refused, 3 partial or failed, 130 interrupted; merge's plan and dry run exit 0 with
@@ -305,16 +305,6 @@ mid-day), from the other side.
 **Open:** whether adjacent days of one camera in one destination with a small gap between their photos are offered
 the neighbour's offset — a proposal, to accept — or decided as one. To be ruled.
 
-### 24. A device position that is not a fix
-
-**Why:** a photo counts as having its own position when it has a latitude and a longitude. One at (0, 0), or far
-from everything else the camera did that day, is kept as the photo's own, never offered for placement, counted as
-placed, and used as an anchor. Item 16 covers positions the agreed offset contradicts; this is the position that is
-wrong on its face.
-
-**Open:** what marks a position as no fix (null island; out of range is refused already), and what then — treat the
-photo as having none, or ask.
-
 ### 25. A photo that cannot be written holds the whole workspace
 
 **Why:** a photo exiftool will not write (a damaged file, a format it reads and cannot write) fails every run; the
@@ -323,19 +313,6 @@ photo out of photos by destination and running prep and the plan again.
 
 **What to do:** have execute's output and the summary say so for a photo that fails twice the same way; decide
 whether the user can instead accept it as it is, which would be a new decision to record.
-
-### 26. What geotag leaves in the other time fields
-
-**Why:** geotag writes `DateTimeOriginal` and `OffsetTimeOriginal`. `CreateDate`, `ModifyDate` and their offsets
-keep the camera's uncorrected time, so a corrected photo holds times that disagree, and a program that reads
-`CreateDate` shows the old one. No item decides it.
-
-**Open:** write them all to the corrected time, leave them (they are the camera's record), or clear the offsets that
-no longer hold. digiKam's reading order decides how much it matters.
-
-**Added by the time review of 2026-11-14:** a real write leaves `XMP:DateCreated` and `IPTC:DateCreated` with the
-old time and old offset, and `SubSecTimeOriginal` attached to the new second, so the composite sub-second time reads
-as the new second with the old fraction.
 
 ### 27. A torn plan, and the editor's save of three records
 
@@ -434,34 +411,6 @@ offset. The same evidence would settle phone photos with no offset tag (item 20)
 **Open:** a stale fix (a camera reusing its last fix) gives a wrong time — what bounds it; whether such an offset
 applies itself as one agreed by several anchors does.
 
-### 36. A camera photo's own recorded offset is ignored
-
-**Why:** a recent body left on home time writes `OffsetTimeOriginal` +01:00 in Japan. The timezone-derived proposal
-is built from Japan's zone, eight hours wrong, and offered as the default answer; the tag that says which zone the
-clock was on is read only for phones. `TimeZone` is carried into the file model and read by nothing.
-
-**Open:** derive the unanchored proposal from the recorded offset where the camera's photos carry one; what when they
-disagree with each other or with a GPS anchor.
-
-### 37. A drift confirmation outlives the tracks it was made against
-
-**Why:** an offset that applied itself rests on its tracks (`RUL-kept_offset_rests_on_its_tracks`); one the user
-confirmed by scrubbing a photo along a track does not. That track removed as a companion's and another added, the
-confirmation still stands and the day is placed on a track nobody looked at.
-
-**What to do:** the confirmation names the tracks it was made against, as it names its offset — written by the
-editor with the confirmation — and holds only while each is there unchanged. Not a choice of behaviour; it needs the
-editor to write it, which is why it was not done with the review.
-
-### 38. A time read from the modification or digitisation field is taken for the camera's clock
-
-**Why:** an export whose `DateTimeOriginal` is gone keeps its make and model and a `ModifyDate` written by the
-editing computer. It joins the camera's group, its edit date opens a day of its own — a new question — and the
-camera's offset is applied to a computer's clock.
-
-**Open:** solve such a photo on its own, never by the camera's offset nor counted in its days; or treat it as
-untimed (item 22).
-
 ### 39. Two bodies in one camera group
 
 **Why:** two bodies of one model that write no serial are one group. Both with GPS: their anchors disagree for good
@@ -486,17 +435,6 @@ recording another offset stops the zone until the user moves it, picks its zone 
 
 **Open:** ask a missing zone once, at the topmost destination that neither has nor inherits one.
 
-### 42. A clock reset to its factory date is proposed like any other
-
-**Why:** battery out, camera at 2000-01-01. No anchor is possible; the cell proposes the timezone-derived offset,
-acceptable in one answer, which writes the year 2000 into the originals as corrected. The drift check now asks where
-tracks lie by the camera's recorded times, which a reset clock's do not. The right answer is a count of seconds over
-26 years, worked out by hand.
-
-**Open:** a proposed offset leaving a cell's photos farther than the largest clock error from every track and every
-other device's photo of the destination does not take effect on acceptance alone; let the user give the true time of
-one photo instead of an offset.
-
 ### 43. Videos and set-aside JPEGs keep the uncorrected clock in their names
 
 **Why:** geotag changes photos by destination only, never a video (`RUL-geotag_changes_only_by_dest`). A camera on
@@ -504,15 +442,6 @@ home time: its photos are named in destination-local time, its videos of the sam
 RAW no longer shares its name with its set-aside JPEG. No item says the provisional name is final for them.
 
 **Open:** say so, or correct those names from the camera-day's settled offset — a rename, no tag written.
-
-### 44. A time corrected by hand after geotag wrote it is planned back
-
-**Why:** geotag decides from the values pinned before its first write. A user who then fixes the photo's time in
-another tool finds, after the next plan, a write putting geotag's value back — now logged with what it replaces, but
-neither asked nor refused.
-
-**Open:** a held time that is neither the pinned original nor what geotag wrote blocks, naming the photo; or is taken
-as the photo's new recorded time.
 
 ### 45. Order and pairs among photos of one second
 

@@ -53,6 +53,10 @@ Replace both files. A workspace begun under 3.0.0 needs one setting added to its
 `.photos-ingest/photos-00-config.json`: `"gpx_track_precedence": []` keeps every track ranked alike, as
 before; see [ranking your devices](concepts.md#placing-each-photo) for what to put in it.
 
+Then run `prep plan` and `prep execute` again: prep now reads more of each photo's time fields, and geotag refuses
+a workspace prepped without them. A drift check you confirmed under 3.0.0 is asked again, since a confirmation now
+names the tracks it was made against.
+
 ### Upgrading from 2.0.0
 
 Replace both files: a `photos-config-defaults.json` from 2.0.0 lacks settings this version needs, and a
