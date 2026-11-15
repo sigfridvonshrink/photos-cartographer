@@ -1044,10 +1044,12 @@ found to hold its content. Its bytes are compared with the workspace copy's firs
 :::{bld} The merge summary
 :id: BLD-merge_records
 :status: ruled
-:realises: RUL-merge_records_landing, RUL-nothing_built_from_merge_records, RUL-merge_outcome_recorded
+:realises: RUL-merge_records_landing, RUL-nothing_built_from_merge_records, RUL-merge_outcome_recorded, RUL-merge_summary_only_for_execution
 :uses: BLD-archive_manifest, BLD-workspace_database
 
-Merge SHALL write `photos-31-merge-summary.json` on every outcome but a stale plan or a failed precondition: per photo,
+Merge SHALL write `photos-31-merge-summary.json` when its execute ends — `success`, `partial` or `failed` — or refuses
+for a required snapshot, and on no other outcome: not for a failed precondition, a plan missing, unreadable or stale,
+a journal unreadable, or an interrupt, the file then left as it was. It holds, per photo,
 grouped by destination, where it landed, whether it was renamed for the library or already present, whether it left
 photos by destination, and, blocked, why — with no library path; in total, the photos placed new, renamed, already
 present and blocked, the removed the sum of the first three; the status `success`, `partial`, `failed` (every photo

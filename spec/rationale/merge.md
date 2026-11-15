@@ -146,6 +146,19 @@ partial one or a failed one, and after a refusal a fix with nothing to undo, the
 tell a refusal from a run that found nothing to do; a recorded outcome says which, long after the terminal has gone.
 :::
 
+:::{rat} The summary records an execution
+:id: RAT-summary_records_an_execution
+:status: ruled
+:forced: no
+:follows_from: RAT-merge_outcome_decides_next, RAT-refused_merge_clean
+:justifies: RUL-merge_summary_only_for_execution
+
+The summary is the record of an execution: what it placed, what it left and how it ended. A run stopped at the door
+executed nothing, and the terminal has said why; a summary written for it would put a record of nothing over that of
+the last merge that ran. An interrupted run reached no end to record: its journal holds what it confirmed, and the
+run that finishes it writes the summary.
+:::
+
 :::{rat} Merge is the step the user watches
 :id: RAT-merge_report_at_the_end
 :status: ruled

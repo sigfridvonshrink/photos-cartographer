@@ -1914,6 +1914,37 @@ def test_a_record_of_merges_own_it_cannot_read_stops_it(tmp_path, capsys, record
     assert state() == before                                                  # the record, and all else, as it was
 
 
+@pytest.mark.parametrize("stop", ["precondition", "no plan", "stale plan", "unreadable journal", "interrupted"])
+@pytest.mark.spec("RUL-merge_summary_only_for_execution", "BLD-merge_records",
+                  test="TST-merge_execute-a_run_that_never_executes_or_is_interrupted_writes_no_summary")
+def test_a_run_that_never_executes_or_is_interrupted_writes_no_summary(tmp_path, monkeypatch, stop):
+    """An execute stopped before it begins — by a precondition, a plan missing or stale, a journal it cannot read —
+    or interrupted writes no summary: the one an earlier execute wrote stays as it was."""
+    ws, lib = _ws(tmp_path, [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"},
+                             {"fp": "B", "dest": "Trip", "final_name": "b.jpg"}],
+                  library_files=[{"fp": "FAIL", "dest": "Trip", "name": "b.jpg"}])
+    assert merge._run_locked_workflow("plan", str(ws)) == 2
+    assert merge._run_locked_workflow("execute", str(ws)) == 3                # the earlier run's summary: partial
+    earlier = open(merge.merge_summary_path(str(ws)), "rb").read()
+    plan_id = json.load(open(merge.merge_plan_path(str(ws))))["plan_id"]
+    if stop == "precondition":
+        (ws / "0-sources" / "new.jpg").write_bytes(b"a new dump")
+    elif stop == "no plan":
+        os.remove(merge.merge_plan_path(str(ws)))
+    elif stop == "stale plan":
+        with open(_ctl(ws, "photos-25-execution-summary.json"), "w") as f:
+            f.write(json.dumps({"status": "success", "touched": True}))
+    elif stop == "unreadable journal":
+        with open(merge.journal_path(str(ws), plan_id), "w") as f:
+            f.write("{torn")
+    else:
+        def ctrl_c(self, ws_, library_root, rec):
+            raise KeyboardInterrupt
+        monkeypatch.setattr(merge.MergeWorkflow, "_move_file", ctrl_c)
+    assert merge._run_locked_workflow("execute", str(ws)) == (130 if stop == "interrupted" else 2)
+    assert open(merge.merge_summary_path(str(ws)), "rb").read() == earlier
+
+
 @pytest.mark.spec("RUL-empty_merge_seals", "BLD-merge_success_sequence",
                   test="TST-merge_execute-a_merge_of_no_photos_seals")
 def test_a_merge_of_no_photos_seals(tmp_path):

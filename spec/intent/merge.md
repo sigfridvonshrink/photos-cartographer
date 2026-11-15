@@ -236,6 +236,18 @@ taking it for an empty one.
 Merge SHALL record whether its run succeeded whole, in part or not at all, or was refused before changing anything.
 :::
 
+:::{rul} Merge's summary is written only for an execution
+:id: RUL-merge_summary_only_for_execution
+:status: ruled
+:criticality: low
+:verify: required
+:refines: RUL-merge_outcome_recorded
+:uses: DEF-merge
+
+Merge SHALL write no summary for a run stopped before its execution began — by a precondition, or a plan or journal it
+would not use — nor for a run interrupted, leaving the summary an earlier run wrote as it was.
+:::
+
 :::{rul} Merge tells how its run ended
 :id: RUL-merge_run_reported
 :status: ruled
