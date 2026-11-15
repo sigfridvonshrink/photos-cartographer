@@ -799,6 +799,51 @@ def test_execute_aborts_when_required_snapshot_fails(tmp_path, monkeypatch):
     assert s["blockers"] and "snapshot failed" in s["blockers"][0]
 
 
+@pytest.mark.spec("BLD-execution_summary_written", "RUL-content_acceptance_stays_open",
+                  test="TST-geotag_execution-summary_written_only_by_a_run_that_executes")
+def test_summary_written_only_by_a_run_that_executes(tmp_path, monkeypatch):
+    """photos-25 is written by a run that applied the plan, or whose required snapshot failed — that one carrying
+    the mismatches still open, acceptances and all. A preflight refusal, a stale plan or an interrupt writes none:
+    the earlier summary stays as it was."""
+    zfs = {"enabled": True, "snapshots_required": True, "snapshot_prefix": "px-",
+           "datasets": {"workspace": "auto", "library": "auto"}}
+    ws, ctl = _ready_ws(tmp_path, monkeypatch, zfs=zfs)
+    _mock_tools(monkeypatch, ws, content_changed=True); _mock_zfs(monkeypatch)
+    assert _execute(monkeypatch, ws) == 3                                 # applied: written, mismatches in it
+    sp = ctl / "photos-25-execution-summary.json"
+    s = _summary(ctl)
+    assert s["fingerprint_mismatches"]
+    for m in s["fingerprint_mismatches"]:
+        m["user_decision"]["accept_fingerprint_change"] = True
+    sp.write_text(json.dumps(s))
+    earlier = sp.read_bytes()
+
+    def unchanged():
+        return sp.read_bytes() == earlier and not list(ctl.glob("photos-25-execution-summary-*.json"))
+
+    (ws / "6-photos-by-dest" / "T" / "jpg").mkdir()                         # a preflight refusal
+    assert _execute(monkeypatch, ws) == 2 and unchanged()
+    (ws / "6-photos-by-dest" / "T" / "jpg").rmdir()
+    gd = ctl / "photos-23-gps-decisions.json"
+    held = gd.read_bytes()
+    gd.write_bytes(held + b" ")                                            # a stale plan
+    assert _execute(monkeypatch, ws) == 2 and unchanged()
+    gd.write_bytes(held)
+
+    def interrupted(*a, **k):
+        raise KeyboardInterrupt
+    with monkeypatch.context() as m:                                      # an interrupt while applying
+        m.setattr(cal.GeotagWorkflow, "_apply_file_contained", interrupted)
+        assert _execute(monkeypatch, ws) == 130 and unchanged()
+
+    _mock_zfs(monkeypatch, fail=True)                                     # a required snapshot that fails
+    assert _execute(monkeypatch, ws) == 2
+    s = _summary(ctl)
+    assert s["status"] == "rejected"
+    assert s["fingerprint_mismatches"] == json.loads(earlier)["fingerprint_mismatches"]   # acceptances kept
+    assert (ctl / "photos-25-execution-summary-001.json").read_bytes() == earlier
+
+
 @pytest.mark.spec("RUL-camera_classes_not_derivation",
                   test="TST-geotag_execution-reclassing_a_camera_group_changes_its_treatment_not_its_key")
 def test_reclassing_a_camera_group_changes_its_treatment_not_its_key(tmp_path, monkeypatch):

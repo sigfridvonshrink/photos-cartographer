@@ -2093,7 +2093,10 @@ class GeotagWorkflow:
             write_versioned_json(execution_summary_path(ws), {
                 "artifact_type": "execution_summary", "artifact_name": EXECUTION_SUMMARY_ARTIFACT,
                 "schema_version": 1, "plan_id": plan.get("plan_id"), "status": "rejected",
-                "snapshot": snapshot, "blockers": [reason], "failures": [], "fingerprint_mismatches": [],
+                "snapshot": snapshot, "blockers": [reason], "failures": [],
+                # the mismatches still open, the user's acceptances with them, stay readable where the next run
+                # looks for them (BLD-execution_summary_written, RUL-content_acceptance_stays_open)
+                "fingerprint_mismatches": self._prior_mismatches(ws, plan.get("plan_id")),
                 "run_metadata": {"execution_id": execution_id, "started_at": now_iso,
                                  "finished_at": now_iso, "jobs": jobs},
             })

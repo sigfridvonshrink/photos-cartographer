@@ -495,6 +495,19 @@ A cell's dates SHALL be counted over all its group's photos in the destination, 
 `geotag execute` SHALL, under the workspace lock: revalidate every dependency of photos-24 — and, when it holds an operation, that the image engine is the handoff's `depends_on.cache.image_engine_version` — and stop before any change if one moved; keep photos-21, -22 and -23 in `executed/<plan id>/`; take the snapshot labelled `geotag`, a required one that fails ending the run as `rejected`; pin and move the own values, single-threaded; then, per photo and under `-j`, skip one whose operations the journal confirms; take one gone from its path with its rename target in place as applied before — its operations recorded, not redone — once the target has the planned fingerprint (or the accepted one) and holds the planned tags, else block; and for one whose size or modification time changed since the plan block if its decoded content differs and is not accepted, else read its tags back — holding the planned values it is counted applied, otherwise, or with only a rename planned, it blocks as edited since the plan. Otherwise it writes the photo's tags in one `exiftool` call ({need}`BLD-metadata_safe_write`), retakes its fingerprint — a changed one, not accepted, or one that cannot be taken, a mismatch that holds the photo's writes and rename back — and renames it, the target checked free. Anything a photo's application raises is that photo's failure and blocker. The results merge in path order into the journal, kept per plan id — each confirmed photo's final path, size and modification time under `media_after` — and photos-25.
 :::
 
+:::{bld} When the execution summary is written
+:id: BLD-execution_summary_written
+:status: ruled
+:realises: RUL-failure_recorded, RUL-content_acceptance_stays_open
+:uses: BLD-execution_summary
+
+`geotag execute` SHALL write `photos-25-execution-summary.json` only once its plan is revalidated and the records of
+its earlier runs are read: when it has applied the plan, whatever the outcome, or, `rejected`, when a required snapshot
+fails, carrying the fingerprint mismatches the summary it sets aside reports for the same plan. A refusal of the
+preflight, a stale plan, a record that cannot be read or an interrupt writes none, the earlier summary left as it was;
+an interrupted run's confirmations are in its journal.
+:::
+
 :::{bld} Records of earlier executions that cannot be read
 :id: BLD-unreadable_execution_records
 :status: ruled
