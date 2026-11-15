@@ -4,7 +4,7 @@
 
 - **What this is:** [`README.md`](README.md). **The record:** [`HISTORY.md`](HISTORY.md).
 
-*Open items: **37** — 2, 6 to 7, 11, 13 to 16, 18 to 32, 35 to 40, 42 to 49.* 🛑 Numbers are never reused; the next is **50**.
+*Open items: **36** — 2, 6 to 7, 11, 13 to 16, 18, 20 to 32, 35 to 40, 42 to 49.* 🛑 Numbers are never reused; the next is **50**.
 
 ---
 
@@ -256,24 +256,6 @@ done: merge clears them as its execution starts.)
 the batch's size and stops or warns; rule it into the spec, then code it.
 
 **When:** any time; low priority.
-
-### 19. Record the conversion's changes and cut the next release
-
-**Why:** since v2.0.0, the conversion finished geotag and retired the original specs, and changed behaviour on the way
-— offsets matched to the right day of a revisited place, a phone's time read by the offset of its own field, files
-naming no camera solved alone, a drift confirmation bound to its offset, edits since the plan never written over, the
-configured default zone only offered, a fingerprint's new value keeping its pinned values, among others — and removed
-two decision fields (`accept_proposed_timezone`, `manual_real_utc`). The review of 2026-11-14 added one,
-`accepted_offset_seconds` (an `accept_proposal` without it is now a blocker), made a missing `gpx_root` stop the plan,
-reads each track file as a track of its own, and changed the journal (`media_after`) and the plan (`placement`,
-`left_unlocated`). None of it is in `HISTORY.md`, and the work is on
-the branch `spec-corpus-sphinx-needs`, not on `main`.
-
-**What to do:** write the `HISTORY.md` entry, refresh `COVERAGE.md`, open the pull request to `main` and, once merged,
-tag and publish the release — its version decided then (a workspace decided under the removed fields carries values
-nothing reads now).
-
-**When:** once the owner chooses to release.
 
 ### 20. Zone-resolved times of phones and camera-less files are assumed, never asked
 
