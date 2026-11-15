@@ -1130,6 +1130,19 @@ sorted into.
 Geotag SHALL NOT propose splitting a day of a camera group the configuration names several bodies.
 :::
 
+:::{rul} The disagreeing photos of several bodies are not wrong positions
+:id: RUL-several_bodies_positions_not_doubted
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+:refines: RUL-several_bodies_named_by_configuration
+:uses: RUL-contradicted_position_reviewed
+
+Geotag SHALL NOT read the photos of a camera group the configuration names several bodies that disagree with its clock
+offset as holding wrong positions.
+:::
+
 
 ## 10. Destination civil timezone
 
@@ -1710,7 +1723,68 @@ for.
 :anti: yes
 :verify: required
 
-Geotag SHALL never replace a photo's own GPS position.
+Geotag SHALL never replace a photo's own GPS position — save on the user's answer, where its camera's agreed clock
+offset contradicts it ({need}`RUL-own_position_replaced_on_answer`).
+:::
+
+:::{rul} An own position the agreed offset contradicts is replaced only on the user's answer
+:id: RUL-own_position_replaced_on_answer
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+:refines: RUL-own_position_kept
+:uses: DEF-clock_offset, DEF-decision
+
+A photo's own GPS position SHALL be replaced only by a position the user sets for it, and only where its camera's
+clock offset, agreed from its own GPS, contradicts that position.
+:::
+
+:::{rul} An own position the agreed offset contradicts is offered the track's
+:id: RUL-contradicted_position_reviewed
+:status: ruled
+:criticality: high
+:verify: required
+:refines: RUL-own_position_replaced_on_answer
+:uses: DEF-tracks
+
+A photo whose own position its camera's agreed clock offset contradicts, lying farther than the anchor distance from
+where the tracks place it at its corrected time, SHALL be a GPS review item proposing that place.
+:::
+
+:::{rul} The contradicted photo keeps its own position unless the user takes another
+:id: RUL-contradicted_position_kept_unless_taken
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+:refines: RUL-contradicted_position_reviewed
+
+A review of a photo's own position its camera's agreed clock offset contradicts SHALL NOT wait for the user: the photo
+keeps its own position until the user sets another.
+:::
+
+:::{rul} With no track, the contradicted photo keeps its own, noted
+:id: RUL-contradicted_position_without_track_noted
+:status: ruled
+:criticality: med
+:verify: required
+:refines: RUL-contradicted_position_reviewed
+
+A photo whose own position its camera's agreed clock offset contradicts, at a corrected time where no track places it,
+SHALL keep its own position, noted in the GPS decisions.
+:::
+
+:::{rul} A replaced own position is logged with what it replaced
+:id: RUL-replaced_own_position_logged
+:status: ruled
+:criticality: high
+:verify: required
+:refines: RUL-own_position_replaced_on_answer
+:uses: RUL-cause_locatable
+
+A photo's own position replaced on the user's answer SHALL be recorded in the workspace's record with the position it
+replaced.
 :::
 
 :::{rul} A position at latitude 0 and longitude 0 is none

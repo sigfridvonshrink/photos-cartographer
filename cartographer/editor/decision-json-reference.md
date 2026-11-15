@@ -249,6 +249,7 @@ destinations or buckets.
 | **`user_decision.accepted_change_offsets_seconds`** | `[int, int]` \| `""` | **yes** | The two runs' `offset_seconds` being accepted, in order — written with `accept_clock_change: true`. |
 | **`user_decision.first_after_change`** | string \| `""` | **yes** | Where `clock_change.between` lists photos: the camera time (`YYYY:MM:DD HH:MM:SS`) of the first photo after the change — one of theirs, or the second run's first. |
 | `clock_change_part` | object | no | On a part of a day split where its clock changed, keyed `<key>#1` or `<key>#2`: `{ "of": <the day's key>, "part": 1 \| 2, "from", "until" }` (camera times; `""` at an open end). Built by geotag from the day's acceptance — its offset `gpx_anchor_accepted` or `gps_time_accepted`; nothing of it is yours to write. |
+| `positions_contradicted` | list | no | On a camera's cell whose offset from its GPS self-anchor is in effect (`gpx_anchor_auto`, `gpx_anchor_accepted`, `gpx_anchor_chosen`) where the anchors conflict or tie or the offset is not the one proposed: the photos holding their own position that matched the tracks and that no pass agrees with the offset in effect. Each is set against the tracks in photos-23 (`own_position_contradicted`, §5.4). Never on a phone's cell or a group named several bodies. |
 | `anchored_by` | list | no | On a cell whose offset applied itself from GPS: the track files it was found from, each `{ "gpx_file", "sha256" }`. The offset is kept for later photos of the day (`decision_mode: "kept_from_earlier"`) only while each is under `gpx_root` unchanged and no newer GPS proposal says otherwise. |
 | `requires_user_input` | bool | no | `true` ⇔ `effective_time_anchor == ""`. (Containers carry no offset cells, so this is never softened here.) |
 | `stale_user_decision` | bool | no | `accept_proposal` is set but `accepted_offset_seconds` is no longer the offset proposed (another offset beyond the tolerance, or none proposed): kept as written, it takes no effect, nothing applies itself in its place, and the cell asks. |
@@ -540,7 +541,8 @@ One entry per file that needs the human (or that the human already locked/accept
 | `relative_path` | string | no | Workspace-relative path of the photo (e.g. `6-photos-by-dest/Japan/IMG_1.arw`). The editor's save names a review item by it. |
 | `content_fingerprint` | string \| null | no | The photo's identity. A decision is found again by it — through geotag's own rename of the photo — not by the path, within the photo's destination: moved to another folder (or its folder renamed), the photo is asked again. |
 | `tracks` | object | no | On a `no_reliable_gps_source` or `accepted_unlocated` photo that has a resolved time and that the tracks did not place: why. `reason` with its evidence: `no_tracks` (no track at all); `outside_track` + `seconds_from_track`; `track_gap` + `seconds_from_track` + `gap_seconds`, and `segment_break: true` when the gap is a break between two `<trkseg>` of the track (never bridged, however short); `track_jump` + `seconds_from_track` + `jump_meters`; `tracks_disagree` + `gpx_files` (the two tracks — each a file name, or `"<file> (track N)"` when both are tracks of one file) + `apart_meters`. Where several tracks miss, the one nearest in time speaks. |
-| `reason` | `"no_reliable_gps_source"` \| `"manual_locked"` \| `"accepted_unlocated"` | no | Why it's here (see below). |
+| `reason` | `"no_reliable_gps_source"` \| `"manual_locked"` \| `"accepted_unlocated"` \| `"own_position_contradicted"` | no | Why it's here (see below). |
+| `own_position`, `proposed_position`, `apart_meters` | object, object \| null, int \| null | no | On an `own_position_contradicted` item: the photo's own position `{lat, lon}`; where the tracks place it at its corrected time `{lat, lon, method, gpx_file}` (`null` only on an item kept for an answer while no track places it); and how far apart, in metres. |
 | **`user_decision.manual_lat`** | number \| `""` | **yes** | Human-entered latitude (set both). |
 | **`user_decision.manual_lon`** | number \| `""` | **yes** | Human-entered longitude. |
 | **`user_decision.accept_unlocated`** | bool | **yes** | Accept leaving this file with no GPS (taken only when neither the tracks nor the folder fallback place it). A file holding exactly latitude 0, longitude 0 — a device's no-fix value — has it removed, and the log records it. |
@@ -553,11 +555,21 @@ One entry per file that needs the human (or that the human already locked/accept
 - **`manual_locked`** — informational: a valid manual coordinate is already set. Editable (change/clear it).
 - **`accepted_unlocated`** — informational: `accept_unlocated` is set, so the file stays without GPS.
   Editable.
+- **`own_position_contradicted`** — a photo **with its own GPS position** that the camera's offset, agreed from its
+  other photos on the tracks, contradicts (listed in its photos-21 cell's `positions_contradicted`), and that lies more
+  than `gpx_anchor_max_point_distance_meters` from where the tracks place it at its corrected time — most likely a
+  wrong fix (jitter, a fix from minutes before). `requires_user_input: false`: the photo keeps its own position. To
+  replace it, set `manual_lat`/`manual_lon` — the editor's **take the track's position** writes `proposed_position`
+  — and it is written as `manual_locked`, the log keeping the position it replaced. Its `user_decision` holds only
+  those two (`accept_unlocated` there is a blocker: a photo with its own position is not left unlocated). An answered
+  item stays while its answer does. Never raised for a group named several bodies (§5d). A contradicted photo the
+  tracks place nowhere at its corrected time is not an item: it keeps its own position and is listed in its
+  destination's `gps_decisions.contradicted_without_track` (`[{ "relative_path", "content_fingerprint" }]`).
 
 (So resolving a `no_reliable_gps_source` item → after re-run it becomes `manual_locked` or
 `accepted_unlocated` with `requires_user_input: false` — or, with `accept_unlocated` and a folder fallback
 or track that now places it, it is placed and only counted. A photo with its own GPS is preserved and never
-listed. The editor's per-file to-do list is the `no_reliable_gps_source` items.)
+listed, but as `own_position_contradicted`. The editor's per-file to-do list is the `no_reliable_gps_source` items.)
 
 The record's top-level `track_disagreements` (read-only, present only when it happened) lists each pair of
 tracks that cover the same time in places farther apart than `gpx_tracks_agree_max_distance_meters`, and how

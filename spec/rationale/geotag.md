@@ -592,7 +592,7 @@ geotag on a time that is, at worst, a poor guess the user can see and correct.
 :status: ruled
 :forced: no
 :follows_from: RAT-class_decides_time_model, RAT-anchor_agreement
-:justifies: RUL-several_bodies_named_by_configuration, RUL-several_bodies_offset_never_auto, RUL-several_bodies_noted, RUL-several_bodies_days_apart, RUL-several_bodies_no_clock_change_split
+:justifies: RUL-several_bodies_named_by_configuration, RUL-several_bodies_offset_never_auto, RUL-several_bodies_noted, RUL-several_bodies_days_apart, RUL-several_bodies_no_clock_change_split, RUL-several_bodies_positions_not_doubted
 
 Two bodies of one model that write no serial are one camera group: nothing in their photos tells them apart. With GPS
 on both, their anchors disagree for good and no one offset is right; with GPS on one that day, its offset would apply
@@ -600,7 +600,8 @@ itself to the other's photos; and a day's offset found in one destination would 
 body's in the next. Geotag cannot see this, and treating every group as perhaps two would cost every camera the offsets
 that apply themselves. So the configuration says it, a group being one camera unless named — the owner's ruling: *"no,
 this needs a workspace setting, default being that it's just one camera. If the setting says multiple cameras, then do
-the recommended"*. For a group so named, an offset from its GPS is a proposal, said to be perhaps one body's; its days in
+the recommended"*. For a group so named, an offset from its GPS is a proposal, said to be perhaps one body's; its photos
+that disagree with it are another body's, their positions right, never offered for replacing; its days in
 different destinations are decided apart; and the user tells the bodies apart by sorting one's photos into a folder of
 their own — never by a split of the day, for two bodies shooting one after the other look like one clock set at the
 change.
@@ -938,6 +939,25 @@ log may have changed since the plan was made, so execution asks the same of it, 
 A position the camera wrote was measured where the photo was taken. Everything geotag can offer instead is derived —
 from a track and a corrected time, from a folder — and so weaker evidence: replacing the measurement with it would make
 the photo less right, not more.
+:::
+
+:::{rat} A position the camera's own clock contradicts is offered, never replaced unasked
+:id: RAT-contradicted_position_offered
+:status: ruled
+:forced: no
+:follows_from: RAT-own_position_best, RAT-anchor_agreement, RAT-decisions_are_the_users
+:justifies: RUL-own_position_replaced_on_answer, RUL-contradicted_position_reviewed, RUL-contradicted_position_kept_unless_taken, RUL-contradicted_position_without_track_noted, RUL-replaced_own_position_logged
+
+A camera's own position is the best evidence of where a photo was — unless it is wrong. Among photos that agree on the
+camera's offset, one whose own position agrees with none of them most likely carries a position that is not its
+photo's: GPS jitter, a fix from minutes before, a position another program wrote. Accepting the agreed offset corrects
+its time and would leave the wrong place in it, and the user could only read the pattern and mend it elsewhere. The
+tracks say where the user was at the photo's corrected time; where that lies farther from the photo's own position than
+an anchor may, the two are set side by side, the track's proposed. The photo's own stays unless the user takes
+another: it is still a measurement, and only the user can tell a stale fix from a detour the track missed — so nothing
+waits on it, and nothing replaces it but their answer. With no track at that time there is nothing to propose; the
+photo keeps its own, and the record says it was doubted. A position replaced is a position lost from the photo, so
+the record keeps it.
 :::
 
 :::{rat} Latitude 0, longitude 0 is a device without a fix

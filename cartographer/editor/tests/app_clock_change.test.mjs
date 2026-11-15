@@ -54,6 +54,29 @@ test("a clock changed during the day: the split is accepted once, naming its off
   assert.deepEqual(app.clockChangeFields(cell, false), { accept_clock_change: false, accepted_change_offsets_seconds: "", first_after_change: "" });
 });
 
+test("photos agreeing with no group: the interim sub-folder advice is gone — a split, a review, or another body", () => {
+  const p = { conflicting_files: [`${DEST}/x.arw`], groups: [] };
+  const plain = app.proposalNotes(p)[0];
+  assert.doesNotMatch(plain, /sub-folder/);
+  assert.match(plain, /GPS view/);
+  assert.match(app.proposalNotes(p, { clock_change: change })[0], /clock changed/);
+  assert.match(app.proposalNotes(p, { several_bodies: true })[0], /several bodies/);
+});
+
+test("an own position the agreed offset contradicts: kept unless the track's is taken, written as manual_lat/lon", () => {
+  const rel = `${DEST}/stray.arw`, ref = { file: "gps", dest: DEST, kind: "review", path: rel };
+  const item = { relative_path: rel, reason: "own_position_contradicted", own_position: { lat: 51.025, lon: 3.7 },
+    proposed_position: { lat: 51.0125, lon: 3.7, method: "interpolated", gpx_file: "walk.gpx" }, apart_meters: 1390,
+    user_decision: { manual_lat: "", manual_lon: "" }, requires_user_input: false };
+  setWork({ gps: { destinations: { [DEST]: { gps_decisions: { review_items: [item] } } } } });
+  assert.equal(app.wouldResolve(ref), true);                           // its own position kept: nothing waits
+  assert.match(app.contradictedNote(item), /1390 m from where the track was/);
+  assert.match(app.contradictedNote({ ...item, proposed_position: null }), /no track/);
+  Object.assign(app.state.work.gps.destinations[DEST].gps_decisions.review_items[0].user_decision, app.takeTrackPosition(item));
+  assert.deepEqual(app.cellAt(app.state.work, ref).user_decision, { manual_lat: 51.0125, manual_lon: 3.7 });
+  assert.equal(app.refInvalid(ref), false);
+});
+
 test("the split resolves the day's offset cell, and its parts are shown on their day, never as rows of their own", () => {
   const cell = dayCell();
   Object.assign(cell.user_decision, app.clockChangeFields(cell, true, "2024:07:03 11:30:00"));

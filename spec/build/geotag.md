@@ -211,7 +211,8 @@ executable runs on.
 :realises: RUL-tracks_elsewhere_restale_nothing, RUL-track_points_kept, RUL-sealing_needs_no_tracks
 :uses: BLD-anchor_matching, BLD-offset_far_from_evidence, BLD-drift_validation, BLD-track_placement
 
-The tracks' window SHALL be the union of what each reader of the tracks reaches, from the reader's own settings, never a setting of its own: each photo's camera time, read as UTC, give or take `gpx_anchor_max_clock_error_seconds` and the larger of `gpx_direct_match_max_seconds` and `gpx_interpolation_max_gap_seconds` — offset inference, the far-from-evidence check, and a higher-ranked track covering an anchor candidate's time; each camera's photos of one day in one destination, from the first camera time to the last, give or take `drift_check_track_window_seconds` — the drift check falling back on the camera's clock; once photos-21 is complete, each drift bucket's photos at their corrected times, from the first to the last, give or take `drift_check_track_window_seconds`; and once photos-22 is complete, each photo placement places, at its corrected time, give or take the largest of `gpx_direct_match_max_seconds`, `gpx_interpolation_max_gap_seconds`, and `gpx_extrapolation_max_seconds` with `gpx_extrapolation_heading_seconds`. A span is of whole seconds since the epoch, both ends in it. `geotag plan` indexes the first two before photos-21 and widens the index before photos-22 and again before photos-23, each record's `gpx_fingerprint` that of the window it was made in. `photos-24-executable-plan.json` records its window in `depends_on` as `gpx_window`, a list of `[start, end]`: `geotag execute` indexes the tracks under `gpx_root` over it, leaving the catalogue as it was, and `geotag finalize` the points the catalogue keeps, never reading `gpx_root`; a plan whose `gpx_window` is missing or not such a list is stale. Past the window a reader finds no track: the far-from-evidence check reports none within reach where one lies past it, the skipped-frame reason `outside_time_window` sees only the window's points, and an unplaced photo's reason measures to the window's points.
+The tracks' window SHALL be the union of what each reader of the tracks reaches, from the reader's own settings, never a setting of its own: each photo's camera time, read as UTC, give or take `gpx_anchor_max_clock_error_seconds` and the larger of `gpx_direct_match_max_seconds` and `gpx_interpolation_max_gap_seconds` — offset inference, the far-from-evidence check, and a higher-ranked track covering an anchor candidate's time; each camera's photos of one day in one destination, from the first camera time to the last, give or take `drift_check_track_window_seconds` — the drift check falling back on the camera's clock; once photos-21 is complete, each drift bucket's photos at their corrected times, from the first to the last, give or take `drift_check_track_window_seconds`; and once photos-22 is complete, each photo placement places, and each whose own position its offset contradicts
+({need}`BLD-contradicted_position`), at its corrected time, give or take the largest of `gpx_direct_match_max_seconds`, `gpx_interpolation_max_gap_seconds`, and `gpx_extrapolation_max_seconds` with `gpx_extrapolation_heading_seconds`. A span is of whole seconds since the epoch, both ends in it. `geotag plan` indexes the first two before photos-21 and widens the index before photos-22 and again before photos-23, each record's `gpx_fingerprint` that of the window it was made in. `photos-24-executable-plan.json` records its window in `depends_on` as `gpx_window`, a list of `[start, end]`: `geotag execute` indexes the tracks under `gpx_root` over it, leaving the catalogue as it was, and `geotag finalize` the points the catalogue keeps, never reading `gpx_root`; a plan whose `gpx_window` is missing or not such a list is stale. Past the window a reader finds no track: the far-from-evidence check reports none within reach where one lies past it, the skipped-frame reason `outside_time_window` sees only the window's points, and an unplaced photo's reason measures to the window's points.
 :::
 
 :::{bld} The tracks an executed plan used, withdrawn and kept
@@ -523,9 +524,11 @@ status 2.
 :::{bld} The placement order
 :id: BLD-placement_order
 :status: ruled
-:realises: RUL-own_position_kept, RUL-placement_order
+:realises: RUL-own_position_kept, RUL-placement_order, RUL-own_position_replaced_on_answer
 
-`classify_gps` SHALL return, for each photo, the first of: `preserve_native` for a photo with its own position; its
+`classify_gps` SHALL return, for each photo, the first of: `preserve_native` for a photo with its own position — but
+`manual_locked` where its review item is `own_position_contradicted` ({need}`BLD-contradicted_position`) and holds
+`manual_lat`/`manual_lon`; its
 review item's `manual_lat`/`manual_lon` as `manual_locked`; the tracks at its resolved time as `gpx_interpolation` or
 `gpx_extrapolation`; its destination's effective fallback as `manual_fallback`; `no_change` for a photo marked
 `accept_unlocated`; else `blocked`. A position from `manual_locked` or `manual_fallback` is written with that marker,
@@ -567,8 +570,32 @@ a `summary` counting `files_total`, `preserve_native_gps`, `automatic_gpx_interp
 `automatic_gpx_extrapolation`, `automatic_folder_fallback`, `manual_locked`, `no_gps_change_needed`, `blocked` and
 `manual_review_required`; an `automatic_decision_summary` naming the track files used; and `review_items` — one per
 photo `blocked` (`no_reliable_gps_source`, requiring input), `manual_locked` or `no_change` (`accepted_unlocated`),
-each with `manual_lat`, `manual_lon` and `accept_unlocated`. No other photo is named: the executable plan derives every
+each with `manual_lat`, `manual_lon` and `accept_unlocated` — and one per photo whose own position its camera's agreed
+offset contradicts ({need}`BLD-contradicted_position`). No other photo is named: the executable plan derives every
 automatic position again from its own inputs.
+:::
+
+:::{bld} An own position the agreed offset contradicts
+:id: BLD-contradicted_position
+:status: ruled
+:realises: RUL-own_position_replaced_on_answer, RUL-contradicted_position_reviewed, RUL-contradicted_position_kept_unless_taken, RUL-contradicted_position_without_track_noted, RUL-replaced_own_position_logged, RUL-several_bodies_positions_not_doubted
+:uses: BLD-anchor_matching, BLD-track_placement, BLD-placement_order
+
+A `camera` offset cell, of a group not named in `several_bodies_groups`, whose proposal is a precise GPX self-anchor and
+whose effective source is `gpx_anchor_auto`, `gpx_anchor_accepted` or `gpx_anchor_chosen`, SHALL list, where the
+anchors conflict or tie or the offset in effect is not the one proposed, in `positions_contradicted` the paths of its
+photos holding their own position that matched a pass of the tracks and no pass of which agrees with the offset in
+effect — within `gpx_anchor_offset_spread_max_seconds`, and the stay as well for a pass over
+`gpx_anchor_stay_max_seconds` (`contradicted_frames`). Once photos-22 is complete, `contradicted_positions` gathers
+them from the cells whose effective source is still one of those three; each is placed by the tracks at its resolved
+time (`place_gps`), and where that place lies more than `gpx_anchor_max_point_distance_meters` from its own position,
+photos-23 gives it a review item, `reason: "own_position_contradicted"`, `requires_user_input: false`, with
+`own_position`, `proposed_position` (`lat`, `lon`, `method`, `gpx_file`) and `apart_meters`, its `user_decision`
+`manual_lat` and `manual_lon` alone — `accept_unlocated` true there a blocker; where the tracks place it nowhere, its
+destination's `gps_decisions.contradicted_without_track` lists it (`relative_path`, `content_fingerprint`). An item
+whose earlier decision holds a position stays while it does, contradicted or not. A position set there replaces the
+photo's own as `manual_locked`, its `metadata_gps_write` (`apply_manual`) carrying in `pre_state` the position it
+replaces, which the log keeps ({need}`BLD-geotag_log_steps`).
 :::
 
 :::{bld} The folder-fallback cell

@@ -875,13 +875,15 @@ class GeotagWorkflow:
                 for _dest, _bucket, _cell, _frames, times in self._drift_cases(files, time_artifact, rows0) if times]
 
     @staticmethod
-    def placement_window(files, rows):
+    def placement_window(files, rows, contradicted=()):
         """What placement reaches (BLD-track_window): each photo it places, at its corrected time, give or take the
         farthest a point can lie that places it — the direct match, the interpolation gap, or the extrapolation
         reach and the stretch its heading is taken over."""
         reach = max(CONFIG["gpx_direct_match_max_seconds"], CONFIG["gpx_interpolation_max_gap_seconds"],
                     CONFIG["gpx_extrapolation_max_seconds"] + CONFIG["gpx_extrapolation_heading_seconds"])
-        native = {f["relative_path"] for f in files if f.get("has_native_gps")}
+        # a photo's own position is set against the tracks only where its offset contradicts it
+        # (BLD-contradicted_position)
+        native = {f["relative_path"] for f in files if f.get("has_native_gps")} - set(contradicted)
         return [around(t, reach) for r in rows if r["resolved_utc_status"] == "valid"
                 and r["relative_path"] not in native and (t := _parse_utc(r["resolved_utc"]))]
 
@@ -1794,6 +1796,15 @@ class GeotagWorkflow:
             cell["decision_mode"] = decision_mode
         if several and (is_gpx or is_gps_time or is_shared):
             cell["several_bodies"] = True          # the offset its GPS gives may be one body's (RUL-several_bodies_noted)
+        if is_gpx and not imprecise and not phone and not several and isinstance(effective, dict) \
+                and effective.get("source") in self._OWN_GPS_SOURCES \
+                and (conflicting or effective["offset_seconds"] != proposal["proposed_offset_seconds"]):
+            # the photos holding their own position that the offset agreed from the camera's GPS contradicts: their
+            # positions are set against the tracks once the photos are placed (BLD-contradicted_position) — never a
+            # group of several bodies', whose disagreeing photos are another body's (RUL-several_bodies_positions_not_doubted)
+            against = contradicted_frames(frames, gpx, CONFIG, effective["offset_seconds"])
+            if against:
+                cell["positions_contradicted"] = against
         return cell
 
     def _handoff_dependency(self, ws):
@@ -2023,11 +2034,15 @@ class GeotagWorkflow:
                      "automatic_gpx_extrapolation", "automatic_folder_fallback", "manual_locked",
                      "manual_review_required", "blocked", "no_gps_change_needed")
 
-    def build_gps_decisions(self, files, resolved_rows, gpx, prior, resolved_fp):
+    def build_gps_decisions(self, files, resolved_rows, gpx, prior, resolved_fp, contradicted=()):
         """Build/regenerate photos-23 (BLD-gps_decisions_record): the BLD-placement_order decision per by-dest file,
         grouped by destination as automatic-category SUMMARIES with file paths only for review/blocker items.
         Destinations are processed parent-first so a folder_fallback inherits its nearest resolved
-        ancestor's effective fallback (BLD-folder_fallback_cell). Returns (artifact, blockers)."""
+        ancestor's effective fallback (BLD-folder_fallback_cell). `contradicted` are the photos whose own position the
+        offset agreed from their camera's GPS contradicts (`contradicted_positions`): each is set against the tracks at
+        its corrected time (BLD-contradicted_position). Returns (artifact, blockers)."""
+        contradicted = set(contradicted)
+        reach = CONFIG["gpx_anchor_max_point_distance_meters"]
         blockers = _decision_shape_blockers(prior, "gps")
         if blockers:
             return None, blockers
@@ -2056,14 +2071,29 @@ class GeotagWorkflow:
             prior_reviews = ({ri["content_fingerprint"]: ri for ri in items if ri.get("content_fingerprint")},
                              {ri["relative_path"]: ri for ri in items if not ri.get("content_fingerprint")})
             counts = {k: 0 for k in self._SUMMARY_KEYS}
-            review_items, gpx_files = [], set()
+            review_items, gpx_files, untracked = [], set(), []
             for f in sorted(by_dest.get(dest, []), key=lambda x: x["relative_path"]):
                 rel = f["relative_path"]
                 ru = _parse_utc(utc_by_path.get(rel)) if utc_by_path.get(rel) else None
-                fd = _prior_review(prior_reviews, f).get("user_decision") or {}
+                earlier = _prior_review(prior_reviews, f)
+                fd = earlier.get("user_decision") or {}
                 self._validate_review_decision(dest, rel, fd, blockers)
+                own = None
+                if f.get("has_native_gps"):
+                    # an own position the camera's agreed offset contradicts (BLD-contradicted_position), or one the
+                    # user replaced so on an earlier run — their answer kept while they keep it
+                    answered = earlier.get("reason") == self._OWN_CONTRADICTED and \
+                        fd.get("manual_lat") not in (None, "") and fd.get("manual_lon") not in (None, "")
+                    if rel in contradicted or answered:
+                        own = self._contradicted_position(f, ru, gpx, reach, answered)
+                        if own is None:
+                            untracked.append({"relative_path": rel, "content_fingerprint": f.get("content_fingerprint")})
+                        elif fd.get("accept_unlocated"):
+                            blockers.append(f"{dest}/{os.path.basename(rel)}: user_decision.accept_unlocated: a photo "
+                                            "holding its own position is not left unlocated — set manual_lat/lon to "
+                                            "replace it, or leave both empty to keep it.")
                 why = {}
-                cat, coord = classify_gps(f, ru, gpx, CONFIG, eff_fb, fd, why)
+                cat, coord = classify_gps(f, ru, gpx, CONFIG, eff_fb, fd, why, replace_own=own is not None)
                 if why.get("reason") == "tracks_disagree":
                     disagreeing[tuple(why["gpx_files"])] = disagreeing.get(tuple(why["gpx_files"]), 0) + 1
                 for lt in (coord or {}).get("lower_tracks") or []:
@@ -2073,7 +2103,14 @@ class GeotagWorkflow:
                         k = (lt["gpx_file"], coord["gpx_file"])
                         outranked[k] = outranked.get(k, 0) + 1
                 counts["files_total"] += 1
-                if cat == "preserve_native":
+                if own is not None:
+                    # the photo's own position kept, or replaced by the position the user set — the item asks nothing
+                    # (RUL-contradicted_position_kept_unless_taken)
+                    counts["preserve_native_gps" if cat == "preserve_native" else "manual_locked"] += 1
+                    item = dict(self._review_item(f, self._OWN_CONTRADICTED, fd, False), **own)
+                    item["user_decision"].pop("accept_unlocated")   # a position set for it, or its own kept
+                    review_items.append(item)
+                elif cat == "preserve_native":
                     counts["preserve_native_gps"] += 1
                 elif cat == "gpx_interpolation":
                     counts["automatic_gpx_interpolation"] += 1; gpx_files.add(coord.get("gpx_file"))
@@ -2108,6 +2145,10 @@ class GeotagWorkflow:
                     "review_items": review_items,
                 },
             }
+            if untracked:
+                # contradicted, with no track to propose a position from: kept, and noted
+                # (RUL-contradicted_position_without_track_noted)
+                destinations[dest]["gps_decisions"]["contradicted_without_track"] = untracked
             if is_container:
                 destinations[dest]["file_less"] = True
         self.coordinator.finish_phase()
@@ -2138,6 +2179,25 @@ class GeotagWorkflow:
         if self.lower_track_disagreements:
             artifact["lower_track_disagreements"] = self.lower_track_disagreements
         return artifact, blockers
+
+    # The reason of a review item for a photo whose own position its camera's agreed offset contradicts.
+    _OWN_CONTRADICTED = "own_position_contradicted"
+
+    def _contradicted_position(self, f, ru, gpx, reach, answered):
+        """What a review item of a photo whose own position its camera's agreed clock offset contradicts carries
+        (BLD-contradicted_position): `own_position`, `proposed_position` — where the tracks place it at its corrected
+        time `ru` (`lat`, `lon`, `method`, `gpx_file`) — and `apart_meters`; None where the tracks place it nowhere,
+        or within `reach` of its own position (`gpx_anchor_max_point_distance_meters`) — but for one the user `answered`
+        on an earlier run, whose item stays while their answer does."""
+        mine = {"lat": (f.get("native_gps") or {}).get("lat"), "lon": (f.get("native_gps") or {}).get("lon")}
+        p = place_gps(ru, gpx, CONFIG) if ru is not None else None
+        if p is None:
+            return {"own_position": mine, "proposed_position": None, "apart_meters": None} if answered else None
+        apart = round(haversine(float(mine["lat"]), float(mine["lon"]), p["lat"], p["lon"]))
+        if apart <= reach and not answered:
+            return None
+        return {"own_position": mine, "apart_meters": apart,
+                "proposed_position": {"lat": p["lat"], "lon": p["lon"], "method": p["method"], "gpx_file": p["gpx_file"]}}
 
     def _folder_fallback_cell(self, dest, prior_fb, inherited, blockers):
         ud = prior_fb.get("user_decision") or {}
@@ -2241,8 +2301,7 @@ class GeotagWorkflow:
         for dest in sorted(by_dest):
             g_d = g_dests.get(dest, {})
             eff_fb = (g_d.get("folder_fallback") or {}).get("effective_fallback")
-            reviews = {ri["relative_path"]: (ri.get("user_decision") or {})
-                       for ri in ((g_d.get("gps_decisions") or {}).get("review_items") or [])}
+            reviews = {ri["relative_path"]: ri for ri in ((g_d.get("gps_decisions") or {}).get("review_items") or [])}
             track_of, lower_of = {}, {}
             unlocated = []
             tz = ((t_dests.get(dest, {}).get("destination_timezone")) or {}).get("effective_iana_timezone") or ""
@@ -2255,8 +2314,9 @@ class GeotagWorkflow:
             for f in sorted(by_dest[dest], key=lambda x: x["relative_path"]):
                 rel = f["relative_path"]
                 ru = (utc_by_path.get(rel) or {}).get("resolved_utc")
-                cat, coord = classify_gps(f, _parse_utc(ru) if ru else None, gpx, cfg,
-                                          eff_fb, reviews.get(rel))
+                item = reviews.get(rel) or {}
+                cat, coord = classify_gps(f, _parse_utc(ru) if ru else None, gpx, cfg, eff_fb, item.get("user_decision"),
+                                          replace_own=item.get("reason") == self._OWN_CONTRADICTED)
                 if coord and coord.get("gpx_file"):
                     track_of[rel] = coord["gpx_file"]
                     lower_of[rel] = coord.get("lower_tracks")
@@ -3145,6 +3205,18 @@ def _changed_time_answer(ud, ch):
     return keep
 
 
+def contradicted_positions(time_artifact):
+    """The photos whose own position the clock offset in effect for their cell, agreed from their camera's own GPS,
+    contradicts — the cells' `positions_contradicted` in photos-21 (BLD-contradicted_position), sorted."""
+    out = set()
+    for d in ((time_artifact or {}).get("destinations") or {}).values():
+        for c in (d.get("camera_group_time_decisions") or {}).values():
+            eff = c.get("effective_time_anchor")
+            if isinstance(eff, dict) and eff.get("source") in GeotagWorkflow._OWN_GPS_SOURCES:
+                out.update(c.get("positions_contradicted") or [])
+    return sorted(out)
+
+
 def camera_group_class(key, device_groups):
     """The class the configuration's `device_groups` gives camera group `key` (BLD-known_camera_group): `smartphone`
     (listed in `phones`), `camera` (in `fixed_clock_cameras`), `unidentified` for files naming no camera — solved on
@@ -3578,7 +3650,8 @@ def run(args):
                     # (BLD-resolved_utc_fingerprint).
                     rows = compute_resolved_utc(files, groups, artifact, drift_offset_overrides(drift_artifact))
                     # placement reaches the photos' corrected times (BLD-track_window)
-                    wf.widen_tracks(gpx, wf.placement_window(files, rows))
+                    contradicted = contradicted_positions(artifact)
+                    wf.widen_tracks(gpx, wf.placement_window(files, rows, contradicted))
                     _stop_on_tracks(reporter, gpx, f"No geotag JSON was written past {DRIFT_VALIDATION_ARTIFACT}.")
                     input_fps = {
                         "camera_time_policy_fingerprint": artifact["depends_on"]["camera_time_policy_fingerprint"],
@@ -3605,7 +3678,7 @@ def run(args):
                     prior_gps, problem = _load_prior_decisions(gdp)
                     if problem:
                         _stop_on_unreadable_decisions(reporter, problem)
-                    gps_artifact, gps_blockers = wf.build_gps_decisions(files, rows, gpx, prior_gps, fp)
+                    gps_artifact, gps_blockers = wf.build_gps_decisions(files, rows, gpx, prior_gps, fp, contradicted)
                     if gps_blockers:
                         reporter.error("\nGeotag cannot proceed: invalid value(s) in "
                               f"{GPS_DECISIONS_ARTIFACT}:")

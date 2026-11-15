@@ -96,6 +96,7 @@ __all__ = [
     'unreadable_offset_tag',
     'AMBIGUOUS_RULES',
     'infer_anchor_proposal',
+    'contradicted_frames',
     'clock_change_proposal',
     'offset_cell_key',
     'gps_readings',
@@ -975,6 +976,21 @@ def _anchor_consensus(by_frame, skipped, cfg):
     }
 
 
+def contradicted_frames(frames, gpx, cfg, offset):
+    """The paths of the frames whose own position the clock offset `offset` contradicts (BLD-contradicted_position):
+    each matched a pass of the tracks by its place (`frame_candidates`), and no pass agrees with the offset — within
+    `gpx_anchor_offset_spread_max_seconds`, and the stay as well for a pass the tracks stood still on, as clustering
+    agrees (`infer_anchor_proposal`). A frame no pass matches says nothing of the offset."""
+    spread, stay_max = cfg["gpx_anchor_offset_spread_max_seconds"], cfg["gpx_anchor_stay_max_seconds"]
+    out = []
+    for f in frames:
+        cs = frame_candidates(f, gpx, cfg)
+        if cs and not any(abs(c["offset_seconds"] - offset)
+                          <= (c["time_span_seconds"] if c["time_span_seconds"] > stay_max else 0) + spread for c in cs):
+            out.append(f.get("relative_path"))
+    return sorted(p for p in out if p)
+
+
 def _reindexed(by_frame):
     """Frames' candidates (`_anchor_candidates`) numbered again from 0, for a consensus over some of them."""
     return [[dict(c, frame=n) for c in cs] for n, cs in enumerate(by_frame)]
@@ -1622,16 +1638,21 @@ _GPS_PLACE_CATEGORY = {"direct_match": "gpx_interpolation", "interpolated": "gpx
                        "extrapolated": "gpx_extrapolation"}
 
 
-def classify_gps(file, resolved_utc, gpx, cfg, effective_fallback, file_decision, why=None):
+def classify_gps(file, resolved_utc, gpx, cfg, effective_fallback, file_decision, why=None, replace_own=False):
     """The seven-option GPS decision for one file (BLD-placement_order), as (category, coord|None). Resolves in
     priority order: preserve native -> per-file manual lock -> GPX interpolation/extrapolation at the
-    resolved UTC -> the destination's effective folder fallback -> accept-unlocated -> blocked.
+    resolved UTC -> the destination's effective folder fallback -> accept-unlocated -> blocked. A photo's own
+    position gives way only to a position the user set for it, where `replace_own` says its review item is of an own
+    position its clock offset contradicts (RUL-own_position_replaced_on_answer).
     Authored coordinates are assumed already range-validated by the caller (RUL-checked_positions_and_times)."""
     fd = file_decision or {}
-    if file.get("has_native_gps"):
-        return "preserve_native", None
     mlat, mlon = fd.get("manual_lat", ""), fd.get("manual_lon", "")
-    if mlat not in (None, "") and mlon not in (None, ""):
+    manual = mlat not in (None, "") and mlon not in (None, "")
+    if file.get("has_native_gps"):
+        if replace_own and manual:
+            return "manual_locked", {"lat": mlat, "lon": mlon}
+        return "preserve_native", None
+    if manual:
         return "manual_locked", {"lat": mlat, "lon": mlon}
     if resolved_utc is not None:
         p = place_gps(resolved_utc, gpx, cfg, why)

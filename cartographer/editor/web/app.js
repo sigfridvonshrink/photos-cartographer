@@ -268,6 +268,7 @@ function wouldResolve(ref) {
   if (ref.kind === "fallback")
     return (u.fallback_lat !== "" && u.fallback_lat != null && u.fallback_lon !== "" && u.fallback_lon != null)
       || (!!u.accept_proposal && !!p.proposed_fallback);
+  if (c.reason === "own_position_contradicted") return true;      // its own position kept, or the one set for it
   return (u.manual_lat !== "" && u.manual_lat != null && u.manual_lon !== "" && u.manual_lon != null) || !!u.accept_unlocated;
 }
 function statusChip(ref) {
@@ -456,6 +457,7 @@ function previewEffective(ref) {
     return "— (optional)";
   }
   if (u.manual_lat !== "" && u.manual_lon !== "") return `${u.manual_lat}, ${u.manual_lon} (manual)`;
+  if (c.reason === "own_position_contradicted") return "its own position kept";
   if (u.accept_unlocated) return "left unlocated";
   return "— (needs a coordinate or accept-unlocated)";
 }
@@ -1111,6 +1113,15 @@ function controls(ref) {
     if (authored) row.append(el("button", { class: "mini", title: "remove this folder fallback (back to none)",
       onclick: () => editMany(ref, { fallback_lat: "", fallback_lon: "", accept_proposal: false }) }, "clear"));
     wrap.append(row, coordField(ref));
+  } else if (c.reason === "own_position_contradicted") {
+    // a photo's own position its camera's agreed clock offset contradicts (BLD-contradicted_position): its own is
+    // kept unless the user takes the track's — or sets another — as manual_lat/lon (RUL-own_position_replaced_on_answer)
+    wrap.append(el("div", { class: "hint warn" }, contradictedNote(c)));
+    const pp = c.proposed_position;
+    if (pp) wrap.append(el("button", { class: "mini", onclick: () => editMany(ref, takeTrackPosition(c)) }, "take the track's position"));
+    wrap.append(coordField(ref));
+    if (u.manual_lat !== "" && u.manual_lat != null)
+      wrap.append(el("button", { class: "mini", onclick: () => editMany(ref, { manual_lat: "", manual_lon: "" }) }, "keep its own position"));
   } else {
     const note = tracksNote(c.tracks);
     if (note) wrap.append(el("div", { class: "hint" }, note));
@@ -1119,6 +1130,17 @@ function controls(ref) {
   }
   return wrap;
 }
+// What a review item of an own position its camera's agreed offset contradicts says (photos-23 own_position_contradicted):
+// the photo's own position, where the track puts it at its corrected time, and how far apart. Pure — unit-tested.
+function contradictedNote(c) {
+  const own = (c && c.own_position) || {}, pp = c && c.proposed_position;
+  const head = `This photo's own position (${own.lat}, ${own.lon}) agrees with none of its camera's other photos: the ` +
+    "offset they agree on puts it ";
+  if (!pp) return head + "where no track is now — its own position is kept, unless you set another.";
+  return head + `${c.apart_meters} m from where the track was then (${pp.lat}, ${pp.lon}, ${pp.method}, ${pp.gpx_file}). ` +
+    "Most likely its GPS was wrong — a stale fix, jitter — take the track's position; or keep its own.";
+}
+const takeTrackPosition = (c) => ({ manual_lat: c.proposed_position.lat, manual_lon: c.proposed_position.lon });
 // Why the tracks placed nothing for a photo (photos-23 review item `tracks`), in one line: the user's lead to
 // the cure — a track to add, a threshold, a track that is not theirs — before they reach for the map.
 function tracksNote(t) {
@@ -1756,7 +1778,7 @@ function ambiguousTimeNote(a) {
   return `This camera's time ${t} falls at a daylight-saving change in ${a.timezone}: ${how}. Its offset is either ` +
     `${fmtOffset(-offs[0])} or ${fmtOffset(-offs[1])}, and no re-run of geotag plan will choose — set the offset yourself.`;
 }
-function proposalNotes(p) {
+function proposalNotes(p, cell) {
   const out = [], groups = p.groups || [];
   if (p.tied && groups.length) {
     const n = groups.filter((g) => g.count === groups[0].count).length;
@@ -1767,10 +1789,15 @@ function proposalNotes(p) {
     "check it on the track (Drift view), or set the offset you know.");
   const files = p.conflicting_files || [];
   if (files.length) {
+    // what geotag does with them: a clock change, proposed as a split of the day (BLD-clock_change_split); else, once
+    // the offset is in effect, their positions set against the tracks (BLD-contradicted_position)
     const shown = files.slice(0, 5).join(", ") + (files.length > 5 ? ` and ${files.length - 5} more` : "");
     out.push(`${files.length} photo${files.length === 1 ? "" : "s"} agree${files.length === 1 ? "s" : ""} with none of these: ${shown}. ` +
-      "Scattered, their own positions are off — accept; the last of the day, the camera's clock changed — move them " +
-      "into a sub-folder and re-run.");
+      (cell && cell.several_bodies ? "This group may be several bodies: they are likely another body's — set the offset of " +
+        "the one whose photos these are, and move the other body's photos into a sub-folder to give them offsets of their own."
+        : cell && cell.clock_change ? "The camera's clock changed during the day — see the split offered above."
+          : "Accept the offset most agree on: a photo whose own position it contradicts is then offered the track's " +
+            "position in the GPS view."));
   }
   return out;
 }
@@ -1815,7 +1842,7 @@ function offsetProposalBlock(ref, p) {
   const wrap = el("div", { class: "pblock" }, el("h3", {}, "Proposal — suggested clock correction"),
     el("div", { class: "prop-head" }, fmtOffset(p.proposed_offset_seconds),
       el("span", { class: "muted" }, ` (${p.confidence}; ${p.anchor_count} geotagged photo${p.anchor_count === 1 ? "" : "s"})`)));
-  for (const note of proposalNotes(p)) wrap.append(el("div", { class: "hint warn" }, note));
+  for (const note of proposalNotes(p, workCell(ref))) wrap.append(el("div", { class: "hint warn" }, note));
   const groups = p.groups || [];
   const u = workCell(ref)?.user_decision || {}, picked = chosenOffset(p, u);
   for (const g of groups.slice(0, 3)) {
@@ -2022,7 +2049,7 @@ export {
   offsetGroups, dateRange, fmtDate, peerKeys, parseLatLon, coordText, contiguousRange,
   groupChoice, chosenOffset, inConflict, proposalTaken, proposalNotes, driftConfirmHolds, driftConfirmFields, driftCorrectionFields, driftTracksHold, driftStaleReason, acceptFields, acceptHolds, tracksNote,
   zoneContradiction, offsetCellNotes, zoneSpokenFor, zoneDespiteFields, effectiveCountry, clearCountriesInside,
-  clockChangeHolds, clockChangeAt, clockChangeFields,
+  clockChangeHolds, clockChangeAt, clockChangeFields, contradictedNote, takeTrackPosition,
   scrubOffset, scrubSeedIndex, mapKeyFor, savePayload,
   ambiguousTimeNote, gpsTimeAsideNote, zoneOffer, validReading, keepHolds, keepFields, keepOffered, phoneNote,
   trueInstant, parseUtcOff, mismatchAccepted, recordAbsentText, DEVICE_CLASSES, changedHolds, changedFields, changedKeepLabel, keptTagNote, unidentifiedHolds, unidentifiedFields, loadRefusal, hasUnsavedEdits, utcOff,

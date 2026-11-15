@@ -212,8 +212,10 @@ What the proposal panel shows depends on where the offset came from:
     the day you were there;
   - **the tracks stood still** — the GPS says where the photos were but not when; the offset shown is
     one that fits. Accepting it sends it through the Drift view to check;
-  - **photos that agree with no group** — named. Scattered, their own positions are off: accept. The last
-    of the day: the camera's clock changed — move them into a sub-folder and re-run.
+  - **photos that agree with no group** — named. Where they come one after the other at one end of the day,
+    the camera's clock changed: the split is offered (below). Otherwise accept the offset most agree on: a photo
+    whose own position it contradicts is then offered the track's position in the GPS view. For a group marked
+    several bodies, they are likely the other body's: move that body's photos into a sub-folder.
 
   Photos skipped for having a track only outside the plausible time window, or none nearby, are counted.
 - **The camera's clock changed this day** — the camera's GPS (on the tracks, or its fixes' times) shows two runs of
@@ -386,6 +388,14 @@ your lead to the fix before you reach for the map:
 - **tracks disagree** — two track files (or two tracks in one file) cover that time in places too far
   apart, and nothing says which one the camera was with. Take the track that isn't this trip's out of the
   tracks folder and re-run.
+
+**An own position the camera's offset contradicts.** A photo with its own GPS position that agrees with none of
+its camera's other photos, once their agreed offset is in effect, is set against the track at its corrected time:
+farther apart than an anchor may be, it is listed (`own_position_contradicted`), with both positions and how far
+apart. It **asks nothing** — the photo keeps its own position — but most likely its GPS was wrong (a stale fix,
+jitter): **take the track's position**, or set another; **keep its own position** takes it back. By hand: write
+`manual_lat`/`manual_lon`. Where no track covers its corrected time, nothing is proposed: it keeps its own, and
+photos-23 notes it (`contradicted_without_track`).
 
 **Placing individual photos** on the map beside the photo (a thumbnail sits in the decision box; hover a
 name in the worklist for a larger preview):

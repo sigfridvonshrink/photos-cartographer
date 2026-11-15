@@ -2096,6 +2096,9 @@
             "offset_seconds": -7200,
             "source": "gpx_anchor_chosen"
           },
+          "positions_contradicted": [
+            "6-photos-by-dest/Conflict/c2.arw"
+          ],
           "proposal": {
             "acceptance_tolerance_seconds": 120.0,
             "anchor_count": 2,
