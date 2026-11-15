@@ -745,7 +745,8 @@ fixes' own times — say what its clock was, exactly as they do for a camera, an
 for a phone's error is a whole zone, not drift (ruled as recommended, *"otherwise all as recommended"*). Agreeing with how the phone's photos are read,
 there is nothing to ask. Several of them agreeing among themselves against it is the evidence a camera's several
 anchors are, and applies itself for that phone and day, the cell showing it; one photo could be a coincidence, and is
-offered. The user, who knows the track was someone else's, can keep the phone as it records itself.
+offered. The user, who knows the track was someone else's, can keep the phone as it records itself (ruled *"all ok"*),
+without typing an offset that a drift check would then ask about again.
 :::
 
 :::{rat} A time read by the zone is an assumption, asked like one
