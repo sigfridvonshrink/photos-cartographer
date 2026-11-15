@@ -2,6 +2,27 @@
 
 *What was decided and why, newest first. A record: never corrected forward. Per-commit detail is `git log`.*
 
+## 2026-11-15 — every run checks the workspace is as the last one left it (BACKLOG 50)
+
+The owner: *"I wonder if before each run, as a rule, there should be a quick check to see if anything unexpected
+happened. The only manual moves in a workspace should be the moves to by-dest."* The protection was a scatter of
+particular checks, and prep took its folders as it found them; a photo put by hand where a removed one had been took
+the removed one's history.
+
+- **the record** — every execute, prep's, geotag's and merge's, records the state it leaves: each file's path, size,
+  modification time, inode and fingerprint, in the media folders, quarantine and strays. Every phase command first
+  compares the workspace with it, from file entries alone (*"a replaced file would also typically have a different
+  inode"*).
+- **what a person does passes** — a dump in the inbox; sorting into photos by destination; culling; a photo moved
+  back; a time given in missing metadata, which prep now files on; a copy keeping size and time with new inodes. The
+  ones that are not sorting are named in the run's log.
+- **anything else stops**, named, until accepted by a code printed with the list — a hash of it, so a list changed
+  since accepts nothing (*"hand accepting these is tedious"*); the acceptances are kept and sealed. The console offers
+  the same as a button.
+- **a run killed outright** — its own half-done work is recognised from its plan and journal and passes; a change it
+  would not have left still stops.
+- **prep's log** — a fingerprint counts as retaken only where the file is unchanged.
+
 ## 2026-11-15 — the tracks geotag used, kept and sealed with the workspace (BACKLOG 13)
 
 The owner: *"I will have always the gps data used during the process, in the form used during the decisioning, which

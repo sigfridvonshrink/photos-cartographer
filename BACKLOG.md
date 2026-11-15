@@ -4,7 +4,7 @@
 
 - **What this is:** [`README.md`](README.md). **The record:** [`HISTORY.md`](HISTORY.md).
 
-*Open items: **27** — 6 to 7, 11, 14 to 16, 18, 20 to 23, 25, 27, 28, 30 to 32, 35, 39, 40, 43, 45 to 50.* 🛑 Numbers are never reused; the next is **51**.
+*Open items: **27** — 6 to 7, 11, 14 to 16, 18, 20 to 23, 25, 27, 28, 30 to 32, 35, 39, 40, 43, 45 to 49, 51.* 🛑 Numbers are never reused; the next is **52**.
 
 ---
 
@@ -406,74 +406,13 @@ natural run to take them from.
 
 **When:** after item 17's text, so the pictures are taken once.
 
+### 51. Prep's journal of a plan executed again is written over
 
-### 50. Every run checks the workspace is as the last one left it
+**Why:** found while building item 50 (2026-11-15). Prep's `start_journal` writes `journal-<plan id>.json`; a plan
+executed a second time — after a failed or interrupted execute — writes over the journal of the first attempt, so
+the record of what that attempt did is lost. Every other record is kept under `-NNN` when made again
+(`BLD-canonical_plan_paths`, `RUL-geotag_run_records_kept`). Geotag's and merge's journals resume rather than
+restart, and item 50's recognition of an interrupted prep run reads the plan, not the journal, so neither is
+affected.
 
-**Why:** the owner, 2026-11-15: *"I wonder if before each run, as a rule, there should be a quick check to see if
-anything unexpected happened. The only manual moves in a workspace should be the moves to by-dest. This should also
-make the processing safer."* Today's protection is a scatter of particular checks — a time changed by hand
-(`RUL-changed_time_stops_plan`), a fingerprint changed after the plan, hidden entries, the vouched prep log, the
-stale-plan checks — and prep takes the managed folders as it finds them. A file replaced, changed or put in place by
-hand outside the inbox passes unless one of them happens to catch it. Found through prep's log: a different photo
-put by hand at the path a removed photo freed took the removed photo's history as a "retaken fingerprint"
-(BACKLOG 2, `RUL-gone_photo_entry_carried`).
-
-**Ruled (2026-11-15):** every command — prep, geotag, merge — first compares the workspace with the state the last
-execute left (prep's cache holds each file's path, size, modification time, inode and fingerprint), by its file
-system entries alone, reading no file whole. What a person is expected to do passes:
-1. a dump put into the inbox;
-2. photos moved from photos by date into photos by destination, and moved, or their folders renamed, within it;
-3. the decision files and the configuration edited;
-4. a photo deleted by hand (culling), in photos by date or by destination — allowed, and named in the next run's log;
-5. a photo moved back from photos by destination to photos by date — allowed, named in the log;
-6. a missing-metadata file given a time by hand, then prep run — allowed, named in the log.
-
-7. Anything else — a file changed in place, replaced, or appearing outside the inbox; anything in quarantine or the
-strays folder changed other than by prune — stops the command, naming each file; the user undoes it, or accepts it
-once, the acceptance recorded.
-
-**Prep's log (ruled, c):** a fingerprint counts as retaken only where the file is unchanged — same size, modification
-time and inode — and the method changed; a different file at the path is a new photo, and the removed photo's entry
-stays a gone one.
-
-**Ruled (2026-11-15), how** (*"rest ok"*, and D *"ok"*):
-- **A. The record:** one table in `photos-00-ingest.db` — path, size, modification time, inode and fingerprint of
-  every file in the media folders, quarantine and strays — rewritten by every execute at its end with the state it
-  leaves (prep's, geotag's and merge's alike; geotag already notes each file's state after its writes). Plans do not
-  change it. Geotag and merge refuse a workspace without one (run prep first); prep's first run compares nothing.
-- **B. Recognising a change, by entries alone:** same size, modification time and inode at a new path is a move (by
-  date → by destination, or within it, passes — case 2; back to by date, passes, logged — case 5); same size and
-  modification time with a new inode (a copy, a snapshot restore) is the same file, passing, logged — a replacement
-  almost never keeps the modification time to the nanosecond, and the fingerprint read again would prove nothing (it
-  covers the pixels, so a time changed by hand passes it); gone with no match is a deletion (case 4); size or
-  modification time changed is a change in place and stops — but in missing metadata (case 6), allowed and logged.
-- **C. Culling:** a deletion in videos by date and in redundant JPEGs is allowed and logged too; in missing metadata,
-  quarantine or strays it stops (quarantine changes only by prune).
-- **D. Accepting:** the stop lists the unexpected changes grouped by kind and folder, and prints the command to run
-  again with `--accept-changes <code>` — the code a hash of the list as printed, so a list changed since (one more
-  file) no longer matches and stops again, listed anew. Accepted changes go into the run's log and into a kept record,
-  `photos-01-accepted-changes.json` (never written over, `-NNN`; sealed with the workspace). The console shows the
-  same list with a button that sends the same code through the same command. Hand-editing a file of acceptances was
-  rejected: *"hand accepting these is tedious"*.
-- **E. Who checks:** every phase command, dry runs included — prep's plan, dry run and execute; geotag's plan,
-  execute and finalize; merge's plan, dry run and execute. Not prune, `init-library` or the editor. Control files keep
-  their own checks (the vouched log, the decision fingerprints, the stale plan).
-
-**Built (2026-11-15)**, and two points it found, ruled *"both recommended"*, to finish it:
-- **a hard kill mid-execute** (power loss, a killed process) left the tool's own half-finished work for the next run
-  to list as unexpected, to be accepted once: it is recognised instead from what the run left in writing — geotag's
-  journal notes each file's state after its write; prep's plan says where each file goes — and passes unasked;
-- **a missing-metadata photo given a time** stayed in missing metadata, prep never filing it on: prep files it into
-  photos by date like a photo of a new dump (case 6 implies it).
-
-**To mind when it is built:**
-- The owner: *"a replaced file would also typically have a different inode."* So the inode is the strongest of the
-  three: a replacement keeps none of them reliably, an untouched file keeps all.
-- The tool's own writes change them too: geotag writes an original through a temporary file renamed over it
-  (`BLD-metadata_safe_write`), so the file has a new inode, size and modification time though its fingerprint holds.
-  Each execute must record the state it leaves — geotag's included, and merge's moves out — or every run after it
-  stops on the tool's own work.
-- A copy to another filesystem, a restore from a snapshot, or some network filesystems give new inodes to unchanged
-  files; to be ruled then whether the fingerprint, read again, settles such a case or it is asked.
-- Which allowed changes need a new prep run before geotag (2 already does, `RUL-prep_records_sort`) and which the
-  check itself records.
+**Open:** keep the earlier journal under `-NNN` (as every record is), or append the second attempt to it.
