@@ -267,7 +267,7 @@ two decision fields (`accept_proposed_timezone`, `manual_real_utc`). The review 
 `accepted_offset_seconds` (an `accept_proposal` without it is now a blocker), made a missing `gpx_root` stop the plan,
 reads each track file as a track of its own, and changed the journal (`media_after`) and the plan (`placement`,
 `left_unlocated`). None of it is in `HISTORY.md`, and the work is on
-the branch `spec-corpus-sphinx-needs`, not on `main`; the tag `specs-before-corpus` is local.
+the branch `spec-corpus-sphinx-needs`, not on `main`.
 
 **What to do:** write the `HISTORY.md` entry, refresh `COVERAGE.md`, open the pull request to `main` and, once merged,
 tag and publish the release — its version decided then (a workspace decided under the removed fields carries values

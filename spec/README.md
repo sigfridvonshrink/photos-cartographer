@@ -41,7 +41,7 @@ in pipeline order.
 
 The corpus was converted from four documents — the shared contract and one spec per phase — sentence by sentence, each
 recorded verbatim with where it went in a ledger that proved none was lost. Those documents, the ledgers and the old
-clause index are kept at the git tag `specs-before-corpus`.
+clause index are in the repository's history, as they stood at the release `v2.0.0`.
 
 ## What belongs here — and what doesn't
 

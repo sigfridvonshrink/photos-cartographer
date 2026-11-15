@@ -76,7 +76,7 @@ tools/spec-build
 A test names what it verifies with `@pytest.mark.spec(<ids>..., test="TST-<module>-<name>")`: the ids are corpus
 items, and `test=` is the test's own stable id, which makes it an item of the corpus. Keep the id when a test is
 renamed. The original specs the corpus was converted from, its conversion ledgers and the clause index that bridged
-the old test marks are at the git tag `specs-before-corpus`.
+the old test marks are in the repository's history, as they stood at the release `v2.0.0`.
 
 Current coverage figures (line/branch, and the corpus's items and tests) live in `COVERAGE.md` at the repo root; the
 commands above regenerate them.

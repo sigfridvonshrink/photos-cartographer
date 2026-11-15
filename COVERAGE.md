@@ -60,4 +60,4 @@ tools/spec-build                 # the corpus gate; rewrites spec/needs.json
 ```
 
 The corpus was converted from four spec documents and checked against a clause index of 633 clauses; both, with the
-conversion ledgers, are kept at the git tag `specs-before-corpus`.
+conversion ledgers, are in the repository's history, as they stood at the release `v2.0.0`.

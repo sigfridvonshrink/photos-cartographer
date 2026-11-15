@@ -8,7 +8,7 @@
 The specification is now only the corpus (`spec/`): 521 rules and invariants, each stating one obligation, each with
 its reason, and each named by a test that fails when it is broken — or, for the three invariants, verified through
 the rules that uphold them, which `tools/spec-build` checks. The four original documents, the conversion ledgers and
-the clause index are kept at the tag `specs-before-corpus` and nowhere else. The phase documents' sections are
+the clause index are in the repository's history, as they stood at the release `v2.0.0`, and nowhere else. The phase documents' sections are
 numbered 1…n, and code, tests and corpus cite items, never sections. Converting geotag, then reviewing it twice
 against its own promise — *"geotagging all photos with minimum human input and ensuring that all decisions are
 explicit and recorded"* — changed what it does:

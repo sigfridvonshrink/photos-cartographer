@@ -6,8 +6,8 @@ The corpus is three levels in one project, each in four documents as the phases 
 `intent/` (what cartographer guarantees, naming no tool, file or database), `rationale/` (why: the justifications,
 tagged, never normative) and `build/` (how this build meets the intent). The tests are items too, generated at every
 build from pytest's own collection of `@pytest.mark.spec(..., test="TST-...")` (spec/_ext/corpus.py).
-The specs the corpus was converted from, its conversion ledgers and the clause index are at the tag
-`specs-before-corpus`.
+The specs the corpus was converted from, its conversion ledgers and the clause index are in the repository's history, as they stood at the
+release `v2.0.0`.
 """
 import os
 import sys
