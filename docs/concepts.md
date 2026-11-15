@@ -228,8 +228,9 @@ photos-cartographer forces you to close that gap: a dedicated **drift check** (b
 makes you confirm each such offset against the track before any photo is placed by it. It is offered
 where there is track within `drift_check_track_window_seconds` (two days by default) of the photos.
 Crucially, **inaction is not consent** — an untouched check *blocks* the run; you must actively affirm
-even "the offset is fine, no change." A confirmation holds only for the offset you confirmed: change the
-offset and it is asked again.
+even "the offset is fine, no change." A confirmation holds only for the offset you confirmed, and only
+while the tracks you confirmed it on are there unchanged: change the offset, or take out or replace one of
+those tracks, and it is asked again.
 
 Drift check in the editor: slide a photo along its GPX track until it lines up, and the corrected
 offset is read straight off the track.

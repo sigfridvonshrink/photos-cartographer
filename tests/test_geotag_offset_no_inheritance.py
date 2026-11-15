@@ -33,6 +33,7 @@ BYDEST = "6-photos-by-dest"
 def _gpx(points):
     idx = cal.GPXIndex("")
     idx.points = list(points)
+    idx.file_sha = {p.source_file: "f" * 64 for p in points}
     return idx
 
 
@@ -341,7 +342,8 @@ def test_a_confirmation_against_the_tracks_is_the_acceptance(tmp_path):
     asked, _ = wf.build_drift_validation(files, art, rows0, _gpx(TRACK), None)
     assert asked["requires_user_input"]
     asked["destinations"][dest]["drift_decisions"][CAM]["user_decision"] = {
-        "confirmed": True, "corrected_offset_seconds": "", "confirmed_offset_seconds": -7200}
+        "confirmed": True, "corrected_offset_seconds": "", "confirmed_offset_seconds": -7200,
+        "confirmed_against_tracks": [{"gpx_file": "t.gpx", "sha256": "f" * 64}]}
     drift, blk = wf.build_drift_validation(files, art, rows0, _gpx(TRACK), asked)
     cell = drift["destinations"][dest]["drift_decisions"][CAM]
     assert not blk and not drift["requires_user_input"] and drift["status"] == "complete"

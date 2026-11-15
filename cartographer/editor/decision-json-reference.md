@@ -109,7 +109,8 @@ the same way:
   - **timezone** (§4.3): a zone kept by `confirmed_despite_recorded_offsets` while the photos now record
     an offset that list does not name;
   - **drift** (§5a): a confirmation whose `confirmed_offset_seconds` is no longer the current offset
-    (the photos-21 offset changed);
+    (the photos-21 offset changed), or one of whose `confirmed_against_tracks` is gone from `gpx_root` or
+    changed since (or which named none, and tracks now lie by the photos);
   - **folder fallback** (§5.3): `accept_proposal` with no inherited fallback to accept.
 
 Top-level **`status`** is `"complete"` when nothing requires input, else `"requires_user_input"`;
@@ -443,9 +444,12 @@ appear. The `<bucket_key>` matches the photos-21 offset cell it refines — bare
     "proposal_source": "timezone_accepted",
     "current_offset_seconds": -7200,
     "frames": [ { "source_file": "6-photos-by-dest/Belgium/Brussels/a.arw", "camera_naive": "2024:07:03 14:00:00" }, ... ],
-    "track_segment": [ { "lat": 50.0, "lon": 4.0, "time_utc": "2024-07-03T12:00:00Z" }, ... ]
+    "track_segment": [ { "lat": 50.0, "lon": 4.0, "time_utc": "2024-07-03T12:00:00Z" }, ... ],
+    "tracks": [ { "gpx_file": "2024/trip-2024-07-03.gpx", "sha256": "3a52…" } ]
   },
-  "user_decision": { "confirmed": false, "corrected_offset_seconds": "", "confirmed_offset_seconds": "" },
+  "user_decision": { "confirmed": false, "corrected_offset_seconds": "", "confirmed_offset_seconds": "",
+                     "confirmed_against_tracks": [] },
+  "confirmed_tracks_changed": [],
   "effective_drift_offset": "",
   "requires_user_input": true,
   "stale_user_decision": false
@@ -464,6 +468,9 @@ appear. The `<bucket_key>` matches the photos-21 offset cell it refines — bare
   decision: `corrected_offset_seconds = (chosen track point's time_utc) − (that frame's camera_naive)`.
   Both `track_segment` and `frames` are re-extracted by the script on every re-run, so a changed
   photos-21 time decision shifts them automatically.
+- `proposal.tracks` is read-only — the track files `track_segment` is drawn from, by their path under
+  `gpx_root`, each with the SHA-256 of its bytes as geotag read it (`BLD-drift_confirmation_tracks`): the
+  tracks the editor shows for this bucket, and what a confirmation names.
 - `user_decision.confirmed` (bool) — the **only** thing that satisfies the gate. `false` (the default)
   blocks. **A "zero scrub" / "the offset was right" must be set explicitly** (`confirmed: true` with an
   empty `corrected_offset_seconds`) — inaction never counts.
@@ -474,6 +481,17 @@ appear. The `<bucket_key>` matches the photos-21 offset cell it refines — bare
   while it equals the current offset; the offset changed in photos-21 since, the cell is
   `stale_user_decision: true` and asks again until confirmed anew. `confirmed: true` with it empty is a
   located blocker naming the current offset.
+- `user_decision.confirmed_against_tracks` — the tracks the confirmation was made against: a copy of
+  `proposal.tracks` as shown when confirming (the editor writes it with `confirmed_offset_seconds`; `[]` when
+  unconfirmed). A confirmation holds only while every track it names is still under `gpx_root` with the SHA-256
+  it names — a track taken out, or replaced by another export, and the cell is `stale_user_decision: true`,
+  the decision kept exactly as written, and asks again. A track put in **beside** the named ones does not unseat
+  it. A confirmation made where no track was shown names `[]`, and holds only while `proposal.tracks` is still
+  empty: a track arriving later is one nobody looked at the photos against. `confirmed: true` without a list
+  here is a located blocker.
+- `confirmed_tracks_changed` — read-only: the named tracks geotag no longer found under `gpx_root` with the
+  SHA-256 named (`[]` when all stand). The editor uses it to tell a confirmation that rests on a track no longer
+  shown from one that still holds.
 - `effective_drift_offset` — `""` until confirmed, then `{ "offset_seconds": N, "source":
   "gps_drift_validated" }`. Geotag recomputes resolved UTC consuming this; the value does **not**
   mutate the photos-21 decision it refines.
@@ -506,7 +524,8 @@ UI should make the *effective* choice obvious and ideally offer them as mutually
   one camera and day in different destinations that differ by more than
   `clock_offset_same_day_max_difference_seconds` both lose effect (`conflicts_with`); a manual one is never
   withheld.
-- **Drift:** `confirmed` holding for the current offset (`confirmed_offset_seconds` equal to it) →
+- **Drift:** `confirmed` holding for the current offset (`confirmed_offset_seconds` equal to it) and for the
+  tracks (`confirmed_against_tracks` each unchanged under `gpx_root`, or `[]` with no track shown) →
   `corrected_offset_seconds` if given, else the current offset; otherwise nothing.
 - **Folder fallback:** `fallback_lat`+`fallback_lon` (if both set & valid) → `accept_proposal`.
 - **Per-file GPS:** the photo's own GPS (preserved; no decision read) → `manual_lat`+`manual_lon` (if both set
@@ -531,6 +550,7 @@ Mirror these client-side; a value that fails makes geotag reject the whole artif
 | `manual_offset_seconds` | A whole number of seconds (an integer, or a float with no fraction), of any size (a clock reset to its factory date is years out). Not a boolean, not a string. `""` allowed. |
 | `accepted_offset_seconds` | Required, as a whole number of seconds, whenever `accept_proposal` is `true` (and no manual offset is set): the `proposed_offset_seconds` accepted. `""` with `accept_proposal: false`. |
 | `confirmed_offset_seconds` (photos-22) | Required, as a whole number of seconds, whenever `confirmed` is `true`: the `current_offset_seconds` confirmed against. `""` with `confirmed: false`. |
+| `confirmed_against_tracks` (photos-22) | Required whenever `confirmed` is `true`: a list (`[]` allowed, only meaning "no track was shown") of `{ "gpx_file": <path under gpx_root>, "sha256": <its SHA-256> }`, each a non-empty string — copied from `proposal.tracks`. `[]` with `confirmed: false`. |
 | `corrected_offset_seconds` (photos-22) | `""` (zero scrub) or a whole number of seconds. |
 | `fallback_lat` / `fallback_lon`, `manual_lat` / `manual_lon` | Numbers (not booleans, not strings); latitude ∈ [-90, 90], longitude ∈ [-180, 180]. Set both or neither. `""` allowed (= unset). |
 | `accept_proposal` / `accept_unlocated` / `confirmed` | `true` or `false` (absent or `null` reads as `false`); anything else — `"false"`, `1`, `"yes"` — is a blocker, never coerced. Default `false`. |

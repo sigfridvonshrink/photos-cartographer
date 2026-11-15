@@ -291,6 +291,14 @@ track decided anything.
 Once photos-21 is complete, `geotag plan` SHALL write `photos-22-gps-drift-validation.json` with a cell for each offset cell whose effective source is `timezone_accepted`, `timezone_unconfirmed`, `manual` or `gpx_anchor_imprecise` and whose photos' resolved times lie within `drift_check_track_window_seconds` of track points, or, none lying there, whose photos' recorded times read as UTC do — whether or not a photo of the cell anchors on the tracks: its `proposal` holding `current_offset_seconds`, its source, the photos and that track segment; its `user_decision` `confirmed`, `corrected_offset_seconds` and `confirmed_offset_seconds`. A cell confirmed with `confirmed_offset_seconds` equal to its current offset takes effect as `gps_drift_validated` — the current offset when no correction is given, else the correction; confirmed against another offset it is `stale_user_decision` and takes no effect; confirmed naming none, a blocker. Until every cell has taken effect, photos-23 and photos-24 are not written; then resolved UTC is computed again with the validated offsets, photos-21 left as it is. photos-22's `depends_on` holds photos-21's SHA-256, `gpx_fingerprint`, `camera_time_policy_fingerprint` and `camera_group_key_version`. A `timezone_unconfirmed` cell is always given its drift cell, whatever track lies by it.
 :::
 
+:::{bld} A drift confirmation names its tracks
+:id: BLD-drift_confirmation_tracks
+:status: ruled
+:realises: RUL-confirmation_rests_on_its_tracks, RUL-changed_tracks_asked_again, RUL-trackless_confirmation_holds_while_none, RUL-stale_confirmation_kept
+
+A drift cell's `proposal` SHALL hold `tracks`, each track file its `track_segment` is drawn from with its SHA-256, by name, and the editor writes them with a confirmation as its `user_decision`'s `confirmed_against_tracks`. A confirmation takes effect only while every track it names is under `gpx_root` with the SHA-256 it names — naming none, only while `tracks` is empty; else the cell is `stale_user_decision`, its `user_decision` kept as written and taking no effect, and its `confirmed_tracks_changed` names the tracks no longer there with the SHA-256 named. Confirmed without a list of tracks, each a `gpx_file` and a `sha256`, a blocker.
+:::
+
 
 ## 15. Every photo's own values
 

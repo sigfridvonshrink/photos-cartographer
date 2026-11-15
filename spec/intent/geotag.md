@@ -952,6 +952,53 @@ A confirmation SHALL hold only for the offset it confirmed.
 An offset changed since it was confirmed SHALL be asked about again.
 :::
 
+:::{rul} A confirmation rests on the tracks it was made against
+:id: RUL-confirmation_rests_on_its_tracks
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+:refines: RUL-unanchored_offset_confirmed
+:uses: DEF-tracks
+
+A confirmation SHALL hold only while every track it was made against is there unchanged.
+:::
+
+:::{rul} A changed track is asked about again
+:id: RUL-changed_tracks_asked_again
+:status: ruled
+:criticality: high
+:verify: required
+:refines: RUL-confirmation_rests_on_its_tracks
+:uses: DEF-tracks
+
+A check whose confirmation was made against a track since removed or changed SHALL be asked about again.
+:::
+
+:::{rul} A confirmation made with no track holds while there is none
+:id: RUL-trackless_confirmation_holds_while_none
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+:refines: RUL-confirmation_rests_on_its_tracks
+:uses: DEF-tracks
+
+A confirmation made where no track lay by the photos SHALL hold only while none lies by them.
+:::
+
+:::{rul} Geotag leaves a confirmation asked about again as the user wrote it
+:id: RUL-stale_confirmation_kept
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+:refines: RUL-unanchored_offset_confirmed
+
+When a check is asked about again, geotag SHALL leave the user's earlier confirmation in the decision exactly as the
+user wrote it, for the user to replace.
+:::
+
 
 ## 15. Every photo's own values
 

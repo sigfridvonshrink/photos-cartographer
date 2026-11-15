@@ -227,6 +227,13 @@ A confirmation names the offset it confirmed. If that offset changes — you edi
 re-run proposes another — the bucket asks again: "Confirmed for X; the offset is now Y — check it on the
 track and confirm again."
 
+It names the tracks it was made against too — the GPX files shown for the bucket, each by the SHA-256 of its
+contents. Take one of them out of the tracks folder (it was a companion's) or replace it with another export of
+the day, and the next run asks again: the photos would otherwise be placed on a track nobody looked at them
+against. A track merely added beside the ones you saw leaves the confirmation standing. A bucket shown with no
+track at all can still be confirmed; that holds only while no track lies by its photos. Your earlier answer is
+kept as you wrote it until you confirm again.
+
 Confirming refines the offset without altering your Time decision; the corrected offset feeds the
 recomputed times on the next run.
 
@@ -304,7 +311,7 @@ Two reset behaviors worth knowing (both take effect on the next run):
   a day's offset is found again by its day, a photo's coordinate by the photo itself, even after geotag
   renamed it. An answer whose question has changed is never silently applied to the new one — it is
   marked **stale** and asked again: an acceptance of an offset no longer proposed, a confirmation of an
-  offset no longer in effect, an inherited fallback that no longer exists, a zone kept for photos when
+  offset no longer in effect or made on a track since taken out or changed, an inherited fallback that no longer exists, a zone kept for photos when
   one arrives recording yet another offset.
 
 ---
