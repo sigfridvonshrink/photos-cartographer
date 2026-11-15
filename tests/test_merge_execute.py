@@ -1967,6 +1967,56 @@ def test_one_journal_per_plan_keeps_every_executes_confirmations(tmp_path):
                                                     "6-photos-by-dest/Trip/b.jpg": "confirmed"}
 
 
+@pytest.mark.spec("BLD-merge_log_steps", "RUL-merge_records_landing",
+                  test="TST-merge_execute-merges_step_says_how_each_photo_reached_the_library")
+def test_merges_step_says_how_each_photo_reached_the_library(tmp_path):
+    """Each photo merged gains one step — placed, placed under a name of its own, or already present — naming the
+    plan, where it came from and where it is, its entry's library_path set to the same place."""
+    ws, lib = _ws(tmp_path, [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"},
+                             {"fp": "B", "dest": "Trip", "final_name": "b.jpg"},
+                             {"fp": "C", "dest": "Trip", "final_name": "c.jpg"}],
+                  library_files=[{"fp": "OTHER", "dest": "Trip", "name": "b.jpg"},     # another photo: b renamed
+                                 {"fp": "C", "dest": "Trip", "name": "c.jpg"}])        # c itself, byte for byte
+    assert merge._run_locked_workflow("plan", str(ws)) == 0
+    plan_id = json.load(open(merge.merge_plan_path(str(ws))))["plan_id"]
+    assert merge._run_locked_workflow("execute", str(ws)) == 0
+    photos = json.loads(open(_ctl(ws, "photos-35-merge-log.json")).read())["photos"]
+    trip = os.path.join(str(lib), "Trip")
+    for fp, action, place, renamed in (("A", "placed", "a.jpg", False), ("B", "placed", "b-001.jpg", True),
+                                       ("C", "already_present", "c.jpg", False)):
+        assert photos[fp]["journey"] == [{"phase": "merge", "run": plan_id, "action": action,
+                                          "from": f"6-photos-by-dest/Trip/{fp.lower()}.jpg",
+                                          "library_path": os.path.join(trip, place),
+                                          "renamed_for_library": renamed}], fp
+        assert photos[fp]["library_path"] == os.path.join(trip, place)
+
+
+@pytest.mark.spec("BLD-merge_archive_manifest", "RUL-package_self_describing",
+                  test="TST-merge_execute-merges_package_manifest_says_what_it_holds_and_whence")
+def test_merges_package_manifest_says_what_it_holds_and_whence(tmp_path):
+    """photos-35's manifest names the workspace and the merge run, supersedes geotag's, and lists every file it
+    archives with its path and SHA-256."""
+    ws, lib = _ws(tmp_path, [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"}])
+    with open(_ctl(ws, "photos-00-workspace-guard"), "w") as f:
+        f.write(json.dumps({"initialized": True, "initialized_by_run": "init-run-1"}))
+    assert merge._run_locked_workflow("plan", str(ws)) == 0
+    assert merge._run_locked_workflow("execute", str(ws)) == 0
+    m = json.loads(open(_ctl(ws, "photos-35-archive-manifest.json")).read())
+    summary = _summary(ws)
+    assert set(m) == {"artifact_type", "artifact_name", "schema_version", "workspace", "workspace_id", "plan_id",
+                      "execution_id", "merge_run_id", "supersedes", "contents", "run_metadata"}
+    assert (m["artifact_type"], m["artifact_name"], m["schema_version"]) == \
+        ("archive_manifest", "photos-35-archive-manifest.json", 1)
+    assert (m["workspace"], m["workspace_id"]) == ("ws", "init-run-1")
+    assert m["plan_id"] == summary["merge_plan_id"]
+    assert m["execution_id"] == m["merge_run_id"] == summary["merge_run_id"]
+    assert m["supersedes"] == "photos-26-archive-manifest.json"
+    assert m["run_metadata"] == {"generated_at": summary["run_metadata"]["started_at"]}
+    for key, rec in m["contents"].items():
+        assert rec["path"] == os.path.join(".photos-ingest", key)
+        assert rec["sha256"] == utils.sha256_file(os.path.join(str(ws), rec["path"])), key
+
+
 @pytest.mark.spec("RUL-empty_merge_seals", "BLD-merge_success_sequence",
                   test="TST-merge_execute-a_merge_of_no_photos_seals")
 def test_a_merge_of_no_photos_seals(tmp_path):

@@ -857,6 +857,19 @@ and requiring a ready plan whose execution succeeded ({need}`BLD-finalize_precon
 into `photos-35-archive-manifest.json` and `photos-35-archive.tar.gz` ({need}`BLD-merge_success_sequence`).
 :::
 
+:::{bld} Merge's package manifest
+:id: BLD-merge_archive_manifest
+:status: ruled
+:realises: RUL-package_self_describing, RUL-merge_reseals
+:uses: BLD-archive_manifest
+
+`photos-35-archive-manifest.json` SHALL hold `artifact_type` `archive_manifest`, its `artifact_name`, `schema_version`
+1, the workspace's folder name as `workspace` and its identity as `workspace_id`, the merge plan's `plan_id`, the merge
+run's id as both `execution_id` and `merge_run_id`, `supersedes` naming `photos-26-archive-manifest.json`, `contents` —
+each file it lists keyed by its path in the control directory, with its path in the workspace (`path`) and its
+`sha256` — and `run_metadata.generated_at`, the merge run's start.
+:::
+
 :::{bld} The log's format
 :id: BLD-log_format
 :status: ruled
@@ -886,6 +899,19 @@ own, the `pre_state` it replaced, from the plan), `gps_cleared` (a position geot
 wrote and no longer places, with that position, from the plan, and the method left), `gps_preserved` and `final_rename`,
 each naming its `run`; finalize takes them from every executed pass — each superseded `photos-24` whose journal shows it
 ran, oldest first, matched by fingerprint — before the current plan's, from the provenance each time write carries.
+:::
+
+:::{bld} Merge's step in the log
+:id: BLD-merge_log_steps
+:status: ruled
+:realises: RUL-log_entry_grows, RUL-log_step_names_run, RUL-merge_records_landing
+:uses: BLD-log_format, BLD-phase_logs
+
+Merge SHALL append to the `journey` of each photo it placed or found already in the library one step: `phase`
+`merge`; its `run`, the merge plan that placed it — the earlier one for a photo a re-plan carried forward
+({need}`BLD-merge_carry_forward`); `action` `placed`, or `already_present`; `from`, its path in photos by destination;
+`library_path`, its place in the library; and `renamed_for_library`, whether it took a name of its own there — setting
+the entry's `library_path` to the same place.
 :::
 
 :::{bld} The journals and the decisions each execution used are kept
