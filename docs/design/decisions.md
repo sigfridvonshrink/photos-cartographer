@@ -59,6 +59,13 @@ affordance.
 - **GPS panel**: a single lat/lon field, Google-Maps paste that commits + jumps the map, multi-select,
   seed-the-next-photo-from-the-last-pick, map placed above the photo (#117–#122, #132).
 - **Drift validation = a scrub-on-track view**, Photo / Track sub-tabs (#124, #129, #131).
+- **Timezones are the host's, never the browser's**: the zone drop-down offers, and the editor checks a
+  zone against, the list of zones geotag's plan accepts on the machine it runs on — sent by the server with
+  the decisions (`zones`, every zone of the host's database that `valid_iana_timezone` takes) — not the browser's
+  own `Intl` list. Why: the plan is what judges a zone; a name one side knows and the other does not (`US/Eastern`
+  on a host without the legacy names) would be saved by the editor and then refused by the plan, the user finding
+  out a run later. Code site `setHostZones` / `validTz` in `web/app.js` and `_host_zones` in `server.py`, tested
+  in `app_validation.test.mjs` and `test_serve.py`.
 - **Folder GPS fallback modelled as presence/absence** — no enum; an unset fallback reads `none`, not
   `resolved`, so it cannot falsely propagate; a **Clear** button resets to none (#241–#243).
 - Served as **package data via importlib.resources, no bundler**; folded into the package as the `edit`
