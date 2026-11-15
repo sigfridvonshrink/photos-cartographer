@@ -1056,11 +1056,11 @@ geotag plan and execution ids, the photos it newly moved and those an earlier ru
 :::{bld} What a whole merge writes, and the seal last
 :id: BLD-merge_success_sequence
 :status: ruled
-:realises: RUL-merge_reseals, RUL-seal_on_success_only, RUL-reseal_rederives_nothing
+:realises: RUL-merge_reseals, RUL-seal_on_success_only, RUL-reseal_rederives_nothing, RUL-empty_merge_seals
 
-Only on success — every photo placed or already present, none left — SHALL merge then, in order, write
-`photos-35-merge-log.json`, `photos-35-merge-ingest.db`, the package's `photos-35-archive-manifest.json` and
-`photos-35-archive.tar.gz`, and last the seal.
+Only on success — every photo placed or already present, none left, a plan of no photo among them — SHALL merge then,
+in order, write `photos-35-merge-log.json`, `photos-35-merge-ingest.db`, the package's
+`photos-35-archive-manifest.json` and `photos-35-archive.tar.gz`, and last the seal.
 :::
 
 :::{bld} The seal

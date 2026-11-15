@@ -1879,6 +1879,22 @@ def test_either_way_out_of_a_library_pointed_away_from_finishes_the_merge(tmp_pa
     assert log["photos"]["A"]["library_path"] == os.path.join(str(home), "Trip", "a.jpg")
 
 
+@pytest.mark.spec("RUL-empty_merge_seals", "BLD-merge_success_sequence",
+                  test="TST-merge_execute-a_merge_of_no_photos_seals")
+def test_a_merge_of_no_photos_seals(tmp_path):
+    """A workspace whose finalized set holds no photo is merged whole: nothing is left to merge, so execute succeeds,
+    writes its records and seals, the library untouched but for its lock."""
+    ws, lib = _ws(tmp_path, [])
+    before = _tree(str(lib))
+    assert merge._run_locked_workflow("plan", str(ws)) == 0
+    assert merge._run_locked_workflow("execute", str(ws)) == 0
+    s = _summary(ws)
+    assert s["status"] == "success" and s["totals"]["removed_from_by_dest"] == 0 and s["totals"]["blocked"] == 0
+    assert utils.is_sealed(str(ws))
+    assert os.path.exists(_ctl(ws, "photos-35-merge-log.json"))
+    assert _tree(str(lib)) == before
+
+
 @pytest.mark.parametrize("end, status", [("done", 0), ("workspace locked", 1), ("library locked", 1),
                                          ("refused", 2), ("partial", 3), ("interrupted", 130)])
 @pytest.mark.spec("RUL-exit_status_says_how_it_ended", "BLD-exit_statuses",

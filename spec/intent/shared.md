@@ -2961,6 +2961,17 @@ Merge SHALL seal the workspace only when it succeeds whole — every photo by de
 already there, none left — a partial, failed or interrupted merge leaving it unsealed.
 :::
 
+:::{rul} A merge of no photos seals
+:id: RUL-empty_merge_seals
+:status: ruled
+:criticality: med
+:verify: required
+:refines: RUL-seal_on_success_only
+:uses: DEF-sealed_workspace, DEF-merge
+
+A merge with no finalized photo to merge SHALL succeed whole and seal the workspace, nothing being left to merge.
+:::
+
 :::{rul} The seal alone says a workspace is finished
 :id: RUL-seal_is_authority
 :status: ruled

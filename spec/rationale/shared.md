@@ -1379,6 +1379,19 @@ which a workspace is. A mark written only when merge succeeds whole can — and 
 none, so it can be finished by running it again.
 :::
 
+:::{rat} Nothing left to merge is a whole merge
+:id: RAT-empty_merge_is_whole
+:status: ruled
+:forced: no
+:follows_from: RAT-seal_not_folder_state, RAT-workspace_not_recycled
+:justifies: RUL-empty_merge_seals
+
+A merge is whole when it leaves no photo behind, and one with none to merge leaves none. A workspace whose photos the
+user took out, or whose dump held only videos, is as finished as one whose photos went to the library; left unsealed,
+it would wait for a merge that has nothing to do, and invite the next dump into a workspace whose records describe
+this one.
+:::
+
 :::{rat} A finished workspace is read, not reprocessed
 :id: RAT-sealed_is_final
 :status: ruled

@@ -103,8 +103,9 @@ def merge_db_snapshot_path(ws):
 
 def merge_execution_status(results):
     """Terminal status of a merge execution from per-file results (BLD-merge_records):
-    `success` (nothing blocked), `failed` (ran but nothing was placed — every file blocked), or
-    `partial` (some placed, some blocked). Pre-mutation aborts are `rejected`, decided elsewhere."""
+    `success` (nothing blocked — a plan of no photo among them, which seals: RUL-empty_merge_seals), `failed`
+    (ran but nothing was placed — every file blocked), or `partial` (some placed, some blocked). Pre-mutation
+    aborts are `rejected`, decided elsewhere."""
     blocked = any(r["final_kind"] == "blocked" for r in results)
     if not blocked:
         return "success"
