@@ -2,6 +2,23 @@
 
 *What was decided and why, newest first. A record: never corrected forward. Per-commit detail is `git log`.*
 
+## 2026-11-15 — every question answerable in the editor, and by hand (BACKLOG 52)
+
+The owner: *"the user should be able to answer all questions in the editor"* — and *"the editor is not the only
+possibility to answer, I need to keep the option to manually give answers, so the snippet added for a new camera
+needs to stay."* An audit of every question the tool asks found the gaps; ruled *"all as recommended in principle"*:
+
+- **a same-day conflict** settles from the editor: its offset is written as the user's own choice.
+- **a drift correction** can be typed, as seconds or a photo's true time, not only scrubbed.
+- **a photo whose content changed after a write** (photos-25) is accepted in the editor, with its preview.
+- **a decision record that does not parse** shows its error.
+- **a new camera's class** is answered in the editor, which writes `device_groups` into the configuration under the
+  lock, every other setting kept; the snippet to paste by hand stays.
+- **a time changed by hand after geotag wrote it** is a question, no longer only a stop: restore geotag's, or keep the
+  new one — *"“keep” means this is the true local time - ruled"*: read by the destination's zone, no camera offset ever
+  applied to it, never evidence of the camera's clock. (Built first as the photo's own camera time, which would have
+  corrected a true time twice; caught before use.)
+
 ## 2026-11-15 — a phone's clock and a fix's time checked, nothing assumed silently (BACKLOG 6, 20, 35)
 
 Geotag trusted a phone's clock with nothing checking it, read no camera's GPS fix time, and read phone photos with no
