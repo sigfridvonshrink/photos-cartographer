@@ -4,7 +4,7 @@
 
 - **What this is:** [`README.md`](README.md). **The record:** [`HISTORY.md`](HISTORY.md).
 
-*Open items: **28** — 2, 6 to 7, 11, 13 to 16, 18, 20 to 23, 25, 27, 28, 30 to 32, 35, 39, 40, 43, 45 to 49.* 🛑 Numbers are never reused; the next is **50**.
+*Open items: **29** — 2, 6 to 7, 11, 13 to 16, 18, 20 to 23, 25, 27, 28, 30 to 32, 35, 39, 40, 43, 45 to 50.* 🛑 Numbers are never reused; the next is **51**.
 
 ---
 
@@ -70,8 +70,8 @@ name; fixed. The `+carto-time` mark is item 46's.
 - *prep fields nothing reads*: the handoff's `hash_algorithm`; the journal's `depends_on.tool`,
   `depends_on.execution_id` and its `snapshots` block; the plan's `workspace_root`; `absolute_path` in plan effects
   and database rows;
-- *a photo placed by hand at the path a removed photo freed*, in a run where prep gives it no step, still takes the
-  removed photo's log entry — the log holds nothing to tell the two apart;
+- *a photo placed by hand at the path a removed photo freed* still takes the removed photo's log entry — ruled
+  under item 50 (a retake needs the file unchanged);
 - *item 5 at execute*: `geotag execute` builds its model, carrying pinned values to a retaken fingerprint, without
   the vouched-log check `geotag plan` now makes (finalize and merge make it too);
 - *item 40*: a chosen offset now shared within a day is still not checked against an anchored one of the same day
@@ -502,3 +502,44 @@ natural run to take them from.
 
 **When:** after item 17's text, so the pictures are taken once.
 
+
+### 50. Every run checks the workspace is as the last one left it
+
+**Why:** the owner, 2026-11-15: *"I wonder if before each run, as a rule, there should be a quick check to see if
+anything unexpected happened. The only manual moves in a workspace should be the moves to by-dest. This should also
+make the processing safer."* Today's protection is a scatter of particular checks — a time changed by hand
+(`RUL-changed_time_stops_plan`), a fingerprint changed after the plan, hidden entries, the vouched prep log, the
+stale-plan checks — and prep takes the managed folders as it finds them. A file replaced, changed or put in place by
+hand outside the inbox passes unless one of them happens to catch it. Found through prep's log: a different photo
+put by hand at the path a removed photo freed took the removed photo's history as a "retaken fingerprint"
+(BACKLOG 2, `RUL-gone_photo_entry_carried`).
+
+**Ruled (2026-11-15):** every command — prep, geotag, merge — first compares the workspace with the state the last
+execute left (prep's cache holds each file's path, size, modification time, inode and fingerprint), by its file
+system entries alone, reading no file whole. What a person is expected to do passes:
+1. a dump put into the inbox;
+2. photos moved from photos by date into photos by destination, and moved, or their folders renamed, within it;
+3. the decision files and the configuration edited;
+4. a photo deleted by hand (culling), in photos by date or by destination — allowed, and named in the next run's log;
+5. a photo moved back from photos by destination to photos by date — allowed, named in the log;
+6. a missing-metadata file given a time by hand, then prep run — allowed, named in the log.
+
+7. Anything else — a file changed in place, replaced, or appearing outside the inbox; anything in quarantine or the
+strays folder changed other than by prune — stops the command, naming each file; the user undoes it, or accepts it
+once, the acceptance recorded.
+
+**Prep's log (ruled, c):** a fingerprint counts as retaken only where the file is unchanged — same size, modification
+time and inode — and the method changed; a different file at the path is a new photo, and the removed photo's entry
+stays a gone one.
+
+**To mind when it is built:**
+- The owner: *"a replaced file would also typically have a different inode."* So the inode is the strongest of the
+  three: a replacement keeps none of them reliably, an untouched file keeps all.
+- The tool's own writes change them too: geotag writes an original through a temporary file renamed over it
+  (`BLD-metadata_safe_write`), so the file has a new inode, size and modification time though its fingerprint holds.
+  Each execute must record the state it leaves — geotag's included, and merge's moves out — or every run after it
+  stops on the tool's own work.
+- A copy to another filesystem, a restore from a snapshot, or some network filesystems give new inodes to unchanged
+  files; to be ruled then whether the fingerprint, read again, settles such a case or it is asked.
+- Which allowed changes need a new prep run before geotag (2 already does, `RUL-prep_records_sort`) and which the
+  check itself records.
