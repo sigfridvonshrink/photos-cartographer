@@ -423,12 +423,11 @@ def test_restored_quarantine_file_reflows_as_a_normal_dump(mock_meta, tmp_path, 
                for op in plan2.operations), [(o.type, o.source) for o in plan2.operations]
 
 
-@pytest.mark.spec("RUL-missing_metadata_stays", test="TST-idempotency_cache-no_special_reimport_path_from_missing_metadata")
+@pytest.mark.spec("RUL-filed_file_stays", "RUL-photos_by_date", test="TST-idempotency_cache-no_special_reimport_path_from_missing_metadata")
 def test_no_special_reimport_path_from_missing_metadata(tmp_path, monkeypatch):
-    """2-missing-metadata is a holding bay, not a re-entry point: prep never reprocesses a file sitting
-    there in place. A file still missing a date stays put (no op); the way to re-import is to move it to
-    0-sources, where it routes like any ordinary dump — here, to 5-photos-by-date by its (now present)
-    date. No 2-missing-metadata-specific rescue path."""
+    """A file in 2-missing-metadata still missing a date stays put (no op); one moved from there into
+    0-sources routes like any ordinary dump — here, to 5-photos-by-date by its (now present) date. (One
+    given a time where it lies is filed on from there: test_time_given_filed_on.)"""
     ws = tmp_path / "ws"; ws.mkdir()
     (ws / ".photos-ingest").mkdir(); (ws / ".photos-ingest" / "photos-00-workspace-guard").touch()
     for d in ("0-sources", "1-strays", "2-missing-metadata", "3-redundant-jpgs",

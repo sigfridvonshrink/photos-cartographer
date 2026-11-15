@@ -428,9 +428,10 @@ def test_stale_dependency_under_concurrency_blocks_execution(mock_read_metadata_
         return res, set()
     mock_read_metadata_concurrently.side_effect = _mock_read_concurrently
 
-    # We should have one file triggering a metadata fetch
-    os.makedirs(os.path.join(workspace, "2-missing-metadata"), exist_ok=True)
-    file_path = os.path.join(workspace, "2-missing-metadata", "UNKN_dummy.jpg")
+    # We should have one file triggering a metadata fetch — a conforming by-date photo, which the plan leaves
+    # where it is (a passive dependency)
+    os.makedirs(os.path.join(workspace, "5-photos-by-date", "2023-01-01"), exist_ok=True)
+    file_path = os.path.join(workspace, "5-photos-by-date", "2023-01-01", "2023-01-01--12-00-00.jpg")
     with open(file_path, "w") as f:
         f.write("dummy")
 

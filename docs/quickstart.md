@@ -202,7 +202,8 @@ Before geotag can run:
 
 - **every photo must leave `5-photos-by-date/`** — into a destination, or out of the workspace;
 - `6-photos-by-dest/` holds **photos only** — videos stay in `4-videos-by-date/`;
-- photos with no recorded time stay in `2-missing-metadata/` — one in a destination stops geotag;
+- photos with no recorded time stay in `2-missing-metadata/` — one in a destination stops geotag; give
+  one a time there and the next prep run files it into `5-photos-by-date/`, to sort with its day;
 - no `jpg` / `tif` development subfolder in a destination, in any case — `JPG` too (development happens in
   the library, after merge).
 

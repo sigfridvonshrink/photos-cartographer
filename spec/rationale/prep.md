@@ -192,8 +192,9 @@ in the plan.
 :justifies: RUL-filed_file_stays
 
 A file outside the inbox was filed by an earlier run or moved there by the user. Moving it again on a later run would
-undo either for nothing and churn the names the user and later phases know it by. Only two things move it: a copy of it
-found to be better filed, and its own recorded time no longer matching its day.
+undo either for nothing and churn the names the user and later phases know it by. Only three things move it: a copy of
+it found to be better filed, its own recorded time no longer matching its day, and a time given at last to one set
+apart for having none.
 :::
 
 :::{rat} A day of photos is one folder
@@ -242,16 +243,18 @@ so that the inbox ends empty, and goes where the user can find it as it was — 
 name it came with, in the run's own folder so no two runs' strays meet.
 :::
 
-:::{rat} The user's fix goes through the inbox
-:id: RAT-fix_through_inbox
+:::{rat} A time given is the fix done
+:id: RAT-time_given_filed_where_it_lies
 :status: ruled
 :forced: no
-:follows_from: RAT-untimed_set_apart, RAT-discrete_stages
-:justifies: RUL-missing_metadata_stays
+:follows_from: RAT-untimed_set_apart, RAT-expected_hand_work, RAT-discrete_stages
+:justifies: RUL-time_given_filed_on
 
-The user gives a file in missing metadata its time with their own tools, whenever they choose. Moving it back into the
-inbox says that they are done; it then goes through prep like any file of a new dump, and no second way into the
-pipeline needs keeping in step with the first.
+The user gives a file in missing metadata its time with their own tools, where it lies, whenever they choose; once it
+has one it waits for nothing, and the next prep run files it as it files a file of a new dump — the same day folder,
+the same name, the same check against the copies already filed. Filing has one way, whatever folder a file starts in,
+so no second way needs keeping in step with the first; and the photo reaches photos by date, to be sorted with the rest
+of its day. One still without a time stays where it is, waiting.
 :::
 
 :::{rat} One spelling of each extension
@@ -689,12 +692,12 @@ visibly, until the user prunes it: by a command of its own, which shows what it 
 :id: RAT-restore_like_any_file
 :status: ruled
 :forced: no
-:follows_from: RAT-fix_through_inbox, RAT-no_automatic_deletion
+:follows_from: RAT-time_given_filed_where_it_lies, RAT-no_automatic_deletion
 :justifies: RUL-restored_file_is_new
 
 Moving a file back is the user's way of saying it should not have been set aside. Handled as a new file it is checked
 afresh — set aside again if it is still a copy, filed if its twin is gone — and no second path into the pipeline needs
-keeping in step with the first ({need}`RAT-fix_through_inbox`). The old record stays: it is history of what that run did.
+keeping in step with the first ({need}`RAT-time_given_filed_where_it_lies`). The old record stays: it is history of what that run did.
 :::
 
 :::{rat} A growing cost is shown
