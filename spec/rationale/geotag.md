@@ -698,8 +698,8 @@ An anchor reads the time off the track where the photo's own position lies on it
 A camera with its own GPS writes, beside the position, the UTC its fix was taken at. Less the camera's own time, that
 is the clock offset itself — measured, where the offset the camera records only states what its clock was set to and
 the zone's guess assumes it. With no track by the photo's place it was all the photo said of its clock, and was not
-read. A track anchor still comes first: a fix's time can be stale — the owner's ruling: *"a stale fix repeats its time
-while the camera's moves on"* — so readings count only where their GPS times all differ and their offsets agree, and
+read. A track anchor still comes first: a fix's time can be stale, and a stale fix repeats its time while the
+camera's moves on — so readings count only where their GPS times all differ and their offsets agree, and
 then, two or more, they apply themselves as several anchors do; one is a single chance of a stale fix, and is offered.
 A camera writing local time into the GPS field shows a whole-hour difference: a track catches it where there is one,
 and so does the check against the destination's other devices that holds back a guess far from all of them.
@@ -742,7 +742,7 @@ A phone takes its time from the network and was trusted with nothing checking it
 photo whose tag is missing while the phone sat in another zone, a phone set by hand to the wrong hour, would each pass
 unseen and misplace every such photo on the track. Where its photos hold their own position, the tracks — or the
 fixes' own times — say what its clock was, exactly as they do for a camera, and by the same settings: no new setting,
-for the owner ruled *"a phone's error is a whole zone, not drift"*. Agreeing with how the phone's photos are read,
+for a phone's error is a whole zone, not drift (ruled as recommended, *"otherwise all as recommended"*). Agreeing with how the phone's photos are read,
 there is nothing to ask. Several of them agreeing among themselves against it is the evidence a camera's several
 anchors are, and applies itself for that phone and day, the cell showing it; one photo could be a coincidence, and is
 offered. The user, who knows the track was someone else's, can keep the phone as it records itself.
@@ -757,12 +757,13 @@ offered. The user, who knows the track was someone else's, can keep the phone as
 
 A camera's "clock was on local time" is a proposal the user accepts, and is then checked against the tracks. The same
 assumption was applied silently to a phone's photo with no offset tag and to a file naming no camera — and those photos
-were then placed on the tracks by it. The owner ruled the phone's photo *"read as the same phone's tagged photos that
-day show, unasked, where those show the zone's offset; else its GPS time or a track settles it; with neither, it rides
-the drift check where there are tracks, and is asked where there are none"*: the phone's own photos that day are the
+were then placed on the tracks by it. So, ruled as recommended, the phone's photo is read as the same phone's tagged
+photos that day show, unasked, where those show the zone's offset; else its GPS time or a track settles it; with
+neither, it rides the drift check where there are tracks, and is asked where there are none: the phone's own photos that day are the
 best word on its clock, its own GPS the next, and only then is it the guess a camera's is, asked once. A file naming
-no camera has no siblings to read it by; the owner ruled its question *"one per destination — 'N files name no camera
-and no offset: read them as local time in <zone>?' — answered once, in the editor, and kept"*: a screenshot is made
+no camera has no siblings to read it by; its question is one per destination — "N files name no camera and no
+offset: read them as local time in <zone>?" — answered once and kept (the owner: *"I suppose that happens in the
+editor, right?"*): a screenshot is made
 at the local time of wherever it was made, which the user knows for the folder as a whole, not file by file. The answer
 names the zone it was given for, so a zone changed later asks again.
 :::
@@ -776,8 +777,8 @@ names the zone it was given for, so a zone changed later asks again.
 
 A time a daylight-saving change repeats or skips was a stop, mended only outside the tool: an offset written into
 the original with exiftool, prep run again. The photo still says nothing of which reading is right, but the user may
-know — the hour of the party, the flight — and the owner ruled it answered in the time decisions, *"per photo, which
-reading (repeated) or the offset (skipped), instead of only outside the tool"*. A time shown twice is one of its two
+know — the hour of the party, the flight — and so it is answered in the time decisions, per photo: which reading, for a
+repeated time, or the offset, for a skipped one (ruled as recommended). A time shown twice is one of its two
 readings and nothing else; a time never shown came from a clock that was not the zone's, so its offset is the user's to
 say.
 :::
@@ -804,8 +805,7 @@ it can be seen later and mended.
 
 A camera's clock is set by hand and keeps its setting through the night clocks change; a phone's follows the
 network. So a camera's offset guessed from the zone is the zone's at its day's earliest photo, and holds for the whole
-day — the owner's ruling: *"a camera's clock does not change at a daylight-saving switch, so one offset for the day is
-right for it"*. Reading each of its photos by the zone instead would move the photos after the switch by an hour its
+day (ruled as recommended: stated as it is). Reading each of its photos by the zone instead would move the photos after the switch by an hour its
 clock never moved.
 :::
 

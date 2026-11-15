@@ -249,8 +249,9 @@ Photos are irreplaceable, so the whole design is **plan → validate → execute
 - **Stops rather than guesses.** Where something cannot be settled safely, the run stops — before it touches
   a photo — names what it found and says what to do: an entry at the workspace's top level that does not belong
   there (its place is the inbox, `0-sources`), a link or a hidden folder among the photos, a photo prep could not
-  fingerprint, a local time that a daylight-saving change skips or repeats (give the photo's time its offset, or
-  move the photo out), a tracks folder that is configured but missing, or holds no track that can be read.
+  fingerprint, a tracks folder that is configured but missing, or holds no track that can be read, a workspace
+  changed in a way no hand action allows. What only the user can know — which reading of a time a daylight-saving
+  change repeats, an offset no evidence settles — it asks, in the decision editor or by hand in the decision files.
 
 ## How it works (the detail)
 
