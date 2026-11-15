@@ -350,6 +350,31 @@ def test_a_photo_s_decision_follows_it_through_its_rename(tmp_path):
     assert _dd(art3, d)["gps_decisions"]["review_items"][0]["reason"] == "manual_locked"
 
 
+@pytest.mark.spec("RUL-moved_photo_position_decided_anew", "BLD-review_item_identity",
+                  test="TST-geotag_gps_decisions-a_moved_photo_s_position_is_decided_anew")
+def test_a_moved_photo_s_position_is_decided_anew(tmp_path):
+    """A position typed for a photo, or its answer to stay unlocated, was given for the folder it lay in: moved to
+    another destination — or its folder renamed — the photo is asked again, though its fingerprint would find the
+    old answer."""
+    wf, a, b, renamed = _wf(tmp_path), f"{BYDEST}/A", f"{BYDEST}/B", f"{BYDEST}/A2"
+    off = "2024-07-03T20:00:00Z"                                               # off the track: asks
+    files = [_fp_file(f"{a}/p.arw", a, "fp-p"), _fp_file(f"{a}/u.arw", a, "fp-u")]
+    art, _ = _build(wf, files, [_row(f"{a}/p.arw", off), _row(f"{a}/u.arw", off)], _gpx())
+    items = {ri["content_fingerprint"]: ri for ri in _dd(art, a)["gps_decisions"]["review_items"]}
+    items["fp-p"]["user_decision"].update(manual_lat=51.5, manual_lon=4.5)
+    items["fp-u"]["user_decision"]["accept_unlocated"] = True
+    art, _ = _build(wf, files, [_row(f"{a}/p.arw", off), _row(f"{a}/u.arw", off)], _gpx(), art)
+    assert {ri["reason"] for ri in _dd(art, a)["gps_decisions"]["review_items"]} == {"manual_locked", "accepted_unlocated"}
+    # one photo moved to B, the other's folder renamed: both asked again, nothing of A's answers with them
+    moved = [_fp_file(f"{b}/p.arw", b, "fp-p"), _fp_file(f"{renamed}/u.arw", renamed, "fp-u")]
+    art2, blk = _build(wf, moved, [_row(f"{b}/p.arw", off), _row(f"{renamed}/u.arw", off)], _gpx(), art)
+    assert not blk
+    for dest in (b, renamed):
+        (item,) = _dd(art2, dest)["gps_decisions"]["review_items"]
+        assert item["reason"] == "no_reliable_gps_source" and item["requires_user_input"]
+        assert item["user_decision"] == {"manual_lat": "", "manual_lon": "", "accept_unlocated": False}
+
+
 @pytest.mark.spec("RUL-unplaced_photo_listed", "RUL-disagreeing_tracks_place_nothing", "BLD-gps_decisions_record",
                   "RUL-disagreeing_tracks_named", "RUL-unplaced_photo_says_why",
                   test="TST-geotag_gps_decisions-an_unplaced_photo_is_listed_with_why")

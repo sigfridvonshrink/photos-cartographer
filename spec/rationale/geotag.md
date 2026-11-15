@@ -502,6 +502,20 @@ there. A photo is moved to fix a mis-sort; carrying its old destination's answer
 its time and its name, now hidden under the right folder.
 :::
 
+:::{rat} A photo's position was answered where it lay
+:id: RAT-position_answered_for_its_destination
+:status: ruled
+:forced: no
+:follows_from: RAT-destination_is_an_input, RAT-decisions_cascade
+:justifies: RUL-moved_photo_position_decided_anew
+
+A position typed for a photo, or the answer to leave it unlocated, is given looking at the photo where it lies: the
+place its folder names, the fallback that folder has or lacks, the tracks that covered it there. Any of these may have
+been part of the answer. Moved, the photo stands among another folder's answers — a fallback that would place it now,
+a place it was not — and the old one, carried, could keep it unlocated beside a fallback or pinned where the folder
+says it was not. Asked again, it costs one answer.
+:::
+
 
 ## 11. Clock offsets from the camera's own GPS
 
@@ -658,12 +672,15 @@ of what they saw, for them to replace.
 :status: ruled
 :forced: yes
 :follows_from: RAT-decision_withdrawable, RAT-decoded_pixel_identity
-:justifies: RUL-own_values_follow_new_fingerprint
+:justifies: RUL-own_values_follow_new_fingerprint, RUL-geotag_plans_on_vouched_log
 
 A new ImageMagick may decode a photo to a new fingerprint; the photo is the same, and so are its own time and
 position. Lost with the old value, they would leave geotag taking the photo's corrected time for its own: a changed
 offset would never reach it, a withdrawn one never undo. Prep's log says which old value became which new one; where
-it does not say so one for one, no photo's values can be told apart, and geotag stops rather than guess.
+it does not say so one for one, no photo's values can be told apart, and geotag stops rather than guess. A log the
+handoff does not vouch for says nothing that can be trusted of which became which: planned past it, as though no
+fingerprint had changed, a photo would lose its pinned values without a word — so geotag stops on it as well, as
+finalize and merge do.
 :::
 
 
@@ -798,6 +815,22 @@ A photo can record when it was made in more than one field — EXIF's `CreateDat
 wrong one beside the right one. Only a field the photo already holds is rewritten: one it never held would be a record
 nobody made. `ModifyDate` is not the making but the last edit, and keeps its time. The fractions of a second recorded
 beside a time stay as they are: a clock offset is a whole number of seconds, so the fraction is still the right one.
+:::
+
+
+## 18. Renames
+
+:::{rat} Geotag finishes the spelling prep could not
+:id: RAT-geotag_finishes_extension_spelling
+:status: ruled
+:forced: no
+:follows_from: RAT-one_extension_spelling, RAT-by_dest_is_the_users
+:justifies: RUL-geotag_extension_lowercase
+
+Prep gives every file it files one spelling of its extension, but photos by destination is the user's sorting, which
+prep leaves as it finds it — so a photo put there by hand keeps the `.JPG` its camera wrote. Geotag renames the
+photos there anyway, and is the last phase to touch them before the library: left to it, the one spelling holds in
+the library too, and a name is the same name on every filesystem and in every tool.
 :::
 
 

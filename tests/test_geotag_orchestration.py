@@ -19,7 +19,7 @@ stale, _valid_iana). Complements the per-stage suites. From conftest.py.
 """
 import json
 from _zone import answer_root_zone, with_root_zone
-from _handoff import match_disk
+from _handoff import match_disk, vouched
 import os
 import sys
 from datetime import datetime, timezone
@@ -59,7 +59,7 @@ def _run(monkeypatch, ws):
 def test_lock_contention_exits_1(tmp_path, monkeypatch, capsys):
     ws, ctl = _init_ws(tmp_path)
     (ctl / "photos-00-config.json").write_text(json.dumps({k: v for k, v in utils.CONFIG.items() if k != "jobs"}))
-    (ctl / "photos-11-handoff.json").write_text(json.dumps({"filename_timestamp_format": utils.CONFIG["filename_timestamp_format"], "files": [], "depends_on": {"cache": {"fingerprint_algorithm_version": utils.FINGERPRINT_ALGORITHM_VERSION}}}))
+    (ctl / "photos-11-handoff.json").write_text(json.dumps(vouched(ctl.parent, {"filename_timestamp_format": utils.CONFIG["filename_timestamp_format"], "files": [], "depends_on": {"cache": {"fingerprint_algorithm_version": utils.FINGERPRINT_ALGORITHM_VERSION}}})))
     held = utils.WorkspaceLock(str(ws))
     assert held.acquire()
     try:
@@ -74,7 +74,7 @@ def test_invalid_config_blocks(tmp_path, monkeypatch, capsys):
     bad = {k: v for k, v in utils.CONFIG.items() if k != "jobs"}
     bad["gpx_interpolation_max_distance_meters"] = -5            # fails validate_config
     (ctl / "photos-00-config.json").write_text(json.dumps(bad))
-    (ctl / "photos-11-handoff.json").write_text(json.dumps({"filename_timestamp_format": utils.CONFIG["filename_timestamp_format"], "files": [], "depends_on": {"cache": {"fingerprint_algorithm_version": utils.FINGERPRINT_ALGORITHM_VERSION}}}))
+    (ctl / "photos-11-handoff.json").write_text(json.dumps(vouched(ctl.parent, {"filename_timestamp_format": utils.CONFIG["filename_timestamp_format"], "files": [], "depends_on": {"cache": {"fingerprint_algorithm_version": utils.FINGERPRINT_ALGORITHM_VERSION}}})))
     assert _run(monkeypatch, ws) == 2
     assert "Invalid workspace config" in capsys.readouterr().err
 
@@ -82,7 +82,7 @@ def test_invalid_config_blocks(tmp_path, monkeypatch, capsys):
 def test_corrupt_json_config_blocks(tmp_path, monkeypatch, capsys):
     ws, ctl = _init_ws(tmp_path)
     (ctl / "photos-00-config.json").write_text("{not valid json")      # JSONDecodeError is a ValueError
-    (ctl / "photos-11-handoff.json").write_text(json.dumps({"filename_timestamp_format": utils.CONFIG["filename_timestamp_format"], "files": [], "depends_on": {"cache": {"fingerprint_algorithm_version": utils.FINGERPRINT_ALGORITHM_VERSION}}}))
+    (ctl / "photos-11-handoff.json").write_text(json.dumps(vouched(ctl.parent, {"filename_timestamp_format": utils.CONFIG["filename_timestamp_format"], "files": [], "depends_on": {"cache": {"fingerprint_algorithm_version": utils.FINGERPRINT_ALGORITHM_VERSION}}})))
     assert _run(monkeypatch, ws) == 2
     assert "Invalid workspace config" in capsys.readouterr().err
 
@@ -90,7 +90,7 @@ def test_corrupt_json_config_blocks(tmp_path, monkeypatch, capsys):
 def test_unreadable_config_blocks(tmp_path, monkeypatch, capsys):
     ws, ctl = _init_ws(tmp_path)
     (ctl / "photos-00-config.json").mkdir()                            # a dir -> open() raises (not ValueError)
-    (ctl / "photos-11-handoff.json").write_text(json.dumps({"filename_timestamp_format": utils.CONFIG["filename_timestamp_format"], "files": [], "depends_on": {"cache": {"fingerprint_algorithm_version": utils.FINGERPRINT_ALGORITHM_VERSION}}}))
+    (ctl / "photos-11-handoff.json").write_text(json.dumps(vouched(ctl.parent, {"filename_timestamp_format": utils.CONFIG["filename_timestamp_format"], "files": [], "depends_on": {"cache": {"fingerprint_algorithm_version": utils.FINGERPRINT_ALGORITHM_VERSION}}})))
     assert _run(monkeypatch, ws) == 2
     assert "could not be read" in capsys.readouterr().err
 
@@ -207,7 +207,7 @@ def _completable_ws(tmp_path):
     files = [rec("6-photos-by-dest/T/a.arw", "2024:07:03 14:00:00", gps=(50.0, 4.0)),
              rec("6-photos-by-dest/T/b.arw", "2024:07:03 15:00:00", gps=(51.0, 5.0)),
              rec("6-photos-by-dest/T/c.arw", "2024:07:03 14:30:00")]          # no GPS -> blocked
-    (ctl / "photos-11-handoff.json").write_text(json.dumps({"filename_timestamp_format": utils.CONFIG["filename_timestamp_format"], "files": match_disk(ws, files), "cache_fingerprint": "pcf", "depends_on": {"cache": {"fingerprint_algorithm_version": utils.FINGERPRINT_ALGORITHM_VERSION}}}))
+    (ctl / "photos-11-handoff.json").write_text(json.dumps(vouched(ctl.parent, {"filename_timestamp_format": utils.CONFIG["filename_timestamp_format"], "files": match_disk(ws, files), "cache_fingerprint": "pcf", "depends_on": {"cache": {"fingerprint_algorithm_version": utils.FINGERPRINT_ALGORITHM_VERSION}}})))
     return ws, ctl
 
 
@@ -263,7 +263,7 @@ def test_a_run_with_nothing_to_decide_writes_every_record(tmp_path, monkeypatch,
     parsed = json.loads(c["metadata_status"]["parsed_json"])
     parsed.update({"has_native_gps": True, "GPSLatitude": 50.5, "GPSLongitude": 4.5})
     c["metadata_status"].update({"has_native_gps": True, "parsed_json": json.dumps(parsed)})
-    (ctl / "photos-11-handoff.json").write_text(json.dumps(ho))
+    (ctl / "photos-11-handoff.json").write_text(json.dumps(vouched(ctl.parent, ho)))
     assert _run(monkeypatch, ws) == 0, capsys.readouterr().err
     for name in ("photos-21-time-decisions.json", "photos-22-gps-drift-validation.json",
                  "photos-23-gps-decisions.json"):
@@ -316,7 +316,7 @@ def test_unparseable_decision_artifact_blocks_and_is_kept(tmp_path, monkeypatch,
 def test_sealed_workspace_with_dump_warns_and_blocks(tmp_path, monkeypatch, capsys):
     ws, ctl = _init_ws(tmp_path)
     (ctl / "photos-00-config.json").write_text(json.dumps({k: v for k, v in utils.CONFIG.items() if k != "jobs"}))
-    (ctl / "photos-11-handoff.json").write_text(json.dumps({"filename_timestamp_format": utils.CONFIG["filename_timestamp_format"], "files": [], "depends_on": {"cache": {"fingerprint_algorithm_version": utils.FINGERPRINT_ALGORITHM_VERSION}}}))
+    (ctl / "photos-11-handoff.json").write_text(json.dumps(vouched(ctl.parent, {"filename_timestamp_format": utils.CONFIG["filename_timestamp_format"], "files": [], "depends_on": {"cache": {"fingerprint_algorithm_version": utils.FINGERPRINT_ALGORITHM_VERSION}}})))
     open(utils.sealed_marker_path(str(ws)), "w").close()           # seal it
     (ws / "loose.jpg").write_bytes(b"x")                           # a new dump at the root
     assert _run(monkeypatch, ws) == 2                              # sealed -> hard stop
@@ -361,7 +361,7 @@ def test_unknown_group_template_is_valid_full_json(tmp_path, monkeypatch, capsys
     (ws / "6-photos-by-dest/T/z.nef").write_bytes(b"x")
     h["files"].append(extra)
     match_disk(ws, h["files"])
-    (ctl / "photos-11-handoff.json").write_text(json.dumps(h))
+    (ctl / "photos-11-handoff.json").write_text(json.dumps(vouched(ctl.parent, h)))
 
     assert _run(monkeypatch, ws) == 2
     err = capsys.readouterr().err

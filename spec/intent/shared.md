@@ -1303,8 +1303,8 @@ destination's civil timezone — and rename it to that final name.
 :verify: required
 :uses: RUL-prep_name_provisional, RUL-geotag_name_final
 
-A file's name SHALL change between prep and geotag only when its timestamp is corrected: geotag plans no rename for a
-file whose time is not corrected.
+A file's name SHALL change between prep and geotag only when its timestamp is corrected, or its extension is not in
+lowercase: geotag plans no rename for a file whose time is not corrected but to lowercase its extension.
 :::
 
 :::{def} An untimed name

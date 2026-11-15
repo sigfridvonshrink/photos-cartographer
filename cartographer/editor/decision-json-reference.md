@@ -53,7 +53,8 @@ Everything the editor must guarantee, in five rules:
    under the key's other form naming the same `day`, since a camera's only day in a destination is
    keyed `<group>` and becomes `<group>@<day>` once a second day arrives (§4.4); a review item by the
    photo's `content_fingerprint` (which follows the photo through geotag's own renames), and by
-   `relative_path` only for an item recorded without one. A decision whose target is gone (no such
+   `relative_path` only for an item recorded without one — within the photo's own destination only: a
+   photo moved to another folder, or whose folder was renamed, is asked its position again. A decision whose target is gone (no such
    destination, day or photo, or a photo that no longer needs one) is not carried over. So:
    - You may **round-trip the whole file** (load, change `user_decision` in place, save). The
      system-owned fields you carry along are ignored and overwritten next run — they exist only so the
@@ -300,9 +301,9 @@ offset; else manual required.
      "shared_from": { "destination": "…", "bucket": "…" }, "confidence": "high" | "review_required" }`.
   `high`: it applied itself there and applies itself here (`same_day_auto`, `decision_mode: "auto_resolved"`).
   `review_required`: accept it here (`same_day_accepted`). It takes the place only of a proposal that would
-  be `recorded_offset`, `timezone_naive` or `manual_required`. Never another day's offset, never one written by hand (the
-  donor's source is `gpx_anchor_auto` or `gpx_anchor_accepted`, one that applied itself chosen first, then
-  by path). Neither same-day source is drift-checked in photos-22.
+  be `recorded_offset`, `timezone_naive` or `manual_required`. Never another day's offset, never one written by hand
+  unless it is a group of the camera's own GPS the user picked (the donor's source is `gpx_anchor_auto`,
+  `gpx_anchor_accepted` or `gpx_anchor_chosen`, one that applied itself chosen first, then by path). Neither same-day source is drift-checked in photos-22.
 - **Manual required** (`proposal_source: "manual_required"`) — no signal: no anchor, no same-day offset,
   and no timezone-derived offset (no resolved timezone, no readable camera time, or a camera time the zone
   reads two ways); the human must enter a manual offset (or real UTC): `{ "proposal_source": "manual_required" }`.
@@ -371,7 +372,7 @@ One entry per file that needs the human (or that the human already locked/accept
 | Field | Type | Editable | Meaning |
 |-------|------|----------|---------|
 | `relative_path` | string | no | Workspace-relative path of the photo (e.g. `6-photos-by-dest/Japan/IMG_1.arw`). The editor's save names a review item by it. |
-| `content_fingerprint` | string \| null | no | The photo's identity. A decision is found again by it — through geotag's own rename of the photo — not by the path. |
+| `content_fingerprint` | string \| null | no | The photo's identity. A decision is found again by it — through geotag's own rename of the photo — not by the path, within the photo's destination: moved to another folder (or its folder renamed), the photo is asked again. |
 | `tracks` | object | no | On a `no_reliable_gps_source` or `accepted_unlocated` photo that has a resolved time and that the tracks did not place: why. `reason` with its evidence: `no_tracks` (no track at all); `outside_track` + `seconds_from_track`; `track_gap` + `seconds_from_track` + `gap_seconds`, and `segment_break: true` when the gap is a break between two `<trkseg>` of the track (never bridged, however short); `track_jump` + `seconds_from_track` + `jump_meters`; `tracks_disagree` + `gpx_files` (the two tracks — each a file name, or `"<file> (track N)"` when both are tracks of one file) + `apart_meters`. Where several tracks miss, the one nearest in time speaks. |
 | `reason` | `"no_reliable_gps_source"` \| `"manual_locked"` \| `"accepted_unlocated"` | no | Why it's here (see below). |
 | **`user_decision.manual_lat`** | number \| `""` | **yes** | Human-entered latitude (set both). |
@@ -564,12 +565,12 @@ Mirror these client-side; a value that fails makes geotag reject the whole artif
 |----------|------|
 | `country` | `""` (= none), or a code that is a key of the top-level `countries` table; any other value is a blocker, as is any value where the host's zone database has no table of countries (`countries` is `{}`). One chosen inside another country's destination is not a blocker: the next run writes it back `""` (`country_removed`). |
 | `manual_iana_timezone` | Must resolve as a real IANA zone in the zone database geotag runs with — never a name standing for the host (`localtime`, `posixrules`, `Factory`). With a country in effect (`country_zones` present), it must be one of `country_zones`. `""` allowed (= unset). |
-| `confirmed_despite_recorded_offsets` | A list of whole numbers of seconds; `[]` = not given. |
+| `confirmed_despite_recorded_offsets` | A list of whole numbers of seconds; `[]` (or `null`, or the field absent) = not given. |
 | `manual_offset_seconds` | A whole number of seconds (an integer, or a float with no fraction), of any size (a clock reset to its factory date is years out). Not a boolean, not a string. `""` allowed. |
 | `accepted_offset_seconds` | Required, as a whole number of seconds, whenever `accept_proposal` is `true` (and no manual offset is set): the `proposed_offset_seconds` accepted. `""` with `accept_proposal: false`. |
-| `confirmed_offset_seconds` (photos-22) | Required, as a whole number of seconds, whenever `confirmed` is `true`: the `current_offset_seconds` confirmed against. `""` with `confirmed: false`. |
+| `confirmed_offset_seconds` (photos-22) | Required, as a whole number of seconds, whenever `confirmed` is `true`: the `current_offset_seconds` confirmed against. `""` with `confirmed: false` — and, if written there all the same, still a whole number of seconds. |
 | `confirmed_against_tracks` (photos-22) | Required whenever `confirmed` is `true`: a list (`[]` allowed, only meaning "no track was shown") of `{ "gpx_file": <path under gpx_root>, "sha256": <its SHA-256> }`, each a non-empty string — copied from `proposal.tracks`. `[]` with `confirmed: false`. |
-| `corrected_offset_seconds` (photos-22) | `""` (zero scrub) or a whole number of seconds. |
+| `corrected_offset_seconds` (photos-22) | `""` (zero scrub) or a whole number of seconds — checked whether or not the cell is confirmed. |
 | `fallback_lat` / `fallback_lon`, `manual_lat` / `manual_lon` | Numbers (not booleans, not strings); latitude ∈ [-90, 90], longitude ∈ [-180, 180]. Set both or neither. `""` allowed (= unset). |
 | `accept_proposal` / `accept_unlocated` / `confirmed` | `true` or `false` (absent or `null` reads as `false`); anything else — `"false"`, `1`, `"yes"` — is a blocker, never coerced. Default `false`. |
 

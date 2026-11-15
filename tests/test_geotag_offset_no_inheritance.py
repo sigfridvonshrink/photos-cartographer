@@ -123,6 +123,30 @@ def test_the_day_s_offset_is_the_camera_s_wherever_its_photos_were_sorted(tmp_pa
     assert _cell(art, f"{BYDEST}/Castle")["effective_time_anchor"] == {"offset_seconds": -7200, "source": "same_day_accepted"}
 
 
+@pytest.mark.spec("RUL-offset_shared_within_day", "BLD-offset_shared_within_day", "RUL-chosen_group_is_anchored",
+                  test="TST-geotag_offset_no_inheritance-a_group_the_user_chose_is_shared_within_the_day")
+def test_a_group_the_user_chose_is_shared_within_the_day(tmp_path):
+    """An offset the user picked from the camera's own GPS groups rests on the camera's own positions: the castle,
+    with none of its own, is offered it like any offset the camera's GPS gave that day — for the user to accept, the
+    pick not having applied itself. An offset no group supports is the user's alone, and is passed nowhere."""
+    wf = _wf(tmp_path)
+    files = PARENT_FRAMES + [_file(f"{BYDEST}/Castle/c.arw", f"{BYDEST}/Castle", naive="2024:07:03 17:00:00")]
+    def picked(offset):
+        prior = {"destinations": {f"{BYDEST}/Trip": {"camera_group_time_decisions": {CAM: {"user_decision": {
+            "manual_offset_seconds": offset}}}}}}
+        art, _ = _build(wf, files, _gpx(TRACK), prior, multi=False)
+        return _cell(art, f"{BYDEST}/Trip"), _cell(art, f"{BYDEST}/Castle")
+    trip, castle = picked(-7200)
+    assert trip["effective_time_anchor"] == {"offset_seconds": -7200, "source": "gpx_anchor_chosen"}
+    assert castle["proposal"]["proposal_source"] == "same_day_elsewhere"
+    assert castle["proposal"]["proposed_offset_seconds"] == -7200
+    assert castle["proposal"]["shared_from"] == {"destination": f"{BYDEST}/Trip", "bucket": CAM}
+    assert castle["effective_time_anchor"] == "" and castle["requires_user_input"]
+    trip, castle = picked(-3600)                                                 # no group of the camera's says so
+    assert trip["effective_time_anchor"] == {"offset_seconds": -3600, "source": "manual"}
+    assert castle["proposal"]["proposal_source"] != "same_day_elsewhere"
+
+
 @pytest.mark.spec("RUL-same_day_offsets_agree", "BLD-offset_shared_within_day",
                   test="TST-geotag_offset_no_inheritance-one_clock_read_two_ways_takes_no_effect")
 def test_one_clock_read_two_ways_on_one_day_takes_no_effect(tmp_path):
@@ -272,6 +296,23 @@ def test_a_destination_has_one_timezone_for_all_its_photos(tmp_path):
     assert cell["user_decision"]["confirmed_despite_recorded_offsets"] == [7200]     # kept as written
     _cell_, blk = zone("Europe/Lisbon", "yes")                                       # not a list of offsets
     assert blk and "confirmed_despite_recorded_offsets" in blk[0]
+
+
+@pytest.mark.spec("BLD-timezone_cell", "RUL-zone_against_photos_needs_word",
+                  test="TST-geotag_offset_no_inheritance-a_null_word_for_the_zone_is_no_answer")
+def test_a_null_word_for_the_zone_is_no_answer(tmp_path):
+    """`confirmed_despite_recorded_offsets: null` reads as no answer, as `null` does in every other field: the zone
+    the photos speak against still asks, and nothing blocks."""
+    wf = _wf(tmp_path)
+    dest = f"{BYDEST}/Roadtrip"
+    files = [_phone(f"{dest}/a.jpg", dest, "2024:07:03 10:00:00", "+01:00"),
+             _phone(f"{dest}/b.jpg", dest, "2024:07:05 10:00:00", "+02:00")]
+    ud = {"manual_iana_timezone": "Europe/Lisbon", "confirmed_despite_recorded_offsets": None}
+    art, blk = wf.build_time_decisions(files, BOTH, {"destinations": {dest: {"destination_timezone": {"user_decision": ud}}}}, _gpx([]))
+    assert not blk
+    cell = art["destinations"][dest]["destination_timezone"]
+    assert cell["effective_iana_timezone"] == "" and cell["requires_user_input"] and not cell["stale_user_decision"]
+    assert cell["user_decision"]["confirmed_despite_recorded_offsets"] == []
 
 
 @pytest.mark.spec("RUL-inherited_timezone_yields_to_photos",

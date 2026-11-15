@@ -136,7 +136,8 @@ beneath inherits it.
 - **The configured default** (`default_folder_timezone`) is only **offered**: a destination with nothing
   to inherit shows it with a **use** button, but it never applies by itself — so a trip abroad is never
   timed in your home zone. Inside a country, it is offered only if it is one of that country's zones.
-- **Manual timezone** — pick an IANA zone from the dropdown. It overrides an inherited one and
+- **Manual timezone** — pick an IANA zone from the dropdown: the zones of the machine geotag runs on, so one
+  your browser knows and that machine does not is never offered. It overrides an inherited one and
   **re-roots the chain**: every destination beneath inherits it (until one of them overrides in turn).
 
 **When the photos disagree with the zone.** Phone photos record the offset from UTC they were taken at.
@@ -192,8 +193,9 @@ What the proposal panel shows depends on where the offset came from:
 
   Photos skipped for having a track only outside the plausible time window, or none nearby, are counted.
 - **Shared from the same day elsewhere** — no photo here has its own position, but the camera's GPS fixed
-  its clock that day in another destination. Where it applied itself there it applies here too;
-  otherwise accept it here or set another. If the camera's GPS gives two different offsets on one day in
+  its clock that day in another destination — by itself, by your acceptance, or as the group of its GPS
+  you picked there. Where it applied itself there it applies here too; otherwise accept it here or set
+  another. If the camera's GPS gives two different offsets on one day in
   two destinations, neither takes effect: both are shown, and you set the right offset by hand in the
   one that is wrong.
 - **The offset the photos record** — no GPS evidence, but the camera wrote, with each photo's time, the
@@ -327,7 +329,8 @@ Two reset behaviors worth knowing (both take effect on the next run):
   computed from it (the corrected times, the GPS decisions, the executable plan) out of date;
   `geotag plan` recomputes it. Your decisions are **kept** while what they decide about is unchanged:
   a day's offset is found again by its day, a photo's coordinate by the photo itself, even after geotag
-  renamed it. An answer whose question has changed is never silently applied to the new one — it is
+  renamed it. A photo you move to another folder (or whose folder you rename) is asked again: its
+  coordinate, or its leave-unlocated, was given for the folder it was in. An answer whose question has changed is never silently applied to the new one — it is
   marked **stale** and asked again: an acceptance of an offset no longer proposed, a confirmation of an
   offset no longer in effect or made on a track since taken out or changed, an inherited fallback that no longer exists, a zone kept for photos when
   one arrives recording yet another offset.

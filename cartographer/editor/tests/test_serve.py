@@ -208,6 +208,23 @@ def test_load_artifacts_demo_mode():
     assert "destinations" in art["time"] and "destinations" in art["gps"]
 
 
+@pytest.mark.spec("RUL-checked_timezones", test="TST-serve-the_editor_checks_zones_by_the_host_s_list")
+def test_the_editor_checks_zones_by_the_host_s_list(tmp_path):
+    """The editor checks a timezone against the zones geotag's plan accepts on this host, sent with the decisions —
+    never the browser's own list — so a zone it lets be saved is one the plan takes. The host's own names
+    (`localtime`, `Factory`, `posixrules`) are no place's zone, and are not among them."""
+    import zoneinfo
+    for art in (serve._load_artifacts(None), serve._load_artifacts(_workspace_with_fixtures(tmp_path))):
+        zones = art["zones"]
+        assert zones == sorted(zones) and {"UTC", "Europe/Brussels", "Asia/Tokyo"} <= set(zones)
+        assert not {"localtime", "Factory", "posixrules"} & set(zones)
+        assert all(serve.photos_utils.valid_iana_timezone(z) for z in zones)
+        assert set(zones) == {z for z in zoneinfo.available_timezones() if serve.photos_utils.valid_iana_timezone(z)}
+    with _running(None) as base:
+        _status, body, _ctype = _get(base + "/api/artifacts")
+        assert json.loads(body)["zones"] == serve._host_zones()
+
+
 def test_load_artifacts_workspace(tmp_path):
     ws = _workspace_with_fixtures(tmp_path)
     art = serve._load_artifacts(ws)

@@ -562,8 +562,13 @@ class GeotagWorkflow:
 
         # 5b. A photo whose fingerprint was taken again keeps its pinned values only through a mapping that is
         # one to one; one that is not leaves geotag unable to say whose values are whose
-        # (BLD-original_values_follow_fingerprint).
-        if not prep_log_blocker(ws, handoff):
+        # (BLD-original_values_follow_fingerprint). A log the handoff does not vouch for says nothing trustworthy
+        # of the mapping: the plan stops, as finalize and merge do, rather than plan as though no fingerprint
+        # had changed (RUL-geotag_plans_on_vouched_log).
+        log_blk = prep_log_blocker(ws, handoff)
+        if log_blk:
+            blockers.append(f"{log_blk[0].upper() + log_blk[1:]}, then `geotag plan`.")
+        else:
             try:
                 with open(prep_log_path(ws)) as f:
                     _earlier, problem = retaken_fingerprints(json.load(f))
@@ -936,7 +941,9 @@ class GeotagWorkflow:
         neither takes effect, both ask; a hand-written offset is the user's word, and is neither withheld nor
         counted. (2) A cell with no GPS evidence of its own is proposed the offset the camera's GPS gave
         that day elsewhere, in place of the timezone's guess: applied by itself where it applied itself
-        there, else for the user to accept."""
+        there, else for the user to accept. An offset the user picked from the camera's own GPS groups
+        (`gpx_anchor_chosen`) rests on the camera's own GPS, and is passed on like the others
+        (BLD-offset_shared_within_day)."""
         limit = CONFIG["clock_offset_same_day_max_difference_seconds"]
         by_day = {}
         for dest, d in destinations.items():
@@ -948,15 +955,16 @@ class GeotagWorkflow:
                 continue
             hand = lambda c: (c.get("user_decision") or {}).get("manual_offset_seconds") not in ("", None)
             donors = [(dest, bucket, c) for dest, bucket, c in sorted(members, key=lambda m: (m[0], m[1]))
-                      if isinstance(c.get("effective_time_anchor"), dict) and not hand(c)
+                      if isinstance(c.get("effective_time_anchor"), dict)
                       and c["effective_time_anchor"].get("source") in self._OWN_GPS_SOURCES]
-            offs = [c["effective_time_anchor"]["offset_seconds"] for _d, _b, c in donors]
+            found = [m for m in donors if not hand(m[2])]      # what the GPS alone gave: the user's word stands
+            offs = [c["effective_time_anchor"]["offset_seconds"] for _d, _b, c in found]
             if offs and max(offs) - min(offs) > limit:
-                for dest, bucket, c in donors:
+                for dest, bucket, c in found:
                     c["conflicts_with"] = [{"destination": d2, "bucket": b2,
                                             "offset_seconds": c2["effective_time_anchor"]["offset_seconds"]}
-                                           for d2, b2, c2 in donors if c2 is not c]
-                for _dest, _bucket, c in donors:
+                                           for d2, b2, c2 in found if c2 is not c]
+                for _dest, _bucket, c in found:
                     c["effective_time_anchor"], c["requires_user_input"] = "", True
                     c.pop("decision_mode", None)
                 continue                              # one clock read two ways: nothing to pass on
@@ -1076,7 +1084,9 @@ class GeotagWorkflow:
         # The photos here that record another offset than the zone has: the zone stands against them only
         # on the user's explicit word, which names the offsets it was given for — a photo arriving with yet
         # another offset was never spoken for, and asks again.
-        despite = ud.get("confirmed_despite_recorded_offsets", [])
+        despite = ud.get("confirmed_despite_recorded_offsets")
+        if despite is None:                 # absent or null: no answer given, as in every other field
+            despite = []
         if not (isinstance(despite, list) and all(_valid_offset(o) for o in despite)):
             blockers.append(f"{dest}: destination_timezone.user_decision.confirmed_despite_recorded_offsets "
                             "must be a list of whole numbers of seconds.")
@@ -1428,30 +1438,34 @@ class GeotagWorkflow:
             blockers.append(f"{dest}: drift_decisions[{loc}].user_decision.confirmed_against_tracks must name the "
                             "tracks the confirmation was made against, each with its gpx_file and sha256.")
         effective, stale = "", False
+        # Each offset written here is checked as written, the cell confirmed or not (RUL-checked_clock_offsets): one that
+        # is no whole number of seconds is named now, not only once a confirmation would make it count.
+        written = lambda v: v not in ("", None)
+        bad_correction = written(corrected) and not _valid_offset(corrected)
+        if bad_correction:
+            blockers.append(f"{dest}: drift_decisions[{loc}].user_decision.corrected_offset_seconds "
+                            "must be empty or a whole number of seconds.")
         # A confirmation names the offset it was made against (RUL-confirmation_holds_for_its_offset), and holds only
         # while that is the offset: changed in photos-21 since, it is stale — kept as written, applied to nothing, the
         # bucket asking again until confirmed anew. One naming none confirms nothing: a zero scrub is never implied.
-        if confirmed and (against == "" or against is None):
-            blockers.append(f"{dest}: drift_decisions[{loc}].user_decision.confirmed_offset_seconds must be the "
-                            f"offset confirmed — the current one is {current}.")
-            confirmed_ok = False
-        elif confirmed and not _valid_offset(against):
+        if written(against) and not _valid_offset(against):
             blockers.append(f"{dest}: drift_decisions[{loc}].user_decision.confirmed_offset_seconds "
                             "must be a whole number of seconds.")
+            confirmed_ok = False
+        elif confirmed and not written(against):
+            blockers.append(f"{dest}: drift_decisions[{loc}].user_decision.confirmed_offset_seconds must be the "
+                            f"offset confirmed — the current one is {current}.")
             confirmed_ok = False
         else:
             # a changed offset or changed tracks: the check asks again, the confirmation kept as written
             # (RUL-changed_offset_asked_again, RUL-changed_tracks_asked_again, RUL-stale_confirmation_kept)
             stale = bool(confirmed) and named_ok and (int(against) != current or not tracks_hold)
             confirmed_ok = bool(confirmed) and named_ok and not stale
-        if confirmed_ok:
-            if corrected == "" or corrected is None:
+        if confirmed_ok and not bad_correction:
+            if not written(corrected):
                 effective = {"offset_seconds": current, "source": "gps_drift_validated"}   # zero scrub
-            elif _valid_offset(corrected):
-                effective = {"offset_seconds": int(corrected), "source": "gps_drift_validated"}
             else:
-                blockers.append(f"{dest}: drift_decisions[{loc}].user_decision.corrected_offset_seconds "
-                                "must be empty or a whole number of seconds.")
+                effective = {"offset_seconds": int(corrected), "source": "gps_drift_validated"}
         # The editor scrubs a representative photo along the track: corrected_offset = (chosen track
         # time) - (that photo's camera naive). Expose every bucket frame (earliest first) so it can
         # default to one and let the operator cross-check others; re-extracted every run with the track.
@@ -1991,6 +2005,26 @@ class GeotagWorkflow:
                     return res
                 res["skipped"] = res["found"] = [o["operation_id"] for o in ops]   # done before: recorded, not redone
                 return done(final_abs)
+            # A change of case alone interrupted between its two moves: the photo sits under the temporary name.
+            # Once seen to be this photo holding what was planned, the second move completes it (BLD-case_rename_via).
+            via = next((o for o in rename_ops if o.get("via")), None)
+            via_abs = os.path.join(os.path.dirname(abs_path), via["via"]) if via else None
+            if via_abs and os.path.exists(via_abs) and not os.path.exists(final_abs):
+                cur_fp = (ContentHasher.fingerprint_image(via_abs) or {}).get("value")
+                if (cur_fp is None or (cur_fp != pre.get("content_fingerprint") and accepted_mismatches.get(rel) != cur_fp)
+                        or (tags and not _holds_writes(self._exiftool_read(via_abs, sorted(tags)), tags))):
+                    res["blocker"] = (f"{rel}: gone, and {via['via']!r} in its place is not this photo "
+                                      "as planned — re-run `geotag plan`")
+                    return res
+                try:
+                    _move_no_clobber(via_abs, final_abs)
+                except Exception as e:
+                    res["failed"].append(via["operation_id"])
+                    res["blocker"] = f"{rel}: rename failed ({e})"
+                    return res
+                res["found"] = [o["operation_id"] for o in ops if o is not via]
+                res["applied"].append(via["operation_id"])
+                return done(final_abs)
             res["blocker"] = f"{rel}: file is missing at execute time"
             return res
 
@@ -2035,8 +2069,16 @@ class GeotagWorkflow:
             if self._target_occupied(d, o["to"], o["from"]):
                 res["blocker"] = f"{rel}: rename target {o['to']!r} is occupied at execute time"
                 return res
+            if o.get("via") and self._target_occupied(d, o["via"], o["from"]):
+                res["blocker"] = f"{rel}: rename target {o['via']!r} is occupied at execute time"
+                return res
             try:
-                _move_no_clobber(abs_path, os.path.join(d, o["to"]))
+                if o.get("via"):
+                    # a change of case alone, in two no-clobber moves by the free temporary name (BLD-case_rename_via)
+                    _move_no_clobber(abs_path, os.path.join(d, o["via"]))
+                    _move_no_clobber(os.path.join(d, o["via"]), os.path.join(d, o["to"]))
+                else:
+                    _move_no_clobber(abs_path, os.path.join(d, o["to"]))
                 res["applied"].append(o["operation_id"])
             except Exception as e:
                 res["failed"].append(o["operation_id"])

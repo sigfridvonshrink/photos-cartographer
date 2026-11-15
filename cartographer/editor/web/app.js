@@ -43,7 +43,12 @@ const clone = (o) => JSON.parse(JSON.stringify(o));
 
 // --- validation (mirrors decision-json-reference §7) -------------------------
 const isNum = (v) => typeof v === "number" && isFinite(v) && typeof v !== "boolean";
-function validTz(s) { if (s === "" || s == null) return true; try { new Intl.DateTimeFormat("en", { timeZone: s }); return true; } catch { return false; } }
+// A timezone is checked against the HOST's list — the zones geotag's plan accepts, which the server sends with the
+// decisions (`zones`, server.py `_host_zones`) — never the browser's own: a name one knows and the other does not
+// (`US/Eastern` on a host without the legacy names) would be saved here and refused by the plan.
+let HOST_ZONES = [], HOST_ZONE_SET = new Set();
+function setHostZones(zones) { HOST_ZONES = Array.isArray(zones) ? [...zones] : []; HOST_ZONE_SET = new Set(HOST_ZONES); }
+function validTz(s) { return s === "" || s == null || HOST_ZONE_SET.has(s); }
 function validOffset(v) { return v === "" || v == null || (isNum(v) && Number.isInteger(Number(v))); }
 const validLat = (v) => v === "" || v == null || (isNum(v) && v >= -90 && v <= 90);
 const validLon = (v) => v === "" || v == null || (isNum(v) && v >= -180 && v <= 180);
@@ -661,16 +666,10 @@ function checkbox(label, checked, onchange, disabled) {
   return el("label", { class: disabled ? "ctl-check disabled" : "ctl-check" }, cb, label);
 }
 
-let TZ_ZONES = null;
-function tzZones() {
-  if (TZ_ZONES) return TZ_ZONES;
-  try { TZ_ZONES = Intl.supportedValuesOf("timeZone"); } catch { TZ_ZONES = ["UTC", "Europe/Brussels", "Asia/Tokyo", "America/New_York"]; }
-  return TZ_ZONES;
-}
 function tzSelect(value, onchange, disabled, only) {
-  const cur = value || "", zones = only && only.length ? only : tzZones();
+  const cur = value || "", zones = only && only.length ? only : HOST_ZONES;
   const opts = [el("option", { value: "" }, "— none —"), ...zones.map((z) => el("option", { value: z }, z))];
-  // Keep a pre-existing value the browser doesn't know about visible/selectable rather than silently dropping it.
+  // Keep a pre-existing value the host doesn't know about visible/selectable rather than silently dropping it.
   if (cur && !zones.includes(cur)) opts.splice(1, 0, el("option", { value: cur }, cur + " (unknown)"));
   const sel = el("select", { class: validTz(cur) ? null : "bad", disabled: disabled ? "" : null }, ...opts);
   sel.value = cur;
@@ -1499,6 +1498,7 @@ async function main() {
   catch (e) { return showRefusal(res ? `the decisions could not be loaded (HTTP ${res.status})` : `the decisions could not be loaded: ${e}`); }
   const refusal = loadRefusal(res.status, body);
   if (refusal) return showRefusal(refusal);
+  setHostZones(body.zones);
   state.base = body; state.work = clone(state.base);
   render();
 }
@@ -1507,7 +1507,7 @@ async function main() {
 if (typeof document !== "undefined") main();
 
 export {
-  isNum, validTz, validOffset, validLat, validLon, bothOrNeither,
+  isNum, validTz, setHostZones, validOffset, validLat, validLon, bothOrNeither,
   fmtOffset, camNaiveMs, dtLocalToMs, msToDtLocal, utcStrToMs, fmtLocal, fmtDT, offsetImpact,
   cellAt, cellStatus, wouldResolve, previewTz, previewFallback, refInvalid, isDirty, state,
   offsetGroups, dateRange, fmtDate, peerKeys, parseLatLon, coordText, contiguousRange,

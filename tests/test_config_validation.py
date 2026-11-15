@@ -54,7 +54,7 @@ def _pol(**overrides):
     (_cfg(zfs={"snapshot_prefix": "bad name!"}), "snapshot_prefix"),             # illegal zfs prefix
     (_pol(single_anchor_auto_apply="yes"), "must be a boolean"),                 # non-bool flag
     (_pol(default_folder_timezone="Mars/Phobos"), "valid IANA timezone"),        # bad tz
-    (_pol(phone_gpx_max_distance_meters=-5), "phone_gpx_max_distance_meters"),   # negative
+    (_cfg(gpx_extrapolation_max_distance_meters=-5), "gpx_extrapolation_max_distance_meters"),   # negative
     (_pol(device_groups={"phones": "nope"}), "list of strings"),                # not a list
     (_pol(device_groups={"phones": [1, 2]}), "list of strings"),                # non-string elems
     (_cfg(folders="nope"), "folders must be an object"),                        # folders not a dict
@@ -63,7 +63,7 @@ def _pol(**overrides):
     (_cfg(zfs={"datasets": "nope"}), "zfs.datasets must be an object"),         # zfs.datasets not a dict
     (_cfg(gpx_interpolation_max_gap_seconds=json.loads("NaN")), "must be a number"),       # JSON NaN
     (_cfg(gpx_interpolation_max_distance_meters=json.loads("Infinity")), "must be a number"),  # JSON Infinity
-    (_pol(dst_conflict_tolerance_seconds=float("-inf")), "must be a number"),   # not finite
+    (_cfg(gpx_extrapolation_max_speed_kmh=float("-inf")), "must be a number"),   # not finite
     (_cfg(gpx_root="   "), "must not be blank"),                                # blank path
     (_cfg(merge={"library_root": " \t"}), "must not be blank"),                # blank library path
     (_pol(device_groups={"phone": ["Pixel"]}), "device_groups.phone is not a device class"),  # misspelt class

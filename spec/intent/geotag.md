@@ -833,6 +833,20 @@ A photo moved to another destination SHALL be decided under that destination's t
 its old destination carried with it.
 :::
 
+:::{rul} A moved photo's position is decided anew
+:id: RUL-moved_photo_position_decided_anew
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+:uses: DEF-destination
+:refines: RUL-moved_photo_decided_anew
+
+A photo moved to another destination — its folder renamed among the ways — SHALL be placed with no position decision
+made for it in its old destination carried with it: neither a position written for it nor the answer to leave it
+unlocated.
+:::
+
 
 ## 11. Clock offsets from the camera's own GPS
 
@@ -1105,6 +1119,18 @@ A photo whose fingerprint is taken again with a new value SHALL keep the own val
 one, so long as the change maps one value to one.
 :::
 
+:::{rul} Geotag plans only on the prep log the handoff vouches for
+:id: RUL-geotag_plans_on_vouched_log
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+:refines: RUL-own_values_follow_new_fingerprint
+:uses: RUL-unchecked_counts_as_changed
+
+Geotag SHALL NOT plan while prep's log is not the one the handoff vouches for.
+:::
+
 
 ## 16. Placing each photo
 
@@ -1366,6 +1392,20 @@ Geotag SHALL write beside each time it writes that time's offset from UTC.
 
 Geotag SHALL write each photo's true time, as its destination's local time, also into every other field in which the
 photo already records when it was made, adding none it does not hold.
+:::
+
+
+## 18. Renames
+
+:::{rul} Geotag leaves every photo's extension in lowercase
+:id: RUL-geotag_extension_lowercase
+:status: ruled
+:criticality: low
+:verify: required
+:uses: DEF-geotag, DEF-managed_folders, RUL-prep_leaves_by_dest_as_found
+
+Each photo in photos by destination SHALL end with its extension in lowercase once geotag has executed — one whose name
+already carries its timestamp renamed for its extension alone.
 :::
 
 

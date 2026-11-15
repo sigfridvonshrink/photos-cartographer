@@ -220,7 +220,7 @@ its `proposal_source` — `inherited`, naming the ancestor in `inherited_from`, 
 `user_decision.manual_iana_timezone`, `effective_iana_timezone`, `requires_user_input`, `stale_user_decision` and, when
 the proposal took effect without the user, `decision_mode: "auto_resolved"`. Destinations are built parent first, so
 each takes the `effective_iana_timezone` of its nearest ancestor that has one; one with none is offered
-`default_folder_timezone`, as `config_default`, which takes effect only once written as its `manual_iana_timezone`. Where a photo of the destination that is no camera's, not yet corrected, records with its time an offset that is not the zone's — the one written, else the one inherited — at that time, the zone does not take effect: the cell asks, holding `contradicted_by` — `photos`, an `example`, `recorded_offset_seconds`, `recorded_offsets` (each distinct one), `timezone` and `timezone_offset_seconds` — and a destination within it inherits nothing through it, until another zone is written that the photos agree with or `user_decision.confirmed_despite_recorded_offsets` lists every one of `recorded_offsets`; then the zone takes effect, `contradicted_by` kept with `confirmed: true`. A list that does not cover them is `stale_user_decision`, kept as written; one that is not a list of whole seconds, a blocker.
+`default_folder_timezone`, as `config_default`, which takes effect only once written as its `manual_iana_timezone`. Where a photo of the destination that is no camera's, not yet corrected, records with its time an offset that is not the zone's — the one written, else the one inherited — at that time, the zone does not take effect: the cell asks, holding `contradicted_by` — `photos`, an `example`, `recorded_offset_seconds`, `recorded_offsets` (each distinct one), `timezone` and `timezone_offset_seconds` — and a destination within it inherits nothing through it, until another zone is written that the photos agree with or `user_decision.confirmed_despite_recorded_offsets` lists every one of `recorded_offsets`; then the zone takes effect, `contradicted_by` kept with `confirmed: true`. A list that does not cover them is `stale_user_decision`, kept as written; one that is not a list of whole seconds, a blocker — `null`, as an absent list, being none.
 :::
 
 
@@ -307,7 +307,7 @@ After the offsets shared within a day, `build_time_decisions` SHALL withdraw the
 :status: ruled
 :realises: RUL-offset_shared_within_day, RUL-same_day_offsets_agree, RUL-offset_from_own_evidence
 
-Over the cells of one camera group naming the same `day` in different destinations, `build_time_decisions` SHALL take as donors those whose effective source is `gpx_anchor_auto`, `gpx_anchor_accepted` or `gpx_anchor_chosen` and whose `manual_offset_seconds` is empty. Donors whose offsets differ by more than `clock_offset_same_day_max_difference_seconds` each lose their effective offset, ask, and list the others in `conflicts_with` (`destination`, `bucket`, `offset_seconds`); nothing is shared. Otherwise a cell whose own proposal would be `recorded_offset`, `timezone_naive` or `manual_required` is proposed the donor's offset — a `gpx_anchor_auto` donor first, then by path — as `proposal_source: "same_day_elsewhere"` with `shared_from` (`destination`, `bucket`): taking effect as `same_day_auto` where the donor's source is `gpx_anchor_auto`, else once accepted, naming the offset, as `same_day_accepted`. An offset the cell keeps from its own earlier GPS comes first. Neither source is followed by a drift check.
+Over the cells of one camera group naming the same `day` in different destinations, `build_time_decisions` SHALL take as donors those whose effective source is `gpx_anchor_auto`, `gpx_anchor_accepted` or `gpx_anchor_chosen` — the last an offset the user wrote that a group of the camera's own GPS anchors supports. Donors not written by hand whose offsets differ by more than `clock_offset_same_day_max_difference_seconds` each lose their effective offset, ask, and list the others in `conflicts_with` (`destination`, `bucket`, `offset_seconds`); nothing is shared, and a hand-written one is neither withheld nor counted. Otherwise a cell whose own proposal would be `recorded_offset`, `timezone_naive` or `manual_required` is proposed the donor's offset — a `gpx_anchor_auto` donor first, then by path — as `proposal_source: "same_day_elsewhere"` with `shared_from` (`destination`, `bucket`): taking effect as `same_day_auto` where the donor's source is `gpx_anchor_auto`, else once accepted, naming the offset, as `same_day_accepted`. An offset the cell keeps from its own earlier GPS comes first. Neither source is followed by a drift check.
 :::
 
 ## 12. The decision records
@@ -369,9 +369,9 @@ track decided anything.
 :::{bld} The drift check
 :id: BLD-drift_validation
 :status: ruled
-:realises: RUL-unanchored_offset_confirmed, RUL-confirmation_holds_for_its_offset, RUL-stay_fixes_no_clock
+:realises: RUL-unanchored_offset_confirmed, RUL-confirmation_holds_for_its_offset, RUL-stay_fixes_no_clock, RUL-checked_clock_offsets
 
-Once photos-21 is complete, `geotag plan` SHALL write `photos-22-gps-drift-validation.json` with a cell for each offset cell whose effective source is `timezone_accepted`, `timezone_unconfirmed`, `recorded_offset_accepted`, `recorded_offset_unconfirmed`, `manual` or `gpx_anchor_imprecise` and whose photos' resolved times lie within `drift_check_track_window_seconds` of track points, or, none lying there, whose photos' recorded times read as UTC do — whether or not a photo of the cell anchors on the tracks: its `proposal` holding `current_offset_seconds`, its source, the photos and that track segment; its `user_decision` `confirmed`, `corrected_offset_seconds` and `confirmed_offset_seconds`. A cell confirmed with `confirmed_offset_seconds` equal to its current offset takes effect as `gps_drift_validated` — the current offset when no correction is given, else the correction; confirmed against another offset it is `stale_user_decision` and takes no effect; confirmed naming none, a blocker. Until every cell has taken effect, photos-23 and photos-24 are not written; then resolved UTC is computed again with the validated offsets, photos-21 left as it is. photos-22's `depends_on` holds photos-21's SHA-256, `gpx_fingerprint`, `camera_time_policy_fingerprint` and `camera_group_key_version`. A `timezone_unconfirmed` or `recorded_offset_unconfirmed` cell is always given its drift cell, whatever track lies by it.
+Once photos-21 is complete, `geotag plan` SHALL write `photos-22-gps-drift-validation.json` with a cell for each offset cell whose effective source is `timezone_accepted`, `timezone_unconfirmed`, `recorded_offset_accepted`, `recorded_offset_unconfirmed`, `manual` or `gpx_anchor_imprecise` and whose photos' resolved times lie within `drift_check_track_window_seconds` of track points, or, none lying there, whose photos' recorded times read as UTC do — whether or not a photo of the cell anchors on the tracks: its `proposal` holding `current_offset_seconds`, its source, the photos and that track segment; its `user_decision` `confirmed`, `corrected_offset_seconds` and `confirmed_offset_seconds`. A cell confirmed with `confirmed_offset_seconds` equal to its current offset takes effect as `gps_drift_validated` — the current offset when no correction is given, else the correction; confirmed against another offset it is `stale_user_decision` and takes no effect; confirmed naming none, a blocker. A `corrected_offset_seconds` or `confirmed_offset_seconds` that is written, the cell confirmed or not, is a whole number of seconds, else a blocker. Until every cell has taken effect, photos-23 and photos-24 are not written; then resolved UTC is computed again with the validated offsets, photos-21 left as it is. photos-22's `depends_on` holds photos-21's SHA-256, `gpx_fingerprint`, `camera_time_policy_fingerprint` and `camera_group_key_version`. A `timezone_unconfirmed` or `recorded_offset_unconfirmed` cell is always given its drift cell, whatever track lies by it.
 :::
 
 :::{bld} A drift confirmation names its tracks
@@ -388,13 +388,14 @@ A drift cell's `proposal` SHALL hold `tracks`, each track file its `track_segmen
 :::{bld} The pinned values follow a retaken fingerprint
 :id: BLD-original_values_follow_fingerprint
 :status: ruled
-:realises: RUL-own_values_follow_new_fingerprint
+:realises: RUL-own_values_follow_new_fingerprint, RUL-geotag_plans_on_vouched_log
 
 `build_file_model` SHALL find a photo's pinned values under its fingerprint or, failing it, under the value it was
 taken again from, step by step back through the `fingerprint_retaken` steps of prep's log (`retaken_fingerprints`),
 when the handoff vouches for the log; execution then moves the pin to the current value, unless one is held there. A
 log holding two steps that give one value two predecessors, or one value two successors, is a blocker of geotag's
-preflight.
+preflight, and so, for `geotag plan`, is a log the handoff does not vouch for (`prep_log_blocker`: missing,
+unreadable, its SHA-256 other than `depends_on.prep_log`'s, or the handoff recording none).
 :::
 
 
@@ -482,9 +483,9 @@ decimal places, and then no position is written ({need}`BLD-executable_plan`).
 :::{bld} A review item is its photo's
 :id: BLD-review_item_identity
 :status: ruled
-:realises: RUL-photo_decision_follows_the_photo, RUL-unplaced_photo_listed, RUL-disagreeing_tracks_place_nothing
+:realises: RUL-photo_decision_follows_the_photo, RUL-unplaced_photo_listed, RUL-disagreeing_tracks_place_nothing, RUL-moved_photo_position_decided_anew
 
-Each of photos-23's `review_items` SHALL carry its photo's `content_fingerprint`, and a photo's earlier decision is the item with its fingerprint, or with the fingerprint its own values are pinned under, else — for an item carrying none — the item at its path. An item of a photo the tracks did not place carries `tracks`: the `reason` (`no_tracks`, `outside_track`, `track_gap`, `track_jump`, `tracks_disagree`) with `seconds_from_track`, `gap_seconds`, `jump_meters` or the `gpx_files` and `apart_meters` that go with it. The record's `track_disagreements` lists each pair of tracks that placed photos apart and how many, which `geotag plan` also warns of.
+Each of photos-23's `review_items` SHALL carry its photo's `content_fingerprint`, and a photo's earlier decision is the item, among its own destination's earlier `review_items` alone, with its fingerprint, or with the fingerprint its own values are pinned under, else — for an item carrying none — the item at its path. An item of a photo the tracks did not place carries `tracks`: the `reason` (`no_tracks`, `outside_track`, `track_gap`, `track_jump`, `tracks_disagree`) with `seconds_from_track`, `gap_seconds`, `jump_meters` or the `gpx_files` and `apart_meters` that go with it. The record's `track_disagreements` lists each pair of tracks that placed photos apart and how many, which `geotag plan` also warns of.
 :::
 
 :::{bld} What a lower-ranked track said
@@ -501,13 +502,28 @@ A position write of photos-24 whose placement has `lower_tracks` SHALL carry the
 :::{bld} How renames are planned
 :id: BLD-rename_planning
 :status: ruled
-:realises: RUL-suffix_no_clobber, RUL-uncorrected_keeps_its_name, RUL-geotag_name_final
+:realises: RUL-suffix_no_clobber, RUL-uncorrected_keeps_its_name, RUL-geotag_name_final, RUL-geotag_extension_lowercase
 
 For each destination, `plan_renames` SHALL count every current name of its photos as taken, case folded, and never
 freed by a rename it plans — two photos that would trade names both take a suffix — then, in path order, leave a photo
-whose name already carries its timestamp, suffix and all, as it is, and give any other the first free name of its
-timestamp by `allocate_suffix`, adding it to the names taken. Execution applies these renames and no other, each by a
-no-clobber move.
+whose name already carries its timestamp, suffix and all, and ends with a lowercase extension, as it is; give one whose
+name carries its timestamp but whose extension is not lowercase that name with its extension lowercased, unless
+another photo there holds the name case folded; and give any other the first free name of its timestamp by
+`allocate_suffix`, adding it to the names taken. Every planned name ends with the photo's extension in lowercase.
+Execution applies these renames and no other, each by a no-clobber move.
+:::
+
+:::{bld} A change of case alone goes by a temporary name
+:id: BLD-case_rename_via
+:status: ruled
+:realises: RUL-geotag_extension_lowercase, RUL-suffix_no_clobber, RUL-target_free_at_execute
+
+A rename `plan_renames` plans whose new name differs from the current one only in case SHALL carry `via`: a
+temporary name — the new name's stem with `.carto-case` before its extension, suffixed by `allocate_suffix` — free
+among the destination's names and those planned. Execution moves the photo to it and then to the new name, each by a
+no-clobber move and each name checked free first, so that a filesystem that ignores case, which holds the new name as
+the photo's own, never refuses it nor overwrites anything; a photo found under `via` with its new name free is this
+photo interrupted between the two, completed once it is seen to be the photo as planned.
 :::
 
 
