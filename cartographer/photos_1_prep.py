@@ -2812,12 +2812,47 @@ def _quarantine_dir_footprint(dpath: str):
     return files_n, bytes_n
 
 
+def _prune_record(base, run_dirs, plan_ids, older_than_days, prune_all):
+    """The record of a prune that deletes (BLD-prune_record): when, by which selectors, and for each quarantine run
+    folder it removes, every file in it with its bytes and what the folder's manifest said (None where it cannot be
+    read)."""
+    removed = []
+    for d in run_dirs:
+        dpath = os.path.join(base, d)
+        files = []
+        for root, dirs, fnames in os.walk(dpath):
+            dirs.sort()
+            for fn in sorted(fnames):
+                rel = os.path.relpath(os.path.join(root, fn), dpath)
+                if rel == "manifest.json":
+                    continue
+                try:
+                    size = os.path.getsize(os.path.join(root, fn))
+                except OSError:
+                    size = None
+                files.append({"path": rel, "bytes": size})
+        try:
+            with open(os.path.join(dpath, "manifest.json")) as mf:
+                manifest = json.load(mf)
+        except (OSError, ValueError):
+            manifest = None
+        removed.append({"quarantine_run": d, "files": files, "manifest": manifest})
+    return {
+        "schema_version": 1,
+        "tool": "photos-1-prep",
+        "pruned_at": datetime.now(timezone.utc).isoformat(),
+        "selectors": {"plan_ids": sorted(plan_ids or []), "older_than_days": older_than_days, "all": bool(prune_all)},
+        "removed": removed,
+    }
+
+
 def prune_quarantine(workspace_root, plan_ids=None, older_than_days=None, do_delete=False, prune_all=False):
     """Delete recoverable quarantine — the ONLY operation that ever removes quarantine
     content (RUL-prune_explicit). Default is a non-destructive dry-run; `do_delete`
     (--yes) actually deletes. Selectable by exact plan-id and/or age; deleting with no
     selector requires `prune_all` (--all). Runs under the workspace lock and only ever
-    touches `.photos-ingest-quarantine/`."""
+    touches `.photos-ingest-quarantine/`, but for the record of what a deleting prune removes
+    (`photos-16-prune-record.json`, RUL-prune_recorded)."""
     import shutil
     from datetime import timedelta
     from .photos_utils import quarantine_dir
@@ -2860,6 +2895,15 @@ def prune_quarantine(workspace_root, plan_ids=None, older_than_days=None, do_del
                            "Pass --plan-id / --older-than-days, or --all to confirm.")
 
     # The workspace lock is held for the whole run by main() (RUL-lock_through_the_run).
+    if do_delete and selected:
+        # What is about to be deleted, and when, is recorded before anything goes (RUL-prune_recorded); an earlier
+        # prune's record is set aside under -NNN, never written over (RUL-prune_record_kept).
+        from .photos_utils import prune_record_path, write_versioned_json
+        record = _prune_record(base, sorted(selected), plan_ids, older_than_days, prune_all)
+        _sha, _prior = write_versioned_json(prune_record_path(workspace_root), record)
+        reporter.log(f"Recorded what this prune removes in {os.path.basename(prune_record_path(workspace_root))}"
+                     + (f" (the earlier record kept as {os.path.basename(_prior)})" if _prior else "") + ".",
+                     stream="stdout")
     total_files = 0
     total_bytes = 0
     for d in sorted(selected):

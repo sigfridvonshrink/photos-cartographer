@@ -852,7 +852,31 @@ Pruning the quarantine by age SHALL refuse an age of less than one day.
 :verify: required
 :refines: RUL-prune_explicit
 
-Prep's prune command SHALL touch nothing outside the quarantine.
+Prep's prune command SHALL touch nothing outside the quarantine but its own record of what it deletes
+({need}`RUL-prune_recorded`).
+:::
+
+:::{rul} A prune that deletes is recorded
+:id: RUL-prune_recorded
+:status: ruled
+:criticality: high
+:verify: required
+:refines: RUL-prune_explicit
+:uses: DEF-control_records
+
+Prep's prune command, told to delete, SHALL record among the control records what it deletes and when, before it
+deletes it.
+:::
+
+:::{rul} An earlier prune's record is kept
+:id: RUL-prune_record_kept
+:status: ruled
+:criticality: med
+:anti: yes
+:verify: required
+:refines: RUL-prune_recorded
+
+A prune's record SHALL never be written over by a later prune's: the earlier is set aside, recoverably.
 :::
 
 :::{rul} A file restored from the quarantine is a new file

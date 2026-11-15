@@ -412,6 +412,17 @@ move; the manifest is replaced whole at each append, and one found unreadable is
 fails before the file is moved, the manifest left as it was.
 :::
 
+:::{bld} The prune's record is `photos-16-prune-record.json`
+:id: BLD-prune_record
+:status: ruled
+:realises: RUL-prune_recorded, RUL-prune_record_kept
+
+`prep prune-quarantine --yes` SHALL, before it removes anything and when it selects at least one run, write
+`photos-16-prune-record.json` in `.photos-ingest/` through {need}`BLD-plan_backups`' set-aside: its time, its selectors,
+and for each `<plan-id>` folder it removes, every file in it with its bytes and the folder's `manifest.json` as it
+read it (null where it cannot be read). A listing prune writes none.
+:::
+
 :::{bld} `prune-quarantine` and its selectors
 :id: BLD-prune_command
 :status: ruled

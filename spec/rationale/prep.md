@@ -693,6 +693,20 @@ A quarantine that only grows costs space without a word. Reporting its size ever
 prune, knowing what it holds.
 :::
 
+:::{rat} The one deletion leaves a record
+:id: RAT-deletion_recorded
+:status: ruled
+:forced: no
+:follows_from: RAT-safety_net_stays, RAT-durable_record
+:justifies: RUL-prune_recorded, RUL-prune_record_kept
+
+Pruning is the one change cartographer makes that nothing can undo, and it removes the quarantine's own manifests with
+the files. Unrecorded, the copies would be gone with no trace that they were ever kept, and the log and handoff would
+name quarantine paths that simply no longer exist. A record of what went, and when — each file, and what its run's
+manifest said of it — written before anything goes, answers for the gap; and as each prune is its own deletion, a
+later one never writes over an earlier's.
+:::
+
 :::{rat} The one command that deletes asks for a real age
 :id: RAT-prune_age_is_real
 :status: ruled

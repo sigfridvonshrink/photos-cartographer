@@ -558,6 +558,10 @@ def prep_log_path(ws: str) -> str:
     """End-of-prep transformation log (BLD-phase_logs)."""
     return os.path.join(ws, CONTROL_DIR, "photos-15-prep-log.json")
 
+def prune_record_path(ws: str) -> str:
+    """The record of the latest quarantine prune that deleted (BLD-prune_record); an earlier one is kept under `-NNN`."""
+    return os.path.join(ws, CONTROL_DIR, "photos-16-prune-record.json")
+
 def prep_log_blocker(ws: str, handoff: dict):
     """None when prep's log is the one the handoff vouches for — its bytes hash to the sha256 the handoff's
     `depends_on.prep_log` records — else why not. A log missing, unreadable or changed, or a handoff

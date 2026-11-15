@@ -1399,8 +1399,9 @@ automated move inside a finished workspace.
 :justifies: RUL-sealed_prune_allowed
 
 The quarantine holds only spare copies of duplicates, which a sealed workspace still keeps. Deleting them, with the
-manifests that list them, touches no photo, library file, control record or row of the database; what each manifest
-said is kept in the transformation log and the package. It neither reprocesses the workspace nor adds a batch to it,
+manifests that list them, touches no photo, library file, earlier control record or row of the database, adding
+only its own record of what it removed; what each manifest said is kept in that record, and in the transformation log
+and the package. It neither reprocesses the workspace nor adds a batch to it,
 so the seal's reasons do not reach it, and the space can be reclaimed.
 :::
 
