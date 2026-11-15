@@ -261,6 +261,21 @@ def test_a_correction_not_whole_seconds_blocks(tmp_path):
     assert blk and "whole number of seconds" in blk[0]
 
 
+@pytest.mark.spec("BLD-drift_validation", "RUL-checked_clock_offsets",
+                  test="TST-drift_validation-an_offset_written_is_checked_confirmed_or_not")
+@pytest.mark.parametrize("field, value", [("corrected_offset_seconds", "noon"), ("corrected_offset_seconds", 12.5),
+                                          ("confirmed_offset_seconds", "x"), ("confirmed_offset_seconds", True)])
+def test_an_offset_written_is_checked_confirmed_or_not(tmp_path, field, value):
+    """An offset written in a drift cell is checked as written: one that is no whole number of seconds is named while
+    the cell is still unconfirmed, not only once a confirmation would make it count."""
+    ud = {"confirmed": False, "corrected_offset_seconds": "", "confirmed_offset_seconds": "", field: value}
+    *_, drift, blk = _triggered(tmp_path, ud)
+    assert [b for b in blk if field in b and "whole number of seconds" in b], blk
+    *_, blk = _triggered(tmp_path, dict(ud, confirmed=True, confirmed_against_tracks=TRIP,
+                                        **({} if field == "confirmed_offset_seconds" else {"confirmed_offset_seconds": 0})))
+    assert [b for b in blk if field in b], blk                                       # and confirmed, as before
+
+
 # --- Preservation / fingerprint cascade -------------------------------------
 
 @pytest.mark.spec("BLD-drift_validation")

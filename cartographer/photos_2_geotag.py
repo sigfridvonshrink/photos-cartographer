@@ -1407,30 +1407,34 @@ class GeotagWorkflow:
             blockers.append(f"{dest}: drift_decisions[{loc}].user_decision.confirmed_against_tracks must name the "
                             "tracks the confirmation was made against, each with its gpx_file and sha256.")
         effective, stale = "", False
+        # Each offset written here is checked as written, the cell confirmed or not (RUL-checked_clock_offsets): one that
+        # is no whole number of seconds is named now, not only once a confirmation would make it count.
+        written = lambda v: v not in ("", None)
+        bad_correction = written(corrected) and not _valid_offset(corrected)
+        if bad_correction:
+            blockers.append(f"{dest}: drift_decisions[{loc}].user_decision.corrected_offset_seconds "
+                            "must be empty or a whole number of seconds.")
         # A confirmation names the offset it was made against (RUL-confirmation_holds_for_its_offset), and holds only
         # while that is the offset: changed in photos-21 since, it is stale — kept as written, applied to nothing, the
         # bucket asking again until confirmed anew. One naming none confirms nothing: a zero scrub is never implied.
-        if confirmed and (against == "" or against is None):
-            blockers.append(f"{dest}: drift_decisions[{loc}].user_decision.confirmed_offset_seconds must be the "
-                            f"offset confirmed — the current one is {current}.")
-            confirmed_ok = False
-        elif confirmed and not _valid_offset(against):
+        if written(against) and not _valid_offset(against):
             blockers.append(f"{dest}: drift_decisions[{loc}].user_decision.confirmed_offset_seconds "
                             "must be a whole number of seconds.")
+            confirmed_ok = False
+        elif confirmed and not written(against):
+            blockers.append(f"{dest}: drift_decisions[{loc}].user_decision.confirmed_offset_seconds must be the "
+                            f"offset confirmed — the current one is {current}.")
             confirmed_ok = False
         else:
             # a changed offset or changed tracks: the check asks again, the confirmation kept as written
             # (RUL-changed_offset_asked_again, RUL-changed_tracks_asked_again, RUL-stale_confirmation_kept)
             stale = bool(confirmed) and named_ok and (int(against) != current or not tracks_hold)
             confirmed_ok = bool(confirmed) and named_ok and not stale
-        if confirmed_ok:
-            if corrected == "" or corrected is None:
+        if confirmed_ok and not bad_correction:
+            if not written(corrected):
                 effective = {"offset_seconds": current, "source": "gps_drift_validated"}   # zero scrub
-            elif _valid_offset(corrected):
-                effective = {"offset_seconds": int(corrected), "source": "gps_drift_validated"}
             else:
-                blockers.append(f"{dest}: drift_decisions[{loc}].user_decision.corrected_offset_seconds "
-                                "must be empty or a whole number of seconds.")
+                effective = {"offset_seconds": int(corrected), "source": "gps_drift_validated"}
         # The editor scrubs a representative photo along the track: corrected_offset = (chosen track
         # time) - (that photo's camera naive). Expose every bucket frame (earliest first) so it can
         # default to one and let the operator cross-check others; re-extracted every run with the track.

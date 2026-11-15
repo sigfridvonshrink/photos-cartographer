@@ -570,12 +570,12 @@ Mirror these client-side; a value that fails makes geotag reject the whole artif
 |----------|------|
 | `country` | `""` (= none), or a code that is a key of the top-level `countries` table; any other value is a blocker, as is any value where the host's zone database has no table of countries (`countries` is `{}`). One chosen inside another country's destination is not a blocker: the next run writes it back `""` (`country_removed`). |
 | `manual_iana_timezone` | Must resolve as a real IANA zone in the zone database geotag runs with — never a name standing for the host (`localtime`, `posixrules`, `Factory`). With a country in effect (`country_zones` present), it must be one of `country_zones`. `""` allowed (= unset). |
-| `confirmed_despite_recorded_offsets` | A list of whole numbers of seconds; `[]` = not given. |
+| `confirmed_despite_recorded_offsets` | A list of whole numbers of seconds; `[]` (or `null`, or the field absent) = not given. |
 | `manual_offset_seconds` | A whole number of seconds (an integer, or a float with no fraction), of any size (a clock reset to its factory date is years out). Not a boolean, not a string. `""` allowed. |
 | `accepted_offset_seconds` | Required, as a whole number of seconds, whenever `accept_proposal` is `true` (and no manual offset is set): the `proposed_offset_seconds` accepted. `""` with `accept_proposal: false`. |
-| `confirmed_offset_seconds` (photos-22) | Required, as a whole number of seconds, whenever `confirmed` is `true`: the `current_offset_seconds` confirmed against. `""` with `confirmed: false`. |
+| `confirmed_offset_seconds` (photos-22) | Required, as a whole number of seconds, whenever `confirmed` is `true`: the `current_offset_seconds` confirmed against. `""` with `confirmed: false` — and, if written there all the same, still a whole number of seconds. |
 | `confirmed_against_tracks` (photos-22) | Required whenever `confirmed` is `true`: a list (`[]` allowed, only meaning "no track was shown") of `{ "gpx_file": <path under gpx_root>, "sha256": <its SHA-256> }`, each a non-empty string — copied from `proposal.tracks`. `[]` with `confirmed: false`. |
-| `corrected_offset_seconds` (photos-22) | `""` (zero scrub) or a whole number of seconds. |
+| `corrected_offset_seconds` (photos-22) | `""` (zero scrub) or a whole number of seconds — checked whether or not the cell is confirmed. |
 | `fallback_lat` / `fallback_lon`, `manual_lat` / `manual_lon` | Numbers (not booleans, not strings); latitude ∈ [-90, 90], longitude ∈ [-180, 180]. Set both or neither. `""` allowed (= unset). |
 | `accept_proposal` / `accept_unlocated` / `confirmed` | `true` or `false` (absent or `null` reads as `false`); anything else — `"false"`, `1`, `"yes"` — is a blocker, never coerced. Default `false`. |
 
