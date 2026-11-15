@@ -4,7 +4,7 @@
 
 - **What this is:** [`README.md`](README.md). **The record:** [`HISTORY.md`](HISTORY.md).
 
-*Open items: **26** — 6 to 7, 11, 14 to 16, 18, 20 to 23, 25, 27, 28, 30 to 32, 35, 39, 40, 43, 45 to 49.* 🛑 Numbers are never reused; the next is **52**.
+*Open items: **27** — 6 to 7, 11, 14 to 16, 18, 20 to 23, 25, 27, 28, 30 to 32, 35, 39, 40, 43, 45 to 49, 52.* 🛑 Numbers are never reused; the next is **53**.
 
 ---
 
@@ -425,3 +425,31 @@ each shot in the other guides that shows something changed; then take the note o
 natural run to take them from.
 
 **When:** after item 17's text, so the pictures are taken once.
+
+### 52. Every question answerable in the editor, and by hand as well
+
+**Why:** the owner, 2026-11-15: *"the user should be able to answer all questions in the editor"* — and: *"don't
+forget that the editor is not the only possibility to answer, I need to keep the option to manually give answers, so
+the snippet added for a new camera needs to stay."* An audit of every question the tool asks (2026-11-15) found the
+editor covers photos-21, 22 and 23 and writes only what geotag accepts, with these gaps.
+
+**Ruled (2026-11-15)** (*"all as recommended in principle"*), each answer the editor gives staying one a person can
+also write by hand, in the same file and field, documented:
+1. **A cell in a same-day conflict** (`conflicts_with`): "use this offset" in the editor writes it as the user's own
+   choice (`manual_offset_seconds`), which settles the conflict — today it writes an acceptance, which geotag counts
+   as automatic and withholds again, while the editor shows the cell resolved.
+2. **A drift correction typed** as well as scrubbed, so a known offset, or a group with no track, can be given there.
+3. **photos-25's `accept_fingerprint_change`** answered in the editor: each photo whose content changed after a
+   write, with its preview and an accept toggle; documented for the hand too (today in no user doc).
+4. **A decision record that does not parse** shown as that error, not as "no file".
+5. **A new camera — phone or fixed-clock camera:** the editor lists each new camera group with a sample photo and
+   writes the answer into the configuration's `device_groups`; the snippet geotag prints to paste by hand stays.
+6. **A time changed by hand after geotag wrote it** (`RUL-changed_time_stops_plan`) becomes a decision: keep the new
+   time — it becomes the photo's original — or restore geotag's.
+
+Left outside, being no answer but a fix (a file moved, a drive mounted, the configuration mended): the workspace
+hygiene stops, prep's misnamed or unknown files, missing tracks, merge's same picture in other bytes. Already answered
+elsewhere: `--accept-changes` and `init-library`, in the console. To come with their items: 22 (no recorded time), 25
+(a photo exiftool cannot write); the daylight-saving reading comes with item 6.
+
+**When:** after items 6, 35 and 20 (they work in the editor too).
