@@ -782,6 +782,19 @@ history in it is not prep's to throw away; stopping before any change names it, 
 knowing the history goes with it.
 :::
 
+:::{rat} Prep records what it did, not what became of a photo
+:id: RAT-gone_photo_history_kept
+:status: ruled
+:forced: no
+:follows_from: RAT-log_adds_no_authority, RAT-durable_record
+:justifies: RUL-gone_photo_entry_carried
+
+A photo that is nowhere in the workspace any more was deleted by the user, or taken out for a while; prep did neither,
+and cannot tell them apart. What it did do to the photo stays true, so its entry stays, its last place the one prep
+left it at. A step saying it went would be one no record of prep's holds, a guess at why the file is missing; the
+absence itself is what a reader of the log and the workspace together can see.
+:::
+
 :::{rat} A new fingerprint is not a new photo
 :id: RAT-new_fingerprint_same_photo
 :status: ruled

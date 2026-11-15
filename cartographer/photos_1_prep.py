@@ -253,7 +253,8 @@ def build_prep_log(prior_photos, operations, cache_files, quarantine_evidence, r
                     if old not in fp_to_current and e.get("prep_path")}
     for new_fp, path in fp_to_current.items():
         old = _old_by_path.get(path) or _old_by_path.get(moved_from.get(path))
-        if new_fp not in prior_photos and old in prior_photos:
+        # A file this run moved or renamed is a photo of this run's own, never the old entry's (RUL-gone_photo_entry_carried).
+        if new_fp not in prior_photos and old in prior_photos and new_fp not in run_steps_by_fp:
             entry = prior_photos.pop(old)
             prior_photos[new_fp] = dict(entry, content_fingerprint=new_fp, journey=list(entry.get("journey", [])) + [
                 _step("fingerprint_retaken", **{"from": old, "to": new_fp})])

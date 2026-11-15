@@ -479,13 +479,23 @@ rather than read it as empty; with no such file, the earlier log is empty.
 
 Prep's execute SHALL build `photos-15-prep-log.json` from the plan's moves and renames replayed per file, the
 quarantine evidence and the final database rows, merged onto the prior log by fingerprint: an entry whose old value is
-nowhere in the workspace and whose `prep_path` holds a file of a new value moves to it with a `fingerprint_retaken`
-step; an entry whose file is elsewhere with no step of this run gains a `user` step `moved_to_by_dest`; and a file in
+nowhere in the workspace and whose `prep_path` holds a file of a new value that this run's plan gives no step moves to
+it with a `fingerprint_retaken` step; an entry whose file is elsewhere with no step of this run gains a `user` step `moved_to_by_dest`; and a file in
 a prep-organized folder with no recorded history gets an entry marked `partial`, with a warning.
 :::
 
 
 ## 15. Concurrency, determinism, and what a run shows
+
+:::{bld} A gone photo's entry is copied unchanged
+:id: BLD-gone_photo_entry
+:status: ruled
+:realises: RUL-gone_photo_entry_carried
+
+An entry of the prior `photos-15-prep-log.json` whose fingerprint no database row holds, which this run's plan gives no
+step and no quarantine record, and which no `fingerprint_retaken` claims ({need}`BLD-prep_log_build`), SHALL be written
+into the new log unchanged, `prep_path` included.
+:::
 
 :::{bld} The tools' workers
 :id: BLD-tool_workers

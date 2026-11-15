@@ -486,3 +486,23 @@ def test_a_log_unreadable_since_the_plan_is_refused_before_any_change(tmp_path, 
         prep.PlanExecutor(str(ws)).execute(plan)
     assert (ws / "0-sources" / "b.jpg").exists()
     assert open(plp).read() == "{not json"
+
+
+@pytest.mark.spec("RUL-gone_photo_entry_carried", "BLD-gone_photo_entry", test="TST-prep_log-a_gone_photos_entry_is_carried_as_it_was")
+def test_a_gone_photos_entry_is_carried_as_it_was(tmp_path, monkeypatch):
+    """The user deletes a filed photo; the next run carries its entry exactly as it was — no step added, its
+    prep_path the place prep left it — beside the new photo's, though the new photo is filed under the name it left
+    free: a photo this run files is its own, never the gone one's under a retaken fingerprint."""
+    _install(monkeypatch)
+    ws = _ws(tmp_path)
+    (ws / "0-sources" / "a.jpg").write_bytes(b"AAAA")
+    _run(ws)
+    (gone_fp, entry), = _log(ws)["photos"].items()
+    os.remove(ws / entry["prep_path"])
+    (ws / "0-sources" / "b.jpg").write_bytes(b"BBBB")
+    _run(ws)
+    photos = _log(ws)["photos"]
+    assert len(photos) == 2
+    assert photos[gone_fp] == entry
+    (new_fp,) = set(photos) - {gone_fp}
+    assert [s["action"] for s in photos[new_fp]["journey"]] == ["organized", "provisional_rename"]

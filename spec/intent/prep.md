@@ -986,6 +986,19 @@ Prep SHALL stop, before any change and naming the file, where its earlier log ex
 it for an empty log.
 :::
 
+:::{rul} A photo gone from the workspace keeps its entry as it was
+:id: RUL-gone_photo_entry_carried
+:status: ruled
+:criticality: med
+:verify: required
+:refines: RUL-log_entry_append_only
+:uses: DEF-transformation_log
+
+An entry of prep's log whose photo is no longer anywhere in the workspace, and which no photo takes up as its own
+under a fingerprint taken again ({need}`RUL-log_follows_retaken_fingerprint`), SHALL be carried into each later log as
+it was — its steps, and the place prep last left it — neither dropped nor given a step of its going.
+:::
+
 :::{rul} Prep's log names what it set aside
 :id: RUL-prep_log_records_set_aside
 :status: ruled
