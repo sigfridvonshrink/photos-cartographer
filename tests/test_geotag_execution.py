@@ -17,6 +17,7 @@ fingerprints, journal/resume, write photos-25. exiftool + fingerprint are mocked
 all external tools), so the executor logic is driven deterministically. From conftest.py.
 """
 import json
+from _handoff import vouched
 from _zone import answer_root_zone, with_root_zone
 import os
 import shutil
@@ -77,7 +78,7 @@ def _ready_ws(tmp_path, monkeypatch, *, zfs=None):
           "files": files, "cache_fingerprint": "pcf",
           "depends_on": {"cache": {"image_engine_version": utils.get_imagemagick_version(), "fingerprint_algorithm_version": utils.FINGERPRINT_ALGORITHM_VERSION}}}
     ho["content_fingerprint"] = utils.handoff_content_fingerprint(ho)
-    (ctl / "photos-11-handoff.json").write_text(json.dumps(ho))
+    (ctl / "photos-11-handoff.json").write_text(json.dumps(vouched(ctl.parent, ho)))
 
     def run():
         monkeypatch.chdir(str(ws))
@@ -1132,12 +1133,12 @@ def test_another_image_engine_stops_execute_before_any_write(tmp_path, monkeypat
     monkeypatch.setattr(cal, "get_imagemagick_version", lambda: "IM-7.1.2")
     ho = json.load(open(ctl / "photos-11-handoff.json"))
     ho["depends_on"] = {"cache": {"image_engine_version": "IM-7.1.2"}}
-    (ctl / "photos-11-handoff.json").write_text(json.dumps(ho))
+    (ctl / "photos-11-handoff.json").write_text(json.dumps(vouched(ctl.parent, ho)))
     assert not [s for s in wf.revalidate_plan(plan, gpx) if "image engine" in s]
     monkeypatch.setattr(cal, "get_imagemagick_version", lambda: "IM-7.1.3")
     assert [s for s in wf.revalidate_plan(plan, gpx) if "image engine changed" in s]
     # a handoff that records no engine cannot vouch for it: refused, never passed
     monkeypatch.setattr(cal, "get_imagemagick_version", lambda: "IM-7.1.2")
     ho["depends_on"] = {"cache": {}}
-    (ctl / "photos-11-handoff.json").write_text(json.dumps(ho))
+    (ctl / "photos-11-handoff.json").write_text(json.dumps(vouched(ctl.parent, ho)))
     assert [s for s in wf.revalidate_plan(plan, gpx) if "records no image engine" in s]

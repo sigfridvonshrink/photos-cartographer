@@ -1107,6 +1107,18 @@ A photo whose fingerprint is taken again with a new value SHALL keep the own val
 one, so long as the change maps one value to one.
 :::
 
+:::{rul} Geotag plans only on the prep log the handoff vouches for
+:id: RUL-geotag_plans_on_vouched_log
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+:refines: RUL-own_values_follow_new_fingerprint
+:uses: RUL-unchecked_counts_as_changed
+
+Geotag SHALL NOT plan while prep's log is not the one the handoff vouches for.
+:::
+
 
 ## 16. Placing each photo
 

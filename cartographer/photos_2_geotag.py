@@ -533,8 +533,13 @@ class GeotagWorkflow:
 
         # 5b. A photo whose fingerprint was taken again keeps its pinned values only through a mapping that is
         # one to one; one that is not leaves geotag unable to say whose values are whose
-        # (BLD-original_values_follow_fingerprint).
-        if not prep_log_blocker(ws, handoff):
+        # (BLD-original_values_follow_fingerprint). A log the handoff does not vouch for says nothing trustworthy
+        # of the mapping: the plan stops, as finalize and merge do, rather than plan as though no fingerprint
+        # had changed (RUL-geotag_plans_on_vouched_log).
+        log_blk = prep_log_blocker(ws, handoff)
+        if log_blk:
+            blockers.append(f"{log_blk[0].upper() + log_blk[1:]}, then `geotag plan`.")
+        else:
             try:
                 with open(prep_log_path(ws)) as f:
                     _earlier, problem = retaken_fingerprints(json.load(f))

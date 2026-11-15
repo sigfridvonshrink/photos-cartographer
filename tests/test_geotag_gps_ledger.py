@@ -18,6 +18,7 @@ decision: the photo is placed again from the tracks, or geotag's position is cle
 and no store of its own. exiftool-write + fingerprint are mocked. From conftest.py.
 """
 import json
+from _handoff import vouched
 from _zone import answer_root_zone, with_root_zone
 import os
 import sys
@@ -49,7 +50,7 @@ def _row(rel):
 def _plan_wf(tmp_path, files, *, manual=None, unlocated=()):
     ws = tmp_path / "ws"; (ws / ".photos-ingest").mkdir(parents=True); ctl = ws / ".photos-ingest"
     (ctl / "photos-00-config.json").write_text(json.dumps({k: v for k, v in utils.CONFIG.items() if k != "jobs"}))
-    (ctl / "photos-11-handoff.json").write_text(json.dumps({"filename_timestamp_format": utils.CONFIG["filename_timestamp_format"], "cache_fingerprint": "pcf"}))
+    (ctl / "photos-11-handoff.json").write_text(json.dumps(vouched(ctl.parent, {"filename_timestamp_format": utils.CONFIG["filename_timestamp_format"], "cache_fingerprint": "pcf"})))
     dests = {f["destination"] for f in files}
     reviews = {d: [] for d in dests}
     for rel, (lat, lon) in (manual or {}).items():
@@ -224,8 +225,8 @@ def _exec_ws(tmp_path, monkeypatch):
     files = [rec(f"{BYDEST}/T/2024-07-03--14-00-00.arw", "2024:07:03 14:00:00", (50.0, 4.0)),
              rec(f"{BYDEST}/T/2024-07-03--15-00-00.arw", "2024:07:03 15:00:00", (51.0, 5.0)),
              rec(f"{BYDEST}/T/2024-07-03--14-30-00.arw", "2024:07:03 14:30:00")]            # no GPS -> blocked -> fallback
-    (ctl / "photos-11-handoff.json").write_text(json.dumps({"filename_timestamp_format": utils.CONFIG["filename_timestamp_format"], "files": files, "cache_fingerprint": "pcf",
-        "depends_on": {"cache": {"image_engine_version": utils.get_imagemagick_version(), "fingerprint_algorithm_version": utils.FINGERPRINT_ALGORITHM_VERSION}}}))
+    (ctl / "photos-11-handoff.json").write_text(json.dumps(vouched(ctl.parent, {"filename_timestamp_format": utils.CONFIG["filename_timestamp_format"], "files": files, "cache_fingerprint": "pcf",
+        "depends_on": {"cache": {"image_engine_version": utils.get_imagemagick_version(), "fingerprint_algorithm_version": utils.FINGERPRINT_ALGORITHM_VERSION}}})))
     return ws, ctl
 
 

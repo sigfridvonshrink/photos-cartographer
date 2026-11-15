@@ -22,6 +22,7 @@ each (a zero-scrub "the offset was right" must be actively set — inaction neve
 The validated/corrected offset lives in 22; compute_resolved_utc re-consumes it. From conftest.py.
 """
 import json
+from _handoff import vouched
 from _zone import answer_root_zone, with_root_zone
 import os
 import sys
@@ -323,7 +324,7 @@ def _e2e_ws(tmp_path):
                                     "field_set_version": utils.FIELD_SET_VERSION, "parsed_json": json.dumps(parsed)}}
     files = [rec(f"{BYDEST}/T/a.arw", "2024:07:03 14:00:00"),
              rec(f"{BYDEST}/T/b.arw", "2024:07:03 14:30:00")]
-    (ctl / "photos-11-handoff.json").write_text(json.dumps({"filename_timestamp_format": utils.CONFIG["filename_timestamp_format"], "files": files, "cache_fingerprint": "pcf", "depends_on": {"cache": {"fingerprint_algorithm_version": utils.FINGERPRINT_ALGORITHM_VERSION}}}))
+    (ctl / "photos-11-handoff.json").write_text(json.dumps(vouched(ctl.parent, {"filename_timestamp_format": utils.CONFIG["filename_timestamp_format"], "files": files, "cache_fingerprint": "pcf", "depends_on": {"cache": {"fingerprint_algorithm_version": utils.FINGERPRINT_ALGORITHM_VERSION}}})))
     return ws, ctl
 
 

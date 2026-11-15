@@ -22,7 +22,7 @@ conftest.py.
 from datetime import datetime, timedelta, timezone
 
 import pytest
-from _handoff import match_disk
+from _handoff import match_disk, vouched
 
 import photos_2_geotag as cal
 import photos_utils as utils
@@ -358,7 +358,7 @@ def test_run_auto_resolves_offset_from_gpx(tmp_path, monkeypatch):
              rec("6-photos-by-dest/B/b.arw", 50.8480, 4.3540, "2024:07:03 14:13:08")]
     for f in files:
         p = ws / f["relative_path"]; p.parent.mkdir(parents=True, exist_ok=True); p.write_bytes(b"x")
-    (ctl / "photos-11-handoff.json").write_text(json.dumps({"filename_timestamp_format": utils.CONFIG["filename_timestamp_format"], "files": match_disk(ws, files), "depends_on": {"cache": {"fingerprint_algorithm_version": utils.FINGERPRINT_ALGORITHM_VERSION}}}))
+    (ctl / "photos-11-handoff.json").write_text(json.dumps(vouched(ctl.parent, {"filename_timestamp_format": utils.CONFIG["filename_timestamp_format"], "files": match_disk(ws, files), "depends_on": {"cache": {"fingerprint_algorithm_version": utils.FINGERPRINT_ALGORITHM_VERSION}}})))
 
     CAM_CFG = CAM
     monkeypatch.chdir(str(ws))

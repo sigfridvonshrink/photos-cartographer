@@ -18,7 +18,7 @@ The lifecycle guards + by-dest scope/re-prep gates that must pass before geotag 
 JSON artifacts are produced. photos_2_geotag / photos_utils come from conftest.py.
 """
 import json
-from _handoff import match_disk
+from _handoff import match_disk, vouched
 import os
 import sys
 
@@ -53,7 +53,7 @@ def _ws(tmp_path, *, guard=True, sealed=False, config=True, handoff=True,
     if handoff:
         files = handoff_files if handoff_files is not None else \
             [{"relative_path": rel, "media_class": "image"} for rel in bydest]
-        (ctl / "photos-11-handoff.json").write_text(json.dumps({"filename_timestamp_format": utils.CONFIG["filename_timestamp_format"], "files": match_disk(ws, files), "depends_on": {"cache": {"fingerprint_algorithm_version": utils.FINGERPRINT_ALGORITHM_VERSION}}}))
+        (ctl / "photos-11-handoff.json").write_text(json.dumps(vouched(ctl.parent, {"filename_timestamp_format": utils.CONFIG["filename_timestamp_format"], "files": match_disk(ws, files), "depends_on": {"cache": {"fingerprint_algorithm_version": utils.FINGERPRINT_ALGORITHM_VERSION}}})))
     return ws
 
 
@@ -665,7 +665,7 @@ def test_a_handoff_of_another_fingerprint_method_stops_geotag(tmp_path, monkeypa
         del ho["depends_on"]["cache"]["fingerprint_algorithm_version"]
     else:
         ho["depends_on"]["cache"]["fingerprint_algorithm_version"] = recorded
-    (ctl / "photos-11-handoff.json").write_text(json.dumps(ho))
+    (ctl / "photos-11-handoff.json").write_text(json.dumps(vouched(ctl.parent, ho)))
     before = sorted(os.listdir(ctl))
     monkeypatch.chdir(ws)
     with pytest.raises(SystemExit) as ei:

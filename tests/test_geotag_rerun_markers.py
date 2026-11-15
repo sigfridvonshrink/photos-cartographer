@@ -20,6 +20,7 @@ Execution is simulated: each plan's writes are folded into the handoff the way a
 them back, so the re-run sees what the files hold. From conftest.py.
 """
 import json
+from _handoff import vouched
 from _zone import answer_root_zone, with_root_zone
 import os
 import sys
@@ -84,7 +85,7 @@ def _write_handoff(ws, files):
     ho = {"filename_timestamp_format": utils.CONFIG["filename_timestamp_format"], "run_metadata": {"plan_id": "prep-1", "execution_id": "exec-1"}, "files": files,
           "cache_fingerprint": "pcf", "depends_on": {"cache": {"image_engine_version": utils.get_imagemagick_version(), "fingerprint_algorithm_version": utils.FINGERPRINT_ALGORITHM_VERSION}}}
     ho["content_fingerprint"] = utils.handoff_content_fingerprint(ho)
-    (ws / ".photos-ingest" / "photos-11-handoff.json").write_text(json.dumps(ho))
+    (ws / ".photos-ingest" / "photos-11-handoff.json").write_text(json.dumps(vouched(ws, ho)))
 
 
 def _plan(monkeypatch, ws):
@@ -596,6 +597,7 @@ def test_finalize_carries_prep_s_record_unchanged(tmp_path, monkeypatch):
                  "note": "prep history incomplete (no retained journey)",
                  "journey": [{"phase": "prep", "action": "moved_to_by_date", "from": "a", "to": "b"}]}}
     (ws / ".photos-ingest" / "photos-15-prep-log.json").write_text(json.dumps({"photos": prep}))
+    _vouch_prep_log(ws)
     _plan(monkeypatch, ws)
     _execute(monkeypatch, ws)
     entry = _finalize(monkeypatch, ws)[fp]
@@ -677,7 +679,7 @@ def _retake_fingerprint(ws, old, new, *, also=None):
     _write_handoff(ws, ho["files"])
     ho2 = json.loads((ctl / "photos-11-handoff.json").read_text())
     ho2["depends_on"] = ho["depends_on"]
-    (ctl / "photos-11-handoff.json").write_text(json.dumps(ho2))
+    (ctl / "photos-11-handoff.json").write_text(json.dumps(vouched(ctl.parent, ho2)))
 
 
 @pytest.mark.spec("RUL-own_values_follow_new_fingerprint", "BLD-original_values_follow_fingerprint",
@@ -707,6 +709,40 @@ def test_a_fingerprint_mapping_not_one_to_one_stops_geotag(tmp_path, monkeypatch
     earlier, problem = utils.retaken_fingerprints({"photos": {"x": {"journey": [
         {"action": "fingerprint_retaken", "from": "a", "to": "b"}, {"action": "fingerprint_retaken", "from": "b", "to": "c"}]}}})
     assert earlier == {"b": "a", "c": "b"} and problem is None                # a chain is one to one
+
+
+@pytest.mark.spec("RUL-geotag_plans_on_vouched_log", "BLD-original_values_follow_fingerprint",
+                  test="TST-geotag_rerun_markers-an_unvouched_prep_log_stops_the_plan")
+@pytest.mark.parametrize("spoil", ["changed", "missing", "no_hash"])
+def test_an_unvouched_prep_log_stops_the_plan(tmp_path, monkeypatch, capsys, spoil):
+    """Prep's log says which photo's fingerprint was taken again from which; one the handoff does not vouch for says
+    nothing to trust of it. The plan stops, writing nothing, and sends the user to prep — never planning as though
+    no fingerprint had changed, which would lose a photo's pinned values."""
+    ws = _executed_round(tmp_path, monkeypatch)
+    _retake_fingerprint(ws, "fp-a.arw", "fp-new")
+    ctl = ws / ".photos-ingest"
+    log, ho_p = ctl / "photos-15-prep-log.json", ctl / "photos-11-handoff.json"
+    if spoil == "changed":
+        log.write_text(json.dumps({"photos": {}}))
+    elif spoil == "missing":
+        log.unlink()
+    else:
+        ho = json.loads(ho_p.read_text())
+        del ho["depends_on"]["prep_log"]
+        ho_p.write_text(json.dumps(ho))
+    plan_p = ctl / "photos-24-executable-plan.json"
+    before = plan_p.read_bytes()
+    blockers, _, _ = cal.GeotagWorkflow(str(ws)).preflight()
+    assert any("prep's log" in b.lower() and "`prep plan` and `prep execute`" in b for b in blockers), blockers
+    capsys.readouterr()
+    monkeypatch.chdir(str(ws))
+    monkeypatch.setattr(sys, "argv", ["photos-2-geotag", "plan"])
+    with pytest.raises(SystemExit) as ei:
+        cal.main()
+    out = capsys.readouterr()
+    assert ei.value.code == 2 and "prep's log" in (out.out + out.err).lower()
+    assert plan_p.read_bytes() == before                                     # nothing planned past it
+    assert not cal.GeotagWorkflow(str(ws)).preflight(for_execute=True)[0]    # the plan alone stops on it
 
 
 @pytest.mark.spec("BLD-original_values_follow_fingerprint",

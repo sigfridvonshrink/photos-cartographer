@@ -19,7 +19,7 @@ branches; plus the SQLite cache round-trip and the deterministic fingerprint. Fr
 """
 import json
 from _zone import answer_root_zone, with_root_zone
-from _handoff import match_disk
+from _handoff import match_disk, vouched
 import re
 import sqlite3
 import sys
@@ -235,7 +235,7 @@ def test_resolved_utc_cache_created_only_after_photos21_complete(tmp_path, monke
              rec("6-photos-by-dest/B/b.arw", 50.8480, 4.3540, "2024:07:03 14:13:08")]
     for f in files:
         p = ws / f["relative_path"]; p.parent.mkdir(parents=True, exist_ok=True); p.write_bytes(b"x")
-    (ctl / "photos-11-handoff.json").write_text(json.dumps({"filename_timestamp_format": utils.CONFIG["filename_timestamp_format"], "files": match_disk(ws, files), "cache_fingerprint": "pcf", "depends_on": {"cache": {"fingerprint_algorithm_version": utils.FINGERPRINT_ALGORITHM_VERSION}}}))
+    (ctl / "photos-11-handoff.json").write_text(json.dumps(vouched(ctl.parent, {"filename_timestamp_format": utils.CONFIG["filename_timestamp_format"], "files": match_disk(ws, files), "cache_fingerprint": "pcf", "depends_on": {"cache": {"fingerprint_algorithm_version": utils.FINGERPRINT_ALGORITHM_VERSION}}})))
 
     def run():
         monkeypatch.chdir(str(ws))
@@ -311,7 +311,7 @@ def test_run_populates_cache_when_complete(tmp_path, monkeypatch, capsys):
     for f in files:
         p = ws / f["relative_path"]; p.parent.mkdir(parents=True, exist_ok=True); p.write_bytes(b"x")
     # the timezone must be accepted for status=complete
-    (ctl / "photos-11-handoff.json").write_text(json.dumps({"filename_timestamp_format": utils.CONFIG["filename_timestamp_format"], "files": match_disk(ws, files), "cache_fingerprint": "pcf", "depends_on": {"cache": {"fingerprint_algorithm_version": utils.FINGERPRINT_ALGORITHM_VERSION}}}))
+    (ctl / "photos-11-handoff.json").write_text(json.dumps(vouched(ctl.parent, {"filename_timestamp_format": utils.CONFIG["filename_timestamp_format"], "files": match_disk(ws, files), "cache_fingerprint": "pcf", "depends_on": {"cache": {"fingerprint_algorithm_version": utils.FINGERPRINT_ALGORITHM_VERSION}}})))
 
     def run():
         monkeypatch.chdir(str(ws))
@@ -389,7 +389,7 @@ def test_unrelated_config_edit_replans_but_does_not_restale_resolved_utc(tmp_pat
              rec("6-photos-by-dest/B/b.arw", 50.8480, 4.3540, "2024:07:03 14:13:08")]
     for f in files:
         p = ws / f["relative_path"]; p.parent.mkdir(parents=True, exist_ok=True); p.write_bytes(b"x")
-    (ctl / "photos-11-handoff.json").write_text(json.dumps({"filename_timestamp_format": utils.CONFIG["filename_timestamp_format"], "files": match_disk(ws, files), "cache_fingerprint": "pcf", "depends_on": {"cache": {"fingerprint_algorithm_version": utils.FINGERPRINT_ALGORITHM_VERSION}}}))
+    (ctl / "photos-11-handoff.json").write_text(json.dumps(vouched(ctl.parent, {"filename_timestamp_format": utils.CONFIG["filename_timestamp_format"], "files": match_disk(ws, files), "cache_fingerprint": "pcf", "depends_on": {"cache": {"fingerprint_algorithm_version": utils.FINGERPRINT_ALGORITHM_VERSION}}})))
 
     def run_fingerprint():
         monkeypatch.chdir(str(ws))
@@ -558,10 +558,10 @@ def test_geotag_plan_stops_on_a_time_its_zone_skips(tmp_path, monkeypatch, capsy
     def plan(files):
         for f in files:
             p = ws / f["relative_path"]; p.parent.mkdir(parents=True, exist_ok=True); p.write_bytes(b"x")
-        (ctl / "photos-11-handoff.json").write_text(json.dumps({
+        (ctl / "photos-11-handoff.json").write_text(json.dumps(vouched(ctl.parent, {
             "filename_timestamp_format": utils.CONFIG["filename_timestamp_format"], "files": match_disk(ws, files),
             "cache_fingerprint": "pcf",
-            "depends_on": {"cache": {"fingerprint_algorithm_version": utils.FINGERPRINT_ALGORITHM_VERSION}}}))
+            "depends_on": {"cache": {"fingerprint_algorithm_version": utils.FINGERPRINT_ALGORITHM_VERSION}}})))
         monkeypatch.chdir(str(ws))
         monkeypatch.setattr(sys, "argv", ["photos-2-geotag", "plan"])
         try:

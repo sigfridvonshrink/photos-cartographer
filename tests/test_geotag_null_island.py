@@ -22,7 +22,7 @@ import sys
 from datetime import datetime, timezone
 
 import pytest
-from _handoff import match_disk
+from _handoff import match_disk, vouched
 
 import photos_2_geotag as cal
 import photos_utils as utils
@@ -127,7 +127,7 @@ def test_zero_point_is_placed_never_kept_nor_counted_native(tmp_path):
 def test_position_written_over_zero_point_is_logged_with_it(tmp_path):
     ws = tmp_path / "ws"; ctl = ws / ".photos-ingest"; ctl.mkdir(parents=True)
     (ctl / "photos-00-config.json").write_text(json.dumps({k: v for k, v in utils.CONFIG.items() if k != "jobs"}))
-    (ctl / "photos-11-handoff.json").write_text(json.dumps({"cache_fingerprint": "pcf"}))
+    (ctl / "photos-11-handoff.json").write_text(json.dumps(vouched(ctl.parent, {"cache_fingerprint": "pcf"})))
     d = f"{BYDEST}/T"
     time_art = {"status": "complete", "destinations": {d: {"destination_timezone": {"effective_iana_timezone": "UTC"}}}}
     gps_art = {"status": "complete", "destinations": {
@@ -179,9 +179,9 @@ def test_zero_point_is_never_an_anchor(tmp_path, monkeypatch, lon, anchored):
     files = [_hfile(f"{BYDEST}/B/a.arw", 0, lon)]
     for f in files:
         p = ws / f["relative_path"]; p.parent.mkdir(parents=True, exist_ok=True); p.write_bytes(b"x")
-    (ctl / "photos-11-handoff.json").write_text(json.dumps({
+    (ctl / "photos-11-handoff.json").write_text(json.dumps(vouched(ctl.parent, {
         "filename_timestamp_format": utils.CONFIG["filename_timestamp_format"], "files": match_disk(ws, files),
-        "depends_on": {"cache": {"fingerprint_algorithm_version": utils.FINGERPRINT_ALGORITHM_VERSION}}}))
+        "depends_on": {"cache": {"fingerprint_algorithm_version": utils.FINGERPRINT_ALGORITHM_VERSION}}})))
     monkeypatch.chdir(str(ws))
     monkeypatch.setattr(sys, "argv", ["photos-2-geotag", "plan"])
     try:
