@@ -436,6 +436,29 @@ once, the acceptance recorded.
 time and inode — and the method changed; a different file at the path is a new photo, and the removed photo's entry
 stays a gone one.
 
+**Ruled (2026-11-15), how** (*"rest ok"*, and D *"ok"*):
+- **A. The record:** one table in `photos-00-ingest.db` — path, size, modification time, inode and fingerprint of
+  every file in the media folders, quarantine and strays — rewritten by every execute at its end with the state it
+  leaves (prep's, geotag's and merge's alike; geotag already notes each file's state after its writes). Plans do not
+  change it. Geotag and merge refuse a workspace without one (run prep first); prep's first run compares nothing.
+- **B. Recognising a change, by entries alone:** same size, modification time and inode at a new path is a move (by
+  date → by destination, or within it, passes — case 2; back to by date, passes, logged — case 5); same size and
+  modification time with a new inode (a copy, a snapshot restore) is the same file, passing, logged — a replacement
+  almost never keeps the modification time to the nanosecond, and the fingerprint read again would prove nothing (it
+  covers the pixels, so a time changed by hand passes it); gone with no match is a deletion (case 4); size or
+  modification time changed is a change in place and stops — but in missing metadata (case 6), allowed and logged.
+- **C. Culling:** a deletion in videos by date and in redundant JPEGs is allowed and logged too; in missing metadata,
+  quarantine or strays it stops (quarantine changes only by prune).
+- **D. Accepting:** the stop lists the unexpected changes grouped by kind and folder, and prints the command to run
+  again with `--accept-changes <code>` — the code a hash of the list as printed, so a list changed since (one more
+  file) no longer matches and stops again, listed anew. Accepted changes go into the run's log and into a kept record,
+  `photos-01-accepted-changes.json` (never written over, `-NNN`; sealed with the workspace). The console shows the
+  same list with a button that sends the same code through the same command. Hand-editing a file of acceptances was
+  rejected: *"hand accepting these is tedious"*.
+- **E. Who checks:** every phase command, dry runs included — prep's plan, dry run and execute; geotag's plan,
+  execute and finalize; merge's plan, dry run and execute. Not prune, `init-library` or the editor. Control files keep
+  their own checks (the vouched log, the decision fingerprints, the stale plan).
+
 **To mind when it is built:**
 - The owner: *"a replaced file would also typically have a different inode."* So the inode is the strongest of the
   three: a replacement keeps none of them reliably, an untouched file keeps all.
