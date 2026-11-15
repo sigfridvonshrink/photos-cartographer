@@ -64,8 +64,8 @@ test("offsetGroups: a day with its own decision is NOT pooled with equal-proposa
 
 test("offsetGroups: equal-proposal days that share an identical decision stay clustered", () => {
   const cells = {                                  // both summer days accepted → one cluster, still collapsed
-    "CAM@2024-07-03": cell("CAM", "2024-07-03", -7200, { accept_proposal: true, manual_offset_seconds: "", manual_real_utc: "" }),
-    "CAM@2024-07-04": cell("CAM", "2024-07-04", -7200, { accept_proposal: true, manual_offset_seconds: "", manual_real_utc: "" }),
+    "CAM@2024-07-03": cell("CAM", "2024-07-03", -7200, { accept_proposal: true, manual_offset_seconds: "" }),
+    "CAM@2024-07-04": cell("CAM", "2024-07-04", -7200, { accept_proposal: true, manual_offset_seconds: "" }),
   };
   const g = app.offsetGroups({ camera_group_time_decisions: cells });
   assert.equal(g[0].proposals.length, 1);
@@ -110,4 +110,105 @@ test("dateRange: single, range", () => {
 test("peerKeys: cluster ref fans out to its peers, plain ref to itself", () => {
   assert.deepEqual(app.peerKeys({ key: "A", peers: ["A", "B", "C"] }), ["A", "B", "C"]);
   assert.deepEqual(app.peerKeys({ key: "A" }), ["A"]);
+});
+
+// --- picking a correction group (a place visited on several days, RUL-revisit_matched_to_its_day) ---
+test("groupChoice: the recommended group accepts the proposal, another sets its offset", () => {
+  const p = { proposed_offset_seconds: -7200, groups: [{ offset_seconds: -7200, count: 3 }, { offset_seconds: -93600, count: 3 }] };
+  assert.deepEqual(app.groupChoice(p, p.groups[0]), { accept_proposal: true, accepted_offset_seconds: -7200, manual_offset_seconds: "" });
+  assert.deepEqual(app.groupChoice(p, p.groups[1]), { accept_proposal: false, accepted_offset_seconds: "", manual_offset_seconds: -93600 });
+  assert.equal(app.chosenOffset(p, { accept_proposal: true, accepted_offset_seconds: -7200, manual_offset_seconds: "" }), -7200);
+  assert.equal(app.chosenOffset(p, { accept_proposal: false, manual_offset_seconds: -93600 }), -93600);
+  assert.equal(app.chosenOffset(p, { accept_proposal: false, manual_offset_seconds: "" }), null);
+});
+
+test("proposalNotes: a tie asks for the day; disagreeing photos are named, five at most", () => {
+  const tied = { tied: true, groups: [{ offset_seconds: -7200, count: 3 }, { offset_seconds: -93600, count: 3 }, { offset_seconds: 0, count: 1 }] };
+  assert.deepEqual(app.proposalNotes(tied), ["These photos lie on 2 visits of the tracks equally — pick the day you were there."]);
+  const files = ["a", "b", "c", "d", "e", "f", "g"].map((x) => `6-photos-by-dest/B/${x}.jpg`);
+  const [note] = app.proposalNotes({ tied: false, groups: [], conflicting_files: files });
+  assert.match(note, /^7 photos agree with none of these: 6-photos-by-dest\/B\/a\.jpg, .*e\.jpg and 2 more\./);
+  assert.match(app.proposalNotes({ conflicting_files: [files[0]] })[0], /^1 photo agrees with none of these/);
+  assert.deepEqual(app.proposalNotes({ tied: false, groups: [], conflicting_files: [] }), []);
+});
+
+// --- what the editor says about evidence that settles nothing -----------------------------------------
+test("proposalNotes: a stay of the tracks is said to fix no time", () => {
+  const notes = app.proposalNotes({ proposed_offset_seconds: -2740, imprecise_seconds: 3595, groups: [] });
+  assert.equal(notes.length, 1);
+  assert.match(notes[0], /where but not when/);
+});
+
+test("acceptFields: an acceptance names the offset it accepts; clearing it clears both", () => {
+  assert.deepEqual(app.acceptFields({ proposed_offset_seconds: -7200 }, true), { accept_proposal: true, accepted_offset_seconds: -7200 });
+  assert.deepEqual(app.acceptFields({ proposed_offset_seconds: -7200 }, false), { accept_proposal: false, accepted_offset_seconds: "" });
+});
+
+test("tracksNote: why the tracks placed nothing, in one line", () => {
+  assert.equal(app.tracksNote(undefined), "");
+  assert.match(app.tracksNote({ reason: "outside_track", seconds_from_track: 3600 }), /1 h from this photo/);
+  assert.match(app.tracksNote({ reason: "track_gap", gap_seconds: 2400, seconds_from_track: 900 }), /40 min gap.*15 min away/);
+  assert.match(app.tracksNote({ reason: "tracks_disagree", gpx_files: ["a.gpx", "b.gpx"], apart_meters: 5560 }), /a\.gpx and b\.gpx.*5560 m apart/);
+});
+
+
+test("zoneContradiction: why an inherited zone is not taken", () => {
+  assert.equal(app.zoneContradiction({}), "");
+  const note = app.zoneContradiction({ contradicted_by: { photos: 2, example: "6-photos-by-dest/Iberia/Madrid/c.jpg",
+    recorded_offset_seconds: 7200, timezone: "Europe/Lisbon", timezone_offset_seconds: 3600 } });
+  assert.match(note, /2 photos here record \+2h 00m from UTC/);
+  assert.match(note, /Europe\/Lisbon was at \+1h 00m then/);
+});
+
+test("offsetCellNotes: a shared offset, a guess checked on the tracks, one clock read two ways", () => {
+  assert.deepEqual(app.offsetCellNotes({ proposal: { proposal_source: "gpx_self_anchor" } }), []);
+  const shared = app.offsetCellNotes({ proposal: { proposal_source: "same_day_elsewhere", proposed_offset_seconds: -7200,
+    confidence: "review_required", shared_from: { destination: "6-photos-by-dest/Museum", bucket: "K" } } });
+  assert.match(shared[0], /fixed its clock that day in 6-photos-by-dest\/Museum.*accept it here/);
+  assert.match(app.offsetCellNotes({ proposal: { proposal_source: "timezone_naive" },
+    effective_time_anchor: { offset_seconds: -7200, source: "timezone_unconfirmed" } })[0], /Drift view/);
+  assert.match(app.offsetCellNotes({ conflicts_with: [{ destination: "6-photos-by-dest/Other", bucket: "K", offset_seconds: -6600 }] })[0],
+    /6-photos-by-dest\/Other — one clock, two readings/);
+});
+
+
+test("zoneSpokenFor: a zone stands against the photos only on the user's word for every offset they record", () => {
+  const k = { photos: 2, example: "x", recorded_offset_seconds: 7200, recorded_offsets: [7200, 32400],
+    timezone: "Europe/Lisbon", timezone_offset_seconds: 3600 };
+  assert.equal(app.zoneSpokenFor({}), true);
+  assert.equal(app.zoneSpokenFor({ contradicted_by: k, user_decision: {} }), false);
+  assert.equal(app.zoneSpokenFor({ contradicted_by: k, user_decision: { confirmed_despite_recorded_offsets: [7200] } }), false);
+  assert.deepEqual(app.zoneDespiteFields({ contradicted_by: k }, true), { confirmed_despite_recorded_offsets: [7200, 32400] });
+  assert.deepEqual(app.zoneDespiteFields({ contradicted_by: k }, false), { confirmed_despite_recorded_offsets: [] });
+  assert.equal(app.zoneSpokenFor({ contradicted_by: k, user_decision: app.zoneDespiteFields({ contradicted_by: k }, true) }), true);
+  // another zone picked since the run that checked: the next run checks that one
+  assert.equal(app.zoneSpokenFor({ contradicted_by: k, user_decision: { manual_iana_timezone: "Europe/Madrid" } }), true);
+  assert.equal(app.zoneSpokenFor({ contradicted_by: k, user_decision: { manual_iana_timezone: "Europe/Lisbon" } }), false);
+});
+
+test("ambiguousTimeNote: a camera time at a daylight-saving change is the user's to set", () => {
+  assert.equal(app.ambiguousTimeNote(undefined), "");
+  const skipped = app.ambiguousTimeNote({ camera_time: "2024:03:31 02:30:00", timezone: "Europe/Berlin", case: "skipped",
+    offsets_seconds: [3600, 7200] });
+  assert.match(skipped, /2024-03-31 02:30:00 falls at a daylight-saving change in Europe\/Berlin/);
+  assert.match(skipped, /clocks went forward over it/);
+  assert.match(skipped, /either −1h 00m 00s or −2h 00m 00s/);      // as clock offsets: camera + offset = UTC
+  assert.match(skipped, /set the offset yourself/);
+  assert.doesNotMatch(skipped, /derive/);
+  const repeated = app.ambiguousTimeNote({ camera_time: "2024:10:27 02:30:00", timezone: "Europe/Berlin", case: "repeated",
+    offsets_seconds: [7200, 3600] });
+  assert.match(repeated, /clocks went back over it, so that time happened twice/);
+  assert.match(repeated, /either −2h 00m 00s or −1h 00m 00s/);
+});
+
+test("zoneOffer: one click takes the proposed zone, never the zone the photos contradict", () => {
+  const k = { timezone: "Europe/Lisbon", recorded_offsets: [7200] };
+  assert.equal(app.zoneOffer({ proposed_iana_timezone: "Europe/Brussels", proposal_source: "config_default", user_decision: {} }), "Europe/Brussels");
+  assert.equal(app.zoneOffer({ proposed_iana_timezone: "Asia/Tokyo", proposal_source: "inherited", user_decision: {} }), "");   // applies itself
+  // inherited and contradicted: writing it resolves nothing — the keep-confirmation is the way to keep it
+  assert.equal(app.zoneOffer({ proposed_iana_timezone: "Europe/Lisbon", proposal_source: "inherited", contradicted_by: k, user_decision: {} }), "");
+  // the zone written here was contradicted; the proposal standing beside it is another zone, and may be taken
+  assert.equal(app.zoneOffer({ proposed_iana_timezone: "Europe/Madrid", proposal_source: "inherited", contradicted_by: k, user_decision: {} }), "Europe/Madrid");
+  assert.equal(app.zoneOffer({ proposed_iana_timezone: "Europe/Brussels", proposal_source: "config_default",
+    user_decision: { manual_iana_timezone: "Asia/Tokyo" } }), "");
 });

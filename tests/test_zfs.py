@@ -44,7 +44,7 @@ def _ws(tmp_path):
 
 def _mock_media(monkeypatch):
     monkeypatch.setattr(prep.ContentHasher, "fingerprint_image",
-                        lambda p: {"status": "valid", "strategy": "image-content-hash-v1",
+                        lambda p: {"status": "valid", "strategy": "image-content-hash-v2",
                                    "value": "sig-" + os.path.basename(p), "engine_version": "t"})
 
     def meta(folders, max_workers=4, progress_coordinator=None):
@@ -85,13 +85,13 @@ def test_validate_config_accepts_valid_zfs():
     {"zfs": {"enabled": "yes"}},                         # not a bool
     {"zfs": "nope"},                                     # not an object
 ])
-@pytest.mark.spec("prep-config-validate-zfs-prefix-1")
+@pytest.mark.spec("RUL-checked_snapshot_names")
 def test_validate_config_rejects_illegal(bad):
     with pytest.raises(ValueError):
         utils.validate_config(bad)
 
 
-@pytest.mark.spec("validate-zfs-prefix-1", test="TST-zfs-load_or_seed_config_rejects_illegal_zfs")
+@pytest.mark.spec("RUL-checked_snapshot_names", test="TST-zfs-load_or_seed_config_rejects_illegal_zfs")
 def test_load_or_seed_config_rejects_illegal_zfs(tmp_path):
     ws = _ws(tmp_path)
     cfg = utils.config_path(str(ws))
@@ -134,7 +134,7 @@ def _plan(ws):
     return plan
 
 
-@pytest.mark.spec("prep-execute-snapshot-1", "snapshot-keyed-by-plan-1", test="TST-zfs-snapshot_taken_with_detected_dataset_and_prefix")
+@pytest.mark.spec("RUL-snapshot_per_plan", test="TST-zfs-snapshot_taken_with_detected_dataset_and_prefix")
 def test_snapshot_taken_with_detected_dataset_and_prefix(tmp_path, monkeypatch, seed_from_live_config):
     _mock_media(monkeypatch)
     monkeypatch.setattr(utils, "detect_zfs_dataset", lambda p: "pool/ws")
@@ -152,7 +152,7 @@ def test_snapshot_taken_with_detected_dataset_and_prefix(tmp_path, monkeypatch, 
     assert snap["snapshot_name"] == f"pool/ws@photos-cartographer-prep-{plan.plan_id}"
 
 
-@pytest.mark.spec("snapshot-required-fatal-1", test="TST-zfs-required_snapshot_with_no_dataset_aborts")
+@pytest.mark.spec("RUL-required_snapshot_or_nothing", test="TST-zfs-required_snapshot_with_no_dataset_aborts")
 def test_required_snapshot_with_no_dataset_aborts(tmp_path, monkeypatch, seed_from_live_config):
     _mock_media(monkeypatch)
     monkeypatch.setattr(utils, "detect_zfs_dataset", lambda p: None)   # workspace not on zfs
@@ -166,15 +166,45 @@ def test_required_snapshot_with_no_dataset_aborts(tmp_path, monkeypatch, seed_fr
     assert os.path.exists(ws / "0-sources" / "a.jpg")                  # no mutation
 
 
+def _zfs_unreachable(monkeypatch):
+    """No `zfs` on this machine: every attempt to run it fails as a missing program, and is recorded."""
+    calls, real = [], subprocess.Popen
+    def popen(args, *a, **k):
+        argv = args.split() if isinstance(args, str) else list(args)
+        if argv and os.path.basename(str(argv[0])) == "zfs":
+            calls.append(argv)
+            raise FileNotFoundError(2, "No such file or directory", "zfs")
+        return real(args, *a, **k)
+    monkeypatch.setattr(subprocess, "Popen", popen)
+    return calls
+
+
+@pytest.mark.spec("RUL-snapshot_optional", "RUL-filesystem_agnostic", test="TST-zfs-prep_runs_whole_with_no_zfs")
+def test_prep_runs_whole_with_no_zfs(tmp_path, monkeypatch):
+    """With snapshots off, as they are by default, prep never reaches for a ZFS feature: on a machine with no
+    `zfs` at all it organizes a dump, and the next, whole."""
+    _mock_media(monkeypatch)
+    calls = _zfs_unreachable(monkeypatch)
+    ws = _ws(tmp_path)
+    for name in ("a.jpg", "b.jpg"):
+        (ws / "0-sources" / name).write_bytes(name.encode())
+        plan = _plan(ws)
+        assert not plan.blockers, plan.blockers
+        prep.PlanExecutor(str(ws)).execute(plan)
+    assert utils.CONFIG["zfs"]["enabled"] is False
+    assert len(glob.glob(str(ws / "5-photos-by-date" / "**" / "*.jpg"), recursive=True)) == 2
+    assert os.path.exists(utils.handoff_path(str(ws))) and calls == []
+
+
 # --- the shared take_zfs_snapshot helper (used by prep + geotag) --------
 
-@pytest.mark.spec("snapshot-disabled-default-1", test="TST-zfs-take_zfs_snapshot_disabled")
+@pytest.mark.spec("RUL-snapshot_off_by_default", test="TST-zfs-take_zfs_snapshot_disabled")
 def test_take_zfs_snapshot_disabled(monkeypatch):
     monkeypatch.setitem(utils.CONFIG, "zfs", {"enabled": False})
     assert utils.take_zfs_snapshot("/ws", "pid", "prep") is None
 
 
-@pytest.mark.spec("snapshot-not-required-proceeds-1", test="TST-zfs-take_zfs_snapshot_no_dataset")
+@pytest.mark.spec("RUL-unrequired_snapshot_proceeds", test="TST-zfs-take_zfs_snapshot_no_dataset")
 def test_take_zfs_snapshot_no_dataset(monkeypatch):
     monkeypatch.setitem(utils.CONFIG, "zfs", {"enabled": True, "snapshots_required": False,
                                               "datasets": {"workspace": "auto", "library": "auto"}})
@@ -235,3 +265,40 @@ def test_take_zfs_snapshot_failure_is_recorded_not_raised(monkeypatch):
     monkeypatch.setattr(subprocess, "run", boom)
     r = utils.take_zfs_snapshot("/ws", "PID", "geotag")        # never raises
     assert r["ok"] is False and r["required"] is True and "pool busy" in r["stderr"]
+
+
+@pytest.mark.spec("RUL-snapshot_per_plan", test="TST-zfs-a_plans_existing_snapshot_counts_as_taken")
+def test_a_plans_existing_snapshot_counts_as_taken(monkeypatch):
+    """A snapshot names its plan, so executing the same plan again (a geotag resume, a merge re-run)
+    asks for a name ZFS already holds: that snapshot precedes the plan's changes, so it counts as taken
+    and says so — never a failure, which `snapshots_required` would turn into a refused resume. A
+    failure with no such snapshot stays a failure."""
+    from cartographer.reporting import Reporter, CaptureSink, use_reporter
+    monkeypatch.setitem(utils.CONFIG, "zfs", {"enabled": True, "snapshots_required": True,
+                                              "snapshot_prefix": "px-", "datasets": {"workspace": "auto", "library": "auto"}})
+    monkeypatch.setattr(utils, "detect_zfs_dataset", lambda p: "pool/ws")
+    existing = set()
+
+    def fake_zfs(cmd, *a, **k):
+        if cmd[:2] == ["zfs", "snapshot"]:
+            if cmd[2] in existing:
+                raise subprocess.CalledProcessError(1, cmd, output="",
+                                                    stderr=f"cannot create snapshot '{cmd[2]}': dataset already exists")
+            existing.add(cmd[2])
+            return types.SimpleNamespace(returncode=0, stdout="", stderr="")
+        if cmd[:4] == ["zfs", "list", "-H", "-t"]:
+            if cmd[-1] in existing:
+                return types.SimpleNamespace(returncode=0, stdout=cmd[-1] + "\n", stderr="")
+            raise subprocess.CalledProcessError(1, cmd, output="", stderr="dataset does not exist")
+        raise AssertionError(cmd)
+    monkeypatch.setattr(subprocess, "run", fake_zfs)
+    first = utils.take_zfs_snapshot("/ws", "PID", "geotag")
+    assert first["ok"] and not first.get("already_existed")
+    cap = CaptureSink()
+    with use_reporter(Reporter([cap])):
+        again = utils.take_zfs_snapshot("/ws", "PID", "geotag")
+    assert again["ok"] is True and again["already_existed"] is True
+    assert again["snapshot_name"] == "pool/ws@px-geotag-PID"
+    assert any("already taken" in e.msg and "pool/ws@px-geotag-PID" in e.msg for e in cap.logs())
+    other = utils.take_zfs_snapshot("/ws", "OTHER", "geotag")      # a new plan gets its own snapshot
+    assert other["ok"] and not other.get("already_existed")

@@ -1,5 +1,11 @@
 # See it work — a full run, end to end
 
+> **Obsolete — to be redone.** This walkthrough and its screenshots are of version 2.0.0. The pipeline has changed
+> since: what geotag asks and when, what the editor shows, and what stops a run. The shape of a run (prep → sort →
+> geotag → merge) and its safety guarantees are as shown; for what the current version does, read the
+> [quick start](quickstart.md), [concepts](concepts.md) and the [specification](../spec/README.md)
+> ([online](https://sigfridvonshrink.github.io/photos-cartographer/)).
+
 This is **a real run** on a real trip dump, start to finish, in pictures — a dump turned into a
 map-complete library. Every step is a screenshot from the browser console (the same phases run from
 the command line — see the [quick start](quickstart.md)). Concepts are introduced as they come up,

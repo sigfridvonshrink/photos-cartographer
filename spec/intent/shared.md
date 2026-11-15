@@ -60,7 +60,6 @@ sorted by destination, into the library.
 :criticality: high
 :anti: yes
 :verify: required
-:aliases: lock-mutual-exclusion-1
 
 At most one cartographer run SHALL act on a workspace at any time — whatever the commands: two runs of one phase, runs
 of two phases, a merge, a finalize, or a quarantine prune.
@@ -70,8 +69,7 @@ of two phases, a merge, a finalize, or a quarantine prune.
 :id: RUL-every_command_locks
 :status: ruled
 :criticality: med
-:verify: incidental
-:aliases: lock-every-command-takes-1
+:verify: required
 :upholds: INV-one_run_at_a_time
 
 Every run, and every change to the workspace, SHALL hold the workspace's lock.
@@ -81,7 +79,7 @@ Every run, and every change to the workspace, SHALL hold the workspace's lock.
 :id: RUL-one_workspace_lock
 :status: ruled
 :criticality: med
-:verify: incidental
+:verify: required
 :refines: RUL-every_command_locks
 
 A workspace SHALL have exactly one lock, shared by every command.
@@ -92,7 +90,6 @@ A workspace SHALL have exactly one lock, shared by every command.
 :status: ruled
 :criticality: high
 :verify: required
-:aliases: lock-covers-planning-1
 :upholds: INV-one_run_at_a_time
 
 A run SHALL hold the lock before it reads any of the workspace's content — before it plans, scans, fingerprints,
@@ -106,11 +103,10 @@ inside the lock all the same.
 :criticality: high
 :anti: yes
 :verify: required
-:aliases: lock-covers-whole-run-1, prep-run-under-single-lock-1
 :upholds: INV-one_run_at_a_time
 
-A run SHALL hold the lock until it ends — through planning, dry run, execution, and every record and artifact it writes
-— and release it then, never letting it outlive the run: between runs, the workspace is unlocked.
+A run SHALL hold the lock until it ends — through planning, dry run, execution, and every record and artifact it
+writes.
 :::
 
 :::{rul} A locked workspace is refused at once
@@ -119,12 +115,20 @@ A run SHALL hold the lock until it ends — through planning, dry run, execution
 :criticality: high
 :anti: yes
 :verify: required
-:aliases: lock-failfast-1
 :upholds: INV-one_run_at_a_time
 
-A run that finds the workspace locked SHALL stop at once, never waiting for it, saying the workspace is locked by a run
-in progress, having scanned, planned and changed nothing — and having produced no plan, no dry-run report and no
-artifact.
+A run that finds the workspace locked SHALL stop at once, never waiting for it, having scanned, planned and changed
+nothing — and having produced no plan, no dry-run report and no artifact.
+:::
+
+:::{rul} A refused run says the workspace is locked
+:id: RUL-lock_refusal_says_locked
+:status: ruled
+:criticality: high
+:verify: required
+:refines: RUL-lock_fail_fast
+
+A run that stops on a locked workspace SHALL say the workspace is locked by a run in progress.
 :::
 
 :::{rul} The lock is released however the run ends
@@ -132,10 +136,10 @@ artifact.
 :status: ruled
 :criticality: med
 :verify: required
-:aliases: lock-release-on-exit-error-1
 :refines: RUL-lock_through_the_run
 
-A run SHALL release the lock when it ends, whether it succeeds or fails.
+A run SHALL release the lock when it ends, whether it succeeds or fails, never letting it outlive the run: between
+runs, the workspace is unlocked.
 :::
 
 :::{rul} A stale lock is recognised and recovered
@@ -143,24 +147,22 @@ A run SHALL release the lock when it ends, whether it succeeds or fails.
 :status: ruled
 :criticality: med
 :verify: required
-:aliases: lock-stale-detectable-1
 
 A lock left behind by a run that died SHALL be recognisable as stale, and recoverable, so that a crash never leaves a
 workspace locked for good.
 :::
 
-:::{rul} Only a dead owner's lock is taken over
+:::{rul} A lock is taken over only once no running process holds it
 :id: RUL-stale_takeover_conservative
 :status: ruled
 :criticality: high
 :anti: yes
-:verify: none
-:omit_reason: no test asserts it (backlog item 3)
-:aliases: lock-stale-takeover-conservative-1
+:verify: required
 :refines: RUL-stale_lock_recovered
 
-A stale lock SHALL be taken over only when its owner is provably gone; a lock whose owner may still be running is left
-alone.
+A lock SHALL be taken over only once the machine's own system reports that no running process holds it — never on what
+the lock's record says of its owner. This guards the runs of one machine; where two machines reach one workspace or
+library over a network, whether the lock holds between them is that filesystem's doing.
 :::
 
 Merge also takes a lock on the library it writes into, so that two merges into one library — even from two workspaces
@@ -172,8 +174,7 @@ Merge also takes a lock on the library it writes into, so that two merges into o
 :id: RUL-snapshot_optional
 :status: ruled
 :criticality: med
-:verify: incidental
-:aliases: snapshot-optional-1
+:verify: required
 
 A phase that changes files MAY first take a snapshot of what it is about to change, from which the whole change can be
 rolled back. Cartographer SHALL be complete and safe without one, no guarantee depending on a snapshot having been
@@ -185,21 +186,21 @@ taken.
 :status: ruled
 :criticality: med
 :verify: required
-:aliases: snapshot-disabled-default-1
 :refines: RUL-snapshot_optional
 
 Snapshots SHALL be off unless the workspace's configuration turns them on.
 :::
 
-:::{rul} Only the snapshot depends on the filesystem
+:::{rul} Only the snapshot uses a feature of one particular filesystem
 :id: RUL-filesystem_agnostic
 :status: ruled
 :criticality: med
-:verify: none
-:omit_reason: a design constraint over the whole code; the gap audit (backlog item 2) checks it
+:verify: required
 
-Nothing in cartographer but the snapshot SHALL depend on a particular filesystem's features, so that cartographer runs
-fully on a filesystem that has none.
+Nothing in cartographer but the snapshot SHALL use a feature particular to one filesystem. Of the filesystem a
+workspace or a library lies on, cartographer requires what POSIX filesystems share: file locks, a rename that is
+atomic, a move that fails where its target exists (by a rename that refuses, or by hard links), and syncing a file
+and a folder to disk.
 :::
 
 :::{rul} A snapshot names its plan
@@ -207,7 +208,6 @@ fully on a filesystem that has none.
 :status: ruled
 :criticality: low
 :verify: required
-:aliases: snapshot-keyed-by-plan-1
 
 Each snapshot SHALL be identifiable by the plan whose changes it precedes.
 :::
@@ -217,10 +217,28 @@ Each snapshot SHALL be identifiable by the plan whose changes it precedes.
 :status: ruled
 :criticality: med
 :verify: required
-:aliases: snapshot-timing-1, prep-execute-snapshot-1
 
-A snapshot SHALL be taken after the plan has been validated against its dependencies and the lock is held, and before
-the plan's first change.
+A snapshot SHALL be taken before the plan's first change.
+:::
+
+:::{rul} A snapshot follows the plan's validation
+:id: RUL-snapshot_after_validation
+:status: ruled
+:criticality: med
+:verify: required
+:refines: RUL-snapshot_timing
+
+A snapshot SHALL be taken only after the plan has been validated against its dependencies.
+:::
+
+:::{rul} A snapshot is taken under the lock
+:id: RUL-snapshot_under_lock
+:status: ruled
+:criticality: med
+:verify: required
+:refines: RUL-snapshot_timing
+
+A snapshot SHALL be taken only while the lock is held.
 :::
 
 :::{rul} A required snapshot that fails stops the run
@@ -229,7 +247,6 @@ the plan's first change.
 :criticality: high
 :anti: yes
 :verify: required
-:aliases: snapshot-required-fatal-1, merge-snapshot-required-aborts-1
 :refines: RUL-snapshot_timing
 
 When the configuration requires snapshots, a run that cannot take one SHALL stop before it changes anything.
@@ -240,7 +257,6 @@ When the configuration requires snapshots, a run that cannot take one SHALL stop
 :status: ruled
 :criticality: med
 :verify: required
-:aliases: snapshot-not-required-proceeds-1
 :refines: RUL-snapshot_optional
 
 When snapshots are not required, or not configured, a run SHALL proceed without one. Its safety then rests, as it
@@ -282,11 +298,12 @@ what is processed under it, and it is an input the user authors.
 :id: RUL-one_configuration
 :status: ruled
 :criticality: med
-:verify: incidental
-:aliases: config-single-shared-1
+:verify: required
 
 All three phases SHALL read their settings from the workspace's one configuration alone, each the settings it needs — no
-phase keeping settings of its own, and no setting that governs a run coming from outside the workspace.
+phase keeping settings of its own, and no setting that bears on what a run produces coming from outside the workspace.
+What a new workspace's configuration starts as is seeded into it once ({need}`RUL-config_seeded_once`) and read from
+there after.
 :::
 
 :::{rul} A configuration missing a setting stops the run
@@ -297,7 +314,17 @@ phase keeping settings of its own, and no setting that governs a run coming from
 :verify: required
 :refines: RUL-one_configuration
 
-A configuration that lacks a setting SHALL stop the run, naming the setting — never filled from the program's defaults.
+A configuration that lacks a setting SHALL stop the run — never filled from the program's defaults.
+:::
+
+:::{rul} The missing setting is named
+:id: RUL-missing_setting_named
+:status: ruled
+:criticality: high
+:verify: required
+:refines: RUL-config_complete
+
+A run stopped by a configuration that lacks a setting SHALL name the setting.
 :::
 
 :::{rul} A configuration holding an unknown setting stops the run
@@ -308,7 +335,17 @@ A configuration that lacks a setting SHALL stop the run, naming the setting — 
 :verify: required
 :refines: RUL-one_configuration
 
-A configuration holding a setting cartographer does not know SHALL stop the run, naming the setting.
+A configuration holding a setting cartographer does not know SHALL stop the run.
+:::
+
+:::{rul} The unknown setting is named
+:id: RUL-unknown_setting_named
+:status: ruled
+:criticality: med
+:verify: required
+:refines: RUL-config_no_unknown_settings
+
+A run stopped by a setting cartographer does not know SHALL name the setting.
 :::
 
 :::{rul} Prep seeds the configuration once
@@ -316,10 +353,8 @@ A configuration holding a setting cartographer does not know SHALL stop the run,
 :status: ruled
 :criticality: med
 :verify: required
-:aliases: config-seeded-by-prep-1, prep-seeds-config-if-absent-1, prep-reads-config-authoritative-1
 
-A prep run SHALL create the configuration from the seed defaults when it finds none, and only then: a configuration it
-finds, it uses as it is.
+A prep run SHALL create the configuration from the seed defaults when it finds none.
 :::
 
 :::{rul} The workspace's configuration governs it, not the defaults
@@ -327,7 +362,6 @@ finds, it uses as it is.
 :status: ruled
 :criticality: med
 :verify: required
-:aliases: config-file-authoritative-1
 :refines: RUL-config_seeded_once
 
 Once a workspace's configuration exists, it SHALL govern every run in that workspace, whatever the seed defaults later
@@ -340,7 +374,6 @@ become — the defaults serving only to seed a new workspace.
 :criticality: high
 :anti: yes
 :verify: required
-:aliases: config-prep-sole-writer-1, config-merge-readonly-1, prep-sole-config-writer-1, merge-config-readonly-1
 
 The configuration SHALL be written only when prep seeds it, when the user edits it by hand, and by the library setup
 below — never by geotag, and never by merge's planning, dry run or execution.
@@ -352,7 +385,6 @@ below — never by geotag, and never by merge's planning, dry run or execution.
 :criticality: med
 :anti: yes
 :verify: required
-:aliases: config-initlib-writes-libroot-only-1
 :refines: RUL-config_writers
 
 Merge's one-time library setup, run inside a workspace and given a library, MAY record in the configuration which
@@ -364,7 +396,6 @@ library this workspace merges into — that setting, and no other.
 :status: ruled
 :criticality: med
 :verify: required
-:aliases: config-hashed-cascade-1
 
 The configuration SHALL be a dependency of what is derived under it, like every other artifact, so that a change to it
 never changes a run without being detected.
@@ -395,7 +426,6 @@ The configuration SHALL be part of the archival record the workspace leaves behi
 :criticality: med
 :anti: yes
 :verify: required
-:aliases: config-in-control-dir-skipped-1
 :refines: RUL-control_records_never_media
 
 No phase SHALL treat the configuration as media — inventorying or organizing it, or folding it into what identifies the
@@ -408,7 +438,6 @@ media.
 :criticality: med
 :anti: yes
 :verify: required
-:aliases: config-surgical-staleness-1
 
 A change to one area of the configuration SHALL make stale only what depends on that area. A change to the track
 thresholds restales placement and the plans, not the renames; a change to the filename format restales the renames,
@@ -432,7 +461,6 @@ A result that is costly to rebuild SHALL be made stale only by the areas it depe
 :criticality: med
 :anti: yes
 :verify: required
-:aliases: config-edit-outside-timepolicy-1
 :refines: RUL-costly_results_survive_unrelated_edits
 
 A configuration change outside the camera-time policy SHALL NOT make stale the true times already resolved.
@@ -443,7 +471,6 @@ A configuration change outside the camera-time policy SHALL NOT make stale the t
 :status: ruled
 :criticality: med
 :verify: required
-:aliases: config-wholehash-coarse-replan-1
 
 Any change to the configuration, in whatever area, SHALL make stale every plan made before it — prep's plan, geotag's
 executable plan and merge's plan — so that none of them is executed.
@@ -454,7 +481,6 @@ executable plan and merge's plan — so that none of them is executed.
 :status: ruled
 :criticality: med
 :verify: required
-:aliases: config-folderset-ext-restale-1
 :refines: RUL-staleness_by_area
 
 A change to the managed folders' names, or to which extensions are which class of media, SHALL make stale geotag's
@@ -466,8 +492,7 @@ executable plan and merge's plan.
 :status: ruled
 :criticality: med
 :anti: yes
-:verify: none
-:omit_reason: no test asserts it yet
+:verify: required
 
 Where a workspace keeps its control records — its configuration among them — SHALL be fixed, the same in every
 workspace, no setting moving it.
@@ -490,7 +515,6 @@ and which extensions are which class of media. Each area's detail is in the item
 :criticality: med
 :anti: yes
 :verify: required
-:aliases: config-folder-roles-not-config-1
 
 The configuration SHALL set the managed folders' names, never their roles or the structure they form.
 :::
@@ -510,9 +534,7 @@ Every phase SHALL find a managed folder by its role, never by its name.
 :status: ruled
 :criticality: med
 :anti: yes
-:verify: none
-:omit_reason: no test asserts it (backlog item 3)
-:aliases: config-camerakey-version-not-config-1
+:verify: required
 
 Of camera grouping, the configuration SHALL set only which camera groups are phones and which have fixed clocks — never
 how a group is derived, nor the version of that derivation.
@@ -523,7 +545,6 @@ how a group is derived, nor the version of that derivation.
 :status: ruled
 :criticality: med
 :verify: required
-:aliases: config-ext-one-class-1
 
 An extension SHALL be in exactly one class of media.
 :::
@@ -563,11 +584,19 @@ A file's extension SHALL be matched to the configuration's lists ignoring case.
 :status: ruled
 :criticality: med
 :verify: required
-:aliases: config-values-validated-1
 :refines: INV-authored_values_checked
 
 Every value of the configuration that comes from the user SHALL be validated before it is used, as part of reading the
 configuration — never as a separate, optional pass.
+:::
+
+:::{rul} A setting has one purpose
+:id: RUL-setting_bounds_one_thing
+:status: ruled
+:criticality: med
+:verify: required
+
+No setting of the configuration SHALL be read for more than one purpose.
 :::
 
 ## 4. The control records, apart from the media
@@ -587,7 +616,6 @@ control records: each belongs to the quarantine folder whose duplicates it descr
 :status: ruled
 :criticality: med
 :verify: required
-:aliases: ctrl-all-in-photos-ingest-1
 :uses: DEF-control_records
 
 Every control record SHALL be kept in the workspace's one place for them, none among the media or at the workspace's top
@@ -600,7 +628,6 @@ level.
 :criticality: med
 :anti: yes
 :verify: required
-:aliases: ctrl-prep-skips-wholesale-1
 :refines: RUL-control_records_together
 
 The control records' place SHALL be left out of every inventory of media as a whole — not file by file — so that no
@@ -621,8 +648,7 @@ phase's output.
 :id: RUL-not_inventoried
 :status: ruled
 :criticality: med
-:verify: incidental
-:aliases: ctrl-skip-set-1, prep-scan-skips-control-subtrees-1, prep-no-requarantine-1, prep-quarantine-excluded-scan-1
+:verify: required
 :refines: RUL-control_records_never_media
 :uses: DEF-strays_folder
 
@@ -630,12 +656,21 @@ Prep SHALL leave out of its inventory of media, each as a whole: the control rec
 version-control directory, and the strays folder with everything in it; and every hidden file.
 :::
 
+:::{rul} A hidden folder holding files stops prep
+:id: RUL-hidden_folder_among_photos_blocks
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+
+Prep SHALL NOT plan while a hidden folder inside a managed folder other than the inbox holds a file.
+:::
+
 :::{rul} The strays folder's contents are never processed again
 :id: RUL-strays_never_processed
 :status: ruled
 :criticality: med
-:verify: incidental
-:aliases: prep-strays-excluded-from-scan-1
+:verify: required
 :refines: RUL-not_inventoried
 
 Nothing SHALL process the strays folder's contents again: prep writes into it, but never scans it.
@@ -646,10 +681,40 @@ Nothing SHALL process the strays folder's contents again: prep writes into it, b
 :status: ruled
 :criticality: med
 :verify: required
-:aliases: ctrl-dotfiles-swept-quarantine-1, prep-hidden-dump-sweep-1, prep-init-sweeps-hidden-to-quarantine-1, prep-no-sweep-non-dump-dotfiles-1
 
 Hidden files that arrive in a dump area — the workspace's top level on the run that initializes it, or the inbox — SHALL
 be moved to the recoverable quarantine, not merely left out.
+:::
+
+:::{rul} What an interrupted metadata write left is quarantined
+:id: RUL-write_leftovers_quarantined
+:status: ruled
+:criticality: med
+:verify: required
+
+A temporary file that an interrupted metadata write left beside a photo, in a folder prep may change, SHALL
+be moved to the recoverable quarantine — never taken for media, never put among the strays.
+:::
+
+:::{rul} Such a leftover in photos by destination is warned of
+:id: RUL-write_leftovers_by_dest_warned
+:status: ruled
+:criticality: low
+:verify: required
+:refines: RUL-write_leftovers_quarantined
+
+A temporary file that an interrupted metadata write left in photos by destination, which prep never changes,
+SHALL be left where it is and the user warned of it.
+:::
+
+:::{rul} A backup the user's own edit left is the user's file
+:id: RUL-user_backup_is_a_stray
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+
+A backup that the user's own edit of a photo left beside it — the photo as it was before that edit — SHALL be treated as any file of no media class, never as what a write of cartographer's left.
 :::
 
 :::{rul} Each plan has one fixed place
@@ -657,7 +722,6 @@ be moved to the recoverable quarantine, not merely left out.
 :status: ruled
 :criticality: med
 :verify: required
-:aliases: plan-canonical-path-1, prep-plan-canonical-path-1
 
 Each phase's plan, and each of its decision records, SHALL have one fixed place among the control records, where the
 phase's planning writes it and its dry run and its execution read it.
@@ -669,7 +733,6 @@ phase's planning writes it and its dry run and its execution read it.
 :criticality: med
 :anti: yes
 :verify: required
-:aliases: plan-no-path-flag-1
 :refines: RUL-plan_at_fixed_place
 
 No command SHALL take an option saying where to put a plan or where to find one; the fixed place is the contract.
@@ -681,9 +744,18 @@ No command SHALL take an option saying where to put a plan or where to find one;
 :criticality: med
 :anti: yes
 :verify: required
-:aliases: plan-missing-stops-1, prep-dryrun-no-plan-stops-1, prep-execute-no-plan-stops-1, merge-dryrun-requires-saved-plan-1
 
-A dry run or an execution that finds no plan in its place SHALL stop, and tell the user to plan first.
+A dry run or an execution that finds no plan in its place SHALL stop.
+:::
+
+:::{rul} The user is told to plan first
+:id: RUL-no_plan_says_plan_first
+:status: ruled
+:criticality: med
+:verify: required
+:refines: RUL-no_plan_no_run
+
+A dry run or an execution stopped for want of a plan SHALL tell the user to plan first.
 :::
 
 :::{rul} A dry run summarises the real plan
@@ -692,10 +764,18 @@ A dry run or an execution that finds no plan in its place SHALL stop, and tell t
 :criticality: med
 :anti: yes
 :verify: required
-:aliases: dryrun-summary-not-dump-1, merge-dryrun-summarizes-real-plan-1
 
-A dry run SHALL validate the saved plan that execution would carry out, and report on that plan — never on a separate
-simulation.
+A dry run SHALL report on the saved plan that execution would carry out — never on a separate simulation.
+:::
+
+:::{rul} A dry run validates the saved plan
+:id: RUL-dry_run_validates_saved_plan
+:status: ruled
+:criticality: med
+:verify: required
+:refines: RUL-dry_run_summarises_the_real_plan
+
+A dry run SHALL validate the saved plan that execution would carry out.
 :::
 
 :::{rul} Re-planning sets the prior plan aside
@@ -704,10 +784,30 @@ simulation.
 :criticality: high
 :anti: yes
 :verify: required
-:aliases: plan-replan-no-clobber-1, prep-replan-never-clobbers-1
 
-Re-planning SHALL never overwrite a plan or a decision record: when what it makes differs from what is saved, the saved
-one is first set aside, recoverably, and the user told where.
+Re-planning SHALL never overwrite a plan or a decision record: when what it makes differs from what is saved, the
+saved one is first set aside, recoverably.
+:::
+
+:::{rul} The user is told where the prior plan went
+:id: RUL-set_aside_plan_reported
+:status: ruled
+:criticality: high
+:verify: required
+:refines: RUL-replanning_keeps_the_prior
+
+Re-planning that sets a saved plan or decision record aside SHALL tell the user where.
+:::
+
+:::{rul} A record being replaced never leaves its path
+:id: RUL-record_in_place_while_replaced
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+:refines: RUL-replanning_keeps_the_prior
+
+A plan or decision record being replaced SHALL be at its path at every instant — the earlier version until the new one is whole — so that a run killed in between finds the decisions, never an empty place.
 :::
 
 :::{rul} An unchanged re-plan writes nothing
@@ -715,7 +815,6 @@ one is first set aside, recoverably, and the user told where.
 :status: ruled
 :criticality: med
 :verify: required
-:aliases: plan-unchanged-no-backup-1
 :refines: RUL-replanning_keeps_the_prior
 
 A re-plan whose result is identical to what is saved SHALL write nothing and set nothing aside.
@@ -726,7 +825,6 @@ A re-plan whose result is identical to what is saved SHALL write nothing and set
 :status: ruled
 :criticality: med
 :verify: required
-:aliases: handoff-verified-by-content-1, geotag-handoff-content-fingerprint-1
 :refines: RUL-hash_detects_any_change
 
 Geotag SHALL verify prep's handoff before using it by the fingerprint of its content — recomputed, and compared with
@@ -739,7 +837,6 @@ the one its dependencies recorded — never by the file's exact bytes.
 :criticality: med
 :anti: yes
 :verify: required
-:aliases: handoff-runonly-refresh-no-restale-1, dep-handoff-dual-key-1
 :refines: RUL-handoff_verified_by_content
 
 A rewrite of the handoff that changes only what describes the run, not its content, SHALL NOT make anything downstream
@@ -751,7 +848,7 @@ stale.
 :status: ruled
 :criticality: high
 :anti: yes
-:verify: incidental
+:verify: by_rules
 
 No phase SHALL process an initialized workspace whose shape was disturbed from outside cartographer — an entry at its
 top level that does not belong there, a symbolic link among its files, a managed folder missing — without stopping.
@@ -763,11 +860,20 @@ top level that does not belong there, a symbolic link among its files, a managed
 :criticality: med
 :anti: yes
 :verify: required
-:aliases: prep-init-creates-structure-1
 :upholds: INV-undisturbed_shape
 
-Prep SHALL create the full structure of managed folders exactly once, when it initializes the workspace, and never
-remove one.
+Prep SHALL create the full structure of managed folders exactly once, when it initializes the workspace.
+:::
+
+:::{rul} Prep never removes a managed folder
+:id: RUL-managed_folder_never_removed
+:status: ruled
+:criticality: med
+:anti: yes
+:verify: required
+:refines: RUL-structure_built_once
+
+Prep SHALL never remove a managed folder.
 :::
 
 :::{rul} No other phase creates or repairs the structure
@@ -777,7 +883,6 @@ remove one.
 :anti: yes
 :verify: required
 :refines: RUL-structure_built_once
-:aliases: merge-require-initialized-else-run-prep-1
 
 No phase but prep SHALL create or repair the workspace's structure; the folders merge creates in the library are
 placement, not structure.
@@ -789,7 +894,6 @@ placement, not structure.
 :criticality: high
 :anti: yes
 :verify: required
-:aliases: struct-base-folders-only-1, prep-post-init-base-folders-only-1, merge-block-misplaced-root-entry-1
 :upholds: INV-undisturbed_shape
 
 The top level of an initialized workspace SHALL hold only the managed folders, the control records' place, the
@@ -803,7 +907,6 @@ inbox, and blocks every phase alike.
 :status: ruled
 :criticality: med
 :verify: required
-:aliases: struct-uninit-exception-1
 :refines: RUL-top_level_only_managed
 
 On a workspace not yet initialized, the files and folders at the top level SHALL be the first dump, and start
@@ -816,12 +919,22 @@ initialization — a symbolic link there still blocking, as everywhere.
 :criticality: high
 :anti: yes
 :verify: required
-:aliases: struct-symlinks-barred-1, gate-no-symlinks-by-dest-1
 :upholds: INV-undisturbed_shape
 
-A symbolic link anywhere among the managed files SHALL block, never followed, organized or skipped silently: a link to a
-file anywhere; a link to a folder inside a dump or a managed folder, whose mere presence blocks though it is never
-entered; a managed folder that is itself a link, before it is walked; a link at the top level.
+A symbolic link anywhere among the managed files SHALL block, never skipped silently: a link to a file anywhere; a
+link to a folder inside a dump or a managed folder; a managed folder that is itself a link; a link at the top level.
+:::
+
+:::{rul} No symbolic link is followed
+:id: RUL-link_never_followed
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+:refines: RUL-no_links
+
+A symbolic link among the managed files SHALL never be followed or organized: a link to a folder is never entered, and
+a managed folder that is itself a link is never walked.
 :::
 
 :::{rul} A blocking link is named, and nothing is made after it
@@ -831,7 +944,17 @@ entered; a managed folder that is itself a link, before it is walked; a link at 
 :verify: required
 :refines: RUL-no_links
 
-A phase a link blocks SHALL name the link, and produce no executable plan and no artifact after it.
+A phase a link blocks SHALL name the link.
+:::
+
+:::{rul} Nothing is made after a blocking link
+:id: RUL-link_block_produces_nothing
+:status: ruled
+:criticality: med
+:verify: required
+:refines: RUL-link_named
+
+A phase a link blocks SHALL produce no executable plan and no artifact after it.
 :::
 
 :::{rul} Prep checks the whole tree for links
@@ -844,16 +967,25 @@ A phase a link blocks SHALL name the link, and produce no executable plan and no
 Prep SHALL check for links across the whole tree it walks, the destination tree included though prep never changes it.
 :::
 
-:::{rul} Geotag and merge check the top level for links
-:id: RUL-geotag_merge_check_top_level_links
+:::{rul} Geotag and merge check for links where they work
+:id: RUL-geotag_merge_check_links
 :status: ruled
 :criticality: med
 :verify: required
 :refines: RUL-who_checks_for_links
-:aliases: merge-nongoal-no-follow-symlink-into-out-1
 
-Geotag and merge SHALL check the top level for links themselves, and consume only a handoff prep built with no link
-present.
+Geotag and merge SHALL check for links themselves, at the top level and throughout photos by destination — a link put
+there since prep is one the handoff cannot know of.
+:::
+
+:::{rul} Geotag and merge take only a handoff built with no link
+:id: RUL-handoff_built_without_links
+:status: ruled
+:criticality: med
+:verify: required
+:refines: RUL-geotag_merge_check_links
+
+Geotag and merge SHALL consume only a handoff prep built with no link present.
 :::
 
 :::{rul} A missing managed folder blocks, and is never rebuilt
@@ -862,11 +994,21 @@ present.
 :criticality: high
 :anti: yes
 :verify: required
-:aliases: struct-no-silent-rebuild-1, merge-require-managed-structure-intact-1
 :upholds: INV-undisturbed_shape
 
-On an initialized workspace, a missing managed folder SHALL block every phase, never recreated outside initialization:
-no phase organizes media into a structure it had to rebuild.
+On an initialized workspace, a missing managed folder SHALL block every phase.
+:::
+
+:::{rul} A missing managed folder is never rebuilt
+:id: RUL-missing_folder_never_recreated
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+:refines: RUL-missing_folder_blocks
+
+A missing managed folder SHALL never be recreated outside initialization: no phase organizes media into a structure it
+had to rebuild.
 :::
 
 :::{rul} The block names the missing folders
@@ -876,8 +1018,27 @@ no phase organizes media into a structure it had to rebuild.
 :verify: required
 :refines: RUL-missing_folder_blocks
 
-The block of a missing managed folder SHALL name the missing folders, say that something is wrong, and tell the user to
-restore them and run again; an empty folder restores one.
+The block of a missing managed folder SHALL name the missing folders and say that something is wrong.
+:::
+
+:::{rul} The block tells the user to restore the folders
+:id: RUL-missing_folder_remedy_told
+:status: ruled
+:criticality: med
+:verify: required
+:refines: RUL-missing_folder_named
+
+The block of a missing managed folder SHALL tell the user to restore the folders and run again.
+:::
+
+:::{rul} An empty folder restores a missing one
+:id: RUL-empty_folder_restores
+:status: ruled
+:criticality: med
+:verify: required
+:refines: RUL-missing_folder_blocks
+
+An empty folder put back in a missing managed folder's place SHALL restore it.
 :::
 
 :::{rul} An empty inbox is normal
@@ -895,8 +1056,7 @@ An empty inbox SHALL be normal — the steady state, not a missing folder.
 :id: RUL-shape_checked_first
 :status: ruled
 :criticality: med
-:verify: incidental
-:aliases: struct-guards-at-startup-1
+:verify: required
 :upholds: INV-undisturbed_shape
 
 Each phase SHALL check the workspace's shape at its start — right after the lock and the seal check, before it scans,
@@ -918,11 +1078,31 @@ metadata the files carry.
 :status: ruled
 :criticality: med
 :verify: required
-:aliases: camera-prep-computes-key-1
 :uses: DEF-camera_group
 
-Prep SHALL derive each file's camera group from its device-identity metadata, and record it both in what it hands
-geotag and in its own records.
+Prep SHALL derive each file's camera group from its device-identity metadata.
+:::
+
+:::{rul} The camera group is in what prep hands geotag
+:id: RUL-camera_group_in_handoff
+:status: ruled
+:criticality: med
+:verify: required
+:refines: RUL-prep_derives_camera_group
+:uses: DEF-camera_group
+
+Prep SHALL record each file's camera group in what it hands geotag.
+:::
+
+:::{rul} The camera group is in prep's own records
+:id: RUL-camera_group_in_prep_records
+:status: ruled
+:criticality: med
+:verify: required
+:refines: RUL-prep_derives_camera_group
+:uses: DEF-camera_group
+
+Prep SHALL record each file's camera group in its own records.
 :::
 
 :::{rul} Geotag reuses prep's camera group
@@ -931,7 +1111,6 @@ geotag and in its own records.
 :criticality: med
 :anti: yes
 :verify: required
-:aliases: camera-geotag-reuses-1
 :refines: RUL-prep_derives_camera_group
 
 Geotag SHALL use the camera group prep derived, never deriving a file's identity again.
@@ -943,7 +1122,6 @@ Geotag SHALL use the camera group prep derived, never deriving a file's identity
 :criticality: med
 :anti: yes
 :verify: required
-:aliases: camera-version-detectable-1
 :refines: RUL-prep_derives_camera_group
 
 How camera groups are derived SHALL carry a version taking part in the checks of freshness and of dependencies, so that
@@ -955,7 +1133,6 @@ a change to the derivation is detected and old and new groups are never silently
 :status: ruled
 :criticality: low
 :verify: required
-:aliases: camera-known-when-classified-1
 :uses: RUL-camera_classes_not_derivation
 
 A camera group SHALL be known when the configuration classes it as a phone or as a camera with a fixed clock, and
@@ -978,7 +1155,6 @@ uncorrected, with no timezone.
 :status: ruled
 :criticality: med
 :verify: required
-:aliases: prep-timestamp-priority-1
 :uses: DEF-recorded_time
 
 A file's recorded time SHALL be read from the first of its `DateTimeOriginal`, `CreateDate` and `ModifyDate` that
@@ -998,12 +1174,21 @@ sets, followed by a differentiating suffix when that name is taken.
 :id: RUL-one_filename_format
 :status: ruled
 :criticality: med
-:verify: incidental
-:aliases: fname-single-shared-key-1
+:verify: required
 :uses: DEF-timestamp_name
 
-Prep and geotag SHALL name files from a timestamp in one format for the whole pipeline, not one for each phase, set by
-the configuration and hard-coded by neither.
+Prep and geotag SHALL name files from a timestamp in one format for the whole pipeline, not one for each phase.
+:::
+
+:::{rul} The format is set by the configuration
+:id: RUL-filename_format_configured
+:status: ruled
+:criticality: med
+:verify: required
+:refines: RUL-one_filename_format
+:uses: DEF-timestamp_name
+
+The filename format SHALL be set by the configuration, hard-coded by neither prep nor geotag.
 :::
 
 :::{rul} A taken name gets a suffix, never clobbering
@@ -1012,11 +1197,39 @@ the configuration and hard-coded by neither.
 :criticality: high
 :anti: yes
 :verify: required
-:aliases: fname-suffix-noclobber-1, prep-organized-output-unique-path-1, prep-path-conflict-bydest-no-clobber-1
 
-A file whose timestamp name is already taken SHALL get a zero-padded differentiating suffix, allocated deterministically
-and without clobbering: against every name on disk and every name planned in the run, compared without regard to case,
-so that two files never collide.
+A file whose timestamp name is already taken SHALL get a differentiating suffix, allocated without clobbering: against
+every name on disk and every name planned in the run, so that two files never collide.
+:::
+
+:::{rul} The suffix is zero-padded
+:id: RUL-suffix_zero_padded
+:status: ruled
+:criticality: high
+:verify: required
+:refines: RUL-suffix_no_clobber
+
+The differentiating suffix SHALL be zero-padded.
+:::
+
+:::{rul} The suffix is allocated deterministically
+:id: RUL-suffix_deterministic
+:status: ruled
+:criticality: high
+:verify: required
+:refines: RUL-suffix_no_clobber
+
+The differentiating suffix SHALL be allocated deterministically.
+:::
+
+:::{rul} Names are compared without regard to case
+:id: RUL-suffix_case_insensitive
+:status: ruled
+:criticality: high
+:verify: required
+:refines: RUL-suffix_no_clobber
+
+A name SHALL be taken when it matches a name on disk or planned in the run without regard to case.
 :::
 
 :::{rul} Prep and geotag take the first free name
@@ -1024,7 +1237,6 @@ so that two files never collide.
 :status: ruled
 :criticality: med
 :verify: required
-:aliases: fname-allocation-per-phase-1, prep-suffix-bare-first-lowest-free-1
 :refines: RUL-suffix_no_clobber
 
 Prep and geotag SHALL take the first free name — the name with no suffix when it is free, otherwise the lowest free
@@ -1037,7 +1249,6 @@ suffix — by one identical rule.
 :criticality: med
 :verify: required
 :refines: RUL-suffix_choice_by_phase
-:aliases: merge-suffix-append-at-max-plus-1-1, merge-allocation-treats-existing-and-batch-occupied-1
 
 Merge SHALL take the suffix above the highest already used for a name, never a lower one that has come free.
 :::
@@ -1046,8 +1257,7 @@ Merge SHALL take the suffix above the highest already used for a name, never a l
 :id: RUL-prep_name_provisional
 :status: ruled
 :criticality: med
-:verify: incidental
-:aliases: fname-prep-provisional-1
+:verify: required
 
 Prep SHALL derive a file's name from its raw timestamp, as the camera recorded it, for organizing and ordering only — a
 provisional name, which prep never corrects, resolves to a timezone or converts to UTC.
@@ -1058,7 +1268,6 @@ provisional name, which prep never corrects, resolves to a timezone or converts 
 :status: ruled
 :criticality: med
 :verify: required
-:aliases: fname-geotag-final-1
 
 Geotag SHALL recompute a file's name from its corrected local time at the destination — its resolved true time, in the
 destination's civil timezone — and rename it to that final name.
@@ -1069,7 +1278,6 @@ destination's civil timezone — and rename it to that final name.
 :status: ruled
 :criticality: med
 :verify: required
-:aliases: fname-uncorrected-no-rename-1
 :uses: RUL-prep_name_provisional, RUL-geotag_name_final
 
 A file's name SHALL change between prep and geotag only when its timestamp is corrected: geotag plans no rename for a
@@ -1101,7 +1309,6 @@ not added again.
 :status: ruled
 :criticality: high
 :verify: required
-:aliases: fname-nonconforming-redumped-1
 :uses: DEF-timestamp_name, DEF-untimed_name
 
 A media file outside the inbox whose name is neither its timestamp name nor, lacking a recorded time, its untimed name
@@ -1115,7 +1322,17 @@ SHALL stop prep.
 :verify: required
 :refines: RUL-misnamed_file_stops_prep
 
-Prep SHALL name every misnamed file it finds, with the name the file should carry.
+Prep SHALL name every misnamed file it finds.
+:::
+
+:::{rul} A misnamed file is given the name it should carry
+:id: RUL-misnamed_file_expected_name
+:status: ruled
+:criticality: med
+:verify: required
+:refines: RUL-misnamed_file_named
+
+Prep SHALL give, with each misnamed file it names, the name the file should carry.
 :::
 
 :::{rul} No meaning is read from a file's name
@@ -1124,7 +1341,6 @@ Prep SHALL name every misnamed file it finds, with the name the file should carr
 :criticality: med
 :anti: yes
 :verify: required
-:aliases: prep-no-parse-nonconforming-name-1
 :refines: RUL-misnamed_file_stops_prep
 
 No phase SHALL read meaning from a file's name: its timestamp comes from its metadata.
@@ -1168,7 +1384,6 @@ photos along them by interpolation or extrapolation. The configuration says wher
 :criticality: med
 :anti: yes
 :verify: required
-:aliases: gpx-prep-unaware-1, prep-gpx-unaware-1
 :uses: DEF-tracks
 
 Geotag SHALL be the only phase that reads the tracks — scanning their location, parsing them, fingerprinting them and
@@ -1181,7 +1396,6 @@ using them as evidence; prep never reads, parses, fingerprints or moves them, no
 :criticality: med
 :anti: yes
 :verify: required
-:aliases: gpx-root-outside-tree-1, gpx-prep-defensive-skip-1, prep-gpx-inside-tree-skip-1
 :uses: DEF-tracks
 :refines: RUL-config_validated_before_use
 
@@ -1219,7 +1433,6 @@ as a file of no media class.
 :status: ruled
 :criticality: med
 :verify: required
-:aliases: gpx-geotag-fingerprint-cascade-1
 :uses: DEF-tracks, DEF-dependency_cascade
 
 Geotag SHALL record the tracks' fingerprint as a dependency of every record it derives with them — the time decisions,
@@ -1262,11 +1475,31 @@ of the configuration or of the areas the record reads — and each use checks th
 :criticality: high
 :anti: yes
 :verify: required
-:aliases: dep-cascade-reject-stale-1, prep-block-on-stale-dependency-1, merge-execute-revalidate-reject-stale-1, geotag-dep-cascade-1, geotag-no-stale-execution-1
 :uses: DEF-dependency_cascade
 
-No phase SHALL use a record once anything it was derived from has changed: each phase validates what it derives from,
-then creates the record, records those dependencies in it, and refuses its use downstream when any of them has changed.
+No phase SHALL use a record once anything it was derived from has changed.
+:::
+
+:::{rul} A phase validates what it derives from first
+:id: RUL-dependencies_validated_before_deriving
+:status: ruled
+:criticality: high
+:verify: required
+:upholds: INV-no_stale_use
+:uses: DEF-dependency_cascade
+
+Each phase SHALL validate what it derives a record from before it creates the record.
+:::
+
+:::{rul} A record carries what it was derived from
+:id: RUL-dependencies_recorded_in_record
+:status: ruled
+:criticality: high
+:verify: required
+:upholds: INV-no_stale_use
+:uses: DEF-dependency_cascade
+
+Each phase SHALL record in a record it creates the dependencies it was derived from.
 :::
 
 :::{rul} What cannot be checked counts as changed
@@ -1285,7 +1518,6 @@ A dependency that is missing, or cannot be checked, SHALL count as changed.
 :status: ruled
 :criticality: med
 :verify: required
-:aliases: dep-fingerprint-invariant-1, prep-fingerprint-invariant-metadata-1
 :uses: DEF-fingerprint
 
 A media file's fingerprint SHALL stay the same when the pipeline rewrites its metadata or its position, or renames it.
@@ -1298,8 +1530,46 @@ A media file's fingerprint SHALL stay the same when the pipeline rewrites its me
 :verify: required
 :uses: DEF-fingerprint
 
-A photo's fingerprint taken under another ImageMagick version SHALL be taken again before a phase relies on it, a new
-value read as the same photo's — its records following it there, or the phase stopping on the photo where they cannot —
+A photo's fingerprint taken under another ImageMagick version SHALL be taken again before a phase relies on it.
+:::
+
+:::{rul} A photo's fingerprint covers every frame
+:id: RUL-fingerprint_covers_every_frame
+:status: ruled
+:criticality: high
+:verify: required
+
+A photo's fingerprint SHALL be taken over every frame of the file, in their order.
+:::
+
+:::{rul} A video's fingerprint covers every stream
+:id: RUL-fingerprint_covers_every_stream
+:status: ruled
+:criticality: med
+:verify: required
+
+A video's fingerprint SHALL be taken over every stream of the file.
+:::
+
+:::{rul} Fingerprints are compared only within one method
+:id: RUL-fingerprint_method_is_the_builds
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+
+Geotag and merge SHALL NOT proceed on a handoff whose fingerprints were taken by a method other than the build's own.
+:::
+
+:::{rul} A fingerprint taken again is the same photo's
+:id: RUL-retaken_fingerprint_same_photo
+:status: ruled
+:criticality: high
+:verify: required
+:refines: RUL-engine_change_is_checked
+:uses: DEF-fingerprint
+
+A fingerprint taken again under another ImageMagick version whose value is new SHALL be read as the same photo's —
 never, for a changed version alone, as a different photo's.
 :::
 
@@ -1308,7 +1578,6 @@ never, for a changed version alone, as a different photo's.
 :status: ruled
 :criticality: med
 :verify: required
-:aliases: dep-hash-sensitive-1
 :uses: DEF-hash
 
 A record's hash SHALL change on any change to its bytes.
@@ -1320,9 +1589,18 @@ A record's hash SHALL change on any change to its bytes.
 :criticality: high
 :verify: required
 :refines: RUL-hash_detects_any_change
-:aliases: geotag-json-dep-sha256-1, geotag-rehash-before-use-1, geotag-no-mtime-reliance-1
 
 A record SHALL be checked as a dependency by its hash — prep's handoff excepted, which is checked by its content.
+:::
+
+:::{rul} The same content is written as the same bytes
+:id: RUL-records_written_alike
+:status: ruled
+:criticality: med
+:verify: required
+
+A record that another record or a later run depends on SHALL be written as the same bytes whenever its content is the
+same, so that its hash changes only when what it says does.
 :::
 
 ## 9. One loop across the phases
@@ -1372,7 +1650,6 @@ subfolders of a destination.
 :status: ruled
 :criticality: med
 :verify: required
-:aliases: prep-sources-empty-after-stage5-1
 :uses: DEF-managed_folders
 
 A prep execution SHALL leave the inbox empty.
@@ -1384,11 +1661,10 @@ A prep execution SHALL leave the inbox empty.
 :criticality: med
 :anti: yes
 :verify: required
-:aliases: loop-sort-photo-only-1
 :uses: DEF-operator_loop, DEF-managed_folders
 
 Photos by destination SHALL hold only photos — videos stay in videos by date, and no file of no media class belongs
-there — geotag refusing to run while it holds anything else.
+there.
 :::
 
 :::{rul} Geotag does not plan over an unrecorded sort
@@ -1397,7 +1673,6 @@ there — geotag refusing to run while it holds anything else.
 :criticality: high
 :anti: yes
 :verify: required
-:aliases: loop-no-behind-preps-back-1
 :uses: DEF-operator_loop, DEF-prep, DEF-geotag
 
 Geotag SHALL NOT plan while photos by destination holds a photo prep has not recorded where it now is.
@@ -1408,11 +1683,22 @@ Geotag SHALL NOT plan while photos by destination holds a photo prep has not rec
 :status: ruled
 :criticality: med
 :verify: required
-:aliases: loop-reprep-mandatory-1
 :refines: RUL-prep_records_sort
 
 A prep run after the latest sort SHALL record the moves from the files' sizes and modification times alone, carrying
 each moved file's identity forward without reading it again.
+:::
+
+:::{rul} Geotag plans only on a record that still holds
+:id: RUL-geotag_plans_on_current_record
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+:refines: RUL-prep_records_sort
+
+Geotag SHALL NOT plan while a photo prep recorded in photos by destination is gone, or differs in size or modification
+time from prep's record.
 :::
 
 :::{rul} Geotag may be re-run until merge
@@ -1420,7 +1706,6 @@ each moved file's identity forward without reading it again.
 :status: ruled
 :criticality: med
 :verify: required
-:aliases: loop-geotag-rerunnable-1, geotag-rerunnable-after-execute-1
 :uses: DEF-geotag, DEF-merge
 
 Geotag SHALL be re-runnable any number of times — after a successful execution too — for as long as the workspace has
@@ -1433,13 +1718,22 @@ not been merged.
 :criticality: high
 :anti: yes
 :verify: required
-:aliases: loop-geotag-rerun-safe-1
 :refines: RUL-geotag_rerunnable
 :uses: RUL-decision_kept, RUL-mutate_on_difference
 
-A geotag re-run SHALL recognise in each file what an earlier run wrote there — never correcting again a time geotag
-corrected, and deriving again and replacing a position geotag wrote, never keeping it as the file's own. The user's
-decisions, and files already right, it keeps as every run does.
+A geotag re-run SHALL recognise a time an earlier run corrected, never correcting it again.
+:::
+
+:::{rul} A re-run derives again a position geotag wrote
+:id: RUL-rerun_rederives_written_position
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+:refines: RUL-geotag_rerun_keeps_settled
+:uses: RUL-decision_kept, RUL-mutate_on_difference
+
+A geotag re-run SHALL derive again and replace a position geotag wrote, never keeping it as the file's own.
 :::
 
 :::{rul} Geotag's gates are the present state, not its history
@@ -1448,13 +1742,24 @@ decisions, and files already right, it keeps as every run does.
 :criticality: high
 :anti: yes
 :verify: required
-:aliases: loop-geotag-gating-preconditions-1
 :uses: DEF-geotag, DEF-managed_folders
 
 Geotag SHALL proceed when, and only when, the workspace now satisfies its gates: photos by date holds no photo; photos
 by destination holds only photos and no development subfolder; prep has recorded every photo in it; and the inbox is
-empty — whether, or how often, prep, the sort or geotag ran before not bearing on it, so the user may run any number of
-prep and sort cycles before geotagging.
+empty.
+:::
+
+:::{rul} What ran before does not bear on geotag's gates
+:id: RUL-geotag_gates_ignore_history
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+:refines: RUL-geotag_gates
+:uses: DEF-geotag, DEF-managed_folders
+
+Whether, or how often, prep, the sort or geotag ran before SHALL NOT bear on whether geotag proceeds, so the user may
+run any number of prep and sort cycles before geotagging.
 :::
 
 :::{rul} A re-run does as much as what changed requires
@@ -1462,13 +1767,22 @@ prep and sort cycles before geotagging.
 :status: ruled
 :criticality: low
 :verify: required
-:aliases: loop-rerun-may-need-decisions-1
 :uses: DEF-dependency_cascade
 :refines: RUL-geotag_rerunnable
 
 A re-run SHALL redo exactly the work its changed inputs require — new media, an edited setting, changed tracks, a
-withdrawn or altered decision, a refreshed handoff — and no more. It MAY ask for new decisions, but only for the items
-the change affects.
+withdrawn or altered decision, a refreshed handoff — and no more.
+:::
+
+:::{rul} A re-run asks only about what the change affects
+:id: RUL-rerun_asks_only_affected
+:status: ruled
+:criticality: low
+:verify: required
+:refines: RUL-rerun_does_what_changed
+:uses: DEF-dependency_cascade
+
+A re-run SHALL ask for new decisions only for the items the change affects.
 :::
 
 :::{rul} More dumps may follow until merge
@@ -1488,7 +1802,6 @@ resumes from prep.
 :criticality: med
 :anti: yes
 :verify: required
-:aliases: archive-finalize-explicit-1
 :uses: DEF-finalize, DEF-merge
 
 Finalize SHALL be a command of its own, never a side effect of geotag's execution.
@@ -1500,7 +1813,6 @@ Finalize SHALL be a command of its own, never a side effect of geotag's executio
 :criticality: high
 :anti: yes
 :verify: required
-:aliases: merge-preconditions-finalized-1, loop-finalize-before-merge-1, merge-require-geotag-success-1, merge-require-finalized-else-run-finalize-1
 :uses: DEF-finalize, DEF-merge, DEF-managed_folders
 
 Merge SHALL require that geotag's execution succeeded and the workspace was finalized, and refuse a workspace that was
@@ -1513,11 +1825,21 @@ not.
 :criticality: high
 :anti: yes
 :verify: required
-:aliases: merge-revalidates-current-1, merge-post-finalize-currency-check-1, merge-noop-reprep-does-not-trip-currency-1
 :refines: RUL-merge_takes_finalized_current
 
-Merge SHALL refuse when photos by destination has changed since finalize — a refresh that changes only what describes a
-prep run not counting as a change — so that what reaches the library is always the corrected, named, fully recorded set.
+Merge SHALL refuse when photos by destination has changed since finalize, so that what reaches the library is always
+the corrected, named, fully recorded set.
+:::
+
+:::{rul} A refresh describing only a prep run is not a change
+:id: RUL-prep_refresh_not_a_change
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+:refines: RUL-merge_refuses_changed_since_finalize
+
+A refresh that changes only what describes a prep run SHALL NOT count, for merge, as a change since finalize.
 :::
 
 :::{rul} Merge ends the workspace
@@ -1547,7 +1869,6 @@ The library SHALL accept merges from many workspaces.
 :criticality: high
 :anti: yes
 :verify: required
-:aliases: loop-dev-before-geotag-blocks-1, merge-nongoal-no-jpg-tif-breakout-1
 :uses: DEF-development, DEF-managed_folders
 
 Development SHALL happen in the library, after merge: a development subfolder anywhere in photos by destination — even
@@ -1561,7 +1882,7 @@ an empty one — stops geotag's planning, execution and finalize, and merge.
 :status: ruled
 :criticality: high
 :anti: yes
-:verify: incidental
+:verify: by_rules
 :uses: DEF-prep, DEF-geotag, DEF-merge
 
 Every phase SHALL change only what its inputs actually require, as far as the work allows — redoing no settled work to
@@ -1573,7 +1894,6 @@ be safe, and leaving no file in a state other than its inputs require.
 :status: ruled
 :criticality: med
 :verify: required
-:aliases: idem-reuse-not-recompute-1, prep-fingerprint-reuse-unchanged-1, prep-reuse-cache-unchanged-1, prep-new-files-act-only-on-changed-1
 :refines: INV-change_only_what_needs
 
 Work already done and still valid SHALL be reused, not repeated — a file's content and metadata read, and the tracks
@@ -1597,7 +1917,6 @@ unchanged.
 :status: ruled
 :criticality: med
 :verify: required
-:aliases: idem-recompute-staleness-only-1
 :uses: DEF-dependency_cascade
 :refines: INV-change_only_what_needs
 
@@ -1610,7 +1929,6 @@ When an input changes, only the records that depend on it SHALL be made again, e
 :criticality: med
 :anti: yes
 :verify: required
-:aliases: idem-mutate-on-real-diff-1
 :refines: INV-change_only_what_needs
 
 In every phase and every run, a file SHALL be moved, renamed or written only where its current state differs from what
@@ -1622,11 +1940,20 @@ the run requires of it: a file already in its place, with its name and its metad
 :status: ruled
 :criticality: med
 :verify: required
-:aliases: idem-no-op-run-1, prep-unchanged-no-op-1, prep-second-run-zero-mutations-1, prep-same-names-same-input-1, merge-deterministic-rerun-same-targets-names-1
 :refines: INV-change_only_what_needs
 
-A phase run over a workspace whose relevant state has not changed SHALL change nothing, and produce the same result —
-the same operations, fingerprints and names.
+A phase run over a workspace whose relevant state has not changed SHALL change nothing.
+:::
+
+:::{rul} A run over unchanged inputs produces the same result
+:id: RUL-no_op_run_same_result
+:status: ruled
+:criticality: med
+:verify: required
+:refines: RUL-no_op_run
+
+A phase run over a workspace whose relevant state has not changed SHALL produce the same result — the same operations,
+fingerprints and names.
 :::
 
 :::{rul} A run over unchanged inputs reports what it reused, never an error
@@ -1634,7 +1961,6 @@ the same operations, fingerprints and names.
 :status: ruled
 :criticality: low
 :verify: required
-:aliases: prep-report-no-op-facts-1
 :refines: RUL-no_op_run
 
 A run over unchanged inputs SHALL report the work it reused and the files already right, never treating earlier work as
@@ -1658,12 +1984,11 @@ tool *proposes*; the user *decides*.
 :status: ruled
 :criticality: high
 :anti: yes
-:verify: incidental
-:aliases: authored-no-autonomous-mutation-1
+:verify: by_rules
 :uses: DEF-decision
 
 Every change a phase makes SHALL follow from a decision the user recorded, or from a fixed rule applied to recorded
-inputs — never from a choice the tool makes on its own; an execution acts only on a plan made from those.
+inputs — never from a choice the tool makes on its own.
 :::
 
 :::{rul} The user writes the decisions
@@ -1672,7 +1997,7 @@ inputs — never from a choice the tool makes on its own; an execution acts only
 :criticality: high
 :anti: yes
 :verify: required
-:aliases: authored-fields-not-overwritten-1
+:upholds: INV-every_change_from_the_record
 :uses: DEF-decision, RUL-decision_kept
 
 A decision field SHALL be written by the user alone, no phase ever overwriting what the user wrote.
@@ -1693,6 +2018,7 @@ A phase SHALL create every field a decision needs, so the user fills in values, 
 :status: ruled
 :criticality: med
 :verify: required
+:upholds: INV-every_change_from_the_record
 :uses: DEF-prep
 
 Prep SHALL ask the user for no decision, organizing from the state of the workspace and its configuration alone.
@@ -1703,7 +2029,7 @@ Prep SHALL ask the user for no decision, organizing from the state of the worksp
 :status: ruled
 :criticality: med
 :verify: required
-:aliases: authored-locatable-cause-1
+:upholds: INV-every_change_from_the_record
 :uses: DEF-decision, DEF-dependency_cascade
 
 Every change a phase executes SHALL be traceable in the records, from the decision and the inputs it was made from,
@@ -1716,6 +2042,7 @@ through the plan, to the record of what ran — so a wrong result points at a re
 :criticality: high
 :anti: yes
 :verify: required
+:upholds: INV-every_change_from_the_record
 :uses: DEF-decision, DEF-dependency_cascade
 
 A decision SHALL be revised by changing it in the record and running again, the change reaching everything that depends
@@ -1728,12 +2055,30 @@ mutated files repaired by hand.
 :status: ruled
 :criticality: med
 :verify: required
-:aliases: authored-withdraw-undoes-1
 :refines: RUL-decision_revisable
 
 Withdrawing a decision SHALL undo its effect, not merely stop asserting it: a manual position withdrawn gives the file
-back the position it held before, or none if it held none; a position derived by the tool is derived again; a time and a
-name are recomputed where the file stands, never moving it out of its destination.
+the position it would have had without it — from the tracks, or none; a position derived by the tool is derived again.
+:::
+
+:::{rul} After a withdrawal the time and the name are recomputed in place
+:id: RUL-withdrawal_recomputes_time_and_name
+:status: ruled
+:criticality: med
+:verify: required
+:refines: RUL-withdrawal_undoes
+
+After a decision is withdrawn, a time and a name SHALL be recomputed where the file stands.
+:::
+
+:::{rul} A withdrawal never moves a file out of its destination
+:id: RUL-withdrawal_keeps_destination
+:status: ruled
+:criticality: med
+:verify: required
+:refines: RUL-withdrawal_undoes
+
+Withdrawing a decision SHALL never move a file out of its destination.
 :::
 
 ## 12. The record of what was done, kept beyond the workspace
@@ -1761,7 +2106,6 @@ through the pipeline — what was done to its photos and why. It is what the use
 :status: ruled
 :criticality: med
 :verify: required
-:aliases: archive-complete-each-phase-1, prep-log-self-sufficient-1, merge-never-merged-no-35-log-1
 :uses: DEF-transformation_log, DEF-control_records
 
 At the end of every phase the workspace SHALL hold a complete, self-sufficient, human-readable record of everything done
@@ -1775,7 +2119,6 @@ phase not yet run reading as the workspace not having advanced, never as a recor
 :criticality: high
 :anti: yes
 :verify: required
-:aliases: archive-artifact-ownership-1, merge-writes-only-own-3x-copies-26-forward-1
 :uses: DEF-control_records
 
 Each numbered record SHALL be written by the phase whose number it carries, and by no other: a phase MAY create, rewrite
@@ -1788,7 +2131,6 @@ or extend its own records across its runs, and reads every other phase's records
 :criticality: high
 :anti: yes
 :verify: required
-:aliases: archive-no-cross-phase-write-1
 :refines: RUL-phase_writes_own_records
 
 To carry an earlier phase's record forward, a phase SHALL copy it to a record of its own and extend the copy — leaving
@@ -1801,7 +2143,6 @@ the earlier one untouched, and never deriving an earlier phase's history again.
 :criticality: med
 :anti: yes
 :verify: required
-:aliases: archive-finalize-nondestructive-1
 :uses: DEF-finalize, DEF-archival_package
 
 Finalize SHALL change nothing in the workspace's media, its other records or the library, only reading the record that
@@ -1813,7 +2154,6 @@ already stands at the end of geotag and writing the package from it.
 :status: ruled
 :criticality: med
 :verify: required
-:aliases: archive-package-contents-1, archive-whole-control-dir-1
 :uses: DEF-archival_package, DEF-transformation_log, DEF-control_records
 
 The archival package SHALL hold every control record but the transient ones, archived together with its own list of
@@ -1827,11 +2167,20 @@ run's journal.
 :status: ruled
 :criticality: low
 :verify: required
-:aliases: archive-self-describing-manifest-1
 :uses: DEF-archival_package
 
-The package SHALL say which workspace it came from and which plan and execution it records, and list its contents with
-each item's hash, so its integrity can be checked later.
+The package SHALL say which workspace it came from and which plan and execution it records.
+:::
+
+:::{rul} The package lists its contents with their hashes
+:id: RUL-package_lists_contents
+:status: ruled
+:criticality: low
+:verify: required
+:refines: RUL-package_self_describing
+:uses: DEF-archival_package
+
+The package SHALL list its contents with each item's hash, so its integrity can be checked later.
 :::
 
 :::{rul} A photo's entry grows one phase at a time
@@ -1840,12 +2189,23 @@ each item's hash, so its integrity can be checked later.
 :criticality: med
 :anti: yes
 :verify: required
-:aliases: log-entry-append-only-1, prep-log-incremental-1, prep-log-carried-forward-1
 :uses: DEF-transformation_log
 
 A photo's entry in the log SHALL gather the steps of every phase it passes through and be whole through the latest of
-them, each phase only appending its own steps, never rewriting an earlier one — so the latest phase's log is the full
-record, and each earlier log stays its own phase's.
+them — so the latest phase's log is the full record.
+:::
+
+:::{rul} A phase only appends to a photo's entry
+:id: RUL-log_entry_append_only
+:status: ruled
+:criticality: med
+:anti: yes
+:verify: required
+:refines: RUL-log_entry_grows
+:uses: DEF-transformation_log
+
+Each phase SHALL only append its own steps to a photo's entry, never rewriting an earlier one — so each earlier log
+stays its own phase's.
 :::
 
 :::{rul} The log is keyed by fingerprint
@@ -1853,10 +2213,20 @@ record, and each earlier log stays its own phase's.
 :status: ruled
 :criticality: med
 :verify: required
-:aliases: log-keyed-by-fingerprint-1, prep-log-per-photo-fingerprint-keyed-1, prep-log-records-journey-1
 :uses: DEF-transformation_log, DEF-fingerprint
 
-The log SHALL key each photo's entry by its fingerprint and carry the chain of names and places it passed through.
+The log SHALL key each photo's entry by its fingerprint.
+:::
+
+:::{rul} The log carries the chain of names and places
+:id: RUL-log_carries_name_chain
+:status: ruled
+:criticality: med
+:verify: required
+:refines: RUL-log_keyed_by_fingerprint
+:uses: DEF-transformation_log, DEF-fingerprint
+
+A photo's entry in the log SHALL carry the chain of names and places it passed through.
 :::
 
 :::{rul} A file of no media class has no log entry
@@ -1874,10 +2244,18 @@ A file of no media class SHALL have no entry in the log.
 :status: ruled
 :criticality: low
 :verify: required
-:aliases: log-decision-provenance-1
 :uses: DEF-transformation_log, DEF-decision
 
 A step that followed from a decision SHALL name that decision, so the why stands beside the what.
+:::
+
+:::{rul} Each step of a log names the run that made it
+:id: RUL-log_step_names_run
+:status: ruled
+:criticality: med
+:verify: required
+
+Each step a phase adds to a photo's log SHALL name the run that made it.
 :::
 
 :::{rul} A manual position's reversal is logged like its application
@@ -1885,11 +2263,21 @@ A step that followed from a decision SHALL name that decision, so the why stands
 :status: ruled
 :criticality: med
 :verify: required
-:aliases: log-records-gps-revert-1
 :uses: DEF-transformation_log
 
 A manual position applied, changed or withdrawn SHALL appear in the log with the position it replaced or restored, or
 that there was none.
+:::
+
+:::{rul} A time written is logged with what it replaced and how it was found
+:id: RUL-log_records_time_replaced
+:status: ruled
+:criticality: med
+:verify: required
+:uses: DEF-transformation_log, DEF-recorded_time
+
+A time geotag writes SHALL appear in the log with the time and offset it replaced, the field the photo's time was read
+from and the rule that turned it to UTC.
 :::
 
 :::{rul} The log reads as it stands
@@ -1897,11 +2285,21 @@ that there was none.
 :status: ruled
 :criticality: low
 :verify: required
-:aliases: log-human-readable-json-1
 :uses: DEF-transformation_log
 
-The log SHALL be readable as it stands, with no separate report: stably ordered, with descriptive names, and values as a
-person reads them — times, timezones and offsets.
+The log SHALL be readable as it stands, with no separate report: with descriptive names, and values as a person reads
+them — times, timezones and offsets.
+:::
+
+:::{rul} The log is stably ordered
+:id: RUL-log_stably_ordered
+:status: ruled
+:criticality: low
+:verify: required
+:refines: RUL-log_human_readable
+:uses: DEF-transformation_log
+
+The log SHALL be stably ordered.
 :::
 
 :::{rul} History is kept across runs, as much as the log needs
@@ -1910,7 +2308,6 @@ person reads them — times, timezones and offsets.
 :criticality: med
 :anti: yes
 :verify: required
-:aliases: log-retention-across-runs-1
 :uses: DEF-transformation_log
 
 The records the log is made from SHALL be kept across runs in enough detail to rebuild every photo's history through
@@ -1924,7 +2321,6 @@ Anything beyond that MAY be pruned.
 :criticality: med
 :anti: yes
 :verify: required
-:aliases: log-fail-if-insufficient-1, prep-log-fail-if-history-insufficient-1
 :refines: RUL-history_retained
 
 A phase whose kept history cannot rebuild a photo's journey through it SHALL fail, or mark its record plainly partial —
@@ -1956,10 +2352,21 @@ successful run.
 :criticality: med
 :anti: yes
 :verify: required
-:aliases: db-single-workspace-1
 :uses: DEF-workspace_database, DEF-library
 
-A workspace SHALL hold exactly one database of record, and the library none.
+A workspace SHALL hold exactly one database of record.
+:::
+
+:::{rul} The library holds no database
+:id: RUL-library_no_database
+:status: ruled
+:criticality: med
+:anti: yes
+:verify: required
+:refines: RUL-one_database
+:uses: DEF-workspace_database, DEF-library
+
+The library SHALL hold no database of record.
 :::
 
 :::{rul} Any other database is scratch
@@ -1969,8 +2376,28 @@ A workspace SHALL hold exactly one database of record, and the library none.
 :verify: required
 :refines: RUL-one_database
 
-Any database a phase keeps besides the database of record SHALL be scratch: holding no decision and no history, safe to
-delete at any time, and neither journalled nor archived.
+Any database a phase keeps besides the database of record SHALL be scratch: holding no decision and no history, safe
+to delete at any time.
+:::
+
+:::{rul} A scratch database is not journalled
+:id: RUL-scratch_database_not_journalled
+:status: ruled
+:criticality: med
+:verify: required
+:refines: RUL-other_databases_scratch
+
+A scratch database SHALL NOT be journalled.
+:::
+
+:::{rul} A scratch database is not archived
+:id: RUL-scratch_database_not_archived
+:status: ruled
+:criticality: med
+:verify: required
+:refines: RUL-other_databases_scratch
+
+A scratch database SHALL NOT be archived.
 :::
 
 :::{rul} The database is part of the record
@@ -1978,11 +2405,20 @@ delete at any time, and neither journalled nor archived.
 :status: ruled
 :criticality: low
 :verify: required
-:aliases: db-durable-artifact-1
 :uses: DEF-workspace_database, DEF-archival_package
 
-The workspace database SHALL be kept with the control records and archived in the package, never discarded with the
-workspace as a cache would be.
+The workspace database SHALL be kept with the control records, never discarded with the workspace as a cache would be.
+:::
+
+:::{rul} The database is archived in the package
+:id: RUL-database_archived
+:status: ruled
+:criticality: low
+:verify: required
+:refines: RUL-database_is_record
+:uses: DEF-workspace_database, DEF-archival_package
+
+The workspace database SHALL be archived in the package.
 :::
 
 :::{rul} Each phase writes only its own part of the database
@@ -1991,7 +2427,6 @@ workspace as a cache would be.
 :criticality: med
 :anti: yes
 :verify: required
-:aliases: db-disjoint-writers-1, prep-sole-cache-writer-1
 :uses: DEF-workspace_database
 :refines: RUL-phase_writes_own_records
 
@@ -2003,7 +2438,7 @@ Each phase SHALL write only its own part of the workspace database, no two phase
 :status: ruled
 :criticality: med
 :anti: yes
-:verify: incidental
+:verify: required
 :refines: RUL-database_regions_disjoint
 
 Finalize SHALL only read the workspace database.
@@ -2014,11 +2449,31 @@ Finalize SHALL only read the workspace database.
 :status: ruled
 :criticality: med
 :verify: required
-:aliases: db-snapshot-per-phase-1, db-snapshot-skip-on-failure-1, prep-db-backup-on-success-1
 :uses: DEF-database_image, DEF-archival_package
 
-Each phase SHALL keep its database image, refreshed by each of its successful runs alone, and left untouched by every
-other phase and by a run that does not succeed.
+Each phase SHALL keep its database image, refreshed by each of its successful runs.
+:::
+
+:::{rul} No other phase touches a phase's image
+:id: RUL-image_untouched_by_other_phase
+:status: ruled
+:criticality: med
+:verify: required
+:refines: RUL-database_image_each_phase
+:uses: DEF-database_image, DEF-archival_package
+
+A phase's database image SHALL be left untouched by every other phase.
+:::
+
+:::{rul} A run that does not succeed leaves the image as it was
+:id: RUL-image_untouched_by_failed_run
+:status: ruled
+:criticality: med
+:verify: required
+:refines: RUL-database_image_each_phase
+:uses: DEF-database_image, DEF-archival_package
+
+A phase's database image SHALL be left untouched by a run that does not succeed.
 :::
 
 :::{rul} A database image is never read back as working data
@@ -2026,8 +2481,7 @@ other phase and by a run that does not succeed.
 :status: ruled
 :criticality: med
 :anti: yes
-:verify: none
-:omit_reason: no test asserts it (backlog item 3)
+:verify: required
 :refines: RUL-database_image_each_phase
 
 A database image SHALL never be read back as working data.
@@ -2049,7 +2503,6 @@ Every database image present SHALL be archived in the package.
 :criticality: med
 :anti: yes
 :verify: required
-:aliases: db-snapshot-consistent-1
 :uses: DEF-database_image
 
 A database image SHALL be a consistent state of the database, never a copy torn mid-transaction.
@@ -2061,7 +2514,6 @@ A database image SHALL be a consistent state of the database, never a copy torn 
 :criticality: high
 :anti: yes
 :verify: required
-:aliases: db-snapshot-atomic-replace-1
 :refines: RUL-database_image_whole
 
 An interrupted capture of a database image SHALL leave the earlier image or the new one, whole.
@@ -2083,7 +2535,6 @@ A workspace is **sealed** once merge has succeeded in it: marked as finished, by
 :criticality: high
 :anti: yes
 :verify: required
-:aliases: merge-library-protected-1, merge-library-file-never-deleted-written-renamed-1
 :uses: DEF-merge, DEF-library
 
 Merge SHALL never rename, overwrite, move, delete or change a file already in the library, an incoming photo whose place
@@ -2097,7 +2548,6 @@ is taken giving way instead.
 :anti: yes
 :verify: required
 :uses: DEF-merge, DEF-library
-:aliases: merge-collision-detected-by-existence-check-1, merge-free-target-places-without-library-read-1, merge-no-library-wide-index-1
 
 Merge SHALL touch the library only at the places its photos go, and read a library file only when one is already there —
 never scanning, indexing or de-duplicating the library.
@@ -2119,11 +2569,29 @@ Where an incoming photo's place in the library is taken, merge SHALL compare the
 :status: ruled
 :criticality: high
 :verify: required
-:aliases: merge-collision-same-content-1, merge-same-content-already-present-remove-source-1, merge-no-duplicate-of-library-file-1
 :refines: RUL-collision_by_content
 
-A taken place holding the same content SHALL mean the photo is already in the library: nothing is written there, and the
-workspace's copy is removed.
+A taken place holding the photo itself, byte for byte, SHALL mean the photo is already in the library: nothing is written there.
+:::
+
+:::{rul} The workspace's copy of a photo already in the library is removed
+:id: RUL-collision_same_content_copy_removed
+:status: ruled
+:criticality: high
+:verify: required
+:refines: RUL-collision_same_content
+
+Where a taken place holds the photo itself, byte for byte, the workspace's copy SHALL be removed.
+:::
+
+:::{rul} The same picture in another file blocks
+:id: RUL-same_pixels_other_file_blocks
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+
+A photo whose picture the library already holds in a file of other bytes — the same pixels, other metadata — SHALL be blocked, both files named and neither removed, for the user to settle.
 :::
 
 :::{rul} Different content is placed under a differentiating name
@@ -2132,7 +2600,6 @@ workspace's copy is removed.
 :criticality: high
 :anti: yes
 :verify: required
-:aliases: merge-collision-diff-content-1, merge-different-content-rename-incoming-1
 :refines: RUL-collision_by_content
 
 A taken place holding different content SHALL mean two photos share a name: the incoming one is placed under a
@@ -2146,11 +2613,21 @@ differentiating name.
 :anti: yes
 :verify: required
 :refines: RUL-collision_by_content
-:aliases: merge-unfingerprintable-library-file-blocker-1
 :uses: DEF-library
 
 Where the library file in an incoming photo's place cannot be fingerprinted, merge SHALL leave that photo in photos by
-destination — neither placing it there nor under another name — and go on with the rest.
+destination — neither placing it there nor under another name.
+:::
+
+:::{rul} A photo held back does not stop the rest
+:id: RUL-unsettled_collision_rest_proceeds
+:status: ruled
+:criticality: high
+:verify: required
+:refines: RUL-unsettled_collision_blocks
+:uses: DEF-library
+
+Where a collision that cannot be settled holds one photo back, merge SHALL go on with the rest.
 :::
 
 :::{rul} A library file is read at most once while unchanged
@@ -2158,12 +2635,22 @@ destination — neither placing it there nor under another name — and go on wi
 :status: ruled
 :criticality: low
 :verify: required
-:aliases: merge-fingerprint-cached-onfly-1, merge-cache-library-fingerprint-in-workspace-db-1
 :uses: DEF-library, DEF-fingerprint, DEF-workspace_database
 
-A library file's fingerprint SHALL be computed only when a collision needs it, and kept, so that a library file
-unchanged since is never fingerprinted again in the workspace, in that run or a later one, while the way photos are
-decoded is unchanged too — save for the one check before a photo is removed from the workspace.
+A library file's fingerprint SHALL be computed only when a collision needs it.
+:::
+
+:::{rul} A library file's fingerprint is kept while the file is unchanged
+:id: RUL-library_fingerprint_kept
+:status: ruled
+:criticality: low
+:verify: required
+:refines: RUL-library_file_read_once
+:uses: DEF-library, DEF-fingerprint, DEF-workspace_database
+
+A library file's fingerprint, once computed, SHALL be kept, so that a library file unchanged since is never
+fingerprinted again in the workspace, in that run or a later one, while the way photos are decoded is unchanged too —
+save for the one check before a photo is removed from the workspace.
 :::
 
 :::{rul} A library file is fingerprinted again before a photo it holds is removed
@@ -2184,12 +2671,22 @@ fingerprinted again, whatever is kept.
 :criticality: high
 :anti: yes
 :verify: required
-:aliases: lib-root-validated-outside-1, merge-validate-library-root-path-1
 :uses: DEF-library, DEF-workspace
 :refines: RUL-checked_paths
 
 Merge SHALL check the library's configured place like every path the user writes, refusing it unless it is an existing
 folder that neither lies inside the workspace nor holds it.
+:::
+
+:::{rul} The library lies outside every workspace
+:id: RUL-library_outside_every_workspace
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+:uses: DEF-library
+
+A folder SHALL NOT be taken as the library while it is a workspace, lies inside one, or holds one among its own folders.
 :::
 
 :::{rul} A library is known by its mark alone
@@ -2198,7 +2695,6 @@ folder that neither lies inside the workspace nor holds it.
 :criticality: high
 :anti: yes
 :verify: required
-:aliases: lib-marker-only-identity-1
 :uses: DEF-library, DEF-merge
 
 A folder SHALL be taken for a library by one mark in it and by nothing else, merge inspecting no structure of the
@@ -2211,9 +2707,18 @@ library, which has none of a workspace's folders, guard or lifecycle.
 :criticality: med
 :verify: required
 :refines: RUL-library_known_by_mark
-:aliases: merge-init-library-creates-marker-1
 
-Merge's library setup alone SHALL make the library's mark — once, making it again changing nothing.
+Merge's library setup alone SHALL make the library's mark.
+:::
+
+:::{rul} Making the mark again changes nothing
+:id: RUL-library_mark_idempotent
+:status: ruled
+:criticality: med
+:verify: required
+:refines: RUL-library_mark_made_by_setup
+
+Making the library's mark again SHALL change nothing.
 :::
 
 :::{rul} Merge's plan, dry run and execution stop without the mark
@@ -2223,9 +2728,8 @@ Merge's library setup alone SHALL make the library's mark — once, making it ag
 :anti: yes
 :verify: required
 :refines: RUL-library_known_by_mark
-:aliases: merge-require-blessed-library-marker-1
 
-Merge's plan, dry run and execution SHALL only read the library's mark, and stop at once if it is absent.
+Merge's plan, dry run and execution SHALL stop at once if the library's mark is absent.
 :::
 
 :::{rul} Merge creates in the library only what it places
@@ -2235,7 +2739,6 @@ Merge's plan, dry run and execution SHALL only read the library's mark, and stop
 :anti: yes
 :verify: required
 :refines: RUL-library_known_by_mark
-:aliases: merge-create-library-dest-subdir-1, merge-no-library-side-state-persist-1
 
 Beyond its mark and its lock, merge SHALL create in the library only the photos it places, the folders they go into,
 and, while a photo crosses filesystems, its temporary copy.
@@ -2247,7 +2750,6 @@ and, while a photo crosses filesystems, its temporary copy.
 :criticality: high
 :anti: yes
 :verify: required
-:aliases: merge-library-lock-1, merge-hold-two-locks-1
 :uses: DEF-library, DEF-merge
 
 Merge SHALL hold a lock on the library for its whole run, besides the workspace's lock and not instead of it, so that no
@@ -2270,7 +2772,6 @@ The library's lock SHALL hold nothing about the library but who holds it.
 :criticality: high
 :anti: yes
 :verify: required
-:aliases: merge-library-lock-failfast-1
 :refines: RUL-library_lock
 
 A merge that finds the library locked SHALL stop at once, having changed nothing in the library.
@@ -2280,7 +2781,7 @@ A merge that finds the library locked SHALL stop at once, having changed nothing
 :id: RUL-library_lock_stale_recovered
 :status: ruled
 :criticality: med
-:verify: incidental
+:verify: required
 :refines: RUL-library_lock_fail_fast
 
 A library lock left by a merge that died SHALL be recognisable as stale, and recoverable, as the workspace's lock is.
@@ -2292,7 +2793,6 @@ A library lock left by a merge that died SHALL be recognisable as stale, and rec
 :criticality: med
 :anti: yes
 :verify: required
-:aliases: merge-lock-after-marker-1, merge-marker-check-before-liblock-1, merge-lock-acquisition-order-1, merge-fail-lock-or-marker-mutates-nothing-1
 :refines: RUL-library_lock
 
 Merge SHALL take the workspace's lock first, then check the library's place and its mark, and only then take the
@@ -2306,7 +2806,6 @@ having changed nothing in the library.
 :criticality: high
 :anti: yes
 :verify: required
-:aliases: merge-move-leaves-bydest-empty-1, merge-move-atomic-source-last-1, merge-move-placed-out-of-by-dest-1, merge-source-removed-only-after-verified-copy-1
 :uses: DEF-merge, DEF-library, DEF-managed_folders
 
 Merge SHALL move each photo it places, removing the workspace's copy only once the library's is verified in place — and
@@ -2319,10 +2818,19 @@ a photo already in the library likewise.
 :criticality: high
 :anti: yes
 :verify: required
-:aliases: merge-blocker-left-in-bydest-1, merge-nongoal-no-by-dest-teardown-1, merge-blocker-left-in-by-dest-partial-1
 :refines: RUL-merge_moves
 
-A photo merge cannot place SHALL stay where it is, the run then partial.
+A photo merge cannot place SHALL stay where it is.
+:::
+
+:::{rul} A run that leaves a photo unplaced is partial
+:id: RUL-unplaced_photo_run_partial
+:status: ruled
+:criticality: high
+:verify: required
+:refines: RUL-unplaced_photo_stays
+
+A merge run that leaves a photo unplaced SHALL be partial.
 :::
 
 :::{rul} Merge resumes, and a merged batch is a no-op
@@ -2330,12 +2838,21 @@ A photo merge cannot place SHALL stay where it is, the run then partial.
 :status: ruled
 :criticality: med
 :verify: required
-:aliases: merge-idempotent-resumable-1, merge-resume-completes-crash-window-1
 :uses: DEF-merge
 :refines: RUL-no_op_run
 
-A merge interrupted SHALL be finished by running it again, which applies only what is outstanding — merging a batch
-already merged changing nothing.
+A merge interrupted SHALL be finished by running it again, which applies only what is outstanding.
+:::
+
+:::{rul} Merging a merged batch changes nothing
+:id: RUL-merged_batch_no_op
+:status: ruled
+:criticality: med
+:verify: required
+:refines: RUL-merge_resumable
+:uses: DEF-merge
+
+Merging a batch already merged SHALL change nothing.
 :::
 
 :::{rul} Merge records where every photo landed
@@ -2343,7 +2860,6 @@ already merged changing nothing.
 :status: ruled
 :criticality: low
 :verify: required
-:aliases: merge-records-summary-1, merge-summary-per-file-placement-1
 :uses: DEF-merge, DEF-transformation_log
 :refines: RUL-phase_writes_own_records
 
@@ -2351,16 +2867,15 @@ Merge SHALL record, in its own records, where each photo landed in the library, 
 already present, and what blocked the rest.
 :::
 
-:::{rul} Nothing is built from merge's records
+:::{rul} Nothing is built from a finished merge's records
 :id: RUL-nothing_built_from_merge_records
 :status: ruled
 :criticality: low
-:verify: none
-:omit_reason: no test asserts it (backlog item 3)
+:verify: required
 :refines: RUL-merge_records_landing
-:aliases: merge-summary-artifact-not-dependency-1
 
-Nothing SHALL be built from merge's records.
+Nothing SHALL be built from the records a finished merge leaves — its summary, its log, its database image and its
+package. Merge's plan and journal, from which an interrupted merge resumes, are not among these.
 :::
 
 :::{rul} Merge remakes the package as part of its run
@@ -2368,7 +2883,6 @@ Nothing SHALL be built from merge's records.
 :status: ruled
 :criticality: med
 :verify: required
-:aliases: merge-reseals-automatically-1, merge-reseal-archive-automatic-1
 :uses: DEF-merge, DEF-archival_package
 
 A merge that succeeds SHALL remake the archival package to hold its own records too, as part of the same run and with no
@@ -2381,7 +2895,6 @@ command of its own.
 :criticality: med
 :anti: yes
 :verify: required
-:aliases: merge-reseal-no-rederive-1, merge-reseal-reads-not-rederive-geotag-1
 :refines: RUL-merge_reseals
 
 Merge SHALL remake the package from the records as they stand, re-deriving nothing of an earlier phase.
@@ -2393,7 +2906,6 @@ Merge SHALL remake the package from the records as they stand, re-deriving nothi
 :criticality: high
 :anti: yes
 :verify: required
-:aliases: seal-success-then-sealed-1, seal-partial-writes-no-marker-1, merge-interrupted-not-sealed-resumes-1, merge-seal-only-on-full-success-1
 :uses: DEF-sealed_workspace, DEF-merge
 
 Merge SHALL seal the workspace only when it succeeds whole — every photo by destination placed in the library or found
@@ -2406,7 +2918,6 @@ already there, none left — a partial, failed or interrupted merge leaving it u
 :criticality: med
 :anti: yes
 :verify: required
-:aliases: seal-marker-is-authority-1, seal-marker-separate-file-1, merge-seal-marker-is-authority-not-emptiness-1
 :uses: DEF-sealed_workspace, DEF-managed_folders
 
 Whether a workspace is finished SHALL be read from its seal alone, never from the state of its folders.
@@ -2418,7 +2929,6 @@ Whether a workspace is finished SHALL be read from its seal alone, never from th
 :criticality: high
 :anti: yes
 :verify: required
-:aliases: seal-scripts-hardstop-1, merge-sealed-hardstop-touch-nothing-1, merge-sealed-all-scripts-refuse-prune-excepted-1
 :uses: DEF-sealed_workspace, DEF-decision
 :refines: RUL-merge_is_terminal
 
@@ -2432,10 +2942,30 @@ workspace lock. Its records MAY still be read.
 :criticality: high
 :anti: yes
 :verify: required
-:aliases: edit-sealed-refuses-1
 :refines: RUL-sealed_refuses
 
-The decision editor SHALL neither open a sealed workspace nor save into it.
+The decision editor SHALL NOT open a sealed workspace.
+:::
+
+:::{rul} The editor saves only over what it showed
+:id: RUL-save_only_what_was_shown
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+
+The decision editor SHALL NOT save while a decision record is not the one it loaded, or while an edit names a decision the record does not hold.
+:::
+
+:::{rul} The decision editor saves nothing into a sealed workspace
+:id: RUL-editor_refuses_sealed_save
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+:refines: RUL-editor_refuses_sealed
+
+The decision editor SHALL NOT save into a sealed workspace.
 :::
 
 :::{rul} A sealed workspace's configuration records no library
@@ -2454,7 +2984,6 @@ Merge's library setup SHALL NOT record a library in a sealed workspace's configu
 :status: ruled
 :criticality: high
 :verify: required
-:aliases: seal-prune-exception-1, prep-prune-quarantine-exempt-seal-1
 :uses: DEF-sealed_workspace
 :refines: RUL-sealed_refuses
 
@@ -2481,7 +3010,6 @@ there and must go to a fresh workspace.
 :criticality: high
 :anti: yes
 :verify: required
-:aliases: seal-new-dump-warn-1, merge-sealed-newdump-warn-1
 :refines: RUL-sealed_new_dump_warned
 
 A command refusing a sealed workspace SHALL leave a new dump it finds there exactly where it is.
@@ -2503,7 +3031,6 @@ An **authored value** is one the user writes by hand: a setting of the configura
 :criticality: high
 :anti: yes
 :verify: required
-:aliases: validate-everything-authored-1
 :uses: DEF-authored_value, DEF-dependency_cascade
 
 Every authored value SHALL be checked to be valid before it is used — besides, not instead of, the dependency cascade's
@@ -2516,7 +3043,6 @@ check that it has not changed.
 :criticality: med
 :anti: yes
 :verify: required
-:aliases: validate-paths-1
 :uses: DEF-configuration, DEF-managed_folders, DEF-tracks
 :refines: INV-authored_values_checked
 
@@ -2529,7 +3055,6 @@ it must: the tracks' place outside the managed folders, the library's an existin
 :status: ruled
 :criticality: med
 :verify: required
-:aliases: validate-zfs-prefix-1
 :uses: RUL-snapshot_optional
 :refines: INV-authored_values_checked
 
@@ -2566,24 +3091,32 @@ separator or space.
 :status: ruled
 :criticality: med
 :verify: required
-:aliases: validate-timezone-1
 :refines: INV-authored_values_checked
 
 A timezone the user writes SHALL be a real zone that resolves, never an arbitrary string.
 :::
 
-:::{rul} A position, an offset and a true time are in range
+:::{rul} A position is well formed
 :id: RUL-checked_positions_and_times
 :status: ruled
 :criticality: high
 :verify: required
-:aliases: validate-coords-offsets-1
 :uses: DEF-decision
 :refines: INV-authored_values_checked
 
-A position, a clock offset or a true time the user writes SHALL be in range: a position two well-formed numbers —
-latitude −90 to 90, longitude −180 to 180, both or neither; a clock offset a number within a day either way; a true time
-a date and time that parses.
+A position the user writes SHALL be well formed: two numbers — latitude −90 to 90, longitude −180 to 180, both or
+neither.
+:::
+
+:::{rul} A clock offset is a whole number of seconds
+:id: RUL-checked_clock_offsets
+:status: ruled
+:criticality: high
+:verify: required
+:refines: INV-authored_values_checked
+:uses: DEF-decision
+
+A clock offset the user writes SHALL be well formed: a whole number of seconds, of any size.
 :::
 
 :::{rul} The filename format makes a safe name
@@ -2591,7 +3124,6 @@ a date and time that parses.
 :status: ruled
 :criticality: med
 :verify: required
-:aliases: validate-filename-format-1
 :uses: RUL-one_filename_format
 :refines: INV-authored_values_checked
 
@@ -2604,7 +3136,6 @@ and no character a filename may not hold.
 :status: ruled
 :criticality: med
 :verify: required
-:aliases: validate-numeric-thresholds-1
 :uses: DEF-configuration
 :refines: INV-authored_values_checked
 
@@ -2612,18 +3143,51 @@ A number the configuration sets — a threshold, a distance, a duration — SHAL
 a sane range: a duration or a distance is never negative.
 :::
 
-:::{rul} A choice is one of its choices, and a decision has its shape
+:::{rul} The drift check's window is more than nothing
+:id: RUL-drift_window_positive
+:status: ruled
+:criticality: med
+:verify: required
+:uses: DEF-configuration
+:refines: RUL-checked_numbers
+
+The span of track the drift check looks at SHALL be set greater than zero, a setting of zero being one that switches
+the check off without saying so.
+:::
+
+:::{rul} A yes-or-no is a yes or a no
 :id: RUL-checked_shapes
 :status: ruled
 :criticality: high
 :anti: yes
 :verify: required
-:aliases: validate-enum-structure-1
 :uses: DEF-decision, RUL-user_writes_decisions
 :refines: INV-authored_values_checked
 
-A yes-or-no SHALL be a yes or a no, a value from a fixed set — a device group's class among them — one of that set, and
-a decision's structure whole: a decision whose structure is broken is an error, never ignored.
+A yes-or-no SHALL be a yes or a no.
+:::
+
+:::{rul} A value from a fixed set is one of that set
+:id: RUL-checked_fixed_set
+:status: ruled
+:criticality: high
+:verify: required
+:refines: INV-authored_values_checked
+:uses: DEF-decision, RUL-user_writes_decisions
+
+A value from a fixed set — a device group's class among them — SHALL be one of that set.
+:::
+
+:::{rul} A decision has its shape
+:id: RUL-checked_decision_structure
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+:refines: INV-authored_values_checked
+:uses: DEF-decision, RUL-user_writes_decisions
+
+A decision's structure SHALL be whole: a decision whose structure is broken is an error, never ignored.
 :::
 
 :::{rul} An invalid value stops the phase before it changes anything
@@ -2632,7 +3196,6 @@ a decision's structure whole: a decision whose structure is broken is an error, 
 :criticality: high
 :anti: yes
 :verify: required
-:aliases: validate-fail-closed-1, merge-config-validated-1
 :uses: INV-no_stale_use
 :refines: INV-authored_values_checked
 
@@ -2645,7 +3208,6 @@ A value found invalid SHALL stop the phase as a stale dependency does, nothing m
 :criticality: med
 :anti: yes
 :verify: required
-:aliases: validate-locate-no-repair-1
 :uses: DEF-authored_value, RUL-cause_locatable
 :refines: INV-authored_values_checked
 
@@ -2681,12 +3243,21 @@ A value SHALL be checked every time a run uses it, never taken as valid because 
 :criticality: med
 :anti: yes
 :verify: required
-:aliases: validate-preserve-invalid-1
 :uses: DEF-decision, RUL-decision_kept
 :refines: RUL-invalid_value_stops
 
-A decision found invalid SHALL be kept exactly as the user wrote it, and reported as needing correction — never erased
-or rewritten.
+A decision found invalid SHALL be kept exactly as the user wrote it — never erased or rewritten.
+:::
+
+:::{rul} An invalid decision is reported as needing correction
+:id: RUL-invalid_decision_reported
+:status: ruled
+:criticality: med
+:verify: required
+:refines: RUL-invalid_decision_kept
+:uses: DEF-decision, RUL-decision_kept
+
+A decision found invalid SHALL be reported as needing correction.
 :::
 
 ## 15. Nothing overwritten, nothing left half-done
@@ -2697,12 +3268,22 @@ or rewritten.
 :criticality: high
 :anti: yes
 :verify: required
-:aliases: exec-noclobber-recheck-1, exec-noclobber-all-content-ops-1, prep-no-clobber-1, prep-execute-time-no-clobber-recheck-1, merge-execute-no-clobber-at-execute-time-1
 :uses: RUL-suffix_no_clobber, DEF-library
 
 Immediately before each change that gives a file a name — prep's moves, renames and setting duplicates aside, geotag's
-renames, merge's placing in the library — execution SHALL check that the name is free, ignoring case where the
-filesystem does, never writing onto a taken name on the strength of the plan: a name found taken blocks that operation.
+renames, merge's placing in the library — execution SHALL check that the name is free, never writing onto a taken name
+on the strength of the plan: a name found taken blocks that operation.
+:::
+
+:::{rul} A name is checked free ignoring case
+:id: RUL-target_free_ignores_case
+:status: ruled
+:criticality: high
+:verify: required
+:refines: RUL-target_free_at_execute
+:uses: RUL-suffix_no_clobber, DEF-library
+
+Execution's check that a name is free SHALL ignore case where the filesystem does.
 :::
 
 :::{rul} An interrupted move leaves the before or the after
@@ -2710,8 +3291,7 @@ filesystem does, never writing onto a taken name on the strength of the plan: a 
 :status: ruled
 :criticality: high
 :anti: yes
-:verify: incidental
-:aliases: atomic-operations-1
+:verify: required
 
 A move, a rename or a placement SHALL be one indivisible operation where the filesystem allows, so that an interruption
 leaves the state before it or the state after, never part of either.
@@ -2722,7 +3302,7 @@ leaves the state before it or the state after, never part of either.
 :status: ruled
 :criticality: high
 :anti: yes
-:verify: incidental
+:verify: required
 :refines: RUL-operations_atomic
 :excepts: RUL-failed_operation_clean
 
@@ -2751,8 +3331,8 @@ among them — on the same one.
 :verify: required
 :refines: RUL-workspace_one_filesystem
 
-Every run of every phase on a workspace SHALL check, before it reads or changes anything, that the workspace lies on
-one filesystem — never taking it as whole because an earlier run found it so.
+Every run of every phase on a workspace SHALL check, before it reads or changes anything but the lock and the seal,
+that the workspace lies on one filesystem — never taking it as whole because an earlier run found it so.
 :::
 
 :::{rul} A workspace spanning filesystems stops the run
@@ -2794,13 +3374,11 @@ A move by prep or geotag that would cross filesystems SHALL fail, never be made 
 :status: ruled
 :criticality: high
 :anti: yes
-:verify: none
-:omit_reason: crash-injection testing is out of scope; the guarantee rests on how the file is written
-:aliases: atomic-inplace-metadata-1
+:verify: required
 :refines: RUL-operations_atomic
 
-A write that rewrites a file in place SHALL leave, if interrupted, the intact original or the fully written file —
-never a damaged one between them.
+A write that rewrites a file in place SHALL leave, if interrupted — the run stopped or killed, or the power lost — the
+intact original or the fully written file, never a damaged one between them.
 :::
 
 :::{rul} Across filesystems, a placement is still all or nothing
@@ -2809,7 +3387,6 @@ never a damaged one between them.
 :criticality: high
 :anti: yes
 :verify: required
-:aliases: atomic-crossfs-equivalent-1
 :refines: RUL-operations_atomic
 
 Where merge's placement into the library crosses filesystems and cannot be one operation, it SHALL be made equivalent:
@@ -2822,19 +3399,29 @@ so that an interruption leaves no file under that name, or the complete one, nev
 :status: ruled
 :criticality: low
 :verify: required
-:aliases: atomic-crossfs-temp-sweep-1
 :uses: DEF-merge, DEF-library, RUL-temp_name_own
 :refines: RUL-cross_fs_all_or_nothing
 
 Merge SHALL clear, as its execution starts, the temporary copies an interrupted merge left in the folders it places
-into, and record how many.
+into.
+:::
+
+:::{rul} The temporary copies cleared are counted
+:id: RUL-crash_temps_counted
+:status: ruled
+:criticality: low
+:verify: required
+:refines: RUL-crash_temps_cleared
+:uses: DEF-merge, DEF-library, RUL-temp_name_own
+
+Merge SHALL record how many temporary copies it cleared.
 :::
 
 :::{rul} A temporary copy bears a name no photo bears
 :id: RUL-temp_name_own
 :status: ruled
 :criticality: low
-:verify: incidental
+:verify: required
 :refines: RUL-cross_fs_all_or_nothing
 
 A temporary copy SHALL bear a name of its own, which no photo bears.
@@ -2846,7 +3433,6 @@ A temporary copy SHALL bear a name of its own, which no photo bears.
 :criticality: high
 :anti: yes
 :verify: required
-:aliases: exec-failed-op-clean-1
 
 An operation that cannot complete SHALL leave its file as it was before it.
 :::
@@ -2880,10 +3466,19 @@ An operation that cannot complete SHALL never be recorded as done, so that a re-
 :criticality: high
 :anti: yes
 :verify: required
-:aliases: prep-plan-nonmutating-1, merge-planning-nonmutating-1
 
-Planning SHALL change no media file, and write nothing but its plan, its decision records, what it keeps so that later
-runs need not compute it again, and — on a workspace's first run — the configuration it seeds.
+Planning SHALL change no media file.
+:::
+
+:::{rul} Planning writes only its own records
+:id: RUL-planning_writes_only_its_records
+:status: ruled
+:criticality: high
+:verify: required
+:refines: RUL-planning_changes_no_media
+
+Planning SHALL write nothing but its plan, its decision records, what it keeps so that later runs need not compute it
+again, and — on a workspace's first run — the configuration it seeds.
 :::
 
 :::{rul} Execution carries out the plan, and only the plan
@@ -2892,7 +3487,6 @@ runs need not compute it again, and — on a workspace's first run — the confi
 :criticality: high
 :anti: yes
 :verify: required
-:aliases: prep-execute-no-rederive-1, merge-execute-no-rederive-1, geotag-execute-no-recalc-1
 :upholds: INV-every_change_from_the_record
 
 Execution SHALL carry out only the operations its plan records, re-deriving no decision.
@@ -2904,7 +3498,6 @@ Execution SHALL carry out only the operations its plan records, re-deriving no d
 :criticality: high
 :anti: yes
 :verify: required
-:aliases: exec-concurrency-no-semantic-change-1
 :refines: RUL-execution_only_the_plan
 
 An execution SHALL change the same files in the same way, and record the same, whatever number of jobs it runs with —
@@ -2916,7 +3509,6 @@ the job count and the run's times in its run metadata the only difference.
 :status: ruled
 :criticality: high
 :verify: required
-:aliases: prep-execute-revalidates-rejects-stale-1
 :refines: INV-no_stale_use
 
 Each phase SHALL carry out or summarise a saved plan only with the code that made it, refusing before any change a plan
@@ -2928,7 +3520,6 @@ made by other code or recording none.
 :status: ruled
 :criticality: med
 :verify: required
-:aliases: prep-journal-all-mutations-1, prep-progress-not-only-record-1
 
 Every change an execution makes to a media file SHALL be recorded in that run's journal.
 :::

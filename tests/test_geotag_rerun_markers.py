@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Geotag's own GPSProcessingMethod markers on a re-run (geotag §30, shared contract §10.1).
+"""Geotag's own GPSProcessingMethod markers on a re-run (BLD-rerun_recognition).
 
 A geotag marker means the file's time is already corrected; a position marker also means its
 position is geotag's, ignored until placed again. A device's own GPSProcessingMethod value is native.
@@ -20,6 +20,7 @@ Execution is simulated: each plan's writes are folded into the handoff the way a
 them back, so the re-run sees what the files hold. From conftest.py.
 """
 import json
+from _zone import answer_root_zone, with_root_zone
 import os
 import sys
 
@@ -74,13 +75,14 @@ def _ws(tmp_path, recs):
         cfg["camera_time_and_timezone_policy"], device_groups={"fixed_clock_cameras": [CAM], "phones": [PHONE]},
         default_folder_timezone="Europe/Brussels", multi_anchor_auto_apply=True)
     (ctl / "photos-00-config.json").write_text(json.dumps(cfg))
+    answer_root_zone(ctl)                        # the zone answered once at the root (RUL-timezone_auto_resolves)
     _write_handoff(ws, [r(ws) for r in recs])
     return ws
 
 
 def _write_handoff(ws, files):
     ho = {"filename_timestamp_format": utils.CONFIG["filename_timestamp_format"], "run_metadata": {"plan_id": "prep-1", "execution_id": "exec-1"}, "files": files,
-          "cache_fingerprint": "pcf"}
+          "cache_fingerprint": "pcf", "depends_on": {"cache": {"image_engine_version": utils.get_imagemagick_version(), "fingerprint_algorithm_version": utils.FINGERPRINT_ALGORITHM_VERSION}}}
     ho["content_fingerprint"] = utils.handoff_content_fingerprint(ho)
     (ws / ".photos-ingest" / "photos-11-handoff.json").write_text(json.dumps(ho))
 
@@ -102,11 +104,12 @@ def _set_offset(ws, offset, bucket=CAM):
 
 
 def _confirm_drift(ws, offset, bucket=CAM):
-    """Confirm the GPS-drift check a manual offset with track coverage triggers (§22a)."""
+    """Confirm the GPS-drift check a manual offset with track coverage triggers (BLD-drift_validation)."""
     p = ws / ".photos-ingest" / "photos-22-gps-drift-validation.json"
     a = json.loads(p.read_text())
-    a["destinations"][T]["drift_decisions"][bucket]["user_decision"].update(
-        confirmed=True, corrected_offset_seconds=offset)
+    cell = a["destinations"][T]["drift_decisions"][bucket]
+    cell["user_decision"].update(confirmed=True, corrected_offset_seconds=offset,
+                                 confirmed_offset_seconds=cell["proposal"]["current_offset_seconds"])
     p.write_text(json.dumps(a))
 
 
@@ -211,12 +214,43 @@ def _first_round(tmp_path, monkeypatch):
     _plan(monkeypatch, ws)
     a = _ops(ws)[f"{T}/a.arw"]
     assert a["writes"]["DateTimeOriginal"] == "2024:07:03 14:30:00"      # 12:30Z, Brussels summer
-    assert a["writes"]["GPSLatitude"] == pytest.approx(50.003) and a["writes"]["GPSProcessingMethod"] == "interpolated"
+    assert a["writes"]["GPSLatitude"] == pytest.approx(50.003) and a["writes"]["GPSProcessingMethod"] == "matched"  # on a point
     _executed_and_reprepped(ws)
     return ws
 
 
-@pytest.mark.spec("loop-geotag-rerun-safe-1", "geotag-marker-time-corrected-1", "geotag-held-write-noop-1", "RUL-geotag_rerun_keeps_settled", "RUL-no_op_run", test="TST-geotag_rerun_markers-manual_offset_is_not_applied_twice")
+@pytest.mark.spec("RUL-track_never_written_in_photo", test="TST-geotag_rerun_markers-the_track_is_not_written_in_the_photo")
+def test_the_track_is_not_written_in_the_photo(tmp_path, monkeypatch):
+    """A photo the track placed is recorded with the track; what execute writes into the photo — its time, its
+    position and how it was found — names no track."""
+    ws = _ws(tmp_path, [lambda ws: _rec(ws, f"{T}/a.arw", "2024:07:03 14:20:00")])
+    os.rename(tmp_path / "gpx" / "t.gpx", tmp_path / "gpx" / "brussels-walk.gpx")
+    _plan(monkeypatch, ws)
+    _set_offset(ws, SLOW)
+    _plan(monkeypatch, ws)
+    _confirm_drift(ws, SLOW)
+    _plan(monkeypatch, ws)
+    plan = json.loads((ws / ".photos-ingest" / "photos-24-executable-plan.json").read_text())
+    gps = [o for d in plan["destinations"].values() for o in d["operations"] if o["type"] == "metadata_gps_write"]
+    assert [o["provenance"]["gpx_file"] for o in gps] == ["brussels-walk.gpx"]     # the record has the track
+
+    written = []
+    fp = json.loads(json.loads((ws / ".photos-ingest" / "photos-11-handoff.json").read_text())
+                    ["files"][0]["content_hash"])["value"]
+    monkeypatch.setattr(cal.GeotagWorkflow, "_exiftool_write", lambda self, p, tags: written.append(tags) or True)
+    monkeypatch.setattr(cal.ContentHasher, "fingerprint_image", staticmethod(lambda p: {"status": "valid", "value": fp}))
+    monkeypatch.chdir(str(ws))
+    monkeypatch.setattr(sys, "argv", ["photos-2-geotag", "execute"])
+    try:
+        cal.main()
+    except SystemExit as e:
+        assert e.code in (0, None), e.code
+    assert len(written) == 1 and written[0]["GPSProcessingMethod"] == "matched"    # placed from the track
+    assert not any("brussels-walk" in f"{k}={v}" for k, v in written[0].items()), written[0]
+
+
+@pytest.mark.spec("RUL-geotag_rerun_keeps_settled", "BLD-marked_file_rerun", "BLD-executable_plan", "RUL-no_op_run",
+                  test="TST-geotag_rerun_markers-manual_offset_is_not_applied_twice")
 def test_manual_offset_is_not_applied_twice(tmp_path, monkeypatch):
     ws = _first_round(tmp_path, monkeypatch)
     _plan(monkeypatch, ws)
@@ -226,7 +260,8 @@ def test_manual_offset_is_not_applied_twice(tmp_path, monkeypatch):
     assert cell["effective_time_anchor"]["offset_seconds"] == SLOW and not cell["requires_user_input"]
 
 
-@pytest.mark.spec("geotag-marker-time-corrected-1", "geotag-offset-kept-1", "RUL-geotag_rerun_keeps_settled", test="TST-geotag_rerun_markers-new_photo_joins_corrected_ones")
+@pytest.mark.spec("BLD-marked_file_rerun", "RUL-day_offset_kept_for_later_photos", "RUL-geotag_rerun_keeps_settled",
+                  test="TST-geotag_rerun_markers-new_photo_joins_corrected_ones")
 def test_new_photo_joins_corrected_ones(tmp_path, monkeypatch):
     """Same camera, same day: the earlier answer — offset and drift confirmation — is kept through a
     run where every photo was already corrected, and applied to the new photo alone."""
@@ -240,7 +275,8 @@ def test_new_photo_joins_corrected_ones(tmp_path, monkeypatch):
     assert ops[f"{T}/c.arw"]["writes"]["DateTimeOriginal"] == "2024:07:03 15:00:00"
 
 
-@pytest.mark.spec("geotag-position-marker-not-native-1", "RUL-geotag_rerun_keeps_settled", test="TST-geotag_rerun_markers-geotag_position_is_placed_again")
+@pytest.mark.spec("BLD-marked_file_rerun", "RUL-rerun_rederives_written_position",
+                  test="TST-geotag_rerun_markers-geotag_position_is_placed_again")
 def test_geotag_position_is_placed_again(tmp_path, monkeypatch):
     """A position geotag wrote is not the file's own: the re-run places the file from the track again
     and overwrites a fix that no longer agrees, and it is never a clock anchor."""
@@ -258,7 +294,8 @@ def test_geotag_position_is_placed_again(tmp_path, monkeypatch):
     assert e["writes"]["GPSLatitude"] == pytest.approx(50.003)
 
 
-@pytest.mark.spec("geotag-time-only-marker-1", "RUL-geotag_rerun_keeps_settled", test="TST-geotag_rerun_markers-own_gps_camera_is_marked_time_fixed")
+@pytest.mark.spec("BLD-rerun_recognition", "RUL-geotag_rerun_keeps_settled",
+                  test="TST-geotag_rerun_markers-own_gps_camera_is_marked_time_fixed")
 def test_own_gps_camera_is_marked_time_fixed(tmp_path, monkeypatch):
     """A camera with its own GPS has its time corrected from that GPS, keeps the position, and is
     marked time-fixed; the re-run then neither corrects it again nor uses it as an anchor."""
@@ -273,7 +310,7 @@ def test_own_gps_camera_is_marked_time_fixed(tmp_path, monkeypatch):
     assert _ops(ws) == {}
 
 
-@pytest.mark.spec("geotag-offset-kept-1", test="TST-geotag_rerun_markers-gps_derived_offset_is_kept_for_later_photos")
+@pytest.mark.spec("RUL-day_offset_kept_for_later_photos", "BLD-day_offset_kept", test="TST-geotag_rerun_markers-gps_derived_offset_is_kept_for_later_photos")
 def test_gps_derived_offset_is_kept_for_later_photos(tmp_path, monkeypatch):
     """An offset found from the camera's own GPS stays the camera's offset for the day once those
     photos are corrected, so a later photo without GPS needs no answer."""
@@ -289,7 +326,7 @@ def test_gps_derived_offset_is_kept_for_later_photos(tmp_path, monkeypatch):
     assert ops[f"{T}/c.arw"]["writes"]["DateTimeOriginal"] == "2024:07:03 15:00:00"
 
 
-@pytest.mark.spec("geotag-device-marker-native-1", test="TST-geotag_rerun_markers-a_devices_own_marker_is_native")
+@pytest.mark.spec("BLD-rerun_recognition", test="TST-geotag_rerun_markers-a_devices_own_marker_is_native")
 def test_a_devices_own_marker_is_native(tmp_path, monkeypatch):
     """A phone's own GPSProcessingMethod is not geotag's: its position is kept and its time is not
     taken as corrected. Geotag's time mark is appended to the phone's value, never replacing it, and
@@ -314,7 +351,7 @@ def test_a_devices_own_marker_is_native(tmp_path, monkeypatch):
     assert _ops(ws) == {}
 
 
-@pytest.mark.spec("geotag-position-marker-not-native-1", test="TST-geotag_rerun_markers-unlocated_geotag_position_is_cleared")
+@pytest.mark.spec("BLD-marked_file_rerun", test="TST-geotag_rerun_markers-unlocated_geotag_position_is_cleared")
 def test_unlocated_geotag_position_is_cleared(tmp_path, monkeypatch):
     """A file geotag once placed, now off the track and accepted as unlocated, loses geotag's old
     fix: kept, it would read as the file's own next time."""
@@ -341,7 +378,7 @@ def test_unlocated_geotag_position_is_cleared(tmp_path, monkeypatch):
                                   "GPSProcessingMethod": "interpolated"}   # what it clears, for the log
 
 
-@pytest.mark.spec("RUL-decision_revisable", "geotag-originals-pinned-1", test="TST-geotag_rerun_markers-changed_offset_after_execute_reaches_the_photo")
+@pytest.mark.spec("RUL-decision_revisable", "BLD-original_values_pinned", test="TST-geotag_rerun_markers-changed_offset_after_execute_reaches_the_photo")
 def test_changed_offset_after_execute_reaches_the_photo(tmp_path, monkeypatch):
     """A wrong offset, once executed, is fixed in the record: the re-run works from the photo's own
     camera time and corrects it once, under the new offset."""
@@ -359,10 +396,45 @@ def test_withdrawn_offset_after_execute_asks_again(tmp_path, monkeypatch):
     ws = _executed_round(tmp_path, monkeypatch)
     _set_offset(ws, "")
     _plan(monkeypatch, ws)
-    assert _cell(ws)["requires_user_input"] and _cell(ws)["effective_time_anchor"] == ""
+    # With tracks by the photo the timezone's guess is asked about where it can be checked: at the drift
+    # check, whose earlier confirmation was of the withdrawn offset and confirms nothing now.
+    assert _cell(ws)["effective_time_anchor"]["source"] == "timezone_unconfirmed"
+    drift = json.loads((ws / ".photos-ingest" / "photos-22-gps-drift-validation.json").read_text())
+    asked = drift["destinations"][T]["drift_decisions"][CAM]
+    assert drift["requires_user_input"] and asked["requires_user_input"] and asked["stale_user_decision"]
+    assert asked["effective_drift_offset"] == ""
 
 
-@pytest.mark.spec("geotag-originals-pinned-1", test="TST-geotag_rerun_markers-originals_are_pinned_once_and_complete")
+@pytest.mark.spec("RUL-withdrawal_recomputes_time_and_name",
+                  test="TST-geotag_rerun_markers-withdrawn_offset_after_execute_recomputes_time_and_name_in_place")
+def test_withdrawn_offset_after_execute_recomputes_time_and_name_in_place(tmp_path, monkeypatch):
+    """A manual offset, five minutes off what the camera's own GPS photos give, is executed: the photo is
+    corrected and named under it. Withdrawn, the offset gives way to the one the tool derives, and the photo's
+    time and name are computed again from its own camera time — for the file where it now stands, under the
+    name the withdrawn decision gave it, and within its destination."""
+    ws = _ws(tmp_path, [lambda ws: _rec(ws, f"{T}/a.arw", "2024:07:03 13:50:00", gps=(50.0, 4.0)),
+                        lambda ws: _rec(ws, f"{T}/b.arw", "2024:07:03 14:40:00", gps=(50.005, 4.0)),
+                        lambda ws: _rec(ws, f"{T}/c.arw", "2024:07:03 14:20:00")])
+    _plan(monkeypatch, ws)
+    _set_offset(ws, SLOW - 300)
+    _plan(monkeypatch, ws)
+    _confirm_drift(ws, SLOW - 300)
+    _plan(monkeypatch, ws)
+    assert _ops(ws)[f"{T}/c.arw"]["to"] == "2024-07-03--14-25-00.arw"    # 14:20 camera + 1:55 = 12:25Z
+    _execute(monkeypatch, ws)
+    assert (ws / T / "2024-07-03--14-25-00.arw").exists() and not (ws / T / "c.arw").exists()
+    _set_offset(ws, "")                                      # the decision withdrawn
+    _plan(monkeypatch, ws)
+    assert _cell(ws)["effective_time_anchor"] == {"offset_seconds": SLOW, "source": "gpx_anchor_auto"}
+    ops = _ops(ws)
+    e = ops[f"{T}/2024-07-03--14-25-00.arw"]                 # the file where it stands
+    assert e["writes"]["DateTimeOriginal"] == "2024:07:03 14:30:00"      # 14:20 camera + 1:50 = 12:30Z
+    assert e["to"] == "2024-07-03--14-30-00.arw"             # a name, not a path: within its destination
+    assert {"metadata_time_write", "rename_no_clobber"} <= set(e["types"])
+    assert all(os.path.exists(ws / rel) for rel in ops)      # every operation is on a file as it stands
+
+
+@pytest.mark.spec("BLD-original_values_pinned", test="TST-geotag_rerun_markers-originals_are_pinned_once_and_complete")
 def test_originals_are_pinned_once_and_complete(tmp_path, monkeypatch):
     ws = _executed_round(tmp_path, monkeypatch)
     pinned = _originals(ws)
@@ -377,7 +449,7 @@ def test_originals_are_pinned_once_and_complete(tmp_path, monkeypatch):
     assert _originals(ws) == pinned                          # never overwritten
 
 
-@pytest.mark.spec("geotag-originals-pinned-1", test="TST-geotag_rerun_markers-a_marked_photo_is_not_pinned")
+@pytest.mark.spec("BLD-original_values_pinned", test="TST-geotag_rerun_markers-a_marked_photo_is_not_pinned")
 def test_a_marked_photo_is_not_pinned(tmp_path, monkeypatch):
     """A photo geotag marked before (elsewhere) holds no original values: nothing is pinned, and its time
     is taken as fixed."""
@@ -389,7 +461,7 @@ def test_a_marked_photo_is_not_pinned(tmp_path, monkeypatch):
     assert _originals(ws) == {}
 
 
-@pytest.mark.spec("geotag-originals-pinned-1", test="TST-geotag_rerun_markers-own_gps_camera_anchors_again_after_execute")
+@pytest.mark.spec("BLD-original_values_pinned", test="TST-geotag_rerun_markers-own_gps_camera_anchors_again_after_execute")
 def test_own_gps_camera_anchors_again_after_execute(tmp_path, monkeypatch):
     """With their own values pinned, a GPS camera's photos give the offset again on a re-run, as on the
     first: nothing is kept from earlier, and nothing is written."""
@@ -440,7 +512,9 @@ def _finalize(monkeypatch, ws, vouch=True):
     return json.loads((ws / ".photos-ingest" / "photos-26-complete-log.json").read_text())["photos"]
 
 
-@pytest.mark.spec("RUL-log_entry_grows", "RUL-partial_history_shown", "RUL-history_retained", "BLD-log_format", "log-every-geotag-pass-1", "log-decision-version-kept-1", test="TST-geotag_rerun_markers-the_log_keeps_every_geotag_pass")
+@pytest.mark.spec("RUL-log_entry_grows", "RUL-partial_history_shown", "RUL-history_retained", "BLD-log_format",
+                  "BLD-history_kept",
+                  test="TST-geotag_rerun_markers-the_log_keeps_every_geotag_pass")
 def test_the_log_keeps_every_geotag_pass(tmp_path, monkeypatch):
     """Finalize logs what every executed pass did, in order and matched by fingerprint — not only the
     latest plan's operations: a photo corrected, then corrected again, then left alone shows all three."""
@@ -471,7 +545,7 @@ def test_the_log_keeps_every_geotag_pass(tmp_path, monkeypatch):
     assert sum(s["action"] == "gps_written" for s in steps) == 2
 
 
-@pytest.mark.spec("RUL-partial_history_shown", "log-fail-if-insufficient-1", "log-partial-geotag-history-1", test="TST-geotag_rerun_markers-a_history_too_thin_is_marked_partial")
+@pytest.mark.spec("RUL-partial_history_shown", test="TST-geotag_rerun_markers-a_history_too_thin_is_marked_partial")
 def test_a_history_too_thin_is_marked_partial(tmp_path, monkeypatch):
     """Finalize never shows as whole what it cannot rebuild: a photo carrying geotag's mark that no pass
     here first corrected is marked partial, and a pass whose plan is gone is named in a warning."""
@@ -503,7 +577,8 @@ def test_a_history_too_thin_is_marked_partial(tmp_path, monkeypatch):
     assert "partial" not in log["photos"]["fp-a.arw"]                    # its own values were pinned here
 
 
-@pytest.mark.spec("BLD-phase_logs", "RUL-partial_history_shown", "log-carried-unchanged-1", test="TST-geotag_rerun_markers-finalize_carries_prep_s_record_unchanged")
+@pytest.mark.spec("BLD-phase_logs", "RUL-partial_history_shown", "RUL-log_entry_append_only",
+                  test="TST-geotag_rerun_markers-finalize_carries_prep_s_record_unchanged")
 def test_finalize_carries_prep_s_record_unchanged(tmp_path, monkeypatch):
     """Finalize's log carries prep's every field and step unchanged, a note of prep's among them, and adds
     only its own: geotag's note goes in a step of its own."""
@@ -583,3 +658,66 @@ def test_geotag_writes_only_its_own_part_of_the_database(tmp_path, monkeypatch):
     _finalize(monkeypatch, ws)
     assert rows() == before
     conn.close()
+
+
+def _retake_fingerprint(ws, old, new, *, also=None):
+    """A new ImageMagick gave the photo fingerprinted `old` the value `new`: the handoff holds `new`, and prep's log —
+    vouched for by the handoff — records the step (`also`: one more step, to make the mapping not one to one)."""
+    ctl = ws / ".photos-ingest"
+    ho = json.loads((ctl / "photos-11-handoff.json").read_text())
+    for f in ho["files"]:
+        if json.loads(f["content_hash"])["value"] == old:
+            f["content_hash"] = json.dumps({"value": new, "status": "valid"})
+    steps = [{"phase": "prep", "action": "fingerprint_retaken", "run": "r2", "from": old, "to": new}]
+    if also:
+        steps.append({"phase": "prep", "action": "fingerprint_retaken", "run": "r2", "from": also, "to": new})
+    (ctl / "photos-15-prep-log.json").write_text(json.dumps({"photos": {new: {"journey": steps}}}))
+    ho.setdefault("depends_on", {})["prep_log"] = {"sha256": utils.sha256_file(str(ctl / "photos-15-prep-log.json"))}
+    _write_handoff(ws, ho["files"])
+    ho2 = json.loads((ctl / "photos-11-handoff.json").read_text())
+    ho2["depends_on"] = ho["depends_on"]
+    (ctl / "photos-11-handoff.json").write_text(json.dumps(ho2))
+
+
+@pytest.mark.spec("RUL-own_values_follow_new_fingerprint", "BLD-original_values_follow_fingerprint",
+                  test="TST-geotag_rerun_markers-a_photo_whose_fingerprint_changed_keeps_its_own_values")
+def test_a_photo_whose_fingerprint_changed_keeps_its_own_values(tmp_path, monkeypatch):
+    # After an ImageMagick upgrade the photo's fingerprint has a new value: geotag still decides from the values it
+    # pinned under the old one — a changed offset reaches the photo from its own camera time — and execute moves
+    # the pin to the new value.
+    ws = _executed_round(tmp_path, monkeypatch)
+    pinned = _originals(ws)["fp-a.arw"]
+    _retake_fingerprint(ws, "fp-a.arw", "fp-new")
+    _confirm_drift(ws, SLOW - 300)
+    _plan(monkeypatch, ws)
+    e = _ops(ws)[f"{T}/2024-07-03--14-30-00.arw"]
+    assert e["writes"]["DateTimeOriginal"] == "2024:07:03 14:25:00"          # from its own 14:20, once
+    _execute(monkeypatch, ws)
+    assert _originals(ws) == {"fp-new": pinned}                               # the pin followed the value
+
+
+@pytest.mark.spec("RUL-own_values_follow_new_fingerprint", "BLD-original_values_follow_fingerprint",
+                  test="TST-geotag_rerun_markers-a_fingerprint_mapping_not_one_to_one_stops_geotag")
+def test_a_fingerprint_mapping_not_one_to_one_stops_geotag(tmp_path, monkeypatch):
+    ws = _executed_round(tmp_path, monkeypatch)
+    _retake_fingerprint(ws, "fp-a.arw", "fp-new", also="fp-other")
+    blockers, _, _ = cal.GeotagWorkflow(str(ws)).preflight()
+    assert any("more than one value" in b and "re-run prep" in b for b in blockers), blockers
+    earlier, problem = utils.retaken_fingerprints({"photos": {"x": {"journey": [
+        {"action": "fingerprint_retaken", "from": "a", "to": "b"}, {"action": "fingerprint_retaken", "from": "b", "to": "c"}]}}})
+    assert earlier == {"b": "a", "c": "b"} and problem is None                # a chain is one to one
+
+
+@pytest.mark.spec("BLD-original_values_follow_fingerprint",
+                  test="TST-geotag_rerun_markers-a_fingerprint_taken_back_to_an_earlier_value_ends_the_walk")
+def test_a_fingerprint_taken_back_to_an_earlier_value_ends_the_walk(tmp_path, monkeypatch):
+    """The image engine upgraded and then put back: a photo's fingerprint goes A → B → A. For a photo with no
+    pin, the walk back through its earlier values comes round to where it started — and stops there, pinless,
+    rather than going round for ever."""
+    ws = _executed_round(tmp_path, monkeypatch)
+    wf = cal.GeotagWorkflow(str(ws))
+    wf.preflight()
+    monkeypatch.setattr(cal.GeotagCache, "originals_all", lambda self: {})
+    monkeypatch.setattr(cal.GeotagWorkflow, "_retaken", lambda self: {"fp-a.arw": "fp-old", "fp-old": "fp-a.arw"})
+    files = wf.build_file_model()
+    assert files and not any(f.get("original_key") for f in files)

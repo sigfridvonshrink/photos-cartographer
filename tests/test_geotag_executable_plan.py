@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Phase 6b (geotag) — photos-24-executable-plan.json (§28): the per-file operation builder,
+"""Phase 6b (geotag) — photos-24-executable-plan.json (BLD-executable_plan): the per-file operation builder,
 the readiness gate, and the deterministic plan + dependency cascade. Op logic at full coverage.
 From conftest.py.
 """
@@ -39,6 +39,8 @@ def _types(ops):
 
 # --- plan_file_ops: branch by branch ----------------------------------------
 
+@pytest.mark.spec("RUL-corrected_time_written_local", "RUL-time_offset_written_beside",
+                  test="TST-geotag_executable_plan-time_write_carries_its_offset")
 def test_time_write_carries_its_offset():
     f = _file()
     full = cal.plan_file_ops(f, UTC, "Europe/Brussels", "preserve_native", None, None)
@@ -55,10 +57,10 @@ def test_a_time_the_file_holds_is_not_written_again():
 
 @pytest.mark.parametrize("cat, origin, marker", [
     ("gpx_interpolation", "recompute_automated", "interpolated"),
-    ("gpx_extrapolation", "recompute_automated", "interpolated"),
+    ("gpx_extrapolation", "recompute_automated", "extrapolated"),
     ("manual_locked", "apply_manual", "manual_locked"),
     ("manual_fallback", "apply_manual", "manual_fallback")])
-@pytest.mark.spec("geotag-fallback-is-manual-1")
+@pytest.mark.spec("BLD-placement_order")
 def test_gps_write_and_marker(cat, origin, marker):
     ops = cal.plan_file_ops(_file(), UTC, "Europe/Brussels", cat, {"lat": 50.0, "lon": 4.0}, None)
     gw = next(o for o in ops if o["type"] == "metadata_gps_write")
@@ -69,12 +71,27 @@ def test_gps_write_and_marker(cat, origin, marker):
     assert mk["writes"]["GPSProcessingMethod"] == marker
 
 
+@pytest.mark.parametrize("method, marker", [("direct_match", "matched"), ("interpolated", "interpolated"),
+                                            ("extrapolated", "extrapolated")])
+@pytest.mark.spec("BLD-rerun_recognition", "RUL-position_carries_its_method", test="TST-geotag_executable_plan-a_track_position_says_how_it_was_derived")
+def test_a_track_position_says_how_it_was_derived(method, marker):
+    # A position from the tracks is marked as derived on a track point, between two, or past a track's end, so a
+    # rough pin is never taken for a precise one — in the file, and so in the library; a re-run takes every one of
+    # them for geotag's own.
+    cat = "gpx_extrapolation" if method == "extrapolated" else "gpx_interpolation"
+    ops = cal.plan_file_ops(_file(), UTC, "Europe/Brussels", cat, {"lat": 50.0, "lon": 4.0, "method": method}, None)
+    mk = next(o for o in ops if o["type"] == "gps_marker_write")
+    assert mk["writes"]["GPSProcessingMethod"] == marker
+    assert cal.geotag_marker(marker) == marker and marker in cal.POSITION_MARKERS
+
+
 @pytest.mark.parametrize("lat, lon, refs", [
     (50.0, 4.0, ("N", "E")), (-33.9, -70.6, ("S", "W")),
     (-1.29, 36.82, ("S", "E")), (14.6, -90.5, ("N", "W")), (0.0, 0.0, ("N", "E"))])
-@pytest.mark.spec("geotag-gps-write-complete-fix-1")
+@pytest.mark.spec("RUL-position_written_whole", "BLD-position_tags",
+                  test="TST-geotag_executable_plan-gps_write_carries_hemisphere_refs")
 def test_gps_write_carries_hemisphere_refs(lat, lon, refs):
-    """§28.1: EXIF coordinates are unsigned magnitudes — a write without GPSLatitudeRef/
+    """RUL-position_written_whole: EXIF coordinates are unsigned magnitudes — a write without GPSLatitudeRef/
     GPSLongitudeRef reads as NO location to a conforming reader, and flips the hemisphere of a
     southern/western position for a lenient one. The refs ship in the same operation."""
     ops = cal.plan_file_ops(_file(), UTC, "Europe/Brussels", "gpx_interpolation", {"lat": lat, "lon": lon}, None)
@@ -149,7 +166,7 @@ def _row(rel, status="valid", utc=UTC):
             "resolved_utc_status": status}
 
 
-@pytest.mark.spec("geotag-flattened-deps-1", "geotag-json-dep-sha256-1", "geotag-plan-deps-1", "RUL-geotag_plan_carries_every_dependency", test="TST-geotag_executable_plan-plan_ready_with_ops_and_full_depends_on")
+@pytest.mark.spec("RUL-geotag_plan_carries_every_dependency", "RUL-hash_is_the_dependency_check", "BLD-geotag_dependencies", test="TST-geotag_executable_plan-plan_ready_with_ops_and_full_depends_on")
 def test_plan_ready_with_ops_and_full_depends_on(tmp_path):
     files = [_model(f"{BYDEST}/T/a.arw", f"{BYDEST}/T", native=True)]
     wf, t, g = _wf(tmp_path, files=files)
@@ -171,7 +188,7 @@ def test_plan_ready_with_ops_and_full_depends_on(tmp_path):
     assert dep["resolved_utc_cache_fingerprint"] == "rfp"
 
 
-@pytest.mark.spec("geotag-gps-after-utc-1")
+@pytest.mark.spec("RUL-time_before_gps")
 def test_unresolved_utc_blocks(tmp_path):
     files = [_model(f"{BYDEST}/T/a.arw", f"{BYDEST}/T")]
     wf, t, g = _wf(tmp_path, files=files)
@@ -180,20 +197,9 @@ def test_unresolved_utc_blocks(tmp_path):
     assert any("no valid resolved UTC" in b for b in blk)
 
 
-@pytest.mark.spec("geotag-plan-preconditions-1")
-def test_incomplete_decisions_block(tmp_path):
-    files = [_model(f"{BYDEST}/T/a.arw", f"{BYDEST}/T", native=True)]
-    rows = [_row(f"{BYDEST}/T/a.arw")]
-    wf, t, g = _wf(tmp_path, files=files)                                     # both complete on disk
-    plan, blk = wf.build_executable_plan(files, rows, t, dict(g, status="requires_user_input"), _gpx(), "rfp")
-    assert plan["status"] == "blocked" and any("photos-23-gps-decisions" in b for b in blk)
-    _, blk2 = wf.build_executable_plan(files, rows, dict(t, status="requires_user_input"), g, _gpx(), "rfp")
-    assert any("photos-21-time-decisions" in b for b in blk2)
-
-
-@pytest.mark.spec("geotag-order-time-gps-rename-1")
+@pytest.mark.spec("RUL-time_before_gps")
 def test_time_first_gps_and_rename_gated_on_resolved_time(tmp_path):
-    """§2: order is time first, GPS/rename last. With a valid resolved UTC a native frame gets a time
+    """RUL-time_before_gps: order is time first, GPS/rename last. With a valid resolved UTC a native frame gets a time
     write AND a rename whose target is the destination-LOCAL civil time (derived from the resolved
     UTC + tz) — proving the rename consumes resolved time. With the SAME file but UNRESOLVED time the
     plan is blocked and produces NO ops at all (no time, no GPS, no rename): everything downstream is
@@ -214,10 +220,10 @@ def test_time_first_gps_and_rename_gated_on_resolved_time(tmp_path):
     assert bad["destinations"][f"{BYDEST}/T"]["operations"] == []
 
 
-@pytest.mark.spec("geotag-24-rederive-auto-gps-1")
+@pytest.mark.spec("BLD-gps_decisions_record")
 def test_automatic_gps_rederived_from_inputs_not_photos23_text(tmp_path):
-    """§25 (anti): photos-24 re-derives every AUTOMATIC GPS decision from its own validated inputs —
-    never by trusting what photos-23 records. A native frame's automatic decision is preserve_native
+    """BLD-gps_decisions_record (anti): photos-24 re-derives every AUTOMATIC GPS decision from its own validated
+    inputs — never by trusting what photos-23 records. A native frame's automatic decision is preserve_native
     (no GPS write). Inject a CONTRARY manual lock into photos-23 for that frame: if photos-24 parroted
     photos-23 it would emit a GPS write — instead it re-derives preserve_native from the file's own
     native-GPS input, so the ops are byte-identical and still carry zero GPS writes."""

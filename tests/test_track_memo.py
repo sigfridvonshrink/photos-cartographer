@@ -13,7 +13,7 @@
 # limitations under the License.
 
 """Geotag reads every track whole on every run — the fingerprint checks its bytes — but parses only
-a track whose bytes it has not parsed before; the memo it keeps for that is scratch (shared §10)."""
+a track whose bytes it has not parsed before; the memo it keeps for that is scratch (RUL-other_databases_scratch)."""
 import os
 import sqlite3
 
@@ -71,7 +71,8 @@ def test_changed_track_is_parsed_again(tracks, tmp_path):
     assert _seen(again) == _seen(cal.GPXIndex(str(tracks)).build())
 
 
-@pytest.mark.spec("RUL-other_databases_scratch", test="TST-track_memo-memo_is_scratch")
+@pytest.mark.spec("RUL-other_databases_scratch", "RUL-scratch_database_not_archived",
+                  test="TST-track_memo-memo_is_scratch")
 def test_memo_is_scratch(tracks, tmp_path):
     memo = tmp_path / "memo.db"
     first = _build(tracks, memo)
@@ -97,3 +98,30 @@ def test_geotag_keeps_the_memo_in_the_control_directory(tracks, tmp_path, monkey
     assert wf.load_gpx().parsed == 2
     assert os.path.exists(utils.track_memo_db_path(str(ws)))
     assert wf.load_gpx().reused == 2
+
+
+@pytest.mark.spec("RUL-other_databases_scratch", "RUL-track_is_one_trk", "RUL-track_break_never_bridged",
+                  test="TST-track_memo-a_memo_of_an_earlier_parse_is_rebuilt")
+def test_a_memo_of_an_earlier_parse_is_rebuilt(tmp_path):
+    """A memo kept by an earlier version — its entries holding no track or segment of a point — is never read: the
+    file is parsed again, each point its <trk> and <trkseg>, and the entry is replaced, read on the next run."""
+    root = tmp_path / "gpx"
+    root.mkdir()
+    pt = lambda m: f'<trkpt lat="50.0" lon="4.0"><time>2024-07-03T12:{m:02d}:00Z</time></trkpt>'
+    data = ('<gpx xmlns="http://www.topografix.com/GPX/1/1"><trk><trkseg>' + pt(0) + '</trkseg><trkseg>' + pt(1)
+            + '</trkseg></trk><trk><trkseg>' + pt(2) + '</trkseg></trk></gpx>')
+    (root / "t.gpx").write_text(data)
+    memo = tmp_path / "memo.db"
+    conn = sqlite3.connect(memo)
+    conn.execute("CREATE TABLE track_memo (sha256 TEXT PRIMARY KEY, parse_version TEXT, parsed_json TEXT)")
+    import hashlib, json
+    conn.execute("INSERT INTO track_memo VALUES (?, ?, ?)", (hashlib.sha256(data.encode()).hexdigest(), "gpx-parse-v2",
+                 json.dumps([[[50.0, 4.0, "2024-07-03T12:00:00+00:00", 0]], []])))
+    conn.commit(); conn.close()
+    idx = _build(root, memo)
+    assert (idx.parsed, idx.reused) == (1, 0)
+    assert [(p.track, p.segment) for p in idx.points] == [(0, 0), (0, 1), (1, 0)]
+    again = _build(root, memo)
+    assert (again.parsed, again.reused) == (0, 1)
+    assert [(p.track, p.segment) for p in again.points] == [(0, 0), (0, 1), (1, 0)]
+    assert again.fingerprint == idx.fingerprint == cal.GPXIndex(str(root)).build().fingerprint

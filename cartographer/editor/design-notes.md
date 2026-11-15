@@ -71,8 +71,8 @@ then the proposal evidence last; non-coord cells just show the proposal.
   changed, a **stale** banner on both views reminds you a Re-run is needed before GPS reflects it (tracked
   by `timeChangedSinceRerun`, cleared on Re-run). Both notices are skipped in demo mode (its curated
   fixtures intentionally pair an incomplete time artifact with a GPS one).
-- **Drift view + GPS-depends-on-drift gate.** A third view (`photos-22-gps-drift-validation.json`, geotag
-  workflow §22a) sits between Time and GPS. It lists the **at-risk buckets** — a manual/timezone-derived
+- **Drift view + GPS-depends-on-drift gate.** A third view (`photos-22-gps-drift-validation.json`,
+  `BLD-drift_validation`) sits between Time and GPS. It lists the **at-risk buckets** — a manual/timezone-derived
   clock offset with no native-GPS anchor — that GPX *can* validate, and must be confirmed before GPS is
   placed (an unconfirmed bucket could silently mis-place a whole batch along the track). It is gated behind
   time (`time.requires_user_input`) and in turn gates GPS (`drift.requires_user_input` locks the GPS view).
@@ -87,11 +87,10 @@ then the proposal evidence last; non-coord cells just show the proposal.
     A frame picker lets the operator cross-check other photos in the bucket (each must yield the same offset;
     the last scrub wins). **Confirming without moving** (the pinned checkbox / "clear correction") is a
     **zero scrub** — `confirmed:true` with an empty correction — and must be explicit; inaction never resolves.
-  - **No-merry-go-round invariant.** The script extracts the track segment ±2 days
-    (`gpx_anchor_max_clock_error_seconds`) around the bucket. Since valid offsets are capped at ±1 day, any
-    two valid offsets differ by ≤2 days, so **every reachable scrub correction is already inside the loaded
-    segment** — a scrub never needs a Re-run to fetch more track. The editor validates the computed offset
-    against the ±1-day bound (`validOffset`) and flags a point that falls outside it. Re-extraction happens
+  - **The track shown.** The script extracts the track segment within `drift_check_track_window_seconds`
+    (two days by default) of the bucket's photos. A scrub reaches no farther than that segment: an offset
+    is of any size, so a correction larger than the window is typed as a manual offset in the time
+    decision, not scrubbed. Re-extraction happens
     only when a *time* decision changes (edit → Save → Re-run → reload), which legitimately shifts the window;
     the editor never touches GPX itself.
 - **Side-panel editor** for the selected cell: the proposal + evidence, the decision control, a **photo
@@ -113,20 +112,18 @@ then the proposal evidence last; non-coord cells just show the proposal.
     **locks** the drop-down (unaccepting frees it). The "accept" box is disabled when there's nothing to accept.
   - **Clock offset:** **three always-visible choices, click-to-activate** — *accept proposal* (the
     automatic offset, never edited → `accept_proposal`), *manual offset* (the **h/m/s spinner**:
-    hover-scroll or focus + ↑/↓ nudges just that unit by ±3600/±60/±1 s, clamped to ±86400 s;
+    hover-scroll or focus + ↑/↓ nudges just that unit by ±3600/±60/±1 s;
     `preventDefault` keeps the wheel off page scroll), and *anchor real-UTC* (a `datetime-local` picker,
     only for a `gpx_self_anchor` proposal). Exactly one is active; clicking another **deactivates the
     others and they update to the active value** — the two manual views are synced (offset ⟷ anchor camera
     time + offset), while the automatic stays the proposal. Only the active view is editable; the rest are
     read-only but **still show the effective offset** (nothing hidden). Manual offset and anchor-UTC are
     both stored canonically as `manual_offset_seconds` (which one is active is per-cell UI state); the
-    picker writes the derived offset, so the editor never persists `manual_real_utc` (a hand-edited one is
-    still honored). Below the choices a common **Impact** line shows what the effective offset does to the
+    picker writes the derived offset. Below the choices a common **Impact** line shows what the effective offset does to the
     anchor photo: `camera local → corrected local (tz, UTC …)` — same compact format as the proposal
     groups (one date copy when invariant; UTC in parens after), with a no-anchor fallback (offset +
     formula). A small "clear"
-    returns the cell to unset (geotag auto-resolves / inherits). The picker writes the derived
-    offset, so `manual_real_utc` isn't persisted by the editor (a hand-edited one is still honored). The
+    returns the cell to unset (geotag auto-resolves / inherits). The
     *accept* row notes the proposal's source (`from timezone <tz>` for a `timezone_naive` proposal); when
     there's no proposal at all the editor says to set the destination timezone and Re-run to derive one
     from the local time. **Per-date buckets:** a destination spanning >1 naive day keys its offset cells
@@ -172,7 +169,7 @@ then the proposal evidence last; non-coord cells just show the proposal.
       `review_item` is on the list precisely because no reliable GPS source placed it, so the
       `photos-23` artifact carries no track/anchor/candidate for it. The crosshair pick + photo are the
       manual-placement aid; the fallback pins are the only positional evidence the artifact provides.*
-- **Validation** mirrors the reference (IANA tz, offset ±86400, ISO-UTC, lat/lon ranges); invalid input is
+- **Validation** mirrors the reference (IANA tz, offset in whole seconds, lat/lon ranges); invalid input is
   blocked client-side so geotag never rejects the save.
 
 ## 5. Build plan (phased)
@@ -189,11 +186,7 @@ then the proposal evidence last; non-coord cells just show the proposal.
    **Reset** discards unsaved edits. The loop is **terminal**: after saving, re-run `photos-cartographer geotag
    plan` in a terminal and reload the regenerated artifacts. There is deliberately **no in-app Re-run
    button** — it proved error-prone and added little over the terminal command, so it was removed; every
-   gate/stale banner instead tells you to re-run in a terminal and reload. (The server still exposes a
-   `/api/rerun` endpoint and an `environment` check on the configured **`gpx_root`** — resolved from
-   `photos-00-config.json` and `os.path.isdir`-checked, an empty `gpx_root` meaning "no GPX configured"
-   and not gating — so the UI can warn when GPX isn't mounted on the editor's host; but no button drives
-   it.) Plus the **advisory live inheritance preview** for the time tree (§4): a timezone
+   gate/stale banner instead tells you to re-run in a terminal and reload. Plus the **advisory live inheritance preview** for the time tree (§4): a timezone
    with no own decision shows, badged `inherited ⟵ <ancestor>`, the value it would inherit from its
    nearest resolved ancestor, updating as you edit ancestors — display-only, authoritative on the next
    Re-run. (Offsets do **not** inherit — they are per-date buckets resolved from a GPX self-anchor or the

@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Phase C2 — end-of-prep transformation log (photos-15-prep-log.json, prep §16.1 / shared §13.3).
+"""Phase C2 — end-of-prep transformation log (photos-15-prep-log.json, BLD-phase_logs).
 
 A per-photo, content-fingerprint-keyed, human-readable record of everything prep did: derived
 from the validated plan + quarantine evidence, carried forward incrementally. Mocked hashing/
@@ -46,7 +46,7 @@ def _install(monkeypatch):
 
     def hsh(p):
         with open(p, "rb") as f:
-            return {"status": "valid", "strategy": "image-content-hash-v1",
+            return {"status": "valid", "strategy": "image-content-hash-v2",
                     "value": "sig-" + f.read().hex()[:16], "engine_version": "t"}
     monkeypatch.setattr(prep.ContentHasher, "fingerprint_image", hsh)
 
@@ -72,7 +72,8 @@ def _log(ws):
         return json.load(f)
 
 
-@pytest.mark.spec("log-keyed-by-fingerprint-1", "prep-log-per-photo-fingerprint-keyed-1", "prep-log-records-journey-1", test="TST-prep_log-media_journey_keyed_by_fingerprint")
+@pytest.mark.spec("RUL-log_keyed_by_fingerprint", "RUL-log_carries_name_chain",
+                  test="TST-prep_log-media_journey_keyed_by_fingerprint")
 def test_media_journey_keyed_by_fingerprint(tmp_path, monkeypatch):
     _install(monkeypatch)
     ws = _ws(tmp_path)
@@ -91,7 +92,7 @@ def test_media_journey_keyed_by_fingerprint(tmp_path, monkeypatch):
     assert all(s.get("run") for s in entry["journey"])     # each step attributed to its run
 
 
-@pytest.mark.spec("prep-log-records-quarantine-dups-1", "prep-quarantine-recoverable-manifest-1", test="TST-prep_log-quarantined_duplicate_recorded")
+@pytest.mark.spec("RUL-prep_log_records_set_aside", "BLD-quarantine_layout", test="TST-prep_log-quarantined_duplicate_recorded")
 def test_quarantined_duplicate_recorded(tmp_path, monkeypatch):
     _install(monkeypatch)
     ws = _ws(tmp_path)
@@ -109,9 +110,9 @@ def test_quarantined_duplicate_recorded(tmp_path, monkeypatch):
     assert dq[0]["retained_counterpart"]                              # the kept file at dedup time
 
 
-@pytest.mark.spec("prep-no-timestamp-correction-1")
+@pytest.mark.spec("RUL-prep_no_time_or_gps")
 def test_prep_organizes_by_raw_naive_timestamp_no_tz_or_utc_shift(tmp_path, monkeypatch):
-    """§7.6 (anti): prep organizes by the RAW camera-naive timestamp and never timezone/UTC-corrects
+    """RUL-prep_no_time_or_gps (anti): prep organizes by the RAW camera-naive timestamp and never timezone/UTC-corrects
     it (that is geotag's job). Use a late-evening naive time that ANY tz/UTC conversion would push to
     a different date+hour; assert the file lands under that EXACT raw date and time."""
     _install(monkeypatch)
@@ -131,10 +132,10 @@ def test_prep_organizes_by_raw_naive_timestamp_no_tz_or_utc_shift(tmp_path, monk
     assert entry["prep_path"] == "5-photos-by-date/2023-03-26/2023-03-26--23-45-00.jpg"
 
 
-@pytest.mark.spec("prep-log-self-sufficient-1")
+@pytest.mark.spec("RUL-record_whole_each_phase")
 def test_prep_log_is_complete_and_standalone_without_geotag_or_merge(tmp_path, monkeypatch):
-    """§16.1: the prep log (photos-15) is complete and self-sufficient even if geotag/merge never run.
-    After a prep-only run, NO geotag (photos-2x) / merge (photos-3x) artifact exists, yet photos-15
+    """RUL-record_whole_each_phase: the prep log (photos-15) is complete and self-sufficient even if geotag/merge never
+    run. After a prep-only run, NO geotag (photos-2x) / merge (photos-3x) artifact exists, yet photos-15
     already records the file's full, non-partial journey ending at its organized destination."""
     _install(monkeypatch)
     ws = _ws(tmp_path)
@@ -157,10 +158,10 @@ def test_prep_log_is_complete_and_standalone_without_geotag_or_merge(tmp_path, m
     assert all(s.get("run") for s in entry["journey"])                # every step attributed to its run
 
 
-@pytest.mark.spec("prep-no-parse-nonconforming-name-1")
+@pytest.mark.spec("RUL-no_meaning_from_names")
 def test_nonconforming_name_is_ignored_timestamp_comes_from_metadata(tmp_path, monkeypatch):
-    """§8: prep never parses meaning from a non-conforming filename — it re-ingests the file and takes
-    the timestamp from metadata. A file whose name MISLEADINGLY encodes 2099 but whose EXIF
+    """RUL-no_meaning_from_names: prep never parses meaning from a non-conforming filename — it re-ingests the file and
+    takes the timestamp from metadata. A file whose name MISLEADINGLY encodes 2099 but whose EXIF
     DateTimeOriginal is 2023:01:02 must be organized under the EXIF date (2023-01-02), with a
     provisional name derived from metadata — the bogus '2099' in the name is never honoured."""
     _install(monkeypatch)                                            # meta -> DateTimeOriginal 2023:01:02 03:04:05
@@ -173,9 +174,9 @@ def test_nonconforming_name_is_ignored_timestamp_comes_from_metadata(tmp_path, m
     assert "2099" not in entry["prep_path"]                        # the misleading name was not parsed
 
 
-@pytest.mark.spec("prep-log-derived-no-new-authority-1", test="TST-prep_log-prep_log_entries_are_derived_from_the_validated_plan")
+@pytest.mark.spec("RUL-prep_log_derived", test="TST-prep_log-prep_log_entries_are_derived_from_the_validated_plan")
 def test_prep_log_entries_are_derived_from_the_validated_plan(tmp_path, monkeypatch):
-    """§16.1 item 4: the prep log is DERIVED from the validated plan + journals and introduces no new
+    """RUL-prep_log_derived: the prep log is DERIVED from the validated plan + journals and introduces no new
     authority — its facts trace back to plan operations. Assert the logged final destination equals a
     destination the plan actually planned, and the extension-normalization step's 'from' name matches
     the plan's rename source — the log records nothing the plan/journal did not establish."""
@@ -213,7 +214,33 @@ def test_strays_and_other_not_logged(tmp_path, monkeypatch):
     assert not any("notes" in json.dumps(e) for e in photos.values())
 
 
-@pytest.mark.spec("prep-log-incremental-1")
+@pytest.mark.spec("RUL-log_step_names_run", test="TST-prep_log-every_step_names_the_run_that_made_it")
+def test_every_step_names_the_run_that_made_it(tmp_path, monkeypatch):
+    """Each step prep adds names its run, the plan that made it — the user's own move, the run that found it; a later
+    run's steps name that later run, the earlier ones keeping theirs."""
+    _install(monkeypatch)
+    ws = _ws(tmp_path)
+    (ws / "0-sources" / "a.jpg").write_bytes(b"AAAA")
+    plans = []
+    real_plan = prep.WorkspacePrepWorkflow.plan
+    def _plan(self):
+        made = real_plan(self)
+        plans.append(made.plan_id)
+        return made
+    monkeypatch.setattr(prep.WorkspacePrepWorkflow, "plan", _plan)
+    _run(ws)
+    first = next(iter(_log(ws)["photos"].values()))["journey"]
+    assert first and all(s.get("run") == plans[0] for s in first), first
+    organized = glob.glob(str(ws / "5-photos-by-date" / "**" / "*.jpg"), recursive=True)[0]
+    (ws / "6-photos-by-dest" / "Trip").mkdir(parents=True)
+    os.rename(organized, ws / "6-photos-by-dest" / "Trip" / os.path.basename(organized))
+    _run(ws)
+    journey = next(iter(_log(ws)["photos"].values()))["journey"]
+    assert journey[:len(first)] == first and len(journey) > len(first)
+    assert plans[1] != plans[0] and all(s.get("run") == plans[1] for s in journey[len(first):]), journey
+
+
+@pytest.mark.spec("RUL-log_entry_append_only", test="TST-prep_log-noop_rerun_leaves_log_byte_identical")
 def test_noop_rerun_leaves_log_byte_identical(tmp_path, monkeypatch):
     _install(monkeypatch)
     ws = _ws(tmp_path)
@@ -224,7 +251,52 @@ def test_noop_rerun_leaves_log_byte_identical(tmp_path, monkeypatch):
     assert open(utils.prep_log_path(str(ws)), "rb").read() == first
 
 
-@pytest.mark.spec("log-entry-append-only-1", test="TST-prep_log-recognized_move_appends_moved_to_by_dest")
+@pytest.mark.spec("RUL-rewrite_in_place_atomic", test="TST-prep_log-an_interrupted_log_rewrite_leaves_the_log_whole")
+def test_an_interrupted_log_rewrite_leaves_the_log_whole(tmp_path, monkeypatch):
+    """Prep's log, rewritten in place by a run and interrupted — while the new log is half written, or with it
+    written but not yet in the earlier one's place — is the earlier log, whole; the next run puts the new one down
+    whole."""
+    import tempfile
+    _install(monkeypatch)
+    ws = _ws(tmp_path)
+    (ws / "0-sources" / "a.jpg").write_bytes(b"AAAA")
+    _run(ws)
+    plp = utils.prep_log_path(str(ws))
+    before = open(plp, "rb").read()
+    log_fds, real_mkstemp, real_dump, real_replace = set(), tempfile.mkstemp, json.dump, prep.replace_durably
+
+    def mkstemp(*a, **k):                                    # the new log's temp file, told from the others
+        fd, path = real_mkstemp(*a, **k)
+        if k.get("prefix") == ".tmp-prep-log-":
+            log_fds.add(fd)
+        return fd, path
+
+    def dump_half(obj, fp, **kw):
+        if fp.fileno() not in log_fds:
+            return real_dump(obj, fp, **kw)
+        text = json.dumps(obj, **kw)
+        fp.write(text[:len(text) // 2]); fp.flush()
+        raise KeyboardInterrupt
+
+    def rename_not_reached(tmp, path):
+        if path == plp:
+            raise KeyboardInterrupt
+        return real_replace(tmp, path)
+    for name, cut in (("b.jpg", lambda m: (m.setattr(tempfile, "mkstemp", mkstemp), m.setattr(json, "dump", dump_half))),
+                      ("c.jpg", lambda m: m.setattr(prep, "replace_durably", rename_not_reached))):
+        (ws / "0-sources" / name).write_bytes(name.encode() * 4)   # new work, so a new log is written
+        with monkeypatch.context() as m:
+            cut(m)
+            with pytest.raises(KeyboardInterrupt):
+                _run(ws)
+        assert open(plp, "rb").read() == before, name
+    (ws / "0-sources" / "d.jpg").write_bytes(b"DDDD")
+    _run(ws)
+    assert open(plp, "rb").read() != before and _log(ws)["photos"]   # the new log, whole
+
+
+@pytest.mark.spec("RUL-log_entry_grows", "RUL-log_entry_append_only",
+                  test="TST-prep_log-recognized_move_appends_moved_to_by_dest")
 def test_recognized_move_appends_moved_to_by_dest(tmp_path, monkeypatch):
     _install(monkeypatch)
     ws = _ws(tmp_path)
@@ -245,7 +317,8 @@ def test_recognized_move_appends_moved_to_by_dest(tmp_path, monkeypatch):
     assert sum(1 for s in entry["journey"] if s["action"] == "organized") == 1
 
 
-@pytest.mark.spec("log-human-readable-json-1", "prep-prep-log-on-success-1", test="TST-prep_log-log_is_deterministic_and_in_control_dir")
+@pytest.mark.spec("RUL-prep_records_on_success", "RUL-log_stably_ordered",
+                  test="TST-prep_log-log_is_deterministic_and_in_control_dir")
 def test_log_is_deterministic_and_in_control_dir(tmp_path, monkeypatch):
     _install(monkeypatch)
     ws = _ws(tmp_path)
@@ -258,7 +331,7 @@ def test_log_is_deterministic_and_in_control_dir(tmp_path, monkeypatch):
     assert list(_log(ws)["photos"]) == sorted(_log(ws)["photos"])  # fingerprint-sorted
 
 
-@pytest.mark.spec("log-fail-if-insufficient-1", "prep-log-fail-if-history-insufficient-1", test="TST-prep_log-missing_history_warns_and_marks_partial")
+@pytest.mark.spec("RUL-partial_history_shown", test="TST-prep_log-missing_history_warns_and_marks_partial")
 def test_missing_history_warns_and_marks_partial(tmp_path, monkeypatch):
     _install(monkeypatch)
     ws = _ws(tmp_path)
@@ -271,7 +344,8 @@ def test_missing_history_warns_and_marks_partial(tmp_path, monkeypatch):
     assert "incomplete" in entry.get("note", "")
 
 
-@pytest.mark.spec("RUL-log_keyed_by_fingerprint", "log-chain-of-names-1", test="TST-prep_log-every_move_names_where_it_came_from")
+@pytest.mark.spec("BLD-log_format", "RUL-log_carries_name_chain",
+                  test="TST-prep_log-every_move_names_where_it_came_from")
 def test_every_move_names_where_it_came_from(tmp_path, monkeypatch):
     """The journey keeps the chain of names and places: each move and rename records where the photo
     came from as well as where it went, so the first step holds its original path in the dump."""
@@ -292,7 +366,7 @@ def test_every_move_names_where_it_came_from(tmp_path, monkeypatch):
     assert by["moved_to_by_dest"]["to"].startswith("6-photos-by-dest/Trip/")
 
 
-@pytest.mark.spec("RUL-log_follows_retaken_fingerprint", "BLD-prep_log_build",
+@pytest.mark.spec("RUL-log_follows_retaken_fingerprint", "BLD-prep_log_build", "RUL-retaken_fingerprint_step_logged",
                   test="TST-prep_log-a_retaken_fingerprint_keeps_the_photos_history")
 def test_a_retaken_fingerprint_keeps_the_photos_history(tmp_path, monkeypatch):
     """A photo fingerprinted again by another method, its value changed, keeps its history: the entry
@@ -304,7 +378,7 @@ def test_a_retaken_fingerprint_keeps_the_photos_history(tmp_path, monkeypatch):
     _run(ws)
     (old,) = _log(ws)["photos"]
     monkeypatch.setattr(prep.ContentHasher, "fingerprint_image", lambda p: {
-        "status": "valid", "strategy": "image-content-hash-v1",
+        "status": "valid", "strategy": "image-content-hash-v2",
         "value": "sig2-" + open(p, "rb").read().hex()[:16], "engine_version": "u"})
     monkeypatch.setattr(utils, "get_imagemagick_version", lambda: "u")
     _run(ws)
@@ -316,7 +390,8 @@ def test_a_retaken_fingerprint_keeps_the_photos_history(tmp_path, monkeypatch):
     assert entry["journey"][-1]["from"] == old
 
 
-@pytest.mark.spec("RUL-log_follows_retaken_fingerprint", "RUL-moved_file_carried", "RUL-engine_change_is_checked", "BLD-prep_log_build",
+@pytest.mark.spec("RUL-log_follows_retaken_fingerprint", "BLD-prep_log_build", "RUL-moved_file_stale_read_again",
+                  "RUL-retaken_fingerprint_step_logged",
                   test="TST-prep_log-a_photo_moved_under_a_new_imagemagick_keeps_its_history")
 def test_a_photo_moved_under_a_new_imagemagick_keeps_its_history(tmp_path, monkeypatch):
     """A photo the user sorts into photos by destination while ImageMagick changes, its fingerprint's value
@@ -333,7 +408,7 @@ def test_a_photo_moved_under_a_new_imagemagick_keeps_its_history(tmp_path, monke
     moved = "6-photos-by-dest/Rome/" + os.path.basename(organized)
     os.rename(ws / organized, ws / moved)
     monkeypatch.setattr(prep.ContentHasher, "fingerprint_image", lambda p: {
-        "status": "valid", "strategy": "image-content-hash-v1",
+        "status": "valid", "strategy": "image-content-hash-v2",
         "value": "sig2-" + open(p, "rb").read().hex()[:16], "engine_version": "u"})
     monkeypatch.setattr(utils, "get_imagemagick_version", lambda: "u")
     _run(ws)
@@ -344,3 +419,23 @@ def test_a_photo_moved_under_a_new_imagemagick_keeps_its_history(tmp_path, monke
     assert [s["action"] for s in entry["journey"]] == [
         "organized", "provisional_rename", "fingerprint_retaken", "moved_to_by_dest"]
     assert entry["journey"][-1]["from"] == organized and entry["journey"][-1]["to"] == moved
+
+
+@pytest.mark.spec("RUL-log_entry_append_only", test="TST-prep_log-an_earlier_runs_duplicates_are_kept")
+def test_an_earlier_runs_duplicates_are_kept(tmp_path, monkeypatch):
+    """A later run that sets aside another duplicate of a photo adds it to the photo's record of duplicates; the
+    earlier run's stay as they were."""
+    _install(monkeypatch)
+    ws = _ws(tmp_path)
+    (ws / "0-sources" / "a.jpg").write_bytes(b"SAME")
+    (ws / "0-sources" / "b.jpg").write_bytes(b"SAME")
+    _run(ws)
+    first = next(iter(_log(ws)["photos"].values()))["deduplicated"]["quarantined"]
+    assert len(first) == 1
+    (ws / "0-sources" / "c.jpg").write_bytes(b"SAME")          # another copy, in a later run
+    _run(ws)
+    photos = _log(ws)["photos"]
+    assert len(photos) == 1
+    dq = next(iter(photos.values()))["deduplicated"]["quarantined"]
+    assert dq[:1] == first and len(dq) == 2, dq
+    assert dq[1]["origin"] == "0-sources/c.jpg"

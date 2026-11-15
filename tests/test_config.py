@@ -45,7 +45,7 @@ def _ws(tmp_path):
 def _mock(monkeypatch):
     monkeypatch.setattr(
         prep.ContentHasher, "fingerprint_image",
-        lambda p: {"status": "valid", "strategy": "image-content-hash-v1",
+        lambda p: {"status": "valid", "strategy": "image-content-hash-v2",
                    "value": "sig-" + os.path.basename(p), "engine_version": "t"},
     )
 
@@ -95,7 +95,7 @@ def test_rerun_does_not_rewrite_config(tmp_path, monkeypatch):
     assert raw1 == raw2  # prep is the sole writer and seeds only once
 
 
-@pytest.mark.spec("config-file-authoritative-1", test="TST-config-handwritten_config_is_authoritative")
+@pytest.mark.spec("RUL-config_authoritative", test="TST-config-handwritten_config_is_authoritative")
 def test_handwritten_config_is_authoritative(tmp_path, monkeypatch):
     _mock(monkeypatch)
     ws = _ws(tmp_path)
@@ -113,7 +113,7 @@ def test_handwritten_config_is_authoritative(tmp_path, monkeypatch):
     assert any("5-photos-by-date/2023-01-02/20230102__030405" in d for d in dests), dests
 
 
-@pytest.mark.spec("config-hashed-cascade-1", "RUL-config_digest_recorded", test="TST-config-config_fingerprint_is_file_sha_and_in_handoff")
+@pytest.mark.spec("RUL-config_in_dependencies", "RUL-config_digest_recorded", test="TST-config-config_fingerprint_is_file_sha_and_in_handoff")
 def test_config_fingerprint_is_file_sha_and_in_handoff(tmp_path, monkeypatch):
     _mock(monkeypatch)
     ws = _ws(tmp_path)
@@ -140,3 +140,31 @@ def test_malformed_config_raises(tmp_path):
         f.write("{ this is not valid json ")
     with pytest.raises(ValueError, match="not valid JSON"):
         utils.load_or_seed_config(str(ws))
+
+
+@pytest.mark.spec("RUL-one_configuration", test="TST-config-prep_reads_its_settings_from_the_workspace_alone")
+def test_prep_reads_its_settings_from_the_workspace_alone(tmp_path, monkeypatch):
+    """Prep, run on an initialized workspace, takes its settings from the workspace's configuration alone: another
+    configuration in every other place — the seed defaults, beside the executable, above the workspace, in the
+    home folder, an environment variable per setting — changes neither how it classifies a file nor how it names
+    it."""
+    from _elsewhere import settings_elsewhere
+    _mock(monkeypatch)
+    ws = _ws(tmp_path)
+    cfg = {k: v for k, v in utils.DEFAULT_CONFIG.items() if k != "jobs"}
+    cfg["filename_timestamp_format"] = "%Y%m%d__%H%M%S"
+    cfg["media_extensions"] = dict(cfg["media_extensions"], image=cfg["media_extensions"]["image"] + ["webp"])
+    with open(utils.config_path(str(ws)), "w") as f:
+        json.dump(cfg, f)
+    other = json.loads(json.dumps(utils.DEFAULT_CONFIG))
+    other["filename_timestamp_format"] = "%Y%m%d_ELSEWHERE_%H%M%S"
+    other["media_extensions"]["image"] = ["jpg", "jpeg"]
+    settings_elsewhere(monkeypatch, tmp_path, other)
+    (ws / "0-sources" / "a.jpg").write_text("aaa")
+    (ws / "0-sources" / "b.webp").write_text("bbb")
+    monkeypatch.chdir(ws)
+    for command in ("plan", "execute"):
+        assert prep.main(["-j", "1", command]) in (0, None), command
+    assert sorted(os.listdir(ws / "5-photos-by-date" / "2023-01-02")) == ["20230102__030405.jpg",
+                                                                          "20230102__030405.webp"]
+    assert json.load(open(utils.config_path(str(ws)))) == cfg

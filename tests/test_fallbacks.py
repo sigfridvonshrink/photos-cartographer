@@ -55,7 +55,7 @@ def test_get_imagemagick_version_unknown_when_absent(monkeypatch):
     assert utils.get_imagemagick_version() == "unknown"
 
 
-# --- cross-filesystem move fallback (shared contract §15.3) -------------------
+# --- cross-filesystem move fallback (BLD-cross_fs_temp) -------------------
 
 def test_cross_fs_move_copies_then_removes_source(tmp_path):
     sub = tmp_path / "sub"; sub.mkdir()
@@ -109,6 +109,86 @@ def test_cross_fs_move_makes_the_rename_durable_before_removing_the_source(tmp_p
     utils._move_cross_fs_no_clobber(str(src), str(dest))
     assert ("fsync", str(sub)) in events
     assert events.index(("fsync", str(sub))) < events.index(("unlink", str(src)))
+
+
+PHOTO = b"PHOTO-BYTES-" * 64
+
+
+def _held_whole(*names):
+    """The photo is whole under at least one of `names` and under no name partly."""
+    held = [p for p in names if os.path.exists(p)]
+    assert held, "the photo is under neither name"
+    for p in held:
+        assert open(p, "rb").read() == PHOTO, f"{p} holds part of the photo"
+
+
+def _stopping(stopped, names, stop_with):
+    """A stand-in for one step of a move: it checks the photo is whole as the move stands when stopped there —
+    what a kill would leave — and stops it there, by an interrupt or by the step failing."""
+    def stop(*a, **k):
+        stopped.append(True)
+        _held_whole(*names)
+        raise stop_with()
+    return stop
+
+
+_STOPS = {"interrupted": KeyboardInterrupt, "failing": lambda: OSError(errno.EIO, "Input/output error")}
+
+
+@pytest.mark.spec("RUL-split_move_never_lost", test="TST-fallbacks-a_cross_fs_move_stopped_at_any_step_loses_nothing")
+@pytest.mark.parametrize("stop_by", sorted(_STOPS))
+@pytest.mark.parametrize("step", ["copy", "halfway_through_the_copy", "copy_times", "compare", "sync",
+                                  "rename", "sync_folder", "remove_source"])
+def test_a_cross_fs_move_stopped_at_any_step_loses_nothing(tmp_path, monkeypatch, step, stop_by):
+    """Merge's move into a library on another filesystem — copy, check, sync, rename into place, sync the folder,
+    remove the source — interrupted, or failing, at any of its steps or halfway through the copy, leaves the photo
+    whole under its old name, its new name or both: at the moment it stops, and once the stop has unwound."""
+    lib = tmp_path / "lib"; lib.mkdir()
+    src = tmp_path / "s.jpg"; src.write_bytes(PHOTO)
+    dest = lib / "x.jpg"
+    stopped = []
+    stop = _stopping(stopped, (str(src), str(dest)), _STOPS[stop_by])
+    real_unlink = os.unlink
+
+    def half_copy(s, d, *a, **k):
+        with open(d, "wb") as f:
+            f.write(PHOTO[:len(PHOTO) // 2])
+        stop()
+
+    def unlink(p, *a, **k):
+        return stop() if str(p) == str(src) else real_unlink(p, *a, **k)
+    seam = {"copy": (utils.shutil, "copyfile", stop), "halfway_through_the_copy": (utils.shutil, "copyfile", half_copy),
+            "copy_times": (utils.shutil, "copystat", stop), "compare": (utils, "_same_bytes", stop),
+            "sync": (utils.os, "fsync", stop), "rename": (utils, "_rename_no_clobber_same_fs", stop),
+            "sync_folder": (utils, "_fsync_dir", stop), "remove_source": (utils.os, "unlink", unlink)}[step]
+    with monkeypatch.context() as m:
+        m.setattr(*seam)
+        try:
+            utils._move_cross_fs_no_clobber(str(src), str(dest))
+        except (KeyboardInterrupt, OSError):
+            pass                                                    # (copying the times may fail, and is let go)
+    assert stopped == [True]
+    _held_whole(str(src), str(dest))
+
+
+@pytest.mark.spec("RUL-split_move_never_lost",
+                  test="TST-fallbacks-a_hard_link_move_stopped_at_either_step_loses_nothing")
+@pytest.mark.parametrize("stop_by", sorted(_STOPS))
+@pytest.mark.parametrize("step", ["link", "unlink"])
+def test_a_hard_link_move_stopped_at_either_step_loses_nothing(tmp_path, monkeypatch, step, stop_by):
+    """Where the filesystem has no rename that refuses a taken name, a move is a hard link under the new name and
+    then the old name's removal: interrupted, or failing, at either, it leaves the photo whole under its old name,
+    or both."""
+    monkeypatch.setattr(utils, "_get_renameat2", lambda: False)
+    src = tmp_path / "s.jpg"; src.write_bytes(PHOTO)
+    dest = tmp_path / "sub" / "x.jpg"; dest.parent.mkdir()
+    stopped = []
+    with monkeypatch.context() as m:
+        m.setattr(utils.os, step, _stopping(stopped, (str(src), str(dest)), _STOPS[stop_by]))
+        with pytest.raises((KeyboardInterrupt, OSError)):
+            utils._move_no_clobber(str(src), str(dest))
+    assert stopped == [True]
+    _held_whole(str(src), str(dest))
 
 
 def _exdev_seam(monkeypatch):

@@ -66,3 +66,33 @@ def test_geotag_run_was_renamed_to_plan():
 def test_jobs_option_on_phase():
     a = _parse(["prep", "-j", "3", "plan"])
     assert a.jobs == 3 and a.command == "plan"
+
+
+def _setting_names(cfg, prefix=""):
+    for key, value in cfg.items():
+        yield prefix + key
+        if isinstance(value, dict) and key != "datasets":
+            yield from _setting_names(value, prefix + key + ".")
+        elif isinstance(value, dict):
+            yield from (prefix + key + "." + k for k in value)
+
+
+@pytest.mark.spec("RUL-one_configuration", test="TST-combined_cli-no_command_takes_a_setting")
+@pytest.mark.parametrize("command", [("prep", "plan"), ("prep", "dry-run"), ("prep", "execute"),
+                                     ("prep", "prune-quarantine"), ("geotag", "plan"), ("geotag", "execute"),
+                                     ("geotag", "finalize"), ("merge", "init-library"), ("merge", "plan"),
+                                     ("merge", "dry-run"), ("merge", "execute")], ids="-".join)
+def test_no_command_takes_a_setting(command, capsys):
+    """No phase's command takes a setting of the configuration on its command line — under the setting's name, its
+    last part, dashed or not, before the command or after it."""
+    from cartographer import photos_utils
+    phase, sub = command
+    parser = cli.build_parser()
+    for name in _setting_names(photos_utils.DEFAULT_CONFIG):
+        for flag in {name, name.split(".")[-1]}:
+            for spelt in {"--" + flag, "--" + flag.replace("_", "-").replace(".", "-")}:
+                for argv in ([phase, spelt, "x", sub], [phase, sub, spelt, "x"]):
+                    with pytest.raises(SystemExit) as e:
+                        parser.parse_args(argv)
+                    assert e.value.code == 2, argv
+    capsys.readouterr()

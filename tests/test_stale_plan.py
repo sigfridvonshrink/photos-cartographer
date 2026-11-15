@@ -15,7 +15,7 @@
 """Phase 4a — stale-plan rejection at execute.
 
 A plan must be rejected before any mutation if the workspace config changed since
-planning (prep Section 21) or the plan schema/version differs (Section 14.3.2).
+planning (INV-no_stale_use) or the plan schema/version differs (BLD-prep_dependencies).
 
 Mocked hashing/metadata, fast. photos_1_prep / photos_utils come from conftest.py.
 """
@@ -42,7 +42,7 @@ def _ws(tmp_path):
 def _mock(monkeypatch):
     monkeypatch.setattr(
         prep.ContentHasher, "fingerprint_image",
-        lambda p: {"status": "valid", "strategy": "image-content-hash-v1",
+        lambda p: {"status": "valid", "strategy": "image-content-hash-v2",
                    "value": "sig-" + os.path.basename(p), "engine_version": "t"},
     )
 
@@ -66,7 +66,7 @@ def _build_plan(ws):
     return plan
 
 
-@pytest.mark.spec("config-wholehash-coarse-replan-1", test="TST-stale_plan-config_change_rejects_plan_at_execute")
+@pytest.mark.spec("RUL-any_config_change_replans", test="TST-stale_plan-config_change_rejects_plan_at_execute")
 def test_config_change_rejects_plan_at_execute(tmp_path, monkeypatch):
     _mock(monkeypatch)
     ws = _ws(tmp_path)
@@ -105,11 +105,11 @@ def test_unchanged_config_executes(tmp_path, monkeypatch):
     assert list(os.scandir(ws / "5-photos-by-date")), "the file should have been organized"
 
 
-@pytest.mark.spec("prep-execute-rejects-new-file-1", test="TST-stale_plan-new_file_since_planning_rejects_plan")
+@pytest.mark.spec("RUL-new_file_restales_plan", test="TST-stale_plan-new_file_since_planning_rejects_plan")
 @pytest.mark.parametrize("rel", ["0-sources/b.jpg", "0-sources/sub/b.jpg", "0-sources/.DS_Store",
                                  "5-photos-by-date/2023-01-02/b.jpg", "6-photos-by-dest/Rome/b.jpg"])
 def test_new_file_since_planning_rejects_plan(tmp_path, monkeypatch, rel):
-    """Prep §14.3 item 2: a file that appears anywhere prep scans between plan and execute is unplanned,
+    """RUL-new_file_restales_plan: a file that appears anywhere prep scans between plan and execute is unplanned,
     so the plan is stale — refused before any mutation, the planned file and the newcomer left in place."""
     _mock(monkeypatch)
     ws = _ws(tmp_path)
@@ -124,7 +124,7 @@ def test_new_file_since_planning_rejects_plan(tmp_path, monkeypatch, rel):
     assert os.path.exists(ws / rel)
 
 
-@pytest.mark.spec("prep-execute-rejects-new-file-1", test="TST-stale_plan-track_file_since_planning_rejects_plan")
+@pytest.mark.spec("RUL-new_file_restales_plan", test="TST-stale_plan-track_file_since_planning_rejects_plan")
 def test_track_file_since_planning_rejects_plan(tmp_path, monkeypatch):
     """A track dropped in after planning is refused like at planning: the rescan blocks on it."""
     _mock(monkeypatch)
@@ -137,11 +137,11 @@ def test_track_file_since_planning_rejects_plan(tmp_path, monkeypatch):
     assert os.path.exists(ws / "0-sources" / "t.gpx")
 
 
-@pytest.mark.spec("prep-execute-rejects-new-file-1", "prep-plan-memo-reuse-1", "RUL-reuse_valid_work",
+@pytest.mark.spec("RUL-new_file_restales_plan", "RUL-plan_memo_kept", "RUL-reuse_valid_work",
                   test="TST-stale_plan-replan_incorporates_new_file_reading_only_it")
 def test_replan_incorporates_new_file_reading_only_it(tmp_path, monkeypatch):
     """After the refusal a new plan takes the newcomer in, fingerprinting only it: the refused plan's
-    fingerprints are reused from the memo (prep §10.3). Metadata is read a folder at a time, so a file
+    fingerprints are reused from the memo (RUL-plan_memo_kept). Metadata is read a folder at a time, so a file
     is re-read only when it shares a folder with one that needs reading; here they are apart."""
     _mock(monkeypatch)
     monkeypatch.setattr(utils, "get_imagemagick_version", lambda: "t")   # match the mock's engine_version

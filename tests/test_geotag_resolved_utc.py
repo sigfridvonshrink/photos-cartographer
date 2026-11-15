@@ -13,11 +13,13 @@
 # limitations under the License.
 
 """Phase 4 (geotag) — Stage 7 resolved UTC per file + the resolved-UTC cache fingerprint
-(spec §22/§22.1). Time-correctness code, so the computation gets full branch coverage: camera
-offset, smartphone native offset, destination-timezone fallback (DST-correct), and the unresolved
+(BLD-resolved_utc/BLD-resolved_utc_fingerprint). Time-correctness code, so the computation gets full branch coverage:
+camera offset, smartphone native offset, destination-timezone fallback (DST-correct), and the unresolved
 branches; plus the SQLite cache round-trip and the deterministic fingerprint. From conftest.py.
 """
 import json
+from _zone import answer_root_zone, with_root_zone
+from _handoff import match_disk
 import re
 import sqlite3
 import sys
@@ -53,7 +55,7 @@ def _one(file, art=None):
 
 # --- the computation, branch by branch --------------------------------------
 
-@pytest.mark.spec("geotag-offset-per-group-dest-1")
+@pytest.mark.spec("RUL-offset_per_camera_destination_day")
 def test_camera_offset():
     r = _one(_file("6-photos-by-dest/B/a.arw", CAM, "2024:07:03 14:12:08"))
     assert r["resolved_utc"] == "2024-07-03T12:12:21Z" and r["resolved_utc_status"] == "valid"
@@ -61,7 +63,7 @@ def test_camera_offset():
     assert r["time_decision_scope"] == f"{CAM}|6-photos-by-dest/B"
 
 
-@pytest.mark.spec("geotag-no-utc-incomplete-tz-1")
+@pytest.mark.spec("BLD-geotag_stage_order")
 def test_camera_offset_missing_is_unresolved():
     r = _one(_file("6-photos-by-dest/B/a.arw", CAM, "2024:07:03 14:12:08"), _art(offset=None))
     assert r["resolved_utc"] is None and r["resolved_utc_status"] == "unresolved"
@@ -74,6 +76,37 @@ def test_smartphone_native_offset():
     assert r["utc_offset_used"] == 7200
 
 
+@pytest.mark.spec("RUL-phone_time_from_own_offset", "BLD-resolved_utc",
+                  test="TST-geotag_resolved_utc-a_phone_time_takes_the_offset_recorded_with_it")
+@pytest.mark.parametrize("tag, offset_tag", [("EXIF:DateTimeOriginal", "OffsetTimeOriginal"),
+                                             ("XMP:CreateDate", "OffsetTimeDigitized"), ("EXIF:ModifyDate", "OffsetTime"),
+                                             ("DateTimeOriginal", "OffsetTimeOriginal")])
+def test_a_phone_time_takes_the_offset_recorded_with_it(tag, offset_tag):
+    # Each time field has its own offset field; another field's offset never turns it to UTC. Prep names the
+    # field with its group (BLD-metadata_extraction), as `EXIF:DateTimeOriginal`.
+    others = {t: "+05:00" for t in ("OffsetTimeOriginal", "OffsetTimeDigitized", "OffsetTime") if t != offset_tag}
+    f = dict(_file("6-photos-by-dest/B/p.jpg", PHONE, "2024:07:03 14:00:00"), source_time_tag=tag,
+             raw_times={offset_tag: "+02:00", **others})
+    r = _one(f)
+    assert r["resolved_utc"] == "2024-07-03T12:00:00Z" and r["utc_offset_used"] == 7200
+    assert r["time_rule_used"] == "smartphone_native_offset"
+    # with only another field's offset recorded, the destination's timezone decides (London, summer: +1)
+    f2 = dict(f, raw_times=others)
+    r2 = _one(f2, _art(tz="Europe/London"))
+    assert r2["time_rule_used"] == "destination_timezone" and r2["resolved_utc"] == "2024-07-03T13:00:00Z"
+
+
+@pytest.mark.spec("BLD-resolved_utc", test="TST-geotag_resolved_utc-a_photos_scope_names_the_cell_its_offset_came_from")
+def test_a_photos_scope_names_the_cell_its_offset_came_from():
+    art = {"destinations": {"6-photos-by-dest/B": {
+        "destination_timezone": {"effective_iana_timezone": "Europe/Brussels"},
+        "camera_group_time_decisions": {
+            f"{CAM}@2024-07-03": {"effective_time_anchor": {"offset_seconds": -7200, "source": "manual"}},
+            f"{CAM}@2024-07-04": {"effective_time_anchor": {"offset_seconds": -3600, "source": "manual"}}}}}}
+    r = _one(_file("6-photos-by-dest/B/a.arw", CAM, "2024:07:04 09:00:00"), art)
+    assert r["time_decision_scope"] == f"{CAM}@2024-07-04|6-photos-by-dest/B" and r["utc_offset_used"] == -3600
+
+
 def test_smartphone_destination_timezone_dst():
     summer = _one(_file("6-photos-by-dest/B/s.jpg", PHONE, "2024:07:03 14:00:00"))   # CEST = UTC+2
     assert summer["resolved_utc"] == "2024-07-03T12:00:00Z" and summer["time_rule_used"] == "destination_timezone"
@@ -81,7 +114,7 @@ def test_smartphone_destination_timezone_dst():
     assert winter["resolved_utc"] == "2024-01-03T13:00:00Z"
 
 
-@pytest.mark.spec("geotag-resolved-utc-needs-both-1")
+@pytest.mark.spec("BLD-resolved_utc")
 def test_smartphone_no_offset_no_timezone_is_unresolved():
     r = _one(_file("6-photos-by-dest/B/n.jpg", PHONE, "2024:07:03 14:00:00"), _art(tz=""))
     assert r["resolved_utc"] is None and r["time_rule_used"] == "timezone_missing"
@@ -90,6 +123,18 @@ def test_smartphone_no_offset_no_timezone_is_unresolved():
 def test_missing_timestamp_is_unresolved():
     r = _one(_file("6-photos-by-dest/B/x.jpg", CAM, "garbage"))
     assert r["resolved_utc"] is None and r["time_rule_used"] == "missing_timestamp"
+
+
+@pytest.mark.spec("BLD-resolved_utc", "RUL-unknown_group_stops_geotag",
+                  test="TST-geotag_resolved_utc-an_unclassified_group_is_never_read_as_a_phone")
+@pytest.mark.parametrize("groups", [{"X|Y|1": {"camera_group_class": "unknown"}}, {}])
+def test_an_unclassified_group_is_never_read_as_a_phone(groups):
+    """A group classed as neither phone nor camera — or not classed at all — is never solved as a phone would be,
+    by the offset recorded with its time or the destination's timezone: its photos stay unresolved."""
+    f = _file("6-photos-by-dest/B/u.jpg", "X|Y|1", "2024:07:03 14:00:00", offset_tag="+02:00")
+    r = cal.compute_resolved_utc([f], groups, _art())[0]
+    assert r["resolved_utc"] is None and r["resolved_utc_status"] == "unresolved"
+    assert r["time_rule_used"] == "camera_group_unclassified"
 
 
 def test_rows_are_path_sorted():
@@ -103,8 +148,11 @@ def test_rows_are_path_sorted():
 
 @pytest.mark.parametrize("s, secs", [
     ("+02:00", 7200), ("-05:30", -19800), ("+00:00", 0), ("-00:00", 0),
-    ("xx", None), ("+2:00", None), ("", None), (None, None), ("+0200", None), (1234, None),
-    ("+ab:cd", None), ("+123456", None)])   # passes the length/prefix guard but fails int/split parse
+    ("xx", None), ("+2:00", None), ("", None), (None, None), ("+0200", 7200), (1234, None),
+    ("Z", 0), ("+14:00", 50400), ("+05:45", 20700),
+    # what is not an offset is none, never one read loosely
+    ("+ab:cd", None), ("+123456", None), ("+99:99", None), ("+15:00", None), ("+02:60", None),
+    ("+-2:00", None), ("+02:-30", None), ("+01:1932", None)])
 def test_parse_iso_offset(s, secs):
     assert cal._parse_iso_offset(s) == secs
 
@@ -133,7 +181,7 @@ def test_cache_round_trips_and_replaces(tmp_path):
     c.close()
 
 
-@pytest.mark.spec("geotag-utc-fingerprint-1")
+@pytest.mark.spec("BLD-resolved_utc_fingerprint")
 def test_fingerprint_stable_and_sensitive():
     rows = _rows()
     inp = {"photos_21_sha256": "abc", "gpx_fingerprint": "g"}
@@ -146,9 +194,9 @@ def test_fingerprint_stable_and_sensitive():
 
 # --- end-to-end through run -------------------------------------------------
 
-@pytest.mark.spec("geotag-utc-after-validation-1")
+@pytest.mark.spec("BLD-resolved_utc")
 def test_resolved_utc_cache_created_only_after_photos21_complete(tmp_path, monkeypatch, capsys):
-    """§22: the resolved-UTC cache is written ONLY after upstream validation — specifically once
+    """BLD-geotag_stage_order: the resolved-UTC cache is written ONLY after upstream validation — specifically once
     photos-21 is complete. Here the GPX anchor auto-resolves the camera offset, but with no default
     folder timezone the destination timezone REQUIRES user input, so photos-21 is incomplete on the
     first run and NO resolved-UTC cache is produced (even though the camera UTC is computable from the
@@ -187,7 +235,7 @@ def test_resolved_utc_cache_created_only_after_photos21_complete(tmp_path, monke
              rec("6-photos-by-dest/B/b.arw", 50.8480, 4.3540, "2024:07:03 14:13:08")]
     for f in files:
         p = ws / f["relative_path"]; p.parent.mkdir(parents=True, exist_ok=True); p.write_bytes(b"x")
-    (ctl / "photos-11-handoff.json").write_text(json.dumps({"filename_timestamp_format": utils.CONFIG["filename_timestamp_format"], "files": files, "cache_fingerprint": "pcf"}))
+    (ctl / "photos-11-handoff.json").write_text(json.dumps({"filename_timestamp_format": utils.CONFIG["filename_timestamp_format"], "files": match_disk(ws, files), "cache_fingerprint": "pcf", "depends_on": {"cache": {"fingerprint_algorithm_version": utils.FINGERPRINT_ALGORITHM_VERSION}}}))
 
     def run():
         monkeypatch.chdir(str(ws))
@@ -226,7 +274,7 @@ def test_resolved_utc_cache_created_only_after_photos21_complete(tmp_path, monke
                             ("6-photos-by-dest/B/b.arw", "2024-07-03T12:13:21Z")]
 
 
-@pytest.mark.spec("geotag-compute-resolved-utc-1")
+@pytest.mark.spec("BLD-resolved_utc")
 def test_run_populates_cache_when_complete(tmp_path, monkeypatch, capsys):
     MANAGED = ["0-sources", "1-strays", "2-missing-metadata", "3-redundant-jpgs",
                "4-videos-by-date", "5-photos-by-date", "6-photos-by-dest"]
@@ -247,6 +295,7 @@ def test_run_populates_cache_when_complete(tmp_path, monkeypatch, capsys):
         cfg["camera_time_and_timezone_policy"], device_groups={"fixed_clock_cameras": [CAM], "phones": []},
         default_folder_timezone="Europe/Brussels", multi_anchor_auto_apply=True)
     (ctl / "photos-00-config.json").write_text(json.dumps(cfg))
+    answer_root_zone(ctl)                        # the zone answered once at the root (RUL-timezone_auto_resolves)
 
     def rec(rel, lat, lon, dto):
         parsed = {"DateTimeOriginal": dto, "selected_source_naive_timestamp": dto,
@@ -262,7 +311,7 @@ def test_run_populates_cache_when_complete(tmp_path, monkeypatch, capsys):
     for f in files:
         p = ws / f["relative_path"]; p.parent.mkdir(parents=True, exist_ok=True); p.write_bytes(b"x")
     # the timezone must be accepted for status=complete
-    (ctl / "photos-11-handoff.json").write_text(json.dumps({"filename_timestamp_format": utils.CONFIG["filename_timestamp_format"], "files": files, "cache_fingerprint": "pcf"}))
+    (ctl / "photos-11-handoff.json").write_text(json.dumps({"filename_timestamp_format": utils.CONFIG["filename_timestamp_format"], "files": match_disk(ws, files), "cache_fingerprint": "pcf", "depends_on": {"cache": {"fingerprint_algorithm_version": utils.FINGERPRINT_ALGORITHM_VERSION}}}))
 
     def run():
         monkeypatch.chdir(str(ws))
@@ -298,10 +347,10 @@ def test_run_populates_cache_when_complete(tmp_path, monkeypatch, capsys):
                     ("6-photos-by-dest/B/b.arw", "2024-07-03T12:13:21Z", "camera_group_offset")]
 
 
-@pytest.mark.spec("geotag-utc-not-restaled-by-unrelated-config-1", "config-edit-outside-timepolicy-1", "RUL-remake_only_what_depends", "RUL-costly_results_survive_unrelated_edits", test="TST-geotag_resolved_utc-unrelated_config_edit_replans_but_does_not_restale_resolved_utc")
+@pytest.mark.spec("BLD-resolved_utc_fingerprint", "RUL-times_survive_unrelated_config_edits", "RUL-remake_only_what_depends", "RUL-costly_results_survive_unrelated_edits", test="TST-geotag_resolved_utc-unrelated_config_edit_replans_but_does_not_restale_resolved_utc")
 def test_unrelated_config_edit_replans_but_does_not_restale_resolved_utc(tmp_path, monkeypatch, capsys):
-    """§22.1 / shared §4.2: a config edit OUTSIDE the time-policy subset re-plans but must NOT restale
-    already-resolved UTC. The resolved-UTC cache fingerprint is built from time-relevant inputs only
+    """RUL-times_survive_unrelated_config_edits: a config edit OUTSIDE the time-policy subset re-plans but must NOT
+    restale already-resolved UTC. The resolved-UTC cache fingerprint is built from time-relevant inputs only
     (photos-21 sha, the camera-time-policy fingerprint, GPX, prep cache, field-set/key versions) — not
     a whole-config hash. Here we edit `merge.library_root` (a merge-phase key, untouched by geotag) and
     re-run: photos-21 stays byte-identical and the resolved_utc_cache_fingerprint is unchanged."""
@@ -325,6 +374,7 @@ def test_unrelated_config_edit_replans_but_does_not_restale_resolved_utc(tmp_pat
         default_folder_timezone="Europe/Brussels", multi_anchor_auto_apply=True)
     config_path = ctl / "photos-00-config.json"
     config_path.write_text(json.dumps(cfg))
+    answer_root_zone(ctl)                        # the zone answered once at the root (RUL-timezone_auto_resolves)
 
     def rec(rel, lat, lon, dto):
         parsed = {"DateTimeOriginal": dto, "selected_source_naive_timestamp": dto,
@@ -339,7 +389,7 @@ def test_unrelated_config_edit_replans_but_does_not_restale_resolved_utc(tmp_pat
              rec("6-photos-by-dest/B/b.arw", 50.8480, 4.3540, "2024:07:03 14:13:08")]
     for f in files:
         p = ws / f["relative_path"]; p.parent.mkdir(parents=True, exist_ok=True); p.write_bytes(b"x")
-    (ctl / "photos-11-handoff.json").write_text(json.dumps({"filename_timestamp_format": utils.CONFIG["filename_timestamp_format"], "files": files, "cache_fingerprint": "pcf"}))
+    (ctl / "photos-11-handoff.json").write_text(json.dumps({"filename_timestamp_format": utils.CONFIG["filename_timestamp_format"], "files": match_disk(ws, files), "cache_fingerprint": "pcf", "depends_on": {"cache": {"fingerprint_algorithm_version": utils.FINGERPRINT_ALGORITHM_VERSION}}}))
 
     def run_fingerprint():
         monkeypatch.chdir(str(ws))
@@ -364,3 +414,174 @@ def test_unrelated_config_edit_replans_but_does_not_restale_resolved_utc(tmp_pat
     fp_after = run_fingerprint()
     assert fp_after == fp_before                          # resolved UTC NOT restaled
     assert sha256_file(str(tdp)) == sha_before            # photos-21 byte-identical (not restaled)
+
+
+@pytest.mark.spec("RUL-offset_within_time_value", "RUL-phone_time_from_own_offset", "BLD-resolved_utc",
+                  test="TST-geotag_resolved_utc-an_offset_within_the_time_s_value_is_its_own")
+@pytest.mark.parametrize("value, utc", [
+    ("2024:05:01 10:00:00Z", "2024-05-01T10:00:00Z"),
+    ("2024:05:01 19:00:00+09:00", "2024-05-01T10:00:00Z"),
+    ("2024:05:01 19:00:00.73+09:00", "2024-05-01T10:00:00Z"),
+    ("2024:05:01 10:00:00", "2024-05-01T08:00:00Z"),            # none stated: the destination's zone
+    ("2024:05:01 10:00:00.73", "2024-05-01T08:00:00Z")])
+def test_an_offset_written_within_the_time_s_value_is_the_one_recorded_with_it(value, utc):
+    """A time whose own value states its zone (XMP writes `…+09:00`, `…Z`) is turned to UTC by that — never
+    read as the destination's local time, which would move it by the difference."""
+    f = _file("6-photos-by-dest/B/p.png", PHONE, value)
+    f["source_time_tag"] = "XMP:DateTimeOriginal"
+    r = _one(f)
+    assert r["resolved_utc"] == utc
+    assert r["time_rule_used"] == ("smartphone_native_offset" if len(value) > 22 or value.endswith("Z")
+                                   else "destination_timezone")
+
+
+@pytest.mark.spec("RUL-offset_within_value_before_beside",
+                  test="TST-geotag_resolved_utc-an_offset_within_the_value_comes_before_one_beside_it")
+@pytest.mark.parametrize("value, beside, utc, offset", [
+    ("2024:05:01 19:00:00+09:00", "+02:00", "2024-05-01T10:00:00Z", 32400),
+    ("2024:05:01 19:00:00.73+09:00", "-05:00", "2024-05-01T10:00:00Z", 32400),
+    ("2024:05:01 10:00:00Z", "+02:00", "2024-05-01T10:00:00Z", 0),
+    ("2024:05:01 10:00:00", "+05:00", "2024-05-01T05:00:00Z", 18000)])     # none within: the one beside it
+def test_an_offset_within_the_time_s_value_comes_before_one_in_the_field_beside_it(value, beside, utc, offset):
+    """A time whose value states its own offset, with an offset field beside it that says something else: the
+    one within the value is the one the time is read by."""
+    f = _file("6-photos-by-dest/B/p.jpg", PHONE, value, offset_tag=beside)
+    assert cal._own_offset(f) == offset
+    r = _one(f)
+    assert r["resolved_utc"] == utc and r["time_rule_used"] == "smartphone_native_offset"
+
+
+@pytest.mark.spec("RUL-corrected_time_written_local", "BLD-executable_plan", "RUL-time_offset_written_beside",
+                  test="TST-geotag_resolved_utc-the_offset_written_is_hours_and_minutes")
+def test_the_offset_written_is_always_hours_and_minutes():
+    """A zone's offset before it kept standard time has seconds (Amsterdam, 1935: +01:19:32). The offset
+    field holds hours and minutes: it is written to the nearest minute, never as `+01:1932`, which reads
+    back a day out."""
+    dto, off = cal._local_time_and_offset("1935-06-01T10:40:28Z", "Europe/Amsterdam")
+    assert (dto, off) == ("1935:06:01 12:00:00", "+01:20") and cal._parse_iso_offset(off) == 4800
+    assert cal._local_time_and_offset("2024-07-03T12:00:00Z", "Asia/Kathmandu")[1] == "+05:45"
+    assert cal._local_time_and_offset("2024-01-03T12:00:00Z", "America/St_Johns")[1] == "-03:30"
+    assert cal._local_time_and_offset("2024-07-03T12:00:00Z", "UTC")[1] == "+00:00"
+
+
+@pytest.mark.spec("BLD-resolved_utc", test="TST-geotag_resolved_utc-a_time_at_the_calendar_s_edge_is_unresolved")
+@pytest.mark.parametrize("naive, key", [("0001:01:01 00:00:00", CAM), ("9999:12:31 23:59:59", PHONE),
+                                        ("0001:01:01 00:00:00", PHONE)])
+def test_a_time_at_the_calendar_s_edge_is_unresolved_not_a_crash(naive, key):
+    art = _art(tz="Asia/Tokyo" if naive.startswith("0001") else "America/Los_Angeles", offset=-7200)
+    r = _one(_file("6-photos-by-dest/B/a.jpg", key, naive), art)
+    assert (r["resolved_utc"], r["resolved_utc_status"], r["time_rule_used"]) == (None, "unresolved", "time_out_of_range")
+
+
+# --- RUL-ambiguous_local_time_never_guessed -------------------------------------
+
+UNIDENTIFIED = cal.NO_IDENTITY_KEY
+
+
+@pytest.mark.parametrize("key, marker", [(PHONE, None), (UNIDENTIFIED, None), (PHONE, "geotag")],
+                         ids=["phone", "naming_no_camera", "corrected_offset_gone"])
+@pytest.mark.parametrize("naive, rule", [("2026:03:29 02:30:00", "local_time_skipped"),
+                                         ("2026:10:25 02:30:00", "local_time_repeated")], ids=["skipped", "repeated"])
+@pytest.mark.spec("RUL-ambiguous_local_time_never_guessed", "BLD-resolved_utc",
+                  test="TST-geotag_resolved_utc-a_time_the_zone_skips_or_repeats_is_left_unresolved")
+def test_a_time_the_zone_skips_or_repeats_is_left_unresolved(key, marker, naive, rule):
+    """A photo whose time is read through its destination's zone — a phone's or a file's naming no camera with no
+    offset recorded, a corrected photo whose offset tag is gone — at a time the zone skips (Berlin, 29 March 2026,
+    02:30 never happened) or repeats (25 October 2026, 02:30 happened twice) is left unresolved, the case named:
+    never resolved to one of its two readings. An hour away, the same photo resolves as before."""
+    groups = dict(GROUPS, **{UNIDENTIFIED: {"camera_group_class": "unidentified"}})
+    f = dict(_file("6-photos-by-dest/B/p.jpg", key, naive), geotag_marker=marker)
+    r = cal.compute_resolved_utc([f], groups, _art(tz="Europe/Berlin"))[0]
+    assert (r["resolved_utc"], r["resolved_utc_status"], r["time_rule_used"]) == (None, "unresolved", rule)
+    near = dict(f, source_naive_time=naive.replace(" 02:30", " 03:30"))
+    r = cal.compute_resolved_utc([near], groups, _art(tz="Europe/Berlin"))[0]
+    assert r["resolved_utc_status"] == "valid" and r["resolved_utc"] == (
+        "2026-03-29T01:30:00Z" if "03:29" in naive else "2026-10-25T02:30:00Z")
+
+
+@pytest.mark.spec("RUL-ambiguous_local_time_never_guessed",
+                  test="TST-geotag_resolved_utc-a_time_with_its_offset_or_a_camera_s_needs_no_zone")
+def test_a_time_with_its_offset_or_a_camera_s_needs_no_zone():
+    """The nearest safe cases: at the same skipped time, a phone's photo recording its offset, and a camera's photo
+    resolved by its clock offset, resolve exactly as before — neither is read through the zone."""
+    art = _art(tz="Europe/Berlin", offset=-3600)
+    r = _one(_file("6-photos-by-dest/B/p.jpg", PHONE, "2026:03:29 02:30:00", offset_tag="+01:00"), art)
+    assert (r["resolved_utc"], r["time_rule_used"]) == ("2026-03-29T01:30:00Z", "smartphone_native_offset")
+    r = _one(_file("6-photos-by-dest/B/a.arw", CAM, "2026:03:29 02:30:00"), art)
+    assert (r["resolved_utc"], r["time_rule_used"]) == ("2026-03-29T01:30:00Z", "camera_group_offset")
+
+
+@pytest.mark.spec("RUL-ambiguous_local_time_never_guessed",
+                  test="TST-geotag_resolved_utc-the_block_names_photo_time_zone_and_both_readings")
+def test_the_block_names_photo_time_zone_and_both_readings():
+    rows = cal.compute_resolved_utc(
+        [_file("6-photos-by-dest/B/skip.jpg", PHONE, "2026:03:29 02:30:00"),
+         _file("6-photos-by-dest/B/twice.jpg", PHONE, "2026:10:25 02:30:00"),
+         _file("6-photos-by-dest/B/fine.jpg", PHONE, "2026:10:25 04:30:00")], GROUPS, _art(tz="Europe/Berlin"))
+    skip, twice = cal.ambiguous_time_blockers(rows)
+    assert "skip.jpg" in skip and "2026:03:29 02:30:00" in skip and "Europe/Berlin" in skip and "never happened" in skip
+    assert "+01:00 (2026-03-29T01:30:00Z)" in skip and "+02:00 (2026-03-29T00:30:00Z)" in skip
+    assert "twice.jpg" in twice and "happened twice" in twice
+    assert "+02:00 (2026-10-25T00:30:00Z)" in twice and "+01:00 (2026-10-25T01:30:00Z)" in twice
+    for b in (skip, twice):
+        assert "exiftool" in b and "move it out of 6-photos-by-dest/" in b
+
+
+@pytest.mark.spec("RUL-ambiguous_local_time_never_guessed",
+                  test="TST-geotag_resolved_utc-geotag_plan_stops_on_a_time_its_zone_skips")
+def test_geotag_plan_stops_on_a_time_its_zone_skips(tmp_path, monkeypatch, capsys):
+    """Through `geotag plan`: a phone's photo taken at 02:30 on the night Berlin's clocks went forward, with no offset
+    recorded, stops geotag once the zone is known, naming the photo — nothing is resolved, checked, placed or planned
+    for it; the photo an hour later alone plans."""
+    ws = tmp_path / "ws"; ws.mkdir()
+    for d in ["0-sources", "1-strays", "2-missing-metadata", "3-redundant-jpgs",
+              "4-videos-by-date", "5-photos-by-date", "6-photos-by-dest"]:
+        (ws / d).mkdir()
+    ctl = ws / ".photos-ingest"; ctl.mkdir()
+    (ctl / "photos-00-workspace-guard").touch()
+    cfg = {k: v for k, v in utils.CONFIG.items() if k != "jobs"}
+    cfg["gpx_root"] = ""
+    cfg["camera_time_and_timezone_policy"] = dict(
+        cfg["camera_time_and_timezone_policy"], device_groups={"fixed_clock_cameras": [], "phones": [PHONE]})
+    (ctl / "photos-00-config.json").write_text(json.dumps(cfg))
+    answer_root_zone(ctl, "Europe/Berlin")
+
+    def rec(rel, dto):
+        parsed = {"DateTimeOriginal": dto, "selected_source_naive_timestamp": dto,
+                  "selected_source_timestamp_tag": "DateTimeOriginal", "camera_group_key": PHONE, "has_timestamp": True}
+        return {"relative_path": rel, "media_class": "image", "folder_class": "6-photos-by-dest",
+                "size": 1, "mtime_ns": 1, "content_hash": json.dumps({"value": "fp" + rel, "status": "valid"}),
+                "metadata_status": {"camera_group_key_version": utils.CAMERA_GROUP_KEY_VERSION,
+                                    "camera_group_key": PHONE, "has_timestamp": True,
+                                    "field_set_version": utils.FIELD_SET_VERSION, "parsed_json": json.dumps(parsed)}}
+
+    def plan(files):
+        for f in files:
+            p = ws / f["relative_path"]; p.parent.mkdir(parents=True, exist_ok=True); p.write_bytes(b"x")
+        (ctl / "photos-11-handoff.json").write_text(json.dumps({
+            "filename_timestamp_format": utils.CONFIG["filename_timestamp_format"], "files": match_disk(ws, files),
+            "cache_fingerprint": "pcf",
+            "depends_on": {"cache": {"fingerprint_algorithm_version": utils.FINGERPRINT_ALGORITHM_VERSION}}}))
+        monkeypatch.chdir(str(ws))
+        monkeypatch.setattr(sys, "argv", ["photos-2-geotag", "plan"])
+        try:
+            cal.main()
+            return 0
+        except SystemExit as e:
+            return e.code
+
+    assert plan([rec("6-photos-by-dest/B/later.jpg", "2026:03:29 03:30:00")]) in (0, None)      # the safe case
+    assert (ctl / "photos-22-gps-drift-validation.json").exists()
+    for n in ("photos-22-gps-drift-validation.json", "photos-23-gps-decisions.json", "photos-24-executable-plan.json"):
+        if (ctl / n).exists():
+            (ctl / n).unlink()
+    capsys.readouterr()
+    both = [rec("6-photos-by-dest/B/later.jpg", "2026:03:29 03:30:00"),
+                rec("6-photos-by-dest/B/skipped.jpg", "2026:03:29 02:30:00")]
+    assert plan(both) == 2
+    out = capsys.readouterr()
+    said = out.out + out.err
+    assert "skipped.jpg" in said and "Europe/Berlin" in said and "2026:03:29 02:30:00" in said, said
+    assert "later.jpg:" not in said
+    assert not any((ctl / n).exists() for n in ("photos-22-gps-drift-validation.json", "photos-23-gps-decisions.json",
+                                                 "photos-24-executable-plan.json"))

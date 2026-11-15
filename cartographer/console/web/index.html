@@ -31,6 +31,12 @@
       <strong>Workspace not initialized.</strong>
       <span>Run <b>Prep → Plan</b> to scaffold it. Every other action stays disabled until then.</span>
     </div>
+    <div id="edit-stale-banner" class="init-banner" hidden>
+      <strong>Geotag plan regenerated the decisions.</strong>
+      <span>The Edit tab still shows the ones it loaded, with unsaved edits. Those cannot be saved over the new
+        records (the save would be refused as changed since loaded): note them, reload the Edit tab, and make them again.</span>
+      <button id="edit-reload" class="mini">Reload Edit tab</button>
+    </div>
     <div id="phase-view">
       <div class="actions">
         <span id="phase-status" class="chip">—</span>

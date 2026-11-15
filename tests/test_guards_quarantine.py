@@ -40,11 +40,11 @@ def _ws(tmp_path):
 def _mock(monkeypatch):
     def spy(p):
         with open(p, "rb") as f:
-            return {"status": "valid", "strategy": "image-content-hash-v1",
+            return {"status": "valid", "strategy": "image-content-hash-v2",
                     "value": "sig-" + f.read().hex()[:16], "engine_version": "t"}
     monkeypatch.setattr(prep.ContentHasher, "fingerprint_image", spy)
     monkeypatch.setattr(prep.ContentHasher, "fingerprint_video",
-                        lambda p: {"status": "valid", "strategy": "video-md5-v1", "value": "vsig"})
+                        lambda p: {"status": "valid", "strategy": "video-md5-v2", "value": "vsig"})
 
     def meta(folders, max_workers=4, progress_coordinator=None):
         res = {}
@@ -76,7 +76,7 @@ def _seed_quarantine(ws):
 
 # --- band-misplacement guard -------------------------------------------------
 
-@pytest.mark.spec("prep-band-misplacement-blocks-1", "prep-video-only-in-videos-band-1", "RUL-band_misplacement_blocks", test="TST-guards_quarantine-band_guard_blocks_video_under_photo_band")
+@pytest.mark.spec("RUL-band_misplacement_blocks", test="TST-guards_quarantine-band_guard_blocks_video_under_photo_band")
 def test_band_guard_blocks_video_under_photo_band(tmp_path, monkeypatch):
     _mock(monkeypatch)
     ws = _ws(tmp_path)
@@ -110,7 +110,8 @@ def test_band_guard_allows_correct_placement(tmp_path, monkeypatch):
 
 # --- prune-quarantine --------------------------------------------------------
 
-@pytest.mark.spec("BLD-prune_command", "RUL-prune_explicit", test="TST-guards_quarantine-prune_dry_run_deletes_nothing")
+@pytest.mark.spec("BLD-prune_command", "RUL-prune_lists_unless_told",
+                  test="TST-guards_quarantine-prune_dry_run_deletes_nothing")
 def test_prune_dry_run_deletes_nothing(tmp_path, monkeypatch):
     _mock(monkeypatch)
     ws = _ws(tmp_path)
@@ -119,7 +120,8 @@ def test_prune_dry_run_deletes_nothing(tmp_path, monkeypatch):
     assert os.path.isdir(os.path.join(utils.quarantine_dir(str(ws)), pid))
 
 
-@pytest.mark.spec("BLD-prune_command", "RUL-prune_explicit", test="TST-guards_quarantine-prune_yes_with_plan_id_deletes_only_that")
+@pytest.mark.spec("BLD-prune_command", "RUL-prune_lists_unless_told",
+                  test="TST-guards_quarantine-prune_yes_with_plan_id_deletes_only_that")
 def test_prune_yes_with_plan_id_deletes_only_that(tmp_path, monkeypatch):
     _mock(monkeypatch)
     ws = _ws(tmp_path)
@@ -158,7 +160,7 @@ def test_prune_by_age_reads_the_plan_id_time(tmp_path):
 
 # --- footprint ---------------------------------------------------------------
 
-@pytest.mark.spec("prep-quarantine-footprint-reported-1", test="TST-guards_quarantine-footprint_reports_quarantine")
+@pytest.mark.spec("RUL-quarantine_footprint_reported", test="TST-guards_quarantine-footprint_reports_quarantine")
 def test_footprint_reports_quarantine(tmp_path, monkeypatch):
     _mock(monkeypatch)
     ws = _ws(tmp_path)
@@ -168,9 +170,16 @@ def test_footprint_reports_quarantine(tmp_path, monkeypatch):
     assert qf["total_files"] >= 1
     assert qf["total_bytes"] > 0
     assert qf["oldest_plan_id"] and qf["newest_plan_id"]
+    # what an interrupted rewrite of a manifest left beside it is not a quarantined file
+    qbase = os.path.join(str(ws), ".photos-ingest-quarantine")
+    pid = sorted(os.listdir(qbase))[0]
+    with open(os.path.join(qbase, pid, ".tmp-manifest-abc.json"), "w") as f:
+        f.write("[")
+    again = _plan(ws).summary["quarantine_footprint"]
+    assert (again["total_files"], again["total_bytes"]) == (qf["total_files"], qf["total_bytes"])
 
 
-# --- quarantine manifest: never silently truncate recoverable history (prep §15) -------------
+# --- quarantine manifest: never silently truncate recoverable history (BLD-quarantine_layout) ---
 
 def test_quarantine_manifest_corruption_is_preserved_not_truncated(tmp_path):
     """A corrupt manifest.json must be preserved under a .corrupt backup (so the prior records stay
@@ -207,6 +216,38 @@ def test_quarantine_manifest_non_array_is_treated_as_corrupt(tmp_path):
     assert json.loads((mdir / "manifest.json").read_text()) == [{"operation_id": "op-1"}]
 
 
+@pytest.mark.spec("RUL-rewrite_in_place_atomic",
+                  test="TST-guards_quarantine-an_interrupted_manifest_rewrite_leaves_the_manifest_whole")
+def test_an_interrupted_manifest_rewrite_leaves_the_manifest_whole(tmp_path, monkeypatch):
+    """The quarantine's manifest, rewritten whole for each entry and interrupted — while the new text is half
+    written, or with it written but not yet in the manifest's place — holds its earlier entries whole, and the next
+    entry goes down with them, whole."""
+    mdir = tmp_path / "qd"; mdir.mkdir()
+    manifest = mdir / "manifest.json"
+    prep._append_quarantine_manifest(str(mdir), {"operation_id": "op-1"})
+    before = manifest.read_bytes()
+    entry = {"operation_id": "op-2", "original_path": "b" * 100_000}
+    real_dump = json.dump
+
+    def dump_half(obj, fp, **kw):
+        text = json.dumps(obj, **kw)
+        fp.write(text[:len(text) // 2]); fp.flush()
+        raise KeyboardInterrupt
+
+    def interrupted_rename(*a, **k):
+        raise KeyboardInterrupt
+    for cut in (lambda m: m.setattr(json, "dump", dump_half),
+                lambda m: (m.setattr(os, "replace", interrupted_rename), m.setattr(os, "rename", interrupted_rename))):
+        with monkeypatch.context() as m:
+            cut(m)
+            with pytest.raises(KeyboardInterrupt):
+                prep._append_quarantine_manifest(str(mdir), entry)
+        assert manifest.read_bytes() == before
+    assert json.dump is real_dump
+    prep._append_quarantine_manifest(str(mdir), entry)
+    assert json.loads(manifest.read_text()) == [{"operation_id": "op-1"}, entry]
+
+
 # --- dump dotfile quarantine + managed-folder prune protection -----------------
 
 def _dump_dotfile_ops(plan):
@@ -214,7 +255,7 @@ def _dump_dotfile_ops(plan):
                   if op.type == "quarantine_move" and op.verification.get("kind") == "dump_dotfile")
 
 
-@pytest.mark.spec("ctrl-dotfiles-swept-quarantine-1", "prep-hidden-dump-sweep-1", "prep-no-sweep-non-dump-dotfiles-1", test="TST-guards_quarantine-0sources_dotfiles_quarantined")
+@pytest.mark.spec("RUL-dump_hidden_files_quarantined", test="TST-guards_quarantine-0sources_dotfiles_quarantined")
 def test_0sources_dotfiles_quarantined(tmp_path, monkeypatch):
     _mock(monkeypatch)
     ws = _ws(tmp_path)
@@ -240,7 +281,7 @@ def test_0sources_dotfiles_quarantined(tmp_path, monkeypatch):
     assert ".DS_Store" in moved and "t.jpg" in moved
 
 
-@pytest.mark.spec("prep-init-sweeps-hidden-to-quarantine-1")
+@pytest.mark.spec("RUL-dump_hidden_files_quarantined")
 def test_init_root_dotfiles_quarantined(tmp_path, monkeypatch):
     _mock(monkeypatch)
     ws = tmp_path / "ws"; ws.mkdir()                           # uninitialized (no guard / no 0-6)
@@ -294,7 +335,8 @@ def test_folders_left_empty_are_planned_removals(tmp_path, monkeypatch):
     assert {o["operation_id"] for o in journal["operations"] if o["status"] == "success"} >= ids
 
 
-@pytest.mark.spec("RUL-emptied_folders_removed", test="TST-guards_quarantine-a_folder_not_empty_at_execute_is_left")
+@pytest.mark.spec("RUL-emptied_folder_removed_only_empty",
+                  test="TST-guards_quarantine-a_folder_not_empty_at_execute_is_left")
 def test_a_folder_not_empty_at_execute_is_left(tmp_path, monkeypatch, capsys):
     """A planned removal finding its folder not empty leaves it, skipped in the journal and reported; the
     run still succeeds."""

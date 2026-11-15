@@ -17,8 +17,7 @@ Top-level layout (the package lives at the repo root):
   `walkthrough.md` — the screenshot tour, `quickstart.md`, `concepts.md`, `editor.md`) plus
   `screenshots/`, linked from `README.md`.
   These are user docs; `spec/` remains the behavioral source of truth.
-- **`tools/`** — build + test helpers (`build-pyz`, `coverage`, `jstest`, `plan-differential`, `spec-build`,
-  `spec-coverage`, `spec-ledger`).
+- **`tools/`** — build + test helpers (`build-pyz`, `coverage`, `jstest`, `plan-differential`, `spec-build`).
 - **`.githooks/`** — local pre-commit / pre-push hooks. `.github/workflows/` — CI.
 
 See `README.md` for the overview.
@@ -67,29 +66,20 @@ tools/coverage -k merge        # subset (report % will be partial)
 # Decision-editor front-end unit tests (web/app.js pure logic) — Node's built-in runner, no deps.
 tools/jstest                   # node --test over cartographer/editor/tests/*.test.mjs
 
-# Spec-clause coverage. spec/spec-clauses.json is a living INDEX of the spec clauses (one per
-# behaviour, each with a spec pointer file+section kept in sync by a test). The GATE applies to the
-# `must_cover` subset (every clause a genuine test asserts): each must keep >=1 test tagged
-# @pytest.mark.spec("<id>"). The other clauses carry an `omit_reason` (incidental happy-path / none /
-# crash-injection / cross-cutting principle). Collection-only (fast); exits non-zero if a must-cover
-# clause lost its test. CI runs it. Complements line/branch coverage — tracks SPEC behaviours, not lines.
-tools/spec-coverage            # report + gate; --verbose for the per-clause table
-
 # The spec corpus (spec/ as one Sphinx project, sphinx-needs items: intent / rationale / build, and the tests
-# as items from their marks). THE GATE: fails on any warning; on success rewrites spec/needs.json -- commit it.
-# The specs move into it one document at a time (BACKLOG item 1); until then spec-clauses.json and
-# tools/spec-coverage keep gating the clauses not yet converted.
+# as items from their marks). THE GATE: fails on any warning — a dangling link, a mark naming no item, an item
+# whose `verify` is `required` that no test verifies — and on success rewrites spec/needs.json -- commit it.
 python3 -m venv spec/.venv && spec/.venv/bin/pip install -r spec/requirements.txt   # first time
 tools/spec-build
-tools/spec-ledger check        # every sentence of a converted spec section is accounted for, verbatim
 ```
 
 A test names what it verifies with `@pytest.mark.spec(<ids>..., test="TST-<module>-<name>")`: the ids are corpus
-items (or the clause-index ids an item lists in its `aliases`), and `test=` is the test's own stable id, which makes it
-an item of the corpus. Keep the id when a test is renamed.
+items, and `test=` is the test's own stable id, which makes it an item of the corpus. Keep the id when a test is
+renamed. The original specs the corpus was converted from, its conversion ledgers and the clause index that bridged
+the old test marks are in the repository's history, as they stood at the release `v2.0.0`.
 
-Current coverage figures (line/branch + spec-clause) live in `COVERAGE.md` at the repo root; the
-commands above regenerate them. The clause-by-clause audit is `docs/design/spec-test-coverage-audit.md`.
+Current coverage figures (line/branch, and the corpus's items and tests) live in `COVERAGE.md` at the repo root; the
+commands above regenerate them.
 
 `tests/conftest.py` imports the package modules once and **aliases them under their historical
 short names** in `sys.modules` (`photos_1_prep` → `cartographer.photos_1_prep`, likewise
@@ -106,9 +96,9 @@ There is no build step and no linter config; runtime deps are system tools (`exi
 ### Continuous integration
 
 - **GitHub Actions** (`.github/workflows/tests.yml`), on every push to `main` and on every pull request: the
-  suite under coverage (failing below 80%), `tools/spec-coverage`, the editor's front-end tests and
-  `tools/build-pyz --check`; and, in a job of its own, the spec corpus — `tools/spec-build`, a check that the
-  committed `spec/needs.json` is what it writes, and `tools/spec-ledger check`.
+  suite under coverage (failing below 80%), the editor's front-end tests and `tools/build-pyz --check`; and, in a
+  job of its own, the spec corpus — `tools/spec-build` and a check that the committed `spec/needs.json` is what it
+  writes.
 - **Local `pre-push` hook** (`.githooks/pre-push`) runs a static guard
   (`.githooks/check_test_only_functions.py` — fails if any production function is referenced only by
   tests), then the suite without its slow tests, the editor's front-end tests, the spec corpus (when
@@ -116,6 +106,12 @@ There is no build step and no linter config; runtime deps are system tools (`exi
   `git config core.hooksPath .githooks`; bypass once with `git push --no-verify`. The guard's
   `SRC_FILES` covers the three phase modules, `photos_utils`, `_geotag_calc`, `_prep_models`, `cli` and both
   web servers.
+- **Private words** (`.githooks/check_private_words.py`): a contributor's real name or personal address must never
+  enter the repository — its files, its commit messages, a ref's name. The words are kept outside it, one to a line
+  in `.git/private-words` of the clone (never tracked), and for CI in the repository secret `PRIVATE_WORDS`; the check
+  itself names none. `pre-commit` checks what is staged, `commit-msg` the message, `pre-push` every commit about to
+  be pushed, CI every tracked file. With no word set it checks nothing and says so. People are named by role
+  ("the owner").
 - **Local `pre-commit` hook** (`.githooks/pre-commit`) rebuilds `dist/photos-cartographer` on every
   commit so the local executable is never stale. `dist/` is gitignored — this is a LOCAL build
   only; nothing is committed or pushed. It blocks a commit only if the build itself breaks.
@@ -181,7 +177,7 @@ entry (`python -m cartographer.photos_1_prep …`) sharing the same `add_argumen
   `photos-30-merge-plan.json`).
   The planning command writes it there and prints the location; the validate/apply commands read it from
   there — there are **no** `--output`/`--plan` path flags. Re-planning backs up the prior artifact under
-  the shared incremental `-NNN` suffix (never clobbered). See shared contract Section 5 ("Canonical plan
+  the shared incremental `-NNN` suffix (never clobbered). See `BLD-canonical_plan_paths` ("Canonical plan
   persistence") and `photos_utils.write_versioned_json`.
 
 ### Seeded config defaults
@@ -234,7 +230,7 @@ Defined in the shared contract (`spec/intent/shared.md`, `spec/build/shared.md`)
   sentinel `photos-00-workspace-guard`, handoff manifest, decision JSONs, journals, the SQLite cache
   `photos-00-ingest.db`, and `gpx/` when `gpx_root` is configured to live there). Prep skips this
   subtree wholesale, so artifacts can never be mistaken for media. Two files there are **scratch, not record**: `photos-00-plan-memo.db`, the
-  plan-time decode memo (prep §10.3) — re-derivable fingerprints of files at the paths they were read
+  plan-time decode memo (`BLD-plan_memo`) — re-derivable fingerprints of files at the paths they were read
   from — and `photos-00-track-memo.db`, the tracks geotag has parsed; both written outside the
   plan/execute op model, never journalled or archived, safe to delete. Finalize adds
   `photos-26-finalized-media.json` and the archival package (`photos-26-archive-manifest.json` +
@@ -261,9 +257,8 @@ Defined in the shared contract (`spec/intent/shared.md`, `spec/build/shared.md`)
 ## Specs are the source of truth
 
 The pipeline is **specification-driven**: behavior is defined by the spec corpus in `spec/` — `intent/`
-(what the tool guarantees), `rationale/` (why) and `build/` (how this build does it) — into which the shared
-contract, prep and merge are converted; `spec/photos-2-geotag-workflow.md` stays authoritative for the geotag
-sections not yet converted. When changing pipeline behavior, update the governing spec; the spec is
+(what the tool guarantees), `rationale/` (why) and `build/` (how this build does it), each in four documents — the
+shared contract, prep, geotag and merge. When changing pipeline behavior, update the governing spec; the spec is
 authoritative, not just the code, so reconcile differences between a script and its spec rather than treating
 the existing code as ground truth.
 

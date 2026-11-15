@@ -14,7 +14,7 @@
 
 """Phase 6c-0 — the content-fingerprint engine (the cross-phase identity spine prep pins and
 geotag recomputes after EXIF writes). The default path is a persistent `magick -script -` worker
-(§17.5), reused across files; a magick-less system falls back to per-file `identify`. Tools are
+(BLD-tool_workers), reused across files; a magick-less system falls back to per-file `identify`. Tools are
 mocked, as the rest of the suite mocks external tools. From conftest.py.
 """
 import photos_utils as utils
@@ -31,11 +31,11 @@ def test_fingerprint_image_missing_imagemagick(monkeypatch):
     monkeypatch.setattr(utils, "get_magick_command", lambda: [])
     monkeypatch.setattr(utils, "get_identify_command", lambda: [])
     r = utils.ContentHasher.fingerprint_image("/nope.jpg")
-    assert r["status"] == "failed" and r["value"] is None and r["strategy"] == "image-content-hash-v1"
+    assert r["status"] == "failed" and r["value"] is None and r["strategy"] == "image-content-hash-v2"
     assert "ImageMagick not found" in r["error"]
 
 
-@pytest.mark.spec("prep-persistent-external-workers-1", test="TST-content_hasher-fingerprint_image_uses_persistent_worker")
+@pytest.mark.spec("BLD-tool_workers", test="TST-content_hasher-fingerprint_image_uses_persistent_worker")
 def test_fingerprint_image_uses_persistent_worker(monkeypatch):
     """Default path: the per-thread persistent magick worker returns the signature."""
     monkeypatch.setattr(utils, "get_magick_command", lambda: ["magick"])
@@ -49,11 +49,12 @@ def test_fingerprint_image_uses_persistent_worker(monkeypatch):
             pass
     monkeypatch.setattr(utils, "_thread_magick_worker", lambda: _W())
     res = utils.ContentHasher.fingerprint_image("/img.jpg")
-    assert res == {"status": "valid", "strategy": "image-content-hash-v1",
+    assert res == {"status": "valid", "strategy": "image-content-hash-v2",
                    "value": "sig-abc123", "engine_version": "magick-test"}
 
 
-@pytest.mark.spec("prep-worker-crash-safe-retry-1", test="TST-content_hasher-fingerprint_image_worker_crash_fails_after_retry")
+@pytest.mark.spec("RUL-tool_failure_retried", "RUL-tool_failure_never_valid",
+                  test="TST-content_hasher-fingerprint_image_worker_crash_fails_after_retry")
 def test_fingerprint_image_worker_crash_fails_after_retry(monkeypatch):
     """A worker that keeps crashing is restarted, retried once, then reported failed (never confirmed)."""
     monkeypatch.setattr(utils, "get_magick_command", lambda: ["magick"])
@@ -90,11 +91,11 @@ def test_fingerprint_image_falls_back_to_per_file_identify(monkeypatch):
     monkeypatch.setattr(utils.subprocess, "Popen", lambda *a, **k: _Proc())
     monkeypatch.setattr(utils.select, "select", lambda r, w, x, t: (r, [], []))
     res = utils.ContentHasher.fingerprint_image("/img.jpg")
-    assert res == {"status": "valid", "strategy": "image-content-hash-v1",
+    assert res == {"status": "valid", "strategy": "image-content-hash-v2",
                    "value": "sig-abc123", "engine_version": "magick-test"}
 
 
-@pytest.mark.spec("prep-persistent-driver-reset-state-1", test="TST-content_hasher-persistent_magick_worker_protocol")
+@pytest.mark.spec("BLD-tool_workers", test="TST-content_hasher-persistent_magick_worker_protocol")
 def test_persistent_magick_worker_protocol(monkeypatch):
     """signature() sends the `-read ... -print %# ... {ready}` script and returns the line before
     the {ready} sentinel."""

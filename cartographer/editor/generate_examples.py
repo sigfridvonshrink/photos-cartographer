@@ -46,12 +46,21 @@ BD = "6-photos-by-dest"
 written = []
 
 
+def _accept(cell, offset=None):
+    """Accept an offset cell's proposal as the editor does: the acceptance names the offset it accepts.
+    `offset` stands for a proposal made on a plan between two steps a scenario folds into one (the zone
+    set, then the offset it yields accepted)."""
+    cell["user_decision"].update(
+        accept_proposal=True,
+        accepted_offset_seconds=cell["proposal"]["proposed_offset_seconds"] if offset is None else offset)
+
+
 def _utc(h, m, s=0):
     return datetime(2024, 7, 3, h, m, s, tzinfo=timezone.utc)
 
 
-def _pt(lat, lon, t):
-    return cal.GPXPoint(lat, lon, t, "trip-2024-07-03.gpx", 0)
+def _pt(lat, lon, t, src="trip-2024-07-03.gpx"):
+    return cal.GPXPoint(lat, lon, t, src, 0)
 
 
 def _gpx(points):
@@ -97,6 +106,13 @@ def _copy(art):
     return json.loads(json.dumps(art))
 
 
+def _root_zone(a, tz="Europe/Brussels"):
+    """The zone answered once at the root of photos by destination, as the user answers it: the configured
+    default is only proposed (RUL-default_zone_proposed_only), and every destination beneath inherits the answer."""
+    a["destinations"][BD]["destination_timezone"]["user_decision"]["manual_iana_timezone"] = tz
+    return a
+
+
 def _td(wf, files, groups, gpx, fill, pre=None):
     """Build time decisions twice: a still-undecided "requires-input" state and the filled "complete".
 
@@ -125,7 +141,7 @@ CAM_B = "NIKON|D750|B"              # no GPX -> timezone-derived offset (manual 
 PHONE = "APPLE|iPhone15|P"          # smartphone -> no offset cell
 JP, KY = f"{BD}/Japan", f"{BD}/Japan/Kyoto"
 BE, BR = f"{BD}/Belgium", f"{BD}/Belgium/Bruges"
-BRU = f"{BD}/Belgium/Brussels"      # CAM_A across 3 naive dates -> per-date offset buckets (§10.2)
+BRU = f"{BD}/Belgium/Brussels"      # CAM_A across 3 naive dates -> per-date offset buckets (BLD-offset_buckets)
 PHO = f"{BD}/PhoneOnly"
 
 
@@ -147,7 +163,7 @@ def scenario_trip():
         _file(f"{BE}/bel-phone.jpg", PHONE, "2024:07:03 13:30:00",
               gps={"lat": 51.0, "lon": 4.3}, raw_times={"OffsetTimeOriginal": "+02:00"}),
         _file(f"{BR}/bruges.arw", CAM_B, "2024:07:03 13:15:00", gps={"lat": 51.2, "lon": 3.2}),  # tz-derived offset
-        # Per-date offset buckets (§10.2): CAM_A in one dest across 3 naive dates, no GPX anchor here
+        # Per-date offset buckets (BLD-offset_buckets): CAM_A in one dest across 3 naive dates, no GPX anchor here
         # (far from the lat50/lon4 track) -> timezone-derived per day. Summer days share -7200 (CEST),
         # the winter day is -3600 (CET) -> DST-aware split; the two equal days collapse in the editor.
         # native-GPS so the GPS phase preserves-native and the bucket stays clean.
@@ -161,21 +177,18 @@ def scenario_trip():
     def fill_time(a):
         d = a["destinations"]
         d[JP]["destination_timezone"]["user_decision"]["manual_iana_timezone"] = "Asia/Tokyo"
-        for dp in (BD, PHO, BE, BR, BRU):
-            d[dp]["destination_timezone"]["user_decision"]["accept_proposed_timezone"] = True
         d[BD]["camera_group_time_decisions"][CAM_B]["user_decision"]["manual_offset_seconds"] = 0
         d[BE]["camera_group_time_decisions"][CAM_B]["user_decision"]["manual_offset_seconds"] = 3600  # manual override
-        d[BR]["camera_group_time_decisions"][CAM_B]["user_decision"]["accept_proposal"] = True  # accept tz-derived
+        _accept(d[BR]["camera_group_time_decisions"][CAM_B])  # accept tz-derived
         for dt in ("2024-07-03", "2024-07-04", "2024-12-22"):                      # accept each per-date bucket
-            d[BRU]["camera_group_time_decisions"][f"{CAM_A}@{dt}"]["user_decision"]["accept_proposal"] = True
+            _accept(d[BRU]["camera_group_time_decisions"][f"{CAM_A}@{dt}"])
         return a
 
     def pre_time(a):
-        # Mid-workflow state for the requires-input fixture: the operator has resolved Brussels'
-        # timezone (so its per-date offset buckets surface DST-aware timezone_naive proposals to
-        # demo §10.2), but every offset — and all other timezones — is still pending.
-        a["destinations"][BRU]["destination_timezone"]["user_decision"]["accept_proposed_timezone"] = True
-        return a
+        # Mid-workflow state for the requires-input fixture: the zone answered at the root (so Brussels'
+        # per-date offset buckets surface DST-aware timezone_naive proposals to demo BLD-offset_buckets), but every
+        # offset is still pending.
+        return _root_zone(a)
 
     wf = _wf()
     time_req, time_comp = _td(wf, files, groups, gpx, fill_time, pre=pre_time)
@@ -212,25 +225,28 @@ def scenario_trip():
 
 # =====================================================================================
 # Scenario 2 — offset proposal/resolution variants (photos-21 only): single-anchor (high,
-# accepted), segment (medium), conflicting (review_required), and manual_real_utc resolution.
+# accepted), segment (medium), conflicting (review_required), resolved manually, and a tie between two
+# days' tracks resolved by picking the other day's group.
 # Each camera lives in its own destination + GPX region so matches never cross.
 # =====================================================================================
 
 CAM_PT = "CAM|single-point|S"       # one point anchor -> high, accepted -> gpx_anchor_accepted
 CAM_SEG = "CAM|segment|G"           # one segment anchor -> medium
 CAM_CONF = "CAM|conflict|C"         # two conflicting anchors -> review_required
-CAM_UTC = "CAM|manual-utc|U"        # one point anchor -> resolved via manual_real_utc
-P, S, C, U = f"{BD}/SinglePoint", f"{BD}/Segment", f"{BD}/Conflict", f"{BD}/ManualUtc"
+CAM_REV = "CAM|revisit|R"           # the same spot on two days' tracks -> tied; the other day picked
+P, S, C, R = f"{BD}/SinglePoint", f"{BD}/Segment", f"{BD}/Conflict", f"{BD}/Revisit"
 
 
 def scenario_offset_variants():
-    _set_policy(device_groups={"fixed_clock_cameras": [CAM_PT, CAM_SEG, CAM_CONF, CAM_UTC], "phones": []},
+    _set_policy(device_groups={"fixed_clock_cameras": [CAM_PT, CAM_SEG, CAM_CONF, CAM_REV], "phones": []},
                 default_folder_timezone="Europe/Brussels")
     gpx = _gpx([
-        _pt(52.0, 6.0, _utc(12, 0, 0)),                                  # SinglePoint anchor
-        _pt(53.0, 7.0, _utc(12, 0, 0)), _pt(53.0, 7.003, _utc(12, 0, 30)),  # Segment (~200 m, 30 s apart)
-        _pt(54.0, 8.0, _utc(12, 0, 0)), _pt(55.0, 9.0, _utc(9, 0, 0)),    # Conflict (offsets disagree)
-        _pt(56.0, 10.0, _utc(12, 0, 0)),                                  # ManualUtc anchor
+        # each camera's region is a track file of its own: one device is in one place at a time
+        _pt(52.0, 6.0, _utc(12, 0, 0), "single.gpx"),                    # SinglePoint anchor
+        _pt(53.0, 7.0, _utc(12, 0, 0), "segment.gpx"), _pt(53.0, 7.003, _utc(12, 0, 30), "segment.gpx"),  # ~200 m, 30 s apart
+        _pt(54.0, 8.0, _utc(12, 0, 0), "conflict-a.gpx"), _pt(55.0, 9.0, _utc(9, 0, 0), "conflict-b.gpx"),  # offsets disagree
+        _pt(56.0, 10.0, _utc(12, 0, 0), "trip-2024-07-03.gpx"),          # Revisit: the spot on 3 July ...
+        _pt(56.0, 10.0, datetime(2024, 7, 4, 12, 0, tzinfo=timezone.utc), "trip-2024-07-04.gpx"),  # ... and 4 July
     ])
     files = [
         _file(f"{P}/p.arw", CAM_PT, "2024:07:03 14:00:00", gps={"lat": 52.0, "lon": 6.0}),
@@ -238,20 +254,20 @@ def scenario_offset_variants():
         _file(f"{S}/g.arw", CAM_SEG, "2024:07:03 14:00:15", gps={"lat": 53.0003, "lon": 7.0015}),
         _file(f"{C}/c1.arw", CAM_CONF, "2024:07:03 14:00:00", gps={"lat": 54.0, "lon": 8.0}),
         _file(f"{C}/c2.arw", CAM_CONF, "2024:07:03 14:00:00", gps={"lat": 55.0, "lon": 9.0}),
-        _file(f"{U}/u.arw", CAM_UTC, "2024:07:03 14:00:00", gps={"lat": 56.0, "lon": 10.0}),
+        _file(f"{R}/r.arw", CAM_REV, "2024:07:04 14:00:00", gps={"lat": 56.0, "lon": 10.0}),
     ]
-    groups = {k: {"camera_group_class": "camera"} for k in (CAM_PT, CAM_SEG, CAM_CONF, CAM_UTC)}
+    groups = {k: {"camera_group_class": "camera"} for k in (CAM_PT, CAM_SEG, CAM_CONF, CAM_REV)}
 
     def fill(a):
         d = a["destinations"]
-        for dp in (P, S, C, U):
-            d[dp]["destination_timezone"]["user_decision"]["accept_proposed_timezone"] = True
-        d[P]["camera_group_time_decisions"][CAM_PT]["user_decision"]["accept_proposal"] = True     # gpx_anchor_accepted (single)
-        d[S]["camera_group_time_decisions"][CAM_SEG]["user_decision"]["accept_proposal"] = True     # gpx_anchor_accepted (medium)
+        _accept(d[P]["camera_group_time_decisions"][CAM_PT])     # gpx_anchor_accepted (single)
+        _accept(d[S]["camera_group_time_decisions"][CAM_SEG])     # gpx_anchor_accepted (medium)
+        _root_zone(a)
         d[C]["camera_group_time_decisions"][CAM_CONF]["user_decision"]["manual_offset_seconds"] = -7200  # resolve a conflict manually
-        # ManualUtc: enter the recommended anchor's true UTC -> source manual_real_utc.
-        u_prop = d[U]["camera_group_time_decisions"][CAM_UTC]["proposal"]
-        d[U]["camera_group_time_decisions"][CAM_UTC]["user_decision"]["manual_real_utc"] = u_prop["proposed_real_utc"]
+        # Revisit: a tie between two days' tracks; the user picks the other day's group -> gpx_anchor_chosen
+        rev = d[R]["camera_group_time_decisions"][CAM_REV]
+        assert rev["proposal"]["tied"] is True, rev["proposal"]
+        rev["user_decision"]["manual_offset_seconds"] = rev["proposal"]["groups"][1]["offset_seconds"]
         return a
 
     _, comp = _td(_wf(), files, groups, gpx, fill)
@@ -289,8 +305,9 @@ def scenario_stale_decision():
     assert not blk, blk
     prior = _copy(base)
     dest = f"{BD}/Stale"
-    # The operator had previously accepted an offset proposal + a timezone proposal that are now gone.
-    prior["destinations"][dest]["camera_group_time_decisions"][CAM_B]["user_decision"]["accept_proposal"] = True
+    # The operator had previously accepted an offset proposal that is now gone.
+    prior["destinations"][dest]["camera_group_time_decisions"][CAM_B]["user_decision"].update(
+        accept_proposal=True, accepted_offset_seconds=-7200)
     art, blk = wf.build_time_decisions(files, groups, prior, _gpx([]))
     assert not blk, blk
     cell = art["destinations"][dest]["camera_group_time_decisions"][CAM_B]
@@ -317,9 +334,8 @@ def scenario_drift_validation():
 
     def fill_time(a):
         d = a["destinations"]
-        for dp in (BD, DR):
-            d[dp]["destination_timezone"]["user_decision"]["accept_proposed_timezone"] = True
-        d[DR]["camera_group_time_decisions"][CAM_DR]["user_decision"]["accept_proposal"] = True  # tz-derived
+        _root_zone(a)
+        _accept(d[DR]["camera_group_time_decisions"][CAM_DR], -7200)  # tz-derived
         return a
 
     wf = _wf()
@@ -332,7 +348,8 @@ def scenario_drift_validation():
     assert not blk, blk
 
     def fill_drift(a):                                                   # confirm the bucket (zero scrub)
-        a["destinations"][DR]["drift_decisions"][CAM_DR]["user_decision"]["confirmed"] = True
+        cell = a["destinations"][DR]["drift_decisions"][CAM_DR]
+        cell["user_decision"].update(confirmed=True, confirmed_offset_seconds=cell["proposal"]["current_offset_seconds"])
         return a
 
     drift_comp, blk = wf.build_drift_validation(files, time_comp, rows0, gpx, fill_drift(_copy(drift_req)))
@@ -355,7 +372,7 @@ def _verify():
         '"proposal_source": "none"', '"proposal_source": "gpx_self_anchor"',
         '"proposal_source": "timezone_naive"', '"proposal_source": "manual_required"',
         '"source": "gpx_anchor_auto"', '"source": "gpx_anchor_accepted"',
-        '"source": "timezone_accepted"', '"source": "manual"', '"source": "manual_real_utc"',
+        '"source": "timezone_accepted"', '"source": "manual"', '"source": "gpx_anchor_chosen"', '"tied": true',
         '"confidence": "high"', '"confidence": "medium"', '"confidence": "review_required"',
         '"stale_user_decision": true',
         '"reason": "no_reliable_gps_source"', '"reason": "manual_locked"', '"reason": "accepted_unlocated"',

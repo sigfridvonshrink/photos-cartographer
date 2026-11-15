@@ -20,6 +20,7 @@ EXIF but NOT the ImageMagick content fingerprint, so the post-write verify confi
 Skipped when the tools are absent (e.g. a bare local checkout). From conftest.py.
 """
 import json
+from _zone import answer_root_zone, with_root_zone
 import os
 import shutil
 import subprocess
@@ -55,9 +56,10 @@ def test_exif_write_preserves_content_fingerprint(tmp_path):
 
 
 @pytest.mark.parametrize("lat, lon, refs", [(50.8467, 4.3525, ("N", "E")), (-33.9, -70.6, ("S", "W"))])
-@pytest.mark.spec("geotag-gps-write-complete-fix-1")
+@pytest.mark.spec("RUL-position_written_whole", "BLD-position_tags",
+                  test="TST-geotag_execution_real-planned_gps_write_lands_a_readable_fix")
 def test_planned_gps_write_lands_a_readable_fix(tmp_path, lat, lon, refs):
-    """§28.1 against the real binary: the tags `plan_file_ops` plans must land a fix a conforming
+    """RUL-position_written_whole against the real binary: the tags `plan_file_ops` plans must land a fix a conforming
     reader can use. Coordinate-only writes were readable to exiftool's lenient composite but carried
     no GPSLatitudeRef/GPSLongitudeRef, so exiv2/digiKam saw NO location — and `-n` stored a negative
     coordinate as its magnitude, flipping the hemisphere. Assert the raw ref tags AND the signed
@@ -106,6 +108,7 @@ def test_full_execute_with_real_tools(tmp_path, monkeypatch):
         cfg["camera_time_and_timezone_policy"], device_groups={"fixed_clock_cameras": [CAM], "phones": []},
         default_folder_timezone="Europe/Brussels", multi_anchor_auto_apply=True)
     (ctl / "photos-00-config.json").write_text(json.dumps(cfg))
+    answer_root_zone(ctl)                        # the zone answered once at the root (RUL-timezone_auto_resolves)
     real_fp = utils.ContentHasher.fingerprint_image(FIXTURE)["value"]
 
     def rec(rel, dto, lat, lon):
@@ -122,11 +125,11 @@ def test_full_execute_with_real_tools(tmp_path, monkeypatch):
                                     "field_set_version": utils.FIELD_SET_VERSION, "parsed_json": json.dumps(parsed)}}
     files = [rec("6-photos-by-dest/T/a.jpg", "2024:07:03 14:00:00", 50.0, 4.0),
              rec("6-photos-by-dest/T/b.jpg", "2024:07:03 15:00:00", 51.0, 5.0)]
-    (ctl / "photos-11-handoff.json").write_text(json.dumps({"filename_timestamp_format": utils.CONFIG["filename_timestamp_format"], "files": files, "cache_fingerprint": "pcf"}))
+    (ctl / "photos-11-handoff.json").write_text(json.dumps({"filename_timestamp_format": utils.CONFIG["filename_timestamp_format"], "files": files, "cache_fingerprint": "pcf",
+        "depends_on": {"cache": {"image_engine_version": utils.get_imagemagick_version(), "fingerprint_algorithm_version": utils.FINGERPRINT_ALGORITHM_VERSION}}}))
 
     _run(monkeypatch, ws, "plan")
     p = ctl / "photos-21-time-decisions.json"; a = json.load(open(p))
-    a["destinations"]["6-photos-by-dest/T"]["destination_timezone"]["user_decision"]["accept_proposed_timezone"] = True
     p.write_text(json.dumps(a))
     _run(monkeypatch, ws, "plan")
     assert (ctl / "photos-24-executable-plan.json").exists()
@@ -143,3 +146,23 @@ def test_full_execute_with_real_tools(tmp_path, monkeypatch):
     got = subprocess.run(["exiftool", "-s3", "-DateTimeOriginal", str(out / "2024-07-03--14-00-00.jpg")],
                          capture_output=True, text=True).stdout.strip()
     assert got == "2024:07:03 14:00:00"
+
+
+@pytest.mark.parametrize("lat, lon", [(50.8467, 4.3525), (-33.865143, -70.6)])
+@pytest.mark.spec("BLD-geotag_execution", test="TST-geotag_execution_real-a_written_photo_reads_back_as_its_planned_values")
+def test_a_written_photo_reads_back_as_its_planned_values(tmp_path, lat, lon):
+    """Against the real binary: a photo geotag wrote reads back as holding every planned value — time, offset,
+    position, references, marker — which is how execute tells its own interrupted write from an edit made since
+    the plan; an edit to one tag no longer reads back as the plan."""
+    img = tmp_path / "img.jpg"; shutil.copy(FIXTURE, img)
+    ops = cal.plan_file_ops({"relative_path": "img.jpg", "content_fingerprint": "fp", "size": 1, "mtime_ns": 1},
+                            "2024-07-03T12:12:21Z", "Europe/Brussels", "gpx_interpolation",
+                            {"lat": lat, "lon": lon}, None)
+    writes = {}
+    for o in ops:
+        writes.update(o.get("writes") or {})
+    wf = cal.GeotagWorkflow(str(tmp_path))
+    assert wf._exiftool_write(str(img), writes)
+    assert cal._holds_writes(wf._exiftool_read(str(img), sorted(writes)), writes)
+    assert wf._exiftool_write(str(img), {"DateTimeOriginal": "2024:07:03 09:00:00"})        # edited elsewhere
+    assert not cal._holds_writes(wf._exiftool_read(str(img), sorted(writes)), writes)

@@ -13,9 +13,10 @@
 # limitations under the License.
 
 """Phase 2 (geotag) — the in-memory model: by-dest file objects, GPX index, camera groups
-(photos-2-geotag, spec §14–§16). Still pre-decision: no JSON artifacts. From conftest.py.
+(photos-2-geotag, BLD-geotag_file_model). Still pre-decision: no JSON artifacts. From conftest.py.
 """
 import json
+from _handoff import match_disk
 import os
 import sys
 from datetime import datetime, timezone
@@ -60,7 +61,7 @@ def _wf(tmp_path, handoff_files):
 
 # --- Stage 2: by-dest file model --------------------------------------------
 
-@pytest.mark.spec("geotag-destination-definition-1")
+@pytest.mark.spec("DEF-destination")
 def test_file_model_builds_by_dest_photos(tmp_path):
     wf = _wf(tmp_path, [_hfile("6-photos-by-dest/Belgium/Brussels/a.arw", gps=(50.84, 4.35))])
     files = wf.build_file_model()
@@ -74,7 +75,8 @@ def test_file_model_builds_by_dest_photos(tmp_path):
     assert f["planned_filename"] is None
 
 
-@pytest.mark.spec("geotag-inmemory-bydest-only-1", "geotag-never-touch-video-1", "geotag-scope-bydest-only-1")
+@pytest.mark.spec("BLD-geotag_file_model", "RUL-geotag_changes_only_by_dest", "RUL-video_never_changed",
+                  test="TST-geotag_model-file_model_excludes_non_bydest_and_videos")
 def test_file_model_excludes_non_bydest_and_videos(tmp_path):
     wf = _wf(tmp_path, [
         _hfile("6-photos-by-dest/T/a.jpg"),
@@ -110,9 +112,15 @@ def test_gpx_malformed_warns_not_crashes(tmp_path):
     root = tmp_path / "gpx"; root.mkdir()
     (root / "bad.gpx").write_text("<gpx><trkpt lat='1'")
     idx = cal.GPXIndex(str(root)).build()
-    assert idx.status == "empty" and any("Malformed" in w for w in idx.warnings)
+    # warned, not a crash — and, the folder's only track file, the folder's tracks are unreadable, not absent
+    # (RUL-unreadable_tracks_stop_geotag)
+    assert idx.status == "unreadable" and any("Malformed" in w for w in idx.warnings)
+    assert [rel for rel, _why in idx.unreadable] == ["bad.gpx"]
 
 
+@pytest.mark.spec("RUL-unreadable_point_reported", "RUL-unreadable_point_skipped", "RUL-track_time_never_guessed",
+                  "BLD-track_points",
+                  test="TST-geotag_model-gpx_parser_skips_bad_trkpts")
 def test_gpx_parser_skips_bad_trkpts(tmp_path):
     # exercise every reject branch in GPXIndex._parse_bytes (GPS code -> full coverage):
     # missing lon, missing time, out-of-range coord, non-numeric coord, and a naive-time point;
@@ -130,10 +138,12 @@ def test_gpx_parser_skips_bad_trkpts(tmp_path):
     idx = cal.GPXIndex(str(root)).build()
     assert idx.status == "usable" and len(idx.points) == 1                          # only the valid one
     assert idx.points[0].time_utc.hour == 10                                        # 12:00:04+02:00 -> 10:00:04Z
-    assert len(idx.warnings) >= 3                                                   # the rejects warned
+    assert len(idx.warnings) == 5                                                   # every reject warned
+    assert all("edge.gpx" in w and "trkpt" in w for w in idx.warnings)              # named: file and point
 
 
-@pytest.mark.spec("geotag-gpx-time-xsd-datetime-1")
+@pytest.mark.spec("BLD-track_points", "RUL-track_time_never_guessed",
+                  test="TST-geotag_model-gpx_parser_accepts_fractional_and_whole_seconds")
 def test_gpx_parser_accepts_fractional_and_whole_seconds(tmp_path):
     # xsd:dateTime allows optional fractional seconds: Garmin writes `...:SS.000Z`, others `...:SSZ`.
     # Both forms (and a fractional offset-suffixed one) parse; mixing them in one track is fine.
@@ -154,6 +164,25 @@ def test_gpx_parser_accepts_fractional_and_whole_seconds(tmp_path):
         datetime(2024, 7, 3, 12, 0, 3, 500000, tzinfo=timezone.utc)]
 
 
+@pytest.mark.spec("RUL-unreadable_point_reported", "RUL-unreadable_point_skipped", "BLD-track_points",
+                  test="TST-geotag_model-a_track_of_untimed_points_is_reported_not_empty")
+def test_a_track_of_untimed_points_is_reported_not_empty(tmp_path):
+    # A track whose every point lacks a time (or a position) yields no point, but never reads as merely
+    # empty: each point is reported, naming its file and index.
+    root = tmp_path / "gpx"; root.mkdir()
+    (root / "untimed.gpx").write_text(
+        '<gpx xmlns="http://www.topografix.com/GPX/1/1"><trk><trkseg>'
+        '<trkpt lat="50.0" lon="4.0"></trkpt>'
+        '<trkpt lat="50.1" lon="4.1"><time> </time></trkpt>'
+        '<trkpt><time>2024-07-03T12:00:00Z</time></trkpt>'
+        '</trkseg></trk></gpx>')
+    idx = cal.GPXIndex(str(root)).build()
+    assert idx.points == [] and idx.status == "empty"
+    assert idx.warnings == ["GPX point without a time in untimed.gpx at trkpt 0",
+                            "GPX point without a time in untimed.gpx at trkpt 1",
+                            "GPX point without a position in untimed.gpx at trkpt 2"]
+
+
 def test_gpx_unreadable_file_warns_and_skips(tmp_path):
     # a .gpx that os.walk lists but open() fails on (broken symlink) -> the OSError branch warns.
     root = tmp_path / "gpx"; root.mkdir()
@@ -164,6 +193,8 @@ def test_gpx_unreadable_file_warns_and_skips(tmp_path):
 
 # --- Stage 4: camera groups + classification ---------------------------------
 
+@pytest.mark.spec("RUL-known_when_classified", "BLD-known_camera_group",
+                  test="TST-geotag_model-camera_group_classification")
 def test_camera_group_classification(tmp_path, monkeypatch):
     monkeypatch.setitem(utils.CONFIG["camera_time_and_timezone_policy"], "device_groups",
                         {"phones": ["APPLE|iPhone|p1"], "fixed_clock_cameras": ["SONY|ILCE-6400|123"]})
@@ -174,19 +205,16 @@ def test_camera_group_classification(tmp_path, monkeypatch):
         _hfile("6-photos-by-dest/A/u.jpg", key="CANON|R5|999"),
     ])
     groups, unknown = wf.recognize_camera_groups(wf.build_file_model())
-    assert groups["SONY|ILCE-6400|123"]["camera_group_class"] == "camera"
-    assert groups["SONY|ILCE-6400|123"]["file_count"] == 2
-    assert groups["SONY|ILCE-6400|123"]["destinations"] == ["6-photos-by-dest/A"]
-    assert groups["SONY|ILCE-6400|123"]["has_native_gps"] == 1
-    assert groups["APPLE|iPhone|p1"]["camera_group_class"] == "smartphone"
-    assert groups["CANON|R5|999"]["camera_group_class"] == "unknown"
+    assert groups == {"APPLE|iPhone|p1": {"camera_group_key": "APPLE|iPhone|p1", "camera_group_class": "smartphone"},
+                      "CANON|R5|999": {"camera_group_key": "CANON|R5|999", "camera_group_class": "unknown"},
+                      "SONY|ILCE-6400|123": {"camera_group_key": "SONY|ILCE-6400|123", "camera_group_class": "camera"}}
     assert unknown == ["CANON|R5|999"]
 
 
-@pytest.mark.spec("camera-geotag-reuses-1", test="TST-geotag_model-geotag_reuses_handoff_camera_group_key_never_recomputes")
+@pytest.mark.spec("RUL-geotag_reuses_camera_group", test="TST-geotag_model-geotag_reuses_handoff_camera_group_key_never_recomputes")
 def test_geotag_reuses_handoff_camera_group_key_never_recomputes(tmp_path):
-    """Shared §6: geotag reuses prep's camera_group_key from the handoff and never recomputes camera
-    identity. The handoff carries a SENTINEL group key that the identity fields (Make/Model/serial)
+    """RUL-geotag_reuses_camera_group: geotag reuses prep's camera_group_key from the handoff and never recomputes
+    camera identity. The handoff carries a SENTINEL group key that the identity fields (Make/Model/serial)
     could never compose — if geotag recomputed from CAMERA_IDENTITY_FIELDS it would land on a
     different key. build_file_model and recognize_camera_groups must use the handoff's key verbatim."""
     sentinel = "PREP-ASSIGNED|opaque-token"
@@ -206,8 +234,7 @@ def test_geotag_reuses_handoff_camera_group_key_never_recomputes(tmp_path):
     wf = _wf(tmp_path, [rec])
     files = wf.build_file_model()
     assert files[0]["camera_group_key"] == sentinel                  # handoff value, not recomputed
-    # the identity fields are surfaced (for display) but were NOT used to derive the key
-    assert files[0]["camera_identity"]["BodySerialNumber"] == "SN-12345"
+    assert "camera_identity" not in files[0]                         # geotag keeps no identity to derive from
     assert sentinel != "SN-12345|SONY|ILCE-6400"
     policy = utils.CONFIG["camera_time_and_timezone_policy"]
     policy["device_groups"] = {"fixed_clock_cameras": [sentinel], "phones": []}
@@ -230,7 +257,7 @@ def _full_ws(tmp_path, *, device_groups, bydest_key="SONY|ILCE-6400|123"):
     (ctl / "photos-00-config.json").write_text(json.dumps(cfg))
     rel = "6-photos-by-dest/Trip/a.jpg"
     p = ws / rel; p.parent.mkdir(parents=True, exist_ok=True); p.write_bytes(b"img")
-    (ctl / "photos-11-handoff.json").write_text(json.dumps({"filename_timestamp_format": utils.CONFIG["filename_timestamp_format"], "files": [_hfile(rel, key=bydest_key)]}))
+    (ctl / "photos-11-handoff.json").write_text(json.dumps({"filename_timestamp_format": utils.CONFIG["filename_timestamp_format"], "files": match_disk(ws, [_hfile(rel, key=bydest_key)]), "depends_on": {"cache": {"fingerprint_algorithm_version": utils.FINGERPRINT_ALGORITHM_VERSION}}}))
     return ws
 
 
@@ -243,7 +270,7 @@ def _main(monkeypatch, ws):
         return e.code if isinstance(e.code, int) else (0 if e.code is None else 1)
 
 
-@pytest.mark.spec("geotag-first-artifact-21-1")
+@pytest.mark.spec("RUL-no_record_before_decisions")
 def test_run_known_group_builds_model(tmp_path, monkeypatch, capsys):
     ws = _full_ws(tmp_path, device_groups={"fixed_clock_cameras": ["SONY|ILCE-6400|123"], "phones": []})
     code = _main(monkeypatch, ws)
@@ -254,7 +281,9 @@ def test_run_known_group_builds_model(tmp_path, monkeypatch, capsys):
     assert os.path.exists(ws / ".photos-ingest" / "photos-21-time-decisions.json")
 
 
-@pytest.mark.spec("geotag-incomplete-classification-block-1")
+@pytest.mark.spec("RUL-unknown_group_stops_geotag", "RUL-no_record_before_decisions", "BLD-unknown_group_snippet",
+                  "RUL-early_stop_said_in_output", "RUL-unknown_group_classification_offered",
+                  test="TST-geotag_model-run_unknown_group_prints_snippet_and_exits")
 def test_run_unknown_group_prints_snippet_and_exits(tmp_path, monkeypatch, capsys):
     ws = _full_ws(tmp_path, device_groups={"fixed_clock_cameras": [], "phones": []})
     code = _main(monkeypatch, ws)
@@ -265,3 +294,83 @@ def test_run_unknown_group_prints_snippet_and_exits(tmp_path, monkeypatch, capsy
     # The two arrays must be emitted in the config file's own key order — fixed_clock_cameras before
     # phones (the sort_keys=True seed order) — so a whole-block paste-over keeps the inter-array comma.
     assert blob.index('"fixed_clock_cameras"') < blob.index('"phones"')
+    # Stopped before its first decision stage: the snippet is text only, no geotag record is written.
+    assert not [n for n in os.listdir(ws / ".photos-ingest") if n.startswith("photos-2")]
+
+
+@pytest.mark.spec("RUL-group_classed_twice_is_unknown", "RUL-unknown_group_stops_geotag",
+                  test="TST-geotag_model-a_group_classed_twice_is_unknown")
+def test_a_group_classed_as_both_is_unknown(tmp_path, monkeypatch, capsys):
+    """The classification geotag offers lists a new group under both classes, for the user to keep one. Pasted
+    as it is, the group is classed as neither — geotag stops and offers it again — never taken for a phone."""
+    key = "SONY|ILCE-6400|123"
+    ws = _full_ws(tmp_path, device_groups={"fixed_clock_cameras": [key], "phones": [key]})
+    assert _main(monkeypatch, ws) == 2
+    assert "unknown camera group" in capsys.readouterr().err
+    assert not [n for n in os.listdir(ws / ".photos-ingest") if n.startswith("photos-2")]
+
+
+@pytest.mark.spec("RUL-missing_tracks_stop_geotag", "RUL-no_tracks_no_stop", "RUL-no_record_before_decisions",
+                  "BLD-gpx_root_missing", "RUL-early_stop_said_in_output",
+                  test="TST-geotag_model-a_tracks_folder_that_is_not_there_stops_geotag")
+def test_a_tracks_folder_that_is_not_there_stops_geotag(tmp_path, monkeypatch, capsys):
+    """Tracks configured but not there — a volume not mounted — are not "no tracks": geotag stops before any
+    record, rather than place by fallback what the tracks place and drop the answers given about them. With no
+    tracks configured, it plans."""
+    ws = _full_ws(tmp_path, device_groups={"fixed_clock_cameras": ["SONY|ILCE-6400|123"], "phones": []})
+    cfg_path = ws / ".photos-ingest" / "photos-00-config.json"
+    cfg = json.loads(cfg_path.read_text())
+    cfg_path.write_text(json.dumps(dict(cfg, gpx_root=str(tmp_path / "not-mounted"))))
+    assert _main(monkeypatch, ws) == 2
+    assert "gpx_root does not exist" in capsys.readouterr().err
+    assert not [n for n in os.listdir(ws / ".photos-ingest") if n.startswith("photos-2")]
+    cfg_path.write_text(json.dumps(dict(cfg, gpx_root="")))
+    assert _main(monkeypatch, ws) == 0
+
+
+@pytest.mark.spec("RUL-unreadable_tracks_stop_geotag", "RUL-no_tracks_no_stop", "BLD-track_points",
+                  test="TST-geotag_model-a_tracks_folder_none_of_whose_files_is_read_stops_geotag")
+def test_a_tracks_folder_none_of_whose_files_is_read_stops_geotag(tmp_path, monkeypatch, capsys):
+    """A tracks folder that is there, holding track files not one of which can be read — one malformed, one that
+    cannot be opened — is not "no tracks": `geotag plan` stops before any record, naming the folder and each file
+    with why. One file read among them, it plans, the others warned of as before; a folder holding no track file
+    at all plans as having none."""
+    ws = _full_ws(tmp_path, device_groups={"fixed_clock_cameras": ["SONY|ILCE-6400|123"], "phones": []})
+    cfg_path = ws / ".photos-ingest" / "photos-00-config.json"
+    cfg = json.loads(cfg_path.read_text())
+    tracks = tmp_path / "tracks"
+    (tracks / "2024").mkdir(parents=True)
+    (tracks / "2024" / "cut.gpx").write_text("<gpx><trk><trkseg><trkpt lat='1'")
+    (tracks / "locked.gpx").symlink_to(tracks / "gone.gpx")                     # there, and cannot be opened
+    cfg_path.write_text(json.dumps(dict(cfg, gpx_root=str(tracks))))
+    assert _main(monkeypatch, ws) == 2
+    err = capsys.readouterr()
+    said = err.out + err.err
+    assert "can be read" in said and str(tracks) in said, said
+    assert "2024/cut.gpx: malformed GPX XML" in said and "locked.gpx: " in said, said
+    assert not [n for n in os.listdir(ws / ".photos-ingest") if n.startswith("photos-2")]
+    (tracks / "trip.gpx").write_text(GPX)                                        # one read among them
+    assert _main(monkeypatch, ws) == 0
+    said = "".join(capsys.readouterr())
+    assert "Malformed GPX XML in 2024/cut.gpx" in said and "locked.gpx" in said
+    (tmp_path / "none").mkdir()
+    (tmp_path / "none" / "notes.txt").write_text("no track here")
+    cfg_path.write_text(json.dumps(dict(cfg, gpx_root=str(tmp_path / "none"))))
+    idx = cal.GPXIndex(str(tmp_path / "none")).build()
+    assert idx.status == "empty" and idx.unreadable == []
+    assert _main(monkeypatch, ws) == 0
+
+
+@pytest.mark.spec("RUL-unreadable_tracks_stop_geotag", "BLD-track_points",
+                  test="TST-geotag_model-a_linked_folder_of_tracks_is_named_not_followed")
+def test_a_linked_folder_of_tracks_is_named_not_followed(tmp_path):
+    """A folder under gpx_root that is a link to tracks elsewhere is not followed — its tracks are not read — and
+    it is said, by name; the tracks beside it are read as before."""
+    elsewhere = tmp_path / "elsewhere"; elsewhere.mkdir()
+    (elsewhere / "far.gpx").write_text(GPX)
+    root = tmp_path / "gpx"; root.mkdir()
+    (root / "trip.gpx").write_text(GPX)
+    (root / "2023").symlink_to(elsewhere, target_is_directory=True)
+    idx = cal.GPXIndex(str(root)).build()
+    assert idx.status == "usable" and {p.source_file for p in idx.points} == {"trip.gpx"}
+    assert [w for w in idx.warnings if "Linked folder" in w and w.endswith(": 2023")], idx.warnings

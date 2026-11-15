@@ -12,11 +12,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Phase 7 (geotag) — Stage 11 finalize + archive (§31 / shared §13): the photos-25
-transformation log (prep carried forward + geotag steps), the DB snapshot, and the manifest.
+"""Phase 7 (geotag) — Stage 11 finalize + archive (BLD-archive_manifest): the photos-26
+complete log (prep carried forward + geotag steps), the DB snapshot, and the manifest.
 Non-destructive. exiftool-write + fingerprint mocked. From conftest.py.
 """
 import json
+from _zone import answer_root_zone, with_root_zone
 import os
 import sqlite3
 import sys
@@ -34,7 +35,7 @@ MANAGED = ["0-sources", "1-strays", "2-missing-metadata", "3-redundant-jpgs",
 
 # --- shared write_db_snapshot helper ----------------------------------------
 
-@pytest.mark.spec("db-snapshot-consistent-1", "geotag-finalize-db-snapshot-1", test="TST-geotag_finalize-write_db_snapshot_is_a_valid_copy")
+@pytest.mark.spec("RUL-database_image_whole", "RUL-images_archived", test="TST-geotag_finalize-write_db_snapshot_is_a_valid_copy")
 def test_write_db_snapshot_is_a_valid_copy(tmp_path):
     src = tmp_path / "live.db"
     conn = sqlite3.connect(str(src))
@@ -55,7 +56,7 @@ def _file(rel, fp, *, native=False, group=CAM):
             "camera_group_key": group, "has_native_gps": native}
 
 
-@pytest.mark.spec("archive-complete-each-phase-1", "geotag-finalize-complete-log-1", "log-decision-provenance-1", test="TST-geotag_finalize-complete_log_superset_and_geotag_steps")
+@pytest.mark.spec("RUL-record_whole_each_phase", "BLD-history_kept", "RUL-log_cites_decisions", test="TST-geotag_finalize-complete_log_superset_and_geotag_steps")
 def test_complete_log_superset_and_geotag_steps():
     prep = {"fpA": {"content_fingerprint": "fpA", "journey": [{"phase": "prep", "action": "organized"}]}}
     files = [_file(f"{BYDEST}/T/a.arw", "fpA", native=True)]
@@ -84,7 +85,7 @@ def test_complete_log_skips_unfingerprinted_and_offsetless():
     assert [s["action"] for s in photos["fpB"]["journey"]] == ["resolved_utc"]   # offset skipped
 
 
-@pytest.mark.spec("geotag-three-gps-origins-1", "log-records-gps-revert-1", test="TST-geotag_finalize-complete_log_gps_written")
+@pytest.mark.spec("RUL-log_records_gps_reverts", test="TST-geotag_finalize-complete_log_gps_written")
 def test_complete_log_gps_written():
     files = [_file(f"{BYDEST}/T/m.jpg", "fpM")]
     rows = [{"relative_path": f"{BYDEST}/T/m.jpg", "resolved_utc": "2024-07-03T12:00:00Z"}]
@@ -103,6 +104,38 @@ def test_complete_log_gps_written():
          "writes": {"GPSLatitude": 1, "GPSLongitude": 2}}]}}}
     photos2 = cal.build_complete_log({}, files2, [], {}, plan2)
     assert next(s for s in photos2["fpN"]["journey"] if s["action"] == "gps_written")["gps_processing_method"] is None
+
+
+@pytest.mark.spec("RUL-log_records_time_replaced", "BLD-geotag_log_steps",
+                  test="TST-geotag_finalize-a_time_written_is_logged_with_what_it_replaced")
+def test_a_time_written_is_logged_with_what_it_replaced_and_how_it_was_found():
+    """Two phone photos written alike: one read by the offset its phone recorded, one by assuming the
+    destination's zone. The log tells them apart, and says what each held before."""
+    def op(rel, rule, held_off):
+        f = {"relative_path": rel, "raw_times": {"DateTimeOriginal": "2024:07:03 19:00:00",
+                                                 **({"OffsetTimeOriginal": held_off} if held_off else {})}}
+        return {"type": "metadata_time_write", "relative_path": rel, "operation_id": "t-" + rel,
+                "writes": {"DateTimeOriginal": "2024:07:03 12:00:00", "OffsetTimeOriginal": "+02:00"},
+                "pre_state": cal.held_time_pre_state(f),
+                "provenance": {"time_rule_used": rule, "source_time_provenance": "EXIF:DateTimeOriginal"}}
+    a, b = f"{BYDEST}/T/a.jpg", f"{BYDEST}/T/b.jpg"
+    plan = {"plan_id": "p1", "destinations": {f"{BYDEST}/T": {"operations": [
+        op(a, "smartphone_native_offset", "+09:00"), op(b, "destination_timezone", None)]}}}
+    photos = cal.build_complete_log({}, [_file(a, "fpA"), _file(b, "fpB")], [], {}, plan)
+    wa = next(s for s in photos["fpA"]["journey"] if s["action"] == "time_written")
+    wb = next(s for s in photos["fpB"]["journey"] if s["action"] == "time_written")
+    assert wa["pre_state"] == {"DateTimeOriginal": "2024:07:03 19:00:00", "OffsetTimeOriginal": "+09:00"}
+    assert wb["pre_state"] == {"DateTimeOriginal": "2024:07:03 19:00:00", "OffsetTimeOriginal": None}
+    assert (wa["rule"], wb["rule"]) == ("smartphone_native_offset", "destination_timezone")
+    assert wa["read_from"] == "EXIF:DateTimeOriginal" and wa["run"] == "p1"
+    assert wa["writes"] == {"DateTimeOriginal": "2024:07:03 12:00:00", "OffsetTimeOriginal": "+02:00"}
+    # a pass executed earlier logs its time write the same way
+    plan["destinations"][f"{BYDEST}/T"]["operations"][0]["preconditions"] = {"content_fingerprint": "fpA"}
+    later = cal.build_complete_log({}, [_file(a, "fpA")], [], {}, {"plan_id": "p2", "destinations": {}},
+                                   earlier_passes=[(plan, {"t-" + a})])
+    step = next(s for s in later["fpA"]["journey"] if s["action"] == "time_written")
+    assert (step["rule"], step["run"]) == ("smartphone_native_offset", "p1")
+    assert step["pre_state"]["OffsetTimeOriginal"] == "+09:00"
 
 
 @pytest.mark.spec("RUL-log_records_gps_reverts", "RUL-record_whole_each_phase", test="TST-geotag_finalize-a_cleared_position_is_logged_with_what_it_held")
@@ -129,7 +162,7 @@ def test_a_cleared_position_is_logged_with_what_it_held():
     assert cal.held_pre_state(_file(f"{BYDEST}/T/y.jpg", "fpY")) == {"present": False}
 
 
-@pytest.mark.spec("RUL-log_cites_decisions", "log-decision-provenance-1", "log-names-exact-decision-1", test="TST-geotag_finalize-each_step_names_its_exact_decision")
+@pytest.mark.spec("RUL-log_cites_decisions", "BLD-log_format", test="TST-geotag_finalize-each_step_names_its_exact_decision")
 def test_each_step_names_its_exact_decision():
     """The offset names its exact cell — with its day when the camera's photos there span days — or
     the drift confirmation that replaced it; a manual position names the pin or the folder fallback."""
@@ -154,7 +187,7 @@ def test_each_step_names_its_exact_decision():
     assert step["because"] == f"photos-23 destinations.{BYDEST}/T.folder_fallback"
 
 
-@pytest.mark.spec("RUL-log_human_readable", "log-human-readable-json-1", "log-offset-in-words-1", test="TST-geotag_finalize-an_offset_is_described_in_words")
+@pytest.mark.spec("RUL-log_human_readable", test="TST-geotag_finalize-an_offset_is_described_in_words")
 def test_an_offset_is_described_in_words():
     assert cal.describe_offset(-6900) == "camera clock 1 h 55 min ahead of UTC"
     assert cal.describe_offset(3612) == "camera clock 1 h 12 s behind UTC"
@@ -167,9 +200,11 @@ def test_an_offset_is_described_in_words():
 
 # --- finalize: readiness + end-to-end ---------------------------------------
 
-def _ready_ws(tmp_path, monkeypatch):
+def _ready_ws(tmp_path, monkeypatch, *, folders=None):
+    """A workspace as prep leaves it for geotag; `folders` (role -> name), if given, names its folders."""
+    bydest = folders["photos_by_dest"] if folders else BYDEST
     ws = tmp_path / "ws"; ws.mkdir()
-    for d in MANAGED:
+    for d in (folders.values() if folders else MANAGED):
         (ws / d).mkdir()
     ctl = ws / ".photos-ingest"; ctl.mkdir(); (ctl / "photos-00-workspace-guard").touch()
     gpx = tmp_path / "gpx"; gpx.mkdir()
@@ -183,10 +218,17 @@ def _ready_ws(tmp_path, monkeypatch):
     cfg["camera_time_and_timezone_policy"] = dict(
         cfg["camera_time_and_timezone_policy"], device_groups={"fixed_clock_cameras": [CAM], "phones": []},
         default_folder_timezone="Europe/Brussels", multi_anchor_auto_apply=True)
+    if folders:
+        cfg["folders"] = dict(folders)
     (ctl / "photos-00-config.json").write_text(json.dumps(cfg))
+    answer_root_zone(ctl)                        # the zone answered once at the root (RUL-timezone_auto_resolves)
+    if folders:                                  # ... at the root as these folders name it
+        td = json.load(open(ctl / "photos-21-time-decisions.json"))
+        td["destinations"] = {bydest: td["destinations"].pop(BYDEST)}
+        (ctl / "photos-21-time-decisions.json").write_text(json.dumps(td))
     # a prep log to carry forward
     (ctl / "photos-15-prep-log.json").write_text(json.dumps({"schema_version": 1, "tool": "photos-1-prep",
-        "photos": {"fp-" + f"{BYDEST}/T/a.arw": {"content_fingerprint": "fp-" + f"{BYDEST}/T/a.arw",
+        "photos": {"fp-" + f"{bydest}/T/a.arw": {"content_fingerprint": "fp-" + f"{bydest}/T/a.arw",
                                                  "journey": [{"phase": "prep", "action": "organized"}]}}}))
     (ctl / "photos-15-prep-ingest.db").write_bytes(b"")   # presence; bundled if present
 
@@ -196,16 +238,17 @@ def _ready_ws(tmp_path, monkeypatch):
                   "has_timestamp": True, "has_native_gps": True, "GPSLatitude": gps[0], "GPSLongitude": gps[1]}
         p = ws / rel; p.parent.mkdir(parents=True, exist_ok=True); p.write_bytes(b"img-" + rel.encode())
         st = p.stat()
-        return {"relative_path": rel, "media_class": "image", "folder_class": "6-photos-by-dest",
+        return {"relative_path": rel, "media_class": "image", "folder_class": bydest,
                 "size": st.st_size, "mtime_ns": st.st_mtime_ns,
                 "content_hash": json.dumps({"value": "fp-" + rel, "status": "valid"}),
                 "metadata_status": {"camera_group_key_version": utils.CAMERA_GROUP_KEY_VERSION,
                                     "camera_group_key": CAM, "has_timestamp": True, "has_native_gps": True,
                                     "field_set_version": utils.FIELD_SET_VERSION, "parsed_json": json.dumps(parsed)}}
-    files = [rec(f"{BYDEST}/T/a.arw", "2024:07:03 14:00:00", (50.0, 4.0)),
-             rec(f"{BYDEST}/T/b.arw", "2024:07:03 15:00:00", (51.0, 5.0))]
+    files = [rec(f"{bydest}/T/a.arw", "2024:07:03 14:00:00", (50.0, 4.0)),
+             rec(f"{bydest}/T/b.arw", "2024:07:03 15:00:00", (51.0, 5.0))]
     (ctl / "photos-11-handoff.json").write_text(json.dumps({"filename_timestamp_format": utils.CONFIG["filename_timestamp_format"], "files": files, "cache_fingerprint": "pcf",
-        "depends_on": {"prep_log": {"sha256": utils.sha256_file(str(ctl / "photos-15-prep-log.json"))}}}))
+        "depends_on": {"prep_log": {"sha256": utils.sha256_file(str(ctl / "photos-15-prep-log.json"))},
+                       "cache": {"image_engine_version": utils.get_imagemagick_version(), "fingerprint_algorithm_version": utils.FINGERPRINT_ALGORITHM_VERSION}}}))
 
     monkeypatch.setattr(cal.GeotagWorkflow, "_exiftool_write", lambda self, p, t: True)
     monkeypatch.setattr(cal.ContentHasher, "fingerprint_image",
@@ -225,7 +268,6 @@ def _run(monkeypatch, ws, cmd):
 def _to_executed(monkeypatch, ws, ctl):
     _run(monkeypatch, ws, "plan")
     a = json.load(open(ctl / "photos-21-time-decisions.json"))
-    a["destinations"][f"{BYDEST}/T"]["destination_timezone"]["user_decision"]["accept_proposed_timezone"] = True
     (ctl / "photos-21-time-decisions.json").write_text(json.dumps(a))
     _run(monkeypatch, ws, "plan")
     _run(monkeypatch, ws, "execute")
@@ -238,7 +280,7 @@ def test_finalize_refuses_before_execute(tmp_path, monkeypatch):
     assert not (ctl / "photos-26-complete-log.json").exists()
 
 
-@pytest.mark.spec("geotag-finalize-requires-success-1")
+@pytest.mark.spec("RUL-finalize_requires_success", test="TST-geotag_finalize-finalize_refuses_partial_execution")
 def test_finalize_refuses_partial_execution(tmp_path, monkeypatch):
     ws, ctl = _ready_ws(tmp_path, monkeypatch)
     _to_executed(monkeypatch, ws, ctl)
@@ -256,7 +298,10 @@ def test_finalize_refuses_plan_id_mismatch(tmp_path, monkeypatch):
     assert _run(monkeypatch, ws, "finalize") == 2
 
 
-@pytest.mark.spec("archive-finalize-explicit-1", "archive-finalize-nondestructive-1", "archive-no-cross-phase-write-1", "archive-package-contents-1", "archive-self-describing-manifest-1", "db-durable-artifact-1", "geotag-finalize-manifest-1", "geotag-finalize-nondestructive-1", test="TST-geotag_finalize-finalize_assembles_package_and_is_nondestructive")
+@pytest.mark.spec("RUL-finalize_explicit", "RUL-finalize_non_destructive", "RUL-carry_forward_by_copy",
+                  "RUL-package_contents", "RUL-package_self_describing", "RUL-package_lists_contents",
+                  "RUL-database_archived",
+                  test="TST-geotag_finalize-finalize_assembles_package_and_is_nondestructive")
 def test_finalize_assembles_package_and_is_nondestructive(tmp_path, monkeypatch):
     ws, ctl = _ready_ws(tmp_path, monkeypatch)
     _to_executed(monkeypatch, ws, ctl)
@@ -300,7 +345,10 @@ def test_finalize_records_each_photo_as_left(tmp_path, monkeypatch):
         assert rec == {"size": st.st_size, "mtime_ns": st.st_mtime_ns}, rel
 
 
-@pytest.mark.spec("RUL-package_contents", "RUL-package_self_describing", "archive-whole-control-dir-1", "archive-self-describing-manifest-1", "RUL-other_databases_scratch", "RUL-images_archived", "RUL-config_archived", test="TST-geotag_finalize-finalize_archives_the_whole_control_directory")
+@pytest.mark.spec("RUL-package_contents", "RUL-package_self_describing", "RUL-images_archived",
+                  "RUL-config_archived", "RUL-package_lists_contents", "RUL-scratch_database_not_archived",
+                  "RUL-database_archived",
+                  test="TST-geotag_finalize-finalize_archives_the_whole_control_directory")
 def test_finalize_archives_the_whole_control_directory(tmp_path, monkeypatch):
     """The package is the whole control directory but its transient files — the drift record and every
     journal among it — listed with their hashes in the manifest and archived, manifest included, into
@@ -309,7 +357,7 @@ def test_finalize_archives_the_whole_control_directory(tmp_path, monkeypatch):
     import tarfile
     ws, ctl = _ready_ws(tmp_path, monkeypatch)
     _to_executed(monkeypatch, ws, ctl)
-    (ctl / "photos-22-gps-drift-validation.json").write_text('{"status": "complete"}')
+    assert (ctl / "photos-22-gps-drift-validation.json").exists()
     (ctl / "photos-00-plan-memo.db").write_bytes(b"scratch")
     (ctl / "photos-15-prep-ingest.db").write_bytes(b"prep's database image")
     (ctl / "photos-00-workspace-guard").write_text('{"initialized": true, "initialized_by_run": "prep-init-1"}')
@@ -330,10 +378,10 @@ def test_finalize_archives_the_whole_control_directory(tmp_path, monkeypatch):
         assert hashlib.sha256(archived[rec["path"]]).hexdigest() == rec["sha256"], rec["path"]
 
 
-@pytest.mark.spec("geotag-finalize-no-merge-1")
+@pytest.mark.spec("RUL-finalize_explicit")
 def test_finalize_bundles_archive_but_performs_no_merge(tmp_path, monkeypatch):
-    """§31 (anti): finalize assembles the archival package (photos-26 complete-log + DB + manifest)
-    but NEVER merges into a library — it produces no merge artifacts and moves no media. Snapshot the
+    """RUL-finalize_non_destructive (anti): finalize assembles the archival package (photos-26 complete-log + DB +
+    manifest) but NEVER merges into a library — it produces no merge artifacts and moves no media. Snapshot the
     by-dest frames, run finalize, assert the package appears, NO merge artifact (photos-31/photos-35)
     is written, and every by-dest media file is byte-unchanged (finalize moved nothing)."""
     ws, ctl = _ready_ws(tmp_path, monkeypatch)
@@ -368,7 +416,6 @@ def test_finalize_refuses_without_summary(tmp_path, monkeypatch):
     ws, ctl = _ready_ws(tmp_path, monkeypatch)
     _run(monkeypatch, ws, "plan")
     a = json.load(open(ctl / "photos-21-time-decisions.json"))
-    a["destinations"][f"{BYDEST}/T"]["destination_timezone"]["user_decision"]["accept_proposed_timezone"] = True
     (ctl / "photos-21-time-decisions.json").write_text(json.dumps(a))
     _run(monkeypatch, ws, "plan")                                         # photos-23 ready, NOT executed
     assert (ctl / "photos-24-executable-plan.json").exists()
@@ -410,6 +457,94 @@ def test_finalize_refuses_a_prep_log_the_handoff_does_not_vouch_for(tmp_path, mo
     assert not (ctl / "photos-26-complete-log.json").exists()
 
 
+@pytest.mark.spec("RUL-image_untouched_by_other_phase",
+                  test="TST-geotag_finalize-geotag_leaves_preps_database_image_as_it_was")
+def test_geotag_leaves_preps_database_image_as_it_was(tmp_path, monkeypatch):
+    """Geotag — plan, execute and finalize — writes its own image of the database and leaves prep's, byte
+    for byte, as prep left it."""
+    ws, ctl = _ready_ws(tmp_path, monkeypatch)
+    image = ctl / "photos-15-prep-ingest.db"
+    image.write_bytes(b"prep's image of the database")
+    st = image.stat()
+    _to_executed(monkeypatch, ws, ctl)
+    assert _run(monkeypatch, ws, "finalize") == 0
+    assert (ctl / "photos-26-geotag-ingest.db").read_bytes().startswith(b"SQLite format 3")   # its own: written
+    assert image.read_bytes() == b"prep's image of the database"
+    assert (image.stat().st_mtime_ns, image.stat().st_ino) == (st.st_mtime_ns, st.st_ino)     # never rewritten
+
+
+@pytest.mark.spec("RUL-control_directory_fixed",
+                  test="TST-geotag_finalize-geotag_keeps_its_records_in_the_one_control_directory")
+def test_geotag_keeps_its_records_in_the_one_control_directory(tmp_path, monkeypatch):
+    """Where geotag reads and writes its records does not follow the configuration: with the default folders, or
+    with every folder renamed, geotag plans, executes and finalizes from the records prep left in `.photos-ingest/`
+    and writes its own there, and nowhere else."""
+    import copy
+    renamed = {role: f"x-{name}" for role, name in copy.deepcopy(utils.DEFAULT_FOLDERS).items()}
+    records = ("photos-21-time-decisions.json", "photos-22-gps-drift-validation.json", "photos-23-gps-decisions.json",
+               "photos-24-executable-plan.json", "photos-25-execution-summary.json", "photos-26-complete-log.json",
+               "photos-26-finalized-media.json", "photos-26-geotag-ingest.db", "photos-26-archive-manifest.json",
+               "photos-26-archive.tar.gz", "photos-00-track-memo.db")
+    for name, folders in (("default", None), ("renamed", renamed)):
+        (tmp_path / name).mkdir()
+        ws, ctl = _ready_ws(tmp_path / name, monkeypatch, folders=folders)
+        utils.CONFIG.clear(); utils.CONFIG.update(utils.default_config())   # a run of its own: nothing read yet
+        _to_executed(monkeypatch, ws, ctl)
+        assert json.load(open(ctl / "photos-25-execution-summary.json"))["status"] == "success", name
+        assert _run(monkeypatch, ws, "finalize") == 0, name
+        for rec in records:
+            assert (ws / ".photos-ingest" / rec).is_file(), (name, rec)
+        plan_id = json.load(open(ctl / "photos-24-executable-plan.json"))["plan_id"]
+        assert (ws / ".photos-ingest" / f"journal-{plan_id}.json").is_file(), name
+        assert sorted(os.listdir(ws)) == sorted([".photos-ingest", *(folders.values() if folders else MANAGED)]), name
+        outside = [os.path.join(r, n) for r, _d, fs in os.walk(ws) if ".photos-ingest" not in r
+                   for n in fs if not n.endswith(".arw")]
+        assert outside == [], (name, outside)                       # no record anywhere among the media
+        bydest = (folders or {}).get("photos_by_dest", BYDEST)
+        assert sorted(os.listdir(ws / bydest / "T")) == ["2024-07-03--14-00-00.arw", "2024-07-03--15-00-00.arw"]
+
+
+@pytest.mark.spec("RUL-image_untouched_by_other_phase",
+                  test="TST-geotag_finalize-prep_after_finalize_leaves_geotags_database_image_as_it_was")
+def test_prep_after_finalize_leaves_geotags_database_image_as_it_was(tmp_path, monkeypatch):
+    """Prep may still run once geotag has finalized, the workspace not yet merged: every command of it — plan, dry
+    run, execute, the quarantine's prune — leaves geotag's image of the database, byte for byte, as geotag left it,
+    while prep's own image is written anew."""
+    import photos_1_prep as prep
+    ws, ctl = _ready_ws(tmp_path, monkeypatch)
+    _to_executed(monkeypatch, ws, ctl)
+    assert _run(monkeypatch, ws, "finalize") == 0
+    image = ctl / "photos-26-geotag-ingest.db"
+    made, st = image.read_bytes(), image.stat()
+    assert made.startswith(b"SQLite format 3")
+
+    def meta(folders, max_workers=4, progress_coordinator=None):    # the time geotag wrote, which names each photo
+        stamp = lambda n: "{}:{}:{} {}:{}:{}".format(*n[:20].replace("--", "-").split("-"))
+        return {os.path.join(r, n): {"DateTimeOriginal": stamp(n), "extraction_status": "extracted_ok"}
+                for folder in folders for r, _d, fs in os.walk(folder) for n in fs if n.endswith(".arw")}, set()
+    monkeypatch.setattr(utils.MetadataReader, "read_metadata_concurrently", meta)
+    monkeypatch.setattr(utils.ContentHasher, "fingerprint_image", staticmethod(
+        lambda p: {"status": "valid", "strategy": "image-content-hash-v2", "value": "fp-" + os.path.basename(p),
+                   "engine_version": "t"}))
+    (ws / "0-sources" / "note.txt").write_text("a stray, so prep has a sort to do")
+    prep.WorkspaceCache(str(ws)).close()          # the cache prep keeps (this workspace was made without prep)
+
+    def prep_run(*argv):
+        monkeypatch.setattr(sys, "argv", ["photos-1-prep", *argv])
+        try:
+            prep.main(); return 0
+        except SystemExit as e:
+            return e.code if isinstance(e.code, int) else (0 if e.code is None else 1)
+    prep_image = ctl / "photos-15-prep-ingest.db"
+    prep_before = prep_image.read_bytes()
+    for argv in (("plan",), ("dry-run",), ("execute",), ("prune-quarantine",), ("plan",)):
+        assert prep_run(*argv) == 0, argv
+        assert image.read_bytes() == made, argv
+        assert (image.stat().st_mtime_ns, image.stat().st_ino) == (st.st_mtime_ns, st.st_ino), argv
+    assert not (ws / "0-sources" / "note.txt").exists()                     # prep did run its sort
+    assert prep_image.read_bytes() != prep_before and prep_image.read_bytes().startswith(b"SQLite format 3")
+
+
 def test_finalize_is_idempotent(tmp_path, monkeypatch):
     ws, ctl = _ready_ws(tmp_path, monkeypatch)
     _to_executed(monkeypatch, ws, ctl)
@@ -419,3 +554,172 @@ def test_finalize_is_idempotent(tmp_path, monkeypatch):
     assert _run(monkeypatch, ws, "finalize") == 0
     assert (ctl / "photos-26-complete-log.json").read_bytes() == log1     # deterministic
     assert (ctl / "photos-15-prep-log.json").read_bytes() == prep1        # prep untouched
+
+
+@pytest.mark.spec("RUL-image_never_working_data", test="TST-geotag_finalize-geotag_never_reads_a_database_image_back")
+def test_geotag_never_reads_a_database_image_back(tmp_path, monkeypatch):
+    """No database image is read back as working data: with prep's image, and then geotag's own, holding no
+    database at all, geotag plans, executes and finalizes — and finalizes again to the same record — opening
+    neither."""
+    ws, ctl = _ready_ws(tmp_path, monkeypatch)
+    images = ("photos-15-prep-ingest.db", "photos-26-geotag-ingest.db")
+    (ctl / images[0]).write_bytes(b"not a database")
+    opened, real_connect = [], sqlite3.connect
+    def connect(database, *a, **k):
+        opened.append(os.path.basename(str(database).split("?")[0]))
+        return real_connect(database, *a, **k)
+    monkeypatch.setattr(sqlite3, "connect", connect)
+    _to_executed(monkeypatch, ws, ctl)
+    assert json.load(open(ctl / "photos-25-execution-summary.json"))["status"] == "success"
+    assert _run(monkeypatch, ws, "finalize") == 0
+    record = {n: (ctl / n).read_bytes() for n in ("photos-26-complete-log.json", "photos-26-finalized-media.json")}
+    (ctl / images[1]).write_bytes(b"not a database either")
+    assert _run(monkeypatch, ws, "finalize") == 0
+    assert {n: (ctl / n).read_bytes() for n in record} == record
+    assert (ctl / images[1]).read_bytes().startswith(b"SQLite format 3")      # its own image, made again
+    assert "photos-00-ingest.db" in opened and not set(images) & set(opened), opened
+
+
+@pytest.mark.spec("RUL-log_step_names_run", test="TST-geotag_finalize-every_geotag_step_names_its_run")
+def test_every_geotag_step_names_its_run(tmp_path, monkeypatch):
+    """Every step geotag adds to a photo's log names the run that made it: the plan that was executed."""
+    ws, ctl = _ready_ws(tmp_path, monkeypatch)
+    _to_executed(monkeypatch, ws, ctl)
+    assert _run(monkeypatch, ws, "finalize") == 0
+    plan_id = json.loads((ctl / "photos-24-executable-plan.json").read_text())["plan_id"]
+    steps = [s for e in json.loads((ctl / "photos-26-complete-log.json").read_text())["photos"].values()
+             for s in e["journey"] if s.get("phase") == "geotag"]
+    assert plan_id and steps and all(s.get("run") == plan_id for s in steps), steps
+
+
+@pytest.mark.spec("RUL-finalize_reads_database", test="TST-geotag_finalize-finalize_only_reads_the_workspace_database")
+def test_finalize_only_reads_the_workspace_database(tmp_path, monkeypatch):
+    """Finalize reads the workspace's database — it images it — and writes nothing to it: once geotag has executed,
+    the database is, byte for byte and row for row, what it was before finalize, and finalize leaves no journal of
+    a write beside it; it has been read all the same, into finalize's own image of it."""
+    ws, ctl = _ready_ws(tmp_path, monkeypatch)
+    _to_executed(monkeypatch, ws, ctl)
+    live = ctl / "photos-00-ingest.db"
+
+    def rows():
+        conn = sqlite3.connect(f"file:{live}?mode=ro", uri=True)
+        try:
+            return list(conn.iterdump())
+        finally:
+            conn.close()
+    before, st, dumped = live.read_bytes(), live.stat(), rows()
+    assert any(line.startswith('INSERT INTO "resolved_utc_cache"') for line in dumped)   # geotag's rows, to keep
+    assert _run(monkeypatch, ws, "finalize") == 0
+    assert live.read_bytes() == before
+    assert (live.stat().st_mtime_ns, live.stat().st_ino) == (st.st_mtime_ns, st.st_ino)
+    assert rows() == dumped
+    assert not [n for n in os.listdir(ctl) if n.startswith("photos-00-ingest.db-")]   # no -journal / -wal left
+    image = sqlite3.connect(str(ctl / "photos-26-geotag-ingest.db"))
+    try:
+        assert list(image.iterdump()) == dumped                         # read whole into its image
+    finally:
+        image.close()
+
+
+@pytest.mark.spec("RUL-snapshot_optional", "RUL-filesystem_agnostic", test="TST-geotag_finalize-geotag_runs_whole_with_no_zfs")
+def test_geotag_runs_whole_with_no_zfs(tmp_path, monkeypatch):
+    """With snapshots off, as they are by default, geotag never reaches for a ZFS feature: on a machine with no
+    `zfs` at all it plans, executes and finalizes."""
+    import subprocess
+    calls, real = [], subprocess.Popen
+    def popen(args, *a, **k):
+        argv = args.split() if isinstance(args, str) else list(args)
+        if argv and os.path.basename(str(argv[0])) == "zfs":
+            calls.append(argv)
+            raise FileNotFoundError(2, "No such file or directory", "zfs")
+        return real(args, *a, **k)
+    monkeypatch.setattr(subprocess, "Popen", popen)
+    ws, ctl = _ready_ws(tmp_path, monkeypatch)
+    assert json.load(open(ctl / "photos-00-config.json"))["zfs"]["enabled"] is False
+    _to_executed(monkeypatch, ws, ctl)
+    assert json.load(open(ctl / "photos-25-execution-summary.json"))["status"] == "success"
+    assert _run(monkeypatch, ws, "finalize") == 0
+    assert (ctl / "photos-26-archive-manifest.json").exists() and calls == []
+
+
+@pytest.mark.spec("RUL-finalize_requires_success", "BLD-finalize_preconditions",
+                  "RUL-finalize_requires_plan_still_holds", "RUL-dependencies_validated_before_deriving",
+                  test="TST-geotag_finalize-a_decision_changed_since_execution_stops_finalize")
+def test_a_decision_changed_since_execution_stops_finalize(tmp_path, monkeypatch):
+    # Executed, then a decision edited without planning again: the package would record a decision the photos
+    # never received, so finalize writes nothing and asks for the plan and execute again.
+    ws, ctl = _ready_ws(tmp_path, monkeypatch)
+    _to_executed(monkeypatch, ws, ctl)
+    p = ctl / "photos-23-gps-decisions.json"
+    a = json.loads(p.read_text()); a["note"] = "edited after execute"; p.write_text(json.dumps(a))
+    assert _run(monkeypatch, ws, "finalize") == 2
+    assert not (ctl / "photos-26-complete-log.json").exists()
+
+
+
+# --- what finalize packages is what execution left (RUL-finalize_checks_photos) -----------------------------
+
+@pytest.mark.spec("RUL-finalize_checks_photos", "BLD-finalize_preconditions",
+                  test="TST-geotag_finalize-a_photo_not_as_execution_left_it_stops_finalize")
+@pytest.mark.parametrize("change", ["edited", "gone", "added"])
+def test_a_photo_not_as_execution_left_it_stops_finalize(tmp_path, monkeypatch, capsys, change):
+    """Between execute and finalize a photo is edited in another program, deleted, or a new one dropped in.
+    Finalize records the photos as geotag's finished work, which merge then trusts: it refuses, naming the
+    photo, rather than record the changed state as its own."""
+    ws, ctl = _ready_ws(tmp_path, monkeypatch)
+    _to_executed(monkeypatch, ws, ctl)
+    assert json.load(open(ctl / "photos-25-execution-summary.json"))["status"] == "success"
+    photos = sorted((ws / BYDEST / "T").iterdir())
+    if change == "edited":
+        photos[0].write_bytes(b"retagged by hand, another size")
+    elif change == "gone":
+        photos[0].unlink()
+    else:
+        (ws / BYDEST / "T" / "dropped-in.jpg").write_bytes(b"new")
+    capsys.readouterr()
+    assert _run(monkeypatch, ws, "finalize") == 2
+    said = capsys.readouterr()
+    assert "not as the execution left" in said.out + said.err
+    assert not (ctl / "photos-26-finalized-media.json").exists()
+
+
+@pytest.mark.spec("RUL-finalize_reports_placement", "RUL-plan_counts_placement", "BLD-executable_plan",
+                  "RUL-finalize_keeps_placement_count",
+                  test="TST-geotag_finalize-finalize_reports_how_every_photo_was_placed")
+def test_finalize_reports_how_every_photo_was_placed(tmp_path, monkeypatch, capsys):
+    """The measure of a run: every photo counted by how it came by its position, those left without one among
+    them — in the plan, in finalize's output, and in the package's manifest."""
+    ws, ctl = _ready_ws(tmp_path, monkeypatch)
+    _to_executed(monkeypatch, ws, ctl)
+    plan = json.load(open(ctl / "photos-24-executable-plan.json"))
+    assert plan["placement"] == {"native": 2}
+    capsys.readouterr()
+    assert _run(monkeypatch, ws, "finalize") == 0
+    assert "Positions: 2 native — of 2 photo(s)." in capsys.readouterr().out
+    assert json.load(open(ctl / "photos-26-archive-manifest.json"))["placement"] == {"native": 2}
+
+
+@pytest.mark.spec("RUL-unlocated_logged", "RUL-log_cites_decisions", "RUL-placement_recorded_with_its_track",
+                  test="TST-geotag_finalize-the_log_says_what_placed_a_photo_or_that_nothing_did")
+def test_the_log_says_what_placed_a_photo_or_that_nothing_did():
+    """A photo the user left unlocated has that in its log, with the decision; one the tracks placed has the
+    track that placed it and the time it was placed at. And a photo recorded under its new name by a prep run
+    since the plan keeps the time steps of the row planned under its old one."""
+    d = f"{BYDEST}/T"
+    files = [_file(f"{d}/u.arw", "fpU"), _file(f"{d}/2024-07-03--14-00-00.arw", "fpT")]
+    rows = [{"relative_path": f"{d}/t.arw", "resolved_utc": "2024-07-03T12:00:00Z"}]
+    plan = {"destinations": {d: {
+        "left_unlocated": [{"relative_path": f"{d}/u.arw", "content_fingerprint": "fpU",
+                            "because": f"photos-23 destinations.{d}.gps_decisions.review_items[u.arw]"}],
+        "operations": [
+            {"type": "metadata_gps_write", "relative_path": f"{d}/t.arw", "gps_origin": "recompute_automated",
+             "preconditions": {"content_fingerprint": "fpT"}, "writes": {"GPSLatitude": 50.0, "GPSLongitude": 4.0},
+             "provenance": {"gpx_file": "trip.gpx", "resolved_utc": "2024-07-03T12:00:00Z"}},
+            {"type": "rename_no_clobber", "relative_path": f"{d}/t.arw", "preconditions": {"content_fingerprint": "fpT"},
+             "from": "t.arw", "to": "2024-07-03--14-00-00.arw"}]}}}
+    log = cal.build_complete_log({}, files, rows, {}, plan)
+    assert {"phase": "geotag", "action": "left_unlocated",
+            "because": f"photos-23 destinations.{d}.gps_decisions.review_items[u.arw]"} in log["fpU"]["journey"]
+    steps = {s["action"]: s for s in log["fpT"]["journey"]}
+    assert steps["gps_written"]["gpx_file"] == "trip.gpx" and steps["gps_written"]["at_utc"] == "2024-07-03T12:00:00Z"
+    assert steps["resolved_utc"]["value"] == "2024-07-03T12:00:00Z"            # found under the old name's row

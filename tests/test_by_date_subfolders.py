@@ -42,10 +42,10 @@ def _ws(tmp_path):
 def _mock(monkeypatch, date_for):
     """date_for(basename) -> "YYYY:MM:DD HH:MM:SS" or None (untimestamped)."""
     monkeypatch.setattr(prep.ContentHasher, "fingerprint_image",
-                        lambda p: {"status": "valid", "strategy": "image-content-hash-v1",
+                        lambda p: {"status": "valid", "strategy": "image-content-hash-v2",
                                    "value": "sig-" + os.path.basename(p), "engine_version": "t"})
     monkeypatch.setattr(prep.ContentHasher, "fingerprint_video",
-                        lambda p: {"status": "valid", "strategy": "video-md5-v1",
+                        lambda p: {"status": "valid", "strategy": "video-md5-v2",
                                    "value": "vsig-" + os.path.basename(p)})
 
     def meta(folders, max_workers=4, progress_coordinator=None):
@@ -66,7 +66,8 @@ def _plan(ws):
     return prep.WorkspacePrepWorkflow(str(ws), prep.WorkspaceCache(str(ws), in_memory=True)).plan()
 
 
-@pytest.mark.spec("prep-date-name-format-1", "prep-day-subfolder-grouping-1", "RUL-by_date_in_day_folder", "RUL-photos_by_date", test="TST-by_date_subfolders-photo_lands_in_day_subfolder")
+@pytest.mark.spec("BLD-day_folder_name", "RUL-by_date_in_day_folder", "RUL-photos_by_date",
+                  test="TST-by_date_subfolders-photo_lands_in_day_subfolder")
 def test_photo_lands_in_day_subfolder(tmp_path, monkeypatch):
     _mock(monkeypatch, lambda f: "2023:07:04 14:30:05")
     ws = _ws(tmp_path)
@@ -76,7 +77,7 @@ def test_photo_lands_in_day_subfolder(tmp_path, monkeypatch):
     assert list((ws / "0-sources").iterdir()) == []
 
 
-@pytest.mark.spec("prep-route-by-class-timestamp-1", "prep-videos-date-organized-1", test="TST-by_date_subfolders-video_lands_in_day_subfolder")
+@pytest.mark.spec("RUL-photos_by_date", "RUL-videos_by_date", test="TST-by_date_subfolders-video_lands_in_day_subfolder")
 def test_video_lands_in_day_subfolder(tmp_path, monkeypatch):
     _mock(monkeypatch, lambda f: "2023:07:04 14:30:05")
     ws = _ws(tmp_path)
@@ -85,7 +86,7 @@ def test_video_lands_in_day_subfolder(tmp_path, monkeypatch):
     assert (ws / "4-videos-by-date" / "2023-07-04" / "2023-07-04--14-30-05.mp4").exists()
 
 
-@pytest.mark.spec("prep-missing-metadata-flat-1", "RUL-untimed_to_missing_metadata", test="TST-by_date_subfolders-untimestamped_stays_flat_in_missing_metadata")
+@pytest.mark.spec("RUL-untimed_to_missing_metadata", test="TST-by_date_subfolders-untimestamped_stays_flat_in_missing_metadata")
 def test_untimestamped_stays_flat_in_missing_metadata(tmp_path, monkeypatch):
     _mock(monkeypatch, lambda f: None)
     ws = _ws(tmp_path)
@@ -94,7 +95,7 @@ def test_untimestamped_stays_flat_in_missing_metadata(tmp_path, monkeypatch):
     assert (ws / "2-missing-metadata" / "UNKN_nodate.jpg").exists()        # flat, no day folder
 
 
-@pytest.mark.spec("prep-collision-resolved-in-memory-1", "prep-suffix-bare-first-lowest-free-1")
+@pytest.mark.spec("BLD-planned_paths_tracked", "RUL-suffix_choice_by_phase")
 def test_same_day_collides_other_day_does_not(tmp_path, monkeypatch):
     # a.jpg and b.jpg share a timestamp (same day -> collision -> suffix); c.jpg is another day (no
     # collision -> bare), proving the day folder alone separates same-name files across days.
@@ -113,7 +114,8 @@ def test_same_day_collides_other_day_does_not(tmp_path, monkeypatch):
     }, dests
 
 
-@pytest.mark.spec("prep-relocate-misfiled-bydate-1", "RUL-by_date_in_day_folder", test="TST-by_date_subfolders-existing_flat_file_is_migrated_into_day_folder")
+@pytest.mark.spec("RUL-by_date_in_day_folder",
+                  test="TST-by_date_subfolders-existing_flat_file_is_migrated_into_day_folder")
 def test_existing_flat_file_is_migrated_into_day_folder(tmp_path, monkeypatch):
     _mock(monkeypatch, lambda f: "2023:07:04 14:30:05")
     ws = _ws(tmp_path)
@@ -128,7 +130,36 @@ def test_existing_flat_file_is_migrated_into_day_folder(tmp_path, monkeypatch):
     assert (ws / "5-photos-by-date" / "2023-07-04" / "2023-07-04--14-30-05.jpg").exists()
 
 
-@pytest.mark.spec("prep-files-in-managed-left-1", "prep-recognize-correct-location-1", "RUL-filed_file_stays", test="TST-by_date_subfolders-conforming_file_is_a_noop")
+@pytest.mark.spec("RUL-by_date_untimed_to_missing_metadata",
+                  test="TST-by_date_subfolders-untimed_file_in_a_dated_folder_goes_to_missing_metadata")
+def test_untimed_file_in_a_dated_folder_goes_to_missing_metadata(tmp_path, monkeypatch):
+    """A file lying in photos by date or videos by date with no recorded time — in a day folder or
+    flat under the band — is moved to missing metadata; a timed neighbour stays where it is."""
+    _mock(monkeypatch, lambda f: "2023:07:04 14:30:05" if f.startswith("2023-07-04--14-30-05") else None)
+    ws = _ws(tmp_path)
+    for band, ext in (("5-photos-by-date", "jpg"), ("4-videos-by-date", "mp4")):
+        (ws / band / "2023-07-04").mkdir()
+        (ws / band / "2023-07-04" / f"2023-07-04--14-30-05.{ext}").write_bytes(b"timed" + ext.encode())
+        (ws / band / "2023-07-04" / f"inday.{ext}").write_bytes(b"inday" + ext.encode())
+        (ws / band / f"flat.{ext}").write_bytes(b"flat" + ext.encode())
+    plan = _plan(ws)
+    assert plan.blockers == []
+    moves = {op.source: op.destination for op in plan.operations if op.type == "move_no_clobber"}
+    assert moves == {
+        "5-photos-by-date/2023-07-04/inday.jpg": "2-missing-metadata/UNKN_inday.jpg",
+        "5-photos-by-date/flat.jpg": "2-missing-metadata/UNKN_flat.jpg",
+        "4-videos-by-date/2023-07-04/inday.mp4": "2-missing-metadata/UNKN_inday.mp4",
+        "4-videos-by-date/flat.mp4": "2-missing-metadata/UNKN_flat.mp4",
+    }, moves
+    prep.PlanExecutor(str(ws)).execute(plan)
+    for dest in moves.values():
+        assert (ws / dest).exists()
+    for band, ext in (("5-photos-by-date", "jpg"), ("4-videos-by-date", "mp4")):
+        assert os.listdir(ws / band) == ["2023-07-04"]
+        assert os.listdir(ws / band / "2023-07-04") == [f"2023-07-04--14-30-05.{ext}"]
+
+
+@pytest.mark.spec("RUL-filed_file_stays", test="TST-by_date_subfolders-conforming_file_is_a_noop")
 def test_conforming_file_is_a_noop(tmp_path, monkeypatch):
     _mock(monkeypatch, lambda f: "2023:07:04 14:30:05")
     ws = _ws(tmp_path)

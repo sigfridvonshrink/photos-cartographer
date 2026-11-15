@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""The prep pipeline's stages (prep §7): duplicates set aside first and as found, the JPEG beside a RAW
+"""The prep pipeline's stages (BLD-prep_stage_order): duplicates set aside first and as found, the JPEG beside a RAW
 and nothing else set aside, extension case taken in the move that files a file, strays as they came.
 
 Mocked hashing (content bytes) and metadata (one fixed time), fast."""
@@ -48,7 +48,7 @@ def _mocks(monkeypatch):
 
     def hsh(p):
         with open(p, "rb") as f:
-            return {"status": "valid", "strategy": "image-content-hash-v1",
+            return {"status": "valid", "strategy": "image-content-hash-v2",
                     "value": "sig-" + f.read().hex()[:16], "engine_version": "t"}
     monkeypatch.setattr(prep.ContentHasher, "fingerprint_image", hsh)
 
@@ -86,7 +86,7 @@ def _tree(ws):
                   if not os.path.relpath(p, ws).startswith(".photos-ingest"))
 
 
-@pytest.mark.spec("RUL-redundant_jpeg_set_aside", "BLD-jpeg_extensions",
+@pytest.mark.spec("RUL-redundant_jpeg_set_aside", "BLD-jpeg_extensions", "RUL-redundant_jpeg_only",
                   test="TST-prep_pipeline-only_the_jpeg_beside_a_raw_is_set_aside")
 def test_only_the_jpeg_beside_a_raw_is_set_aside(tmp_path):
     """A RAW sets aside the JPEG of its name in its folder — `.jpg` or `.jpeg` — and no other image."""
@@ -122,7 +122,7 @@ def test_a_redumped_pair_settles_in_one_run(tmp_path):
     assert _media_ops(_plan(ws)) == []
 
 
-@pytest.mark.spec("RUL-copy_kept_by_folder", test="TST-prep_pipeline-copies_in_one_folder_keep_the_first_by_path")
+@pytest.mark.spec("RUL-copy_kept_first_by_path", test="TST-prep_pipeline-copies_in_one_folder_keep_the_first_by_path")
 def test_copies_in_one_folder_keep_the_first_by_path(tmp_path):
     ws = _ws(tmp_path)
     (ws / "0-sources" / "b").mkdir()
@@ -150,6 +150,57 @@ def test_a_duplicate_is_set_aside_as_found(tmp_path):
     assert q.destination.endswith("/0-sources/b.JPG")
     with open(ws / ".photos-ingest-quarantine" / plan.plan_id / "manifest.json") as f:
         assert json.load(f)[0]["original_path"] == "0-sources/b.JPG"
+
+
+@pytest.mark.spec("RUL-duplicate_in_manifest_with_kept",
+                  test="TST-prep_pipeline-the_quarantine_manifest_names_the_copy_kept")
+def test_the_quarantine_manifest_names_the_copy_kept(tmp_path):
+    """Each duplicate's record in the quarantine manifest names the copy prep kept instead of it."""
+    ws = _ws(tmp_path)
+    (ws / "0-sources" / "first.jpg").write_bytes(b"same")
+    (ws / "0-sources" / "other.jpg").write_bytes(b"else")
+    _run(ws)
+    kept = f"5-photos-by-date/2023-01-02/{NAME}.jpg"
+    with open(ws / kept, "rb") as f:
+        assert f.read() == b"same"
+    (ws / "0-sources" / "again.jpg").write_bytes(b"same")
+    (ws / "0-sources" / "more.jpg").write_bytes(b"else")
+    plan = _run(ws)
+    with open(ws / ".photos-ingest-quarantine" / plan.plan_id / "manifest.json") as f:
+        records = {r["original_path"]: r["retained_counterpart"] for r in json.load(f)}
+    assert records == {"0-sources/again.jpg": kept,
+                       "0-sources/more.jpg": f"5-photos-by-date/2023-01-02/{NAME}-001.jpg"}
+    for path in records.values():
+        assert (ws / path).exists()
+
+
+@pytest.mark.spec("RUL-restored_file_record_kept",
+                  test="TST-prep_pipeline-a_restored_files_quarantine_record_is_left_as_it_is")
+def test_a_restored_files_quarantine_record_is_left_as_it_is(tmp_path):
+    """Moving a quarantined file back into the inbox and running prep again — whether it is filed or
+    quarantined once more — leaves the manifest that recorded its first quarantine byte for byte."""
+    ws = _ws(tmp_path)
+    (ws / "0-sources" / "a.jpg").write_bytes(b"same")
+    (ws / "0-sources" / "b.jpg").write_bytes(b"same")
+    first = _run(ws)
+    qdir = ws / ".photos-ingest-quarantine" / first.plan_id
+    record = (qdir / "manifest.json").read_bytes()
+    assert json.loads(record)[0]["original_path"] == "0-sources/b.jpg"
+
+    os.rename(qdir / "0-sources" / "b.jpg", ws / "0-sources" / "b.jpg")     # still a duplicate
+    second = _run(ws)
+    assert second.plan_id != first.plan_id
+    assert (qdir / "manifest.json").read_bytes() == record
+    again = ws / ".photos-ingest-quarantine" / second.plan_id
+    with open(again / "manifest.json") as f:
+        assert [r["original_path"] for r in json.load(f)] == ["0-sources/b.jpg"]
+
+    os.remove(ws / "5-photos-by-date" / "2023-01-02" / f"{NAME}.jpg")       # no longer a duplicate
+    os.rename(again / "0-sources" / "b.jpg", ws / "0-sources" / "b.jpg")
+    _run(ws)
+    assert (ws / "5-photos-by-date" / "2023-01-02" / f"{NAME}.jpg").exists()
+    assert (qdir / "manifest.json").read_bytes() == record
+    assert json.loads((again / "manifest.json").read_bytes())[0]["original_path"] == "0-sources/b.jpg"
 
 
 @pytest.mark.spec("RUL-media_extension_lowercase", "BLD-two_step_case_rename", "RUL-inbox_kept_as_dumped",
@@ -212,7 +263,7 @@ def test_an_untimed_redundant_jpeg_takes_its_untimed_name(tmp_path, monkeypatch)
     assert sorted(os.listdir(ws / "3-redundant-jpgs")) == ["UNKN_old.jpg", "UNKN_shot.jpg"]
 
 
-@pytest.mark.spec("RUL-database_matches_files", "BLD-database_ops",
+@pytest.mark.spec("RUL-database_matches_files", "BLD-database_ops", "RUL-no_row_for_gone_file",
                   test="TST-prep_pipeline-a_file_sent_back_is_refiled_where_it_was")
 def test_a_file_sent_back_is_refiled_where_it_was(tmp_path):
     """A filed file the user moves back into the inbox is filed again under the name it had; the row of
@@ -230,7 +281,7 @@ def test_a_file_sent_back_is_refiled_where_it_was(tmp_path):
     cache.close()
 
 
-@pytest.mark.spec("RUL-quarantined_leaves_database", "BLD-move_row_effects",
+@pytest.mark.spec("RUL-quarantined_leaves_database", "BLD-move_row_effects", "RUL-quarantined_leaves_handoff",
                   test="TST-prep_pipeline-a_quarantined_file_leaves_the_database")
 def test_a_quarantined_file_leaves_the_database(tmp_path):
     """A duplicate set aside has no row in the database and no entry in the handoff; reclaiming the

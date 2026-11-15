@@ -2,6 +2,122 @@
 
 *What was decided and why, newest first. A record: never corrected forward. Per-commit detail is `git log`.*
 
+## 2026-11-14 — v3.0.0
+
+**The conversion is finished: geotag is in the corpus, the original specs are retired, and every rule has a test.**
+The specification is now only the corpus (`spec/`): 521 rules and invariants, each stating one obligation, each with
+its reason, and each named by a test that fails when it is broken — or, for the three invariants, verified through
+the rules that uphold them, which `tools/spec-build` checks. The four original documents, the conversion ledgers and
+the clause index are in the repository's history, as they stood at the release `v2.0.0`, and nowhere else. The phase documents' sections are
+numbered 1…n, and code, tests and corpus cite items, never sections. Converting geotag, then reviewing it twice
+against its own promise — *"geotagging all photos with minimum human input and ensuring that all decisions are
+explicit and recorded"* — changed what it does:
+
+- **the clock offset** — the offset a camera's own positions agree on is found whichever day a place was visited, a
+  revisit matched to its own day and a tie between visits asked, one click to answer. An accepted proposal names the
+  offset it accepted (`accepted_offset_seconds`) and is asked again when the proposal becomes another; the earlier
+  answer stays as the user wrote it. An offset the camera's own positions gave is shared across the destinations of
+  the same day, and two that disagree are shown against each other. A timezone-derived offset is asked about once, at
+  the tracks, where it can be checked. A stay in one place fixes no time and goes through the drift check. A drift
+  confirmation holds for the offset it confirmed.
+- **the timezone** — the configured default is offered, never applied. A destination is said to be *in* a country,
+  chosen once on the way down the tree, and a country of one timezone gives it; a destination has one timezone, and
+  one that its photos' own recorded offsets speak against takes effect only on the user's word. `by-dest` is a tree of
+  places, not of trips.
+- **reading times** — a phone's time is read by the offset recorded with that very field; an offset written inside
+  the time's value is read, and before one beside it; an offset that is not an offset is read as none, strictly; a
+  time out of range stops with the photo named. The log's `time_written` step records what was replaced, where the
+  time was read from, and by which rule.
+- **the tracks** — each track file is one device's record: no photo is placed, and no clock anchored, from a point
+  of one file taken with a point of another, between them or beyond them. Tracks that disagree about where a photo
+  was place nothing and are named. A tracks folder that is configured and not there stops the plan. Every position
+  written is marked `matched`, `interpolated` or `extrapolated`. Each threshold now has one purpose and its own
+  setting; none is read for two.
+- **execution and the record** — execute never writes over a photo edited since the plan, and finalize refuses a
+  plan no longer current and a photo changed since execute. Every step of every log names the run that made it —
+  merge's did not. A file naming no camera is solved on its own. A new ImageMagick changing a fingerprint keeps the
+  photo's pinned own values.
+
+**Safety, from asserting every rule.** Writing a test for each rule that had none, or was only passed through,
+found the code short of five of them:
+
+- **Every rewrite is on disk before it replaces the earlier file.** A rename can reach the disk before the bytes it
+  names, so a power cut could leave a record — or a photo — empty. Asked whether to narrow the rule to a killed
+  process or to sync: *"B. Sync - I don't care if slow, the script promises absolute safety."* The photo's metadata
+  write no longer lets exiftool rename over the photo: exiftool writes the new file beside it, geotag syncs it and
+  renames it into place.
+- **A link among the photos stops geotag.** It checked the top level only; a photo replaced since prep by a link to
+  the same file elsewhere was planned and written through, into a file outside the workspace.
+- **A disturbed workspace stops prep before it scans**, and geotag before it runs prep for the user. Both used to
+  fingerprint every file and write a plan first.
+- **Geotag and merge read the configuration before checking the folders it names.** Run on their own, they looked
+  for the built-in folder names and refused any workspace whose folders were renamed.
+- **The editor reads the seal under the workspace's lock**, not before taking it.
+
+A walk of every function against the corpus then found the code contradicting ruled rules in fourteen more places,
+fixed here: a failed prep execute rolls back its database effects instead of committing the half that succeeded;
+merge never moves, nor removes as already in the library, a photo written to after the plan, and an error placing
+one photo blocks that photo alone where it used to end the run with no summary; the console judges a plan stale by
+the workspace's own configuration, not the built-in one, and its editor tab refuses a sealed workspace and takes
+the editor's lock; exiftool gets the two attempts the rule gives it; re-executing a plan no longer fails on the
+snapshot its first execution took; the seal is checked before the workspace is walked. Code nothing reached is
+removed.
+
+The walk also found thirteen matters of safety that no rule covered. Each was ruled and built:
+
+- **A fingerprint covers the whole file.** A multi-page image was fingerprinted by its first page, a video by the
+  streams ffmpeg picks by default: two different files could be one to prep, which set one aside as the other's
+  duplicate, and to merge, which removed a workspace's copy because the library held "it". Every frame and every
+  stream are covered now, the method's version is recorded, and geotag and merge refuse a handoff of another method.
+  Single-frame photos keep their fingerprints; every file is fingerprinted again once.
+- **The same picture is not the same file.** Merge took a library file with the photo's pixels for the photo, and
+  removed the workspace's copy — the one carrying the time and position geotag had written. Only a library file that
+  is the photo byte for byte is the photo; the same pixels in other bytes block, both files named, neither removed.
+  Asked whether to replace the library's copy where it only lacks geotag's work: *"I changed my mind - if library
+  copy is same pixels, stop and let user sort."*
+- **A photo prep could not fingerprint stops geotag and merge.** Geotag wrote to it without keeping its own values,
+  and merge placed it with no identity.
+- **A track is one `<trk>`, and a break is never bridged.** A file holding two devices' tracks was read as one line
+  zig-zagging between them, and a recording break was interpolated across.
+- **A time a daylight-saving change skips or repeats is never guessed.** 02:30 on a spring-forward night was
+  silently written back an hour later.
+- **Tracks none of which can be read stop geotag**, where they used to count as no tracks at all.
+- **Geotag runs prep itself only where prep's plan touches no media file**; otherwise it stops and leaves the plan.
+- **The user's own `_original` backup is a stray**, never quarantined as a write's debris; **a hidden folder holding
+  files stops prep**, and any hidden entry among the photos stops merge, where both used to be passed over and left
+  in the sealed workspace.
+- **A library lies outside every workspace**, not only the one merge runs in; **an earlier merge's place counts only
+  inside the library now configured**; **pruning the quarantine by age takes a day or more**; **the editor saves
+  only over the records it loaded.**
+
+What the walk found beyond these — records, limits and smaller decisions the corpus does not yet state — is listed
+in BACKLOG 2.
+
+Two rules were narrowed to what is true rather than built out: a lock is taken over once the system reports no
+running process holds it, never on its owner record, and guards the runs of one machine; and only the snapshot uses
+a feature of one particular filesystem, the rule now naming what cartographer does require of one — locks, an atomic
+rename, a move that refuses a taken name, syncing to disk.
+
+**Major: a workspace begun under v2.0.0 cannot be continued without edits.** Its configuration lacks the settings
+that replaced the shared thresholds (`gpx_extrapolation_*`, `gpx_tracks_agree_max_distance_meters`, `gpx_anchor_*`,
+`drift_check_track_window_seconds`, `clock_offset_same_day_max_difference_seconds`) and is refused until they are
+added; `photo_anchor_interpolation_max_gap_seconds` and `photo_anchor_extrapolation_max_seconds` are gone. Two
+decision fields are removed — `accept_proposed_timezone`, `manual_real_utc` — and an `accept_proposal` without
+`accepted_offset_seconds` is a blocker, so earlier answers are asked again. The plan and the journal carry new fields
+(`placement`, `left_unlocated`, `media_after`). Replace a deployed `photos-config-defaults.json` with this release's.
+The library itself needs nothing.
+
+**The user guides are redone against this version** — the README, the quick start, concepts, the editor guide and
+the decision-file reference: how a timezone and a clock offset are settled, what applies itself and what is asked,
+what stops a run and what to do about it, and what a 2.0.0 workspace needs. Redoing them found the editor telling the
+user wrong things, fixed with them: a refused load showed an empty editor instead of its reason; the console
+reloaded the Edit tab over unsaved edits; a time at a daylight-saving change was explained nowhere; a zone the
+photos contradict offered a button that resolved nothing; and a country written as anything but text ended the plan
+in an error rather than a blocker.
+
+**Not yet caught up:** the walkthrough and its screenshots show v2.0.0; it is marked obsolete until it is retaken
+(BACKLOG 49).
+
 ## 2026-11-13 — v2.0.0
 
 **The specification becomes a checked corpus, and every rule in it is now met by the code.** The four specs are

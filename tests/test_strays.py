@@ -14,8 +14,8 @@
 
 """Phase B2 — strays routing (non-media out of 0-sources into 1-strays).
 
-Non-media (other-class) is never fingerprinted/deduped (§9); it is moved inert into
-1-strays/<plan-id>/<rel> with its structure preserved (§3.2/§7.6), untracked and scan-skipped,
+Non-media (other-class) is never fingerprinted/deduped (RUL-strays_leave_no_trace); it is moved inert into
+1-strays/<plan-id>/<rel> with its structure preserved (RUL-inbox_non_media_to_strays), untracked and scan-skipped,
 so 0-sources is left empty. Mocked hashing/metadata, fast. From conftest.py.
 """
 import glob
@@ -46,7 +46,7 @@ def _install(monkeypatch):
 
     def hsh(p):
         with open(p, "rb") as f:
-            return {"status": "valid", "strategy": "image-content-hash-v1",
+            return {"status": "valid", "strategy": "image-content-hash-v2",
                     "value": "sig-" + f.read().hex()[:16], "engine_version": "t"}
     monkeypatch.setattr(prep.ContentHasher, "fingerprint_image", hsh)
 
@@ -81,7 +81,7 @@ def _cached_paths(ws):
         conn.close()
 
 
-@pytest.mark.spec("prep-sources-empty-after-stage5-1", "prep-strays-per-run-subfolder-1", "RUL-inbox_non_media_to_strays", test="TST-strays-stray_moved_structure_preserved")
+@pytest.mark.spec("RUL-prep_empties_inbox", "BLD-strays_per_run", "RUL-inbox_non_media_to_strays", test="TST-strays-stray_moved_structure_preserved")
 def test_stray_moved_structure_preserved(tmp_path, monkeypatch):
     _install(monkeypatch)
     ws = _ws(tmp_path)
@@ -100,7 +100,7 @@ def test_stray_moved_structure_preserved(tmp_path, monkeypatch):
     assert list((ws / "0-sources").iterdir()) == []               # inbox left empty
 
 
-@pytest.mark.spec("prep-other-not-fingerprinted-1", "prep-strays-inert-1", test="TST-strays-stray_not_fingerprinted_and_not_cached")
+@pytest.mark.spec("RUL-unlisted_extension_other", "RUL-strays_leave_no_trace", test="TST-strays-stray_not_fingerprinted_and_not_cached")
 def test_stray_not_fingerprinted_and_not_cached(tmp_path, monkeypatch):
     # If fingerprint_image were called on the stray it would raise (so we'd notice).
     _install(monkeypatch)
@@ -125,7 +125,7 @@ def test_stray_not_fingerprinted_and_not_cached(tmp_path, monkeypatch):
     assert "notes.txt" not in log                                # in no log
 
 
-@pytest.mark.spec("prep-scan-skips-control-subtrees-1", "prep-strays-excluded-from-scan-1")
+@pytest.mark.spec("RUL-not_inventoried", "RUL-strays_never_processed")
 def test_strays_scan_skipped_on_next_run(tmp_path, monkeypatch):
     _install(monkeypatch)
     ws = _ws(tmp_path)
@@ -139,9 +139,101 @@ def test_strays_scan_skipped_on_next_run(tmp_path, monkeypatch):
     assert os.path.exists(landed)                                # the stray is left untouched
 
 
-@pytest.mark.spec("gpx-prep-unaware-1", "RUL-tracks_geotag_only", "RUL-track_files_block_prep", "RUL-track_file_left_in_place", test="TST-strays-track_file_blocks_prep_and_stays_put")
+def _spy_reads(monkeypatch):
+    """Record every file prep fingerprints and every folder whose metadata it reads."""
+    fingerprinted, metadata_folders = [], []
+    hsh, meta = prep.ContentHasher.fingerprint_image, utils.MetadataReader.read_metadata_concurrently
+
+    def fp(p):
+        fingerprinted.append(p)
+        return hsh(p)
+
+    def md(folders, max_workers=4, progress_coordinator=None):
+        metadata_folders.extend(folders)
+        return meta(folders, max_workers, progress_coordinator)
+    monkeypatch.setattr(prep.ContentHasher, "fingerprint_image", fp)
+    monkeypatch.setattr(utils.MetadataReader, "read_metadata_concurrently", md)
+    return fingerprinted, metadata_folders
+
+
+@pytest.mark.spec("RUL-not_inventoried", test="TST-strays-what_prep_leaves_out_of_its_inventory")
+def test_what_prep_leaves_out_of_its_inventory(tmp_path, monkeypatch):
+    """Prep leaves out of its inventory of media, each as a whole, the control directory, the quarantine, a `.git`
+    directory and the strays folder with everything in it, and every hidden file: photos placed in each are never
+    fingerprinted, never read for metadata, in no part of the plan, and never cached — while a photo in the inbox
+    beside them is. A hidden file in the inbox is set aside to the quarantine (RUL-dump_hidden_files_quarantined),
+    never taken as media."""
+    _install(monkeypatch)
+    fingerprinted, metadata_folders = _spy_reads(monkeypatch)
+    ws = _ws(tmp_path)
+    left_out = [".photos-ingest/inside.jpg",
+                ".photos-ingest-quarantine/20250101T000000Z-aaaaaa/0-sources/parked.jpg",
+                ".git/objects/blob.jpg",
+                "1-strays/loose.jpg", "1-strays/20250101T000000Z-aaaaaa/sub/kept.jpg",
+                "5-photos-by-date/2023-01-02/.hidden.jpg",
+                "6-photos-by-dest/Trip/.edit.jpg"]   # a hidden FOLDER holding files stops prep instead
+                                                     # (RUL-hidden_folder_among_photos_blocks, test_hidden_folders)
+    for rel in left_out + ["0-sources/.preview.jpg", "0-sources/real.jpg"]:
+        (ws / rel).parent.mkdir(parents=True, exist_ok=True)
+        (ws / rel).write_bytes(b"img " + rel.encode())
+    plan = _plan(ws)
+    assert not plan.blockers, plan.blockers
+    assert [os.path.relpath(p, ws) for p in fingerprinted] == ["0-sources/real.jpg"]   # only the inbox's photo
+    read = {os.path.relpath(f, ws) for f in metadata_folders}
+    assert "0-sources" in read
+    assert not [f for f in read if f.split("/")[0] in (".photos-ingest", ".photos-ingest-quarantine", ".git",
+                                                       "1-strays") or "/." in "/" + f], read
+    in_plan = set(plan.inventory) | {p["relative_path"] for p in plan.workspace_file_preconditions}
+    named = {op.source for op in plan.operations} | {op.destination for op in plan.operations}
+    for rel in left_out:
+        assert rel not in in_plan and rel not in named, rel
+    assert [(op.type, op.source) for op in plan.operations if op.source == "0-sources/.preview.jpg"] \
+        == [("quarantine_move", "0-sources/.preview.jpg")]
+    prep.PlanExecutor(str(ws)).execute(plan)
+    cached = _cached_paths(ws)
+    jpgs = [p for p in cached if p.endswith(".jpg")]
+    assert len(jpgs) == 1 and jpgs[0].startswith("5-photos-by-date/") and "/." not in jpgs[0], cached   # the photo
+    for rel in left_out:
+        assert (ws / rel).read_bytes() == b"img " + rel.encode(), rel                            # all left as they were
+
+
+@pytest.mark.spec("RUL-strays_never_processed", test="TST-strays-strays_are_never_processed_again")
+def test_strays_are_never_processed_again(tmp_path, monkeypatch):
+    """Prep writes into the strays folder but never scans it: a stray set aside by one run — even once the
+    configuration counts its extension as an image, and beside a photo dropped in the strays folder by hand — is
+    never fingerprinted or read again by the runs after, enters no plan, no cache and no handoff (so geotag and
+    merge, which read the handoff, never meet it), and stays where it was, byte for byte."""
+    import json
+    _install(monkeypatch)
+    ws = _ws(tmp_path)
+    (ws / "0-sources" / "notes.txt").write_bytes(b"hello")
+    (ws / "0-sources" / "real.jpg").write_bytes(b"img")
+    _run(ws)
+    stray = glob.glob(str(ws / "1-strays" / "*" / "notes.txt"))[0]
+    rel_stray = os.path.relpath(stray, ws)
+    (ws / "1-strays" / "by-hand.jpg").write_bytes(b"a photo")
+    cfg_p = ws / ".photos-ingest" / "photos-00-config.json"
+    cfg = json.loads(cfg_p.read_text())
+    cfg["media_extensions"]["image"] = list(cfg["media_extensions"]["image"]) + ["txt"]
+    cfg_p.write_text(json.dumps(cfg))                               # a stray's extension now names an image
+    fingerprinted, metadata_folders = _spy_reads(monkeypatch)
+    (ws / "0-sources" / "next.jpg").write_bytes(b"next img")       # the next run has a dump of its own
+    plan = _run(ws)
+    assert "0-sources/next.jpg" in [os.path.relpath(p, ws) for p in fingerprinted]     # the run did read its dump
+    assert not [p for p in fingerprinted if os.path.relpath(p, ws).startswith("1-strays")], fingerprinted
+    assert not [f for f in metadata_folders if os.path.relpath(f, ws).startswith("1-strays")], metadata_folders
+    for rel in (rel_stray, "1-strays/by-hand.jpg"):
+        assert rel not in plan.inventory
+        assert not [op for op in plan.operations if rel in (op.source, op.destination)], rel
+        assert rel not in _cached_paths(ws)
+    handoff = json.loads((ws / ".photos-ingest" / "photos-11-handoff.json").read_text())
+    assert not [f for f in handoff["files"] if f["relative_path"].startswith("1-strays/")]
+    assert open(stray, "rb").read() == b"hello" and (ws / "1-strays" / "by-hand.jpg").read_bytes() == b"a photo"
+
+
+@pytest.mark.spec("RUL-tracks_geotag_only", "RUL-track_files_block_prep", "RUL-track_file_left_in_place", test="TST-strays-track_file_blocks_prep_and_stays_put")
 def test_track_file_blocks_prep_and_stays_put(tmp_path, monkeypatch):
-    """Shared contract §8: a track is never media. A `.gpx` anywhere prep inventories — the 0-sources
+    """RUL-track_files_block_prep: a track is never media. A `.gpx` anywhere prep inventories — the 0-sources
     dump or a managed folder — blocks the plan and is left where it is: no operation moves it (above
     all not into 1-strays, where clearing the strays would delete it), it is never fingerprinted, and
     the blocked plan cannot be executed."""
@@ -212,7 +304,7 @@ def test_prep_never_reads_the_tracks(tmp_path, monkeypatch):
 @pytest.mark.spec("RUL-track_files_block_prep", test="TST-strays-every_track_format_blocks_prep")
 @pytest.mark.parametrize("name", ["route.kml", "route.KMZ", "ride.FIT", "run.tcx", "log.nmea", "flight.igc"])
 def test_every_track_format_blocks_prep(tmp_path, monkeypatch, name):
-    """Shared contract §8: a track in any format, not only the GPX geotag reads, is never media — it
+    """RUL-track_files_block_prep: a track in any format, not only the GPX geotag reads, is never media — it
     blocks the plan and stays in the dump, never parked in 1-strays."""
     _install(monkeypatch)
     ws = _ws(tmp_path)
@@ -239,7 +331,8 @@ def test_mixed_media_and_stray(tmp_path, monkeypatch):
     assert list((ws / "0-sources").iterdir()) == []
 
 
-@pytest.mark.spec("prep-stray-media-warning-1", "RUL-stray_media_hinted", "BLD-stray_media_probe", test="TST-strays-stray_media_detection_warns_only_for_media_mime")
+@pytest.mark.spec("RUL-stray_media_hinted", "BLD-stray_media_probe", "RUL-stray_media_hint_names_extension",
+                  test="TST-strays-stray_media_detection_warns_only_for_media_mime")
 def test_stray_media_detection_warns_only_for_media_mime(tmp_path, monkeypatch):
     # An unlisted RAW (.raf) and a real non-media (.txt) both land in strays. exiftool sees the .raf as
     # image/*, the .txt as text/plain -> only the .raf gets the "add to media_extensions" hint, once,
@@ -264,7 +357,7 @@ def test_stray_media_detection_warns_only_for_media_mime(tmp_path, monkeypatch):
     assert not plan.blockers                                     # a hint, never a block
 
 
-@pytest.mark.spec("prep-stray-media-warning-advisory-1", "RUL-stray_media_hinted", test="TST-strays-stray_media_detection_silent_when_exiftool_absent")
+@pytest.mark.spec("RUL-stray_media_hinted", test="TST-strays-stray_media_detection_silent_when_exiftool_absent")
 def test_stray_media_detection_silent_when_exiftool_absent(tmp_path, monkeypatch):
     # exiftool unavailable (probe returns None) -> no stray-media warning, never blocks.
     _install(monkeypatch)
@@ -275,7 +368,8 @@ def test_stray_media_detection_silent_when_exiftool_absent(tmp_path, monkeypatch
     assert not any(".raf" in w for w in plan.warnings)
 
 
-@pytest.mark.spec("RUL-other_outside_inbox_blocks", test="TST-strays-a_file_of_no_media_class_outside_the_inbox_blocks")
+@pytest.mark.spec("RUL-other_outside_inbox_blocks",
+                  test="TST-strays-a_file_of_no_media_class_outside_the_inbox_blocks")
 @pytest.mark.parametrize("where", ["5-photos-by-date/2023-01-02", "2-missing-metadata", "4-videos-by-date/2023-01-02",
                                    "6-photos-by-dest/Trip"])
 def test_a_file_of_no_media_class_outside_the_inbox_blocks(tmp_path, monkeypatch, where):
@@ -292,3 +386,35 @@ def test_a_file_of_no_media_class_outside_the_inbox_blocks(tmp_path, monkeypatch
     assert [b for b in plan.blockers if rel in b and "no media class" in b], plan.blockers
     assert not any(rel in (op.source or "") for op in plan.operations)
 
+
+
+@pytest.mark.spec("RUL-stray_media_hinted", "BLD-stray_media_probe",
+                  test="TST-strays-stray_media_hinted_on_the_run_that_initializes")
+def test_stray_media_hinted_on_the_run_that_initializes(tmp_path, monkeypatch):
+    """On the run that initializes a workspace the dump is still where it was put, beside the folders prep makes;
+    its files prep sets aside as strays are probed and hinted as the inbox's are."""
+    _install(monkeypatch)
+    ws = tmp_path / "ws"
+    (ws / "dump").mkdir(parents=True)
+    (ws / "dump" / "DSCF1.raf").write_bytes(b"raw")             # not in default media_extensions -> stray
+    monkeypatch.setattr(utils, "exiftool_mime_type",
+                        lambda p: "image/x-fujifilm-raf" if p.lower().endswith(".raf") else None)
+    plan = _plan(ws)
+    assert any((op.destination or "").startswith("1-strays/") and op.destination.endswith("DSCF1.raf")
+               for op in plan.operations)                         # set aside as a stray
+    assert [w for w in plan.warnings if ".raf" in w and "media_extensions" in w], plan.warnings
+
+
+@pytest.mark.spec("RUL-inbox_non_media_never_blocks",
+                  test="TST-strays-a_failed_metadata_read_never_blocks_a_file_of_no_media_class")
+def test_a_failed_metadata_read_never_blocks_a_file_of_no_media_class(tmp_path, monkeypatch):
+    """exiftool failing for a folder of the inbox blocks its media, never its files of no media class."""
+    _install(monkeypatch)
+    monkeypatch.setattr(utils.MetadataReader, "read_metadata_concurrently",
+                        lambda folders, max_workers=4, progress_coordinator=None: ({}, set(folders)))
+    ws = _ws(tmp_path)
+    (ws / "0-sources" / "notes.txt").write_bytes(b"hello")
+    (ws / "0-sources" / "photo.jpg").write_bytes(b"img")
+    plan = _plan(ws)
+    assert not [b for b in plan.blockers if "notes.txt" in b], plan.blockers
+    assert [b for b in plan.blockers if "photo.jpg" in b], plan.blockers     # media still blocks

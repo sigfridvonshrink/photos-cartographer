@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Plan-time decode memo (prep Section 10.3).
+"""Plan-time decode memo (RUL-plan_memo_kept).
 
 Cache rows are written by execute only, so before the memo a plan that was never executed
 threw away every fingerprint it computed and the next plan re-decoded the whole workspace.
@@ -48,7 +48,7 @@ def _install_mocks(monkeypatch, hash_calls):
     def spy(p):
         hash_calls.append(p)
         with open(p, "rb") as f:
-            return {"status": "valid", "strategy": "image-content-hash-v1",
+            return {"status": "valid", "strategy": "image-content-hash-v2",
                     "value": "sig-" + f.read().hex()[:16], "engine_version": "t"}
     monkeypatch.setattr(prep.ContentHasher, "fingerprint_image", spy)
     monkeypatch.setattr(utils, "get_imagemagick_version", lambda: "t")   # match the spy's engine_version
@@ -83,7 +83,8 @@ def _seed(ws, n=2):
     prep.CONFIG["jobs"] = 1
 
 
-@pytest.mark.spec("prep-plan-memo-reuse-1", test="TST-plan_memo-replan_without_execute_reuses_fingerprints")
+@pytest.mark.spec("RUL-plan_memo_kept", "RUL-rehash_memo_count_reported",
+                  test="TST-plan_memo-replan_without_execute_reuses_fingerprints")
 def test_replan_without_execute_reuses_fingerprints(tmp_path, monkeypatch):
     """The point of the memo: plan, do NOT execute, plan again — the second plan decodes nothing.
     Before the memo this re-hashed the whole workspace, because cache rows are written by execute."""
@@ -111,7 +112,7 @@ def test_replan_without_execute_reuses_fingerprints(tmp_path, monkeypatch):
     assert _hashes(plan2) == _hashes(plan1)
 
 
-@pytest.mark.spec("prep-plan-memo-not-the-cache-1", test="TST-plan_memo-plan_does_not_write_the_workspace_cache")
+@pytest.mark.spec("RUL-plan_memo_kept", test="TST-plan_memo-plan_does_not_write_the_workspace_cache")
 def test_plan_does_not_write_the_workspace_cache(tmp_path, monkeypatch):
     """The memo must not become a back door into the cache: planning still leaves file_cache empty,
     and the memo lives in its own database file."""
@@ -128,7 +129,7 @@ def test_plan_does_not_write_the_workspace_cache(tmp_path, monkeypatch):
     assert utils.plan_memo_db_path(str(ws)) != utils.db_path(str(ws))
 
 
-@pytest.mark.spec("prep-plan-memo-subordinate-1", test="TST-plan_memo-executed_cache_wins_over_the_memo")
+@pytest.mark.spec("RUL-database_over_memo", test="TST-plan_memo-executed_cache_wins_over_the_memo")
 def test_executed_cache_wins_over_the_memo(tmp_path, monkeypatch):
     """A cache row is the executed state and always outranks a memo row for the same path: after
     execute, reuse is attributed to the cache (memo_reused 0), not to the memo."""
@@ -146,7 +147,32 @@ def test_executed_cache_wins_over_the_memo(tmp_path, monkeypatch):
     assert (reused, total) == (0, 0)                 # ... and the source was the cache
 
 
-@pytest.mark.spec("prep-plan-memo-freshness-1", test="TST-plan_memo-changed_file_is_not_reused_from_the_memo")
+@pytest.mark.spec("RUL-scratch_database_not_journalled", test="TST-plan_memo-the_memo_is_not_journalled")
+def test_the_memo_is_not_journalled(tmp_path, monkeypatch):
+    """Writing the memo is no operation of a plan and leaves no entry in a journal: planning writes it
+    with no journal at all, and executing the plan journals the plan's operations and nothing else."""
+    hash_calls = []
+    _install_mocks(monkeypatch, hash_calls)
+    ws = _ws(tmp_path)
+    _seed(ws, 2)
+    ctl = ws / ".photos-ingest"
+    memo = os.path.basename(utils.plan_memo_db_path(str(ws)))
+
+    plan = _plan(ws)
+    assert os.path.exists(utils.plan_memo_db_path(str(ws)))           # the plan wrote the memo...
+    assert glob.glob(str(ctl / "journal-*.json")) == []                # ...and journalled nothing
+    assert not any(memo in (op.source or "") + (op.destination or "") for op in plan.operations)
+
+    prep.PlanExecutor(str(ws)).execute(plan)
+    _plan(ws)                                                          # the memo written again, after execute
+    journals = glob.glob(str(ctl / "journal-*.json"))
+    assert len(journals) == 1
+    journal = json.loads(open(journals[0]).read())
+    assert sorted(r["operation_id"] for r in journal["operations"]) == sorted(op.operation_id for op in plan.operations)
+    assert memo not in open(journals[0]).read()
+
+
+@pytest.mark.spec("RUL-memo_entry_same_tests", test="TST-plan_memo-changed_file_is_not_reused_from_the_memo")
 def test_changed_file_is_not_reused_from_the_memo(tmp_path, monkeypatch):
     """A memo row faces the same freshness gate as a cache row: bump the mtime and it is rejected,
     the file is re-decoded, and the re-hash diagnostic names a reason rather than staying silent."""
@@ -165,7 +191,7 @@ def test_changed_file_is_not_reused_from_the_memo(tmp_path, monkeypatch):
     assert plan2.summary["performance_and_cache"]["rehash_summary"]["by_reason"] == {"mtime-changed": 1}
 
 
-@pytest.mark.spec("prep-plan-memo-freshness-1", test="TST-plan_memo-engine_change_invalidates_memo_rows")
+@pytest.mark.spec("RUL-memo_entry_same_tests", test="TST-plan_memo-engine_change_invalidates_memo_rows")
 def test_engine_change_invalidates_memo_rows(tmp_path, monkeypatch):
     """The memo stores the engine version bound to each pixel signature, so an ImageMagick bump
     restales memo rows exactly as it restales cache rows."""
@@ -182,7 +208,7 @@ def test_engine_change_invalidates_memo_rows(tmp_path, monkeypatch):
     assert plan2.summary["performance_and_cache"]["rehash_summary"]["by_reason"] == {"engine-changed": 1}
 
 
-@pytest.mark.spec("prep-plan-memo-pruned-1", test="TST-plan_memo-memo_drops_paths_it_no_longer_sees")
+@pytest.mark.spec("RUL-memo_tracks_workspace", test="TST-plan_memo-memo_drops_paths_it_no_longer_sees")
 def test_memo_drops_paths_it_no_longer_sees(tmp_path, monkeypatch):
     """The memo tracks the workspace instead of growing forever: a file that disappears loses its row."""
     hash_calls = []
@@ -199,7 +225,7 @@ def test_memo_drops_paths_it_no_longer_sees(tmp_path, monkeypatch):
     assert sorted(rows) == ["0-sources/a0.jpg"]
 
 
-@pytest.mark.spec("prep-plan-memo-disposable-1", test="TST-plan_memo-a_broken_memo_degrades_instead_of_failing_the_plan")
+@pytest.mark.spec("RUL-memo_never_changes_plan", test="TST-plan_memo-a_broken_memo_degrades_instead_of_failing_the_plan")
 def test_a_broken_memo_degrades_instead_of_failing_the_plan(tmp_path, monkeypatch):
     """The memo is an accelerator, never a dependency: a corrupt memo database costs the decode it
     was saving and nothing else — the plan still completes."""

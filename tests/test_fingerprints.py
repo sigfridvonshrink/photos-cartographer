@@ -12,9 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Phase 6 — §5 fingerprint/version coverage + §14.3.7 single-transaction cache.
-Phase D — fingerprint/hash terminology (§9.1): media carries a content fingerprint and no
-byte hash; the handoff/cache use fingerprint terms.
+"""Phase 6 — BLD-prep_dependencies fingerprint/version coverage + BLD-workspace_database single-transaction cache.
+Phase D — fingerprint/hash terminology (RAT-fingerprint_and_hash_opposite_jobs): media carries a content fingerprint and
+no byte hash; the handoff/cache use fingerprint terms.
 
 Mocked hashing/metadata, fast. photos_1_prep / photos_utils come from conftest.py.
 """
@@ -41,7 +41,7 @@ def _ws(tmp_path):
 def _mock(monkeypatch):
     monkeypatch.setattr(
         prep.ContentHasher, "fingerprint_image",
-        lambda p: {"status": "valid", "strategy": "image-content-hash-v1",
+        lambda p: {"status": "valid", "strategy": "image-content-hash-v2",
                    "value": "sig-" + os.path.basename(p), "engine_version": "t"},
     )
 
@@ -128,6 +128,7 @@ def test_a_file_whose_metadata_is_read_again_is_fingerprinted_again(tmp_path, mo
 
 
 @pytest.mark.spec("RUL-fingerprint_method_matches", "BLD-fingerprint", "BLD-fingerprint_method",
+                  "RUL-fingerprint_method_unrecorded_retaken",
                   test="TST-fingerprints-a_fingerprint_is_reused_only_from_this_method")
 def test_a_fingerprint_is_reused_only_from_this_method(tmp_path, monkeypatch):
     """A cached fingerprint is reused only when taken by the method this build uses: the same strategy and,
@@ -154,7 +155,7 @@ def test_a_fingerprint_is_reused_only_from_this_method(tmp_path, monkeypatch):
     assert _plan_counting(ws, monkeypatch) == 1                     # a new ImageMagick restales the photo only
 
 
-@pytest.mark.spec("prep-fingerprint-algo-recorded-1", "BLD-prep_dependencies", "BLD-cache_versions",
+@pytest.mark.spec("BLD-prep_dependencies", "BLD-cache_versions",
                   test="TST-fingerprints-execute_writes_the_database_versions")
 def test_execute_writes_the_database_versions(tmp_path, monkeypatch):
     """Each execute writes the current versions into the database's version row, over what it held."""
@@ -170,7 +171,7 @@ def test_execute_writes_the_database_versions(tmp_path, monkeypatch):
     assert prep.WorkspaceCache(str(ws)).get_meta("fingerprint_algorithm_version") == prep.FINGERPRINT_ALGORITHM_VERSION
 
 
-@pytest.mark.spec("prep-fingerprint-algo-recorded-1")
+@pytest.mark.spec("BLD-prep_dependencies")
 def test_cache_meta_records_versions(tmp_path, monkeypatch):
     _mock(monkeypatch)
     ws = _ws(tmp_path)
@@ -195,7 +196,7 @@ def test_journal_is_version_stamped(tmp_path, monkeypatch):
     assert dep["fingerprint_algorithm_version"] == prep.FINGERPRINT_ALGORITHM_VERSION
 
 
-@pytest.mark.spec("prep-artifacts-carry-depends-on-1", "prep-record-min-fingerprints-1", "BLD-prep_dependencies", test="TST-fingerprints-handoff_depends_on_coverage")
+@pytest.mark.spec("BLD-prep_dependencies", test="TST-fingerprints-handoff_depends_on_coverage")
 def test_handoff_depends_on_coverage(tmp_path, monkeypatch):
     _mock(monkeypatch)
     ws = _ws(tmp_path)
@@ -255,9 +256,9 @@ def test_a_dependency_missing_or_unrecorded_stops_execution(tmp_path, monkeypatc
     assert (ws / "0-sources" / "a.jpg").exists()
 
 
-# --- Phase D: fingerprint/hash terminology (§9.1) ---------------------------
+# --- Phase D: fingerprint/hash terminology (RAT-fingerprint_and_hash_opposite_jobs) ---------------------------
 
-@pytest.mark.spec("dep-fingerprint-invariant-1", "prep-byte-sha-artifacts-only-1", test="TST-fingerprints-media_carries_fingerprint_and_no_byte_hash")
+@pytest.mark.spec("RUL-fingerprint_survives_mutation", "BLD-hash", test="TST-fingerprints-media_carries_fingerprint_and_no_byte_hash")
 def test_media_carries_fingerprint_and_no_byte_hash(tmp_path, monkeypatch):
     _mock(monkeypatch)
     ws = _ws(tmp_path)

@@ -80,16 +80,16 @@ def test_hash_image_valid_on_real_fullsize_jpeg_and_raw():
     if raw["status"] != "valid":
         pytest.skip(f"ImageMagick lacks RAW decode support here: {raw.get('error')}")
     assert raw["value"]
-    assert raw["strategy"] == "image-content-hash-v1"
+    assert raw["strategy"] == "image-content-hash-v2"
     assert raw.get("engine_version")
 
 
 @requires_magick
-@pytest.mark.spec("prep-fingerprint-decoded-content-1")
+@pytest.mark.spec("BLD-fingerprint")
 def test_hash_image_valid_and_version_bound():
     r = prep.ContentHasher.fingerprint_image(CAM_SMALL)
     assert r["status"] == "valid" and r["value"]
-    assert r["strategy"] == "image-content-hash-v1"
+    assert r["strategy"] == "image-content-hash-v2"
     assert r.get("engine_version")
 
 
@@ -102,7 +102,7 @@ def test_pixel_signature_distinct_for_different_photos():
 
 @requires_magick
 @requires_exiftool
-@pytest.mark.spec("prep-fingerprint-invariant-metadata-1", "RUL-fingerprint_survives_mutation", test="TST-content_hash-pixel_signature_is_exif_invariant")
+@pytest.mark.spec("RUL-fingerprint_survives_mutation", test="TST-content_hash-pixel_signature_is_exif_invariant")
 def test_pixel_signature_is_exif_invariant(tmp_path):
     # Copy the JPEG, mutate EXIF (date + GPS) on the copy without touching pixels;
     # the pixel signature must be unchanged. This is the property geotag relies
@@ -150,7 +150,7 @@ def test_raw_signature_survives_geotag_s_writes(tmp_path):
 
 def test_hash_image_failure_is_recorded_when_magick_absent(monkeypatch):
     # Simulate ImageMagick missing: fingerprint_image must return a clean failure record
-    # (which the §6.2/§11.3 blocker path keys on), still version-stamped.
+    # (which the RUL-failed_fingerprint_blocks blocker path keys on), still version-stamped.
     monkeypatch.setattr(utils, "get_magick_command", lambda: [])      # no persistent worker
     monkeypatch.setattr(utils, "get_identify_command", lambda: [])    # no legacy fallback either
     r = prep.ContentHasher.fingerprint_image(CAM_SMALL)
@@ -181,9 +181,9 @@ def test_real_jpeg_organizes_with_spec_filename_and_no_blocker(tmp_path):
 
 @requires_magick
 @requires_exiftool
-@pytest.mark.spec("prep-fingerprint-failure-blocks-1", test="TST-content_hash-unreadable_image_blocks_with_hash_failure")
+@pytest.mark.spec("RUL-failed_fingerprint_blocks", test="TST-content_hash-unreadable_image_blocks_with_hash_failure")
 def test_unreadable_image_blocks_with_hash_failure(tmp_path):
-    # Negative path: a file that magick cannot decode must surface a §6.2/§11.3
+    # Negative path: a file that magick cannot decode must surface a RUL-failed_fingerprint_blocks
     # hash-failure blocker, not silently pass.
     ws = _make_ws(tmp_path)
     (ws / "0-sources" / "broken.jpg").write_bytes(b"this is not a real jpeg")
@@ -196,7 +196,7 @@ def test_unreadable_image_blocks_with_hash_failure(tmp_path):
 
 @requires_magick
 @requires_exiftool
-@pytest.mark.spec("prep-quarantine-extra-copies-1", "RUL-duplicates_quarantined", test="TST-content_hash-byte_identical_images_dedup_with_real_hasher")
+@pytest.mark.spec("RUL-duplicates_quarantined", test="TST-content_hash-byte_identical_images_dedup_with_real_hasher")
 def test_byte_identical_images_dedup_with_real_hasher(tmp_path):
     ws = _make_ws(tmp_path)
     shutil.copy(CAM_SMALL, ws / "0-sources" / "a.jpg")
@@ -212,7 +212,8 @@ def test_byte_identical_images_dedup_with_real_hasher(tmp_path):
 @pytest.mark.slow
 @requires_magick
 @requires_exiftool
-@pytest.mark.spec("prep-separate-redundant-jpeg-1", "RUL-redundant_jpeg_set_aside", test="TST-content_hash-raw_jpeg_pair_separates_redundant_jpeg")
+@pytest.mark.spec("RUL-redundant_jpeg_set_aside", "RUL-redundant_jpeg_only",
+                  test="TST-content_hash-raw_jpeg_pair_separates_redundant_jpeg")
 def test_raw_jpeg_pair_separates_redundant_jpeg(tmp_path):
     # Uses the real RAW (slow). The JPEG sibling only needs the same basename.
     if prep.ContentHasher.fingerprint_image(CAM_RAW)["status"] != "valid":
@@ -238,7 +239,7 @@ def test_filename_format_is_config_driven(tmp_path, monkeypatch, seed_from_live_
     ws = _make_ws(tmp_path)
     monkeypatch.setattr(
         prep.ContentHasher, "fingerprint_image",
-        lambda p: {"status": "valid", "strategy": "image-content-hash-v1",
+        lambda p: {"status": "valid", "strategy": "image-content-hash-v2",
                    "value": "sig-" + os.path.basename(p), "engine_version": "test"},
     )
 

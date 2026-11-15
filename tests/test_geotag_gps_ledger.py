@@ -12,12 +12,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Geotag (§24.1) — reversible manual GPS overrides. Every plan decides about a pinned photo from its own
-values (the original-values ledger, §24.2), so a withdrawn pin is planned like any changed decision:
-the photo is placed again from the tracks, or geotag's position is cleared. There is no revert operation
+"""Geotag (RUL-withdrawal_undoes) — reversible manual GPS overrides. Every plan decides about a pinned photo from its
+own values (the original-values ledger, BLD-decided_from_own_values), so a withdrawn pin is planned like any changed
+decision: the photo is placed again from the tracks, or geotag's position is cleared. There is no revert operation
 and no store of its own. exiftool-write + fingerprint are mocked. From conftest.py.
 """
 import json
+from _zone import answer_root_zone, with_root_zone
 import os
 import sys
 from datetime import datetime, timezone
@@ -90,16 +91,17 @@ def _ops(plan, rel=None):
 _FORWARD = {"metadata_time_write", "metadata_gps_write", "gps_marker_write", "rename_no_clobber"}
 
 
-@pytest.mark.spec("geotag-gps-write-complete-fix-1")
+@pytest.mark.spec("RUL-position_written_whole", "BLD-position_tags", "RUL-position_cleared_whole",
+                  test="TST-geotag_gps_ledger-a_cleared_position_takes_its_hemisphere_refs_with_it")
 def test_a_cleared_position_takes_its_hemisphere_refs_with_it():
-    """§28.1: a clear drops the refs with the coordinates — a ref left behind without its coordinate is a
+    """BLD-position_tags: a clear drops the refs with the coordinates — a ref left behind without its coordinate is a
     torn fix."""
     op = cal.time_fixed_marker_op(_model(f"{BYDEST}/T/a.jpg", f"{BYDEST}/T"), "+carto-time", clear_position=True)
     assert op["writes"] == {"GPSLatitude": "", "GPSLatitudeRef": "", "GPSLongitude": "", "GPSLongitudeRef": "",
                             "GPSProcessingMethod": "+carto-time"}
 
 
-@pytest.mark.spec("geotag-withdraw-revert-1", "geotag-manual-gps-reversible-1", "authored-withdraw-undoes-1", test="TST-geotag_gps_ledger-a_withdrawn_pin_is_cleared")
+@pytest.mark.spec("RUL-withdrawal_undoes", test="TST-geotag_gps_ledger-a_withdrawn_pin_is_cleared")
 def test_a_withdrawn_pin_is_cleared(tmp_path):
     """A pin withdrawn from a photo that had no GPS, the photo accepted as unlocated: the plan, deciding
     from its own values, clears geotag's position, and records the position it clears."""
@@ -116,7 +118,8 @@ def test_a_withdrawn_pin_is_cleared(tmp_path):
     assert not any(o["type"] == "metadata_gps_write" for o in _ops(plan, rel))
 
 
-@pytest.mark.spec("geotag-automated-gps-no-revert-1", test="TST-geotag_gps_ledger-a_withdrawn_pin_is_placed_again_from_the_tracks")
+@pytest.mark.spec("BLD-decided_from_own_values", "RUL-withdrawal_undoes",
+                  test="TST-geotag_gps_ledger-a_withdrawn_pin_is_placed_again_from_the_tracks")
 def test_a_withdrawn_pin_is_placed_again_from_the_tracks(tmp_path):
     """Withdrawn, the pin gives way to the position the tracks give the photo's own time: recomputed, not
     rolled back to anything stored."""
@@ -133,7 +136,8 @@ def test_a_withdrawn_pin_is_placed_again_from_the_tracks(tmp_path):
     assert {o["type"] for o in _ops(plan)} <= _FORWARD
 
 
-@pytest.mark.spec("geotag-recompute-inplace-1", "time-name-never-reverted-1", test="TST-geotag_gps_ledger-a_withdrawal_never_reverts_time_name_or_destination")
+@pytest.mark.spec("RUL-withdrawal_keeps_destination",
+                  test="TST-geotag_gps_ledger-a_withdrawal_never_reverts_time_name_or_destination")
 def test_a_withdrawal_never_reverts_time_name_or_destination(tmp_path):
     """Withdrawing a decision changes GPS only as any plan would: geotag has no revert operation at all
     (time writes and renames are forward-idempotent), and it never moves a photo across destinations."""
@@ -168,7 +172,7 @@ def test_a_changed_pin_is_written_over_the_old_one(tmp_path):
                               "GPSProcessingMethod": "manual_locked"}      # the position it replaces
 
 
-@pytest.mark.spec("geotag-prestate-absent-1")
+@pytest.mark.spec("RUL-log_records_gps_reverts")
 def test_a_pin_never_overrides_native_gps(tmp_path):
     """Preserve-native wins: a photo carrying its own GPS keeps it, whatever pin it is given."""
     rel = f"{BYDEST}/T/a.jpg"
@@ -200,6 +204,7 @@ def _exec_ws(tmp_path, monkeypatch):
         cfg["camera_time_and_timezone_policy"], device_groups={"fixed_clock_cameras": [CAM], "phones": []},
         default_folder_timezone="Europe/Brussels", multi_anchor_auto_apply=True)
     (ctl / "photos-00-config.json").write_text(json.dumps(cfg))
+    answer_root_zone(ctl)                        # the zone answered once at the root (RUL-timezone_auto_resolves)
 
     def rec(rel, dto, gps=None):
         parsed = {"DateTimeOriginal": dto, "selected_source_naive_timestamp": dto,
@@ -218,7 +223,8 @@ def _exec_ws(tmp_path, monkeypatch):
     files = [rec(f"{BYDEST}/T/2024-07-03--14-00-00.arw", "2024:07:03 14:00:00", (50.0, 4.0)),
              rec(f"{BYDEST}/T/2024-07-03--15-00-00.arw", "2024:07:03 15:00:00", (51.0, 5.0)),
              rec(f"{BYDEST}/T/2024-07-03--14-30-00.arw", "2024:07:03 14:30:00")]            # no GPS -> blocked -> fallback
-    (ctl / "photos-11-handoff.json").write_text(json.dumps({"filename_timestamp_format": utils.CONFIG["filename_timestamp_format"], "files": files, "cache_fingerprint": "pcf"}))
+    (ctl / "photos-11-handoff.json").write_text(json.dumps({"filename_timestamp_format": utils.CONFIG["filename_timestamp_format"], "files": files, "cache_fingerprint": "pcf",
+        "depends_on": {"cache": {"image_engine_version": utils.get_imagemagick_version(), "fingerprint_algorithm_version": utils.FINGERPRINT_ALGORITHM_VERSION}}}))
     return ws, ctl
 
 
@@ -244,10 +250,7 @@ def _edit(ctl, name, fn):
 
 
 def _drive_ready(monkeypatch, ws, ctl):
-    """Drive _exec_ws to a ready photos-24 (timezone + folder-fallback accepted), c.arw -> manual."""
-    _run(monkeypatch, ws, "plan")
-    _edit(ctl, "photos-21-time-decisions.json", lambda a: a["destinations"][f"{BYDEST}/T"]
-          ["destination_timezone"]["user_decision"].update({"accept_proposed_timezone": True}))
+    """Drive _exec_ws to a ready photos-24 (folder fallback accepted), c.arw -> manual."""
     _run(monkeypatch, ws, "plan")
     _edit(ctl, "photos-23-gps-decisions.json", lambda b: b["destinations"][f"{BYDEST}/T"]
           ["folder_fallback"]["user_decision"].update({"fallback_lat": 48.85, "fallback_lon": 2.35}))
@@ -255,9 +258,9 @@ def _drive_ready(monkeypatch, ws, ctl):
     assert (ctl / "photos-24-executable-plan.json").exists()
 
 
-@pytest.mark.spec("geotag-prestate-before-write-1", test="TST-geotag_gps_ledger-own_values_pinned_before_the_first_write")
+@pytest.mark.spec("BLD-geotag_execution", test="TST-geotag_gps_ledger-own_values_pinned_before_the_first_write")
 def test_own_values_pinned_before_the_first_write(tmp_path, monkeypatch):
-    """§29.1a: a photo's own values are committed to the ledger BEFORE geotag's first write to it.
+    """BLD-original_values_pinned: a photo's own values are committed to the ledger BEFORE geotag's first write to it.
     Order-probe both seams during execute and assert the pin precedes the write."""
     ws, ctl = _exec_ws(tmp_path, monkeypatch)
     _mock_tools(monkeypatch, ws)                                # sets _exiftool_write to a passthrough mock
@@ -282,7 +285,7 @@ def test_own_values_pinned_before_the_first_write(tmp_path, monkeypatch):
     assert events.index(("pin", manual)) < events.index(("write", manual)), events
 
 
-@pytest.mark.spec("geotag-rerunnable-after-execute-1", test="TST-geotag_gps_ledger-a_pin_executed_then_withdrawn_plans_and_executes_again")
+@pytest.mark.spec("RUL-geotag_rerunnable", test="TST-geotag_gps_ledger-a_pin_executed_then_withdrawn_plans_and_executes_again")
 def test_a_pin_executed_then_withdrawn_plans_and_executes_again(tmp_path, monkeypatch):
     ws, ctl = _exec_ws(tmp_path, monkeypatch)
     _mock_tools(monkeypatch, ws)

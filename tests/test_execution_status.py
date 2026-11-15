@@ -1,5 +1,5 @@
 """Terminal-status derivation for geotag/merge executions, including the explicit `failed` status
-(spec reconciliation: photos-2 §29.2 item 7 / photos-3 §9.1 item 8). `failed` = ran past the
+(spec reconciliation: BLD-execution_summary / BLD-merge_records). `failed` = ran past the
 mutation gate but achieved nothing; `partial` = mixed; `success` = clean. Pre-mutation aborts are
 `rejected`, decided elsewhere."""
 

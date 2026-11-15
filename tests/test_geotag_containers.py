@@ -20,8 +20,8 @@ children. Such a container:
   * never blocks and stays off the to-do list (it has no media to act on);
   * auto-resolves its timezone by inheritance, while remaining overridable, and propagates a manual
     GPS fallback downward.
-Clock OFFSETS, by contrast, do NOT inherit or aggregate (§10.2): a container exposes NO offset cells
-(it has no media to time-correct and offsets never cross destinations). From conftest.py.
+Clock OFFSETS, by contrast, do NOT inherit or aggregate (RUL-offset_from_own_evidence): a container exposes NO offset
+cells (it has no media to time-correct and offsets never cross destinations). From conftest.py.
 """
 import photos_2_geotag as cal
 import photos_utils as utils
@@ -52,7 +52,7 @@ def _gpx():
 def _tfile(rel, dest, *, key=CAM, naive="2024:07:03 14:00:00"):
     return {"relative_path": rel, "destination": dest, "camera_group_key": key,
             "native_gps": None, "has_native_gps": False, "has_timestamp": True,
-            "source_naive_time": naive, "camera_identity": {}}
+            "source_naive_time": naive}
 
 
 def _gfile(rel, dest):
@@ -61,7 +61,7 @@ def _gfile(rel, dest):
 
 # --- enumeration -------------------------------------------------------------
 
-@pytest.mark.spec("geotag-container-destination-1")
+@pytest.mark.spec("DEF-container_destination", "RUL-container_never_waits", test="TST-geotag_containers-container_materialized_with_no_offset_cells")
 def test_container_materialized_with_no_offset_cells(tmp_path):
     wf = _wf(tmp_path)
     # CAM lives under Trip/Day1; CAM2 lives two levels down under Trip/Day2/Sub.
@@ -72,14 +72,15 @@ def test_container_materialized_with_no_offset_cells(tmp_path):
     # every ancestor folder is materialized and flagged file-less
     for c in (BYDEST, f"{BYDEST}/Trip", f"{BYDEST}/Trip/Day2"):
         assert d[c]["file_less"] is True
-        assert d[c]["camera_group_time_decisions"] == {}     # containers hold NO offset cells (§10.2)
+        # containers hold NO offset cells (RUL-offset_per_camera_destination_day)
+        assert d[c]["camera_group_time_decisions"] == {}
     # real leaves are not file-less and carry their own group's cell
     assert "file_less" not in d[f"{BYDEST}/Trip/Day1"]
     assert set(d[f"{BYDEST}/Trip/Day1"]["camera_group_time_decisions"]) == {CAM}
     assert set(d[f"{BYDEST}/Trip/Day2/Sub"]["camera_group_time_decisions"]) == {CAM2}
 
 
-@pytest.mark.spec("geotag-container-no-block-1")
+@pytest.mark.spec("RUL-container_never_waits", test="TST-geotag_containers-containers_never_block")
 def test_containers_never_block(tmp_path):
     wf = _wf(tmp_path)
     files = [_tfile(f"{BYDEST}/Trip/Day1/a.arw", f"{BYDEST}/Trip/Day1")]
@@ -91,23 +92,74 @@ def test_containers_never_block(tmp_path):
 
 # --- auto-resolve + propagation ----------------------------------------------
 
-@pytest.mark.spec("geotag-timezone-inherit-parentfirst-1")
-def test_container_timezone_autoresolves_from_default(tmp_path):
+@pytest.mark.spec("RUL-timezone_from_nearest", "RUL-default_zone_proposed_only", "BLD-timezone_cell",
+                  "RUL-no_timezone_to_inherit_waits", "RUL-timezone_auto_resolves",
+                  test="TST-geotag_containers-the_default_zone_is_proposed_and_an_answer_cascades")
+def test_the_default_zone_is_proposed_and_an_answer_cascades(tmp_path):
+    # The configured default is the user's usual zone, true of no trip in particular: it is proposed, never applied —
+    # a trip folder is no exception, a container asks nothing; once answered at the trip, everything beneath
+    # inherits it without asking.
     utils.CONFIG["camera_time_and_timezone_policy"]["default_folder_timezone"] = "Europe/Brussels"
     wf = _wf(tmp_path)
     files = [_tfile(f"{BYDEST}/Trip/Day1/a.arw", f"{BYDEST}/Trip/Day1")]
     art, _ = wf.build_time_decisions(files, GROUPS, None, _gpx())
     trip = art["destinations"][f"{BYDEST}/Trip"]["destination_timezone"]
-    assert trip["effective_iana_timezone"] == "Europe/Brussels"
-    assert trip["decision_mode"] == "auto_resolved" and trip["requires_user_input"] is False
-    # the real leaf auto-inherits too (nested geography): adopts Trip's zone, no confirmation demanded
+    assert trip["proposal_source"] == "config_default" and trip["effective_iana_timezone"] == ""
+    assert trip["requires_user_input"] is False                           # a container asks nothing
     leaf = art["destinations"][f"{BYDEST}/Trip/Day1"]["destination_timezone"]
-    assert leaf["effective_iana_timezone"] == "Europe/Brussels"
-    assert leaf["proposal_source"] == "inherited" and leaf["decision_mode"] == "auto_resolved"
+    assert leaf["proposal_source"] == "config_default" and leaf["requires_user_input"] is True
+    prior = {"destinations": {f"{BYDEST}/Trip": {"destination_timezone":
+             {"user_decision": {"manual_iana_timezone": "Asia/Tokyo"}}}}}
+    art, _ = wf.build_time_decisions(files, GROUPS, prior, _gpx())
+    leaf = art["destinations"][f"{BYDEST}/Trip/Day1"]["destination_timezone"]
+    assert leaf["effective_iana_timezone"] == "Asia/Tokyo" and leaf["decision_mode"] == "auto_resolved"
     assert leaf["requires_user_input"] is False
 
 
-@pytest.mark.spec("geotag-container-no-offset-1", "geotag-offset-no-rollup-1")
+@pytest.mark.spec("RUL-timezone_from_nearest", "BLD-timezone_cell", "RUL-no_timezone_to_inherit_waits",
+                  test="TST-geotag_containers-manual_timezone_reroots_the_chain")
+def test_manual_timezone_reroots_the_chain(tmp_path):
+    # A zone set by hand on a trip's folder becomes what every destination beneath it inherits — over the
+    # configured default — while a destination outside that trip is offered the default, and asks.
+    utils.CONFIG["camera_time_and_timezone_policy"]["default_folder_timezone"] = "Europe/Brussels"
+    wf = _wf(tmp_path)
+    files = [_tfile(f"{BYDEST}/Japan/Kyoto/a.arw", f"{BYDEST}/Japan/Kyoto"),
+             _tfile(f"{BYDEST}/Home/b.arw", f"{BYDEST}/Home")]
+    prior = {"destinations": {f"{BYDEST}/Japan": {"destination_timezone":
+             {"user_decision": {"manual_iana_timezone": "Asia/Tokyo"}}}}}
+    art, blk = wf.build_time_decisions(files, GROUPS, prior, _gpx())
+    assert blk == []
+    japan = art["destinations"][f"{BYDEST}/Japan"]["destination_timezone"]
+    assert japan["effective_iana_timezone"] == "Asia/Tokyo" and "decision_mode" not in japan
+    kyoto = art["destinations"][f"{BYDEST}/Japan/Kyoto"]["destination_timezone"]
+    assert kyoto["effective_iana_timezone"] == "Asia/Tokyo"
+    assert kyoto["proposal_source"] == "inherited" and kyoto["inherited_from"] == f"{BYDEST}/Japan"
+    home = art["destinations"][f"{BYDEST}/Home"]["destination_timezone"]
+    assert home["proposed_iana_timezone"] == "Europe/Brussels" and home["proposal_source"] == "config_default"
+    assert home["effective_iana_timezone"] == "" and home["requires_user_input"] is True
+
+
+@pytest.mark.spec("RUL-moved_photo_decided_anew", test="TST-geotag_containers-moved_photo_takes_its_new_destinations_offset")
+def test_moved_photo_takes_its_new_destinations_offset(tmp_path):
+    # A photo re-sorted from A into B is decided under B: B's clock offset for the camera that day, never A's.
+    utils.CONFIG["camera_time_and_timezone_policy"]["default_folder_timezone"] = "Europe/Brussels"
+    wf = _wf(tmp_path)
+    prior = {"destinations": {
+        f"{BYDEST}/A": {"camera_group_time_decisions": {CAM: {"user_decision": {"manual_offset_seconds": -3600}}}},
+        f"{BYDEST}/B": {"camera_group_time_decisions": {CAM: {"user_decision": {"manual_offset_seconds": 600}}}}}}
+    before = [_tfile(f"{BYDEST}/A/x.arw", f"{BYDEST}/A"), _tfile(f"{BYDEST}/B/y.arw", f"{BYDEST}/B")]
+    art, _ = wf.build_time_decisions(before, GROUPS, prior, _gpx())
+    rows = {r["relative_path"]: r for r in cal.compute_resolved_utc(before, GROUPS, art)}
+    assert rows[f"{BYDEST}/A/x.arw"]["utc_offset_used"] == -3600
+    after = [_tfile(f"{BYDEST}/B/x.arw", f"{BYDEST}/B"), _tfile(f"{BYDEST}/B/y.arw", f"{BYDEST}/B")]
+    art, _ = wf.build_time_decisions(after, GROUPS, art, _gpx())
+    rows = {r["relative_path"]: r for r in cal.compute_resolved_utc(after, GROUPS, art)}
+    assert rows[f"{BYDEST}/B/x.arw"]["utc_offset_used"] == 600
+    assert rows[f"{BYDEST}/B/x.arw"]["resolved_utc"] == "2024-07-03T14:10:00Z"
+    assert f"{BYDEST}/A" not in art["destinations"]                        # nothing of A remains
+
+
+@pytest.mark.spec("RUL-offset_per_camera_destination_day", "RUL-offset_from_own_evidence", test="TST-geotag_containers-child_offset_decision_is_not_pooled_upward")
 def test_child_offset_decision_is_not_pooled_upward(tmp_path):
     wf = _wf(tmp_path)
     files = [_tfile(f"{BYDEST}/Trip/Day1/a.arw", f"{BYDEST}/Trip/Day1")]
@@ -117,7 +169,7 @@ def test_child_offset_decision_is_not_pooled_upward(tmp_path):
     # the child resolved from its own decision
     leaf = art["destinations"][f"{BYDEST}/Trip/Day1"]["camera_group_time_decisions"][CAM]
     assert leaf["effective_time_anchor"]["offset_seconds"] == -3600
-    # the parent container exposes NO offset cell at all — offsets never aggregate upward (§10.2)
+    # the parent container exposes NO offset cell at all — offsets never aggregate upward (RUL-offset_from_own_evidence)
     assert art["destinations"][f"{BYDEST}/Trip"]["camera_group_time_decisions"] == {}
 
 

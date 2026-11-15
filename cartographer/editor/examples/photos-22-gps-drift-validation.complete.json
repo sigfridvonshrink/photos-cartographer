@@ -4,9 +4,9 @@
   "decision_mode": "no_op_or_confirmed",
   "depends_on": {
     "camera_group_key_version": 1,
-    "camera_time_policy_fingerprint": "840f62db228ba45660d44cf8eebbaa8e22405f59a695ce3dc10a4be3c78e4650",
+    "camera_time_policy_fingerprint": "d73ae9e51b28fdb186e822031466c4969195f72a26b25032b3cfbaa7008c6d08",
     "gpx_fingerprint": "example-gpx-fingerprint",
-    "photos_21_sha256": "3066347f113a0e129dce53c4e403a01a6a915c3a6e417e5c9d27ecf9e81ac366"
+    "photos_21_sha256": "ac41e744ef14f7af715766a17b8491e97cf19674246df3dcb983788f1e5e9bde"
   },
   "destinations": {
     "6-photos-by-dest/DriftTown": {
@@ -14,6 +14,7 @@
       "drift_decisions": {
         "CAM|drift|D": {
           "camera_group": "CAM|drift|D",
+          "day": "2024-07-03",
           "effective_drift_offset": {
             "offset_seconds": -7200,
             "source": "gps_drift_validated"
@@ -93,6 +94,7 @@
           "stale_user_decision": false,
           "user_decision": {
             "confirmed": true,
+            "confirmed_offset_seconds": -7200,
             "corrected_offset_seconds": ""
           }
         }

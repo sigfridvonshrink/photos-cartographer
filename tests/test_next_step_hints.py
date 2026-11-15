@@ -13,7 +13,7 @@ import json
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Closing 'Next: …' operator guidance (shared contract Section 10).
+"""Closing 'Next: …' operator guidance (DEF-operator_loop).
 
 Every phase command ends its output with a single `Next: …` line stating the next action for the
 state it produced. These tests drive prep's `run()` and assert the line for the success, blocked, and
@@ -45,7 +45,7 @@ def _install(monkeypatch):
 
     def hsh(p):
         with open(p, "rb") as f:
-            return {"status": "valid", "strategy": "image-content-hash-v1",
+            return {"status": "valid", "strategy": "image-content-hash-v2",
                     "value": "sig-" + f.read().hex()[:16], "engine_version": "t"}
     monkeypatch.setattr(prep.ContentHasher, "fingerprint_image", hsh)
 

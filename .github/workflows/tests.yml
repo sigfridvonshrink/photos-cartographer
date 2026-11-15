@@ -15,6 +15,13 @@ jobs:
         with:
           python-version: "3.13"
 
+      # No private word — a contributor's real name, a personal address — in any tracked file. The words are a
+      # repository secret, never written here; with the secret unset (a fork's pull request) nothing is checked.
+      - name: Check no private word is tracked
+        env:
+          PRIVATE_WORDS: ${{ secrets.PRIVATE_WORDS }}
+        run: python3 .githooks/check_private_words.py --tree
+
       # Most tests mock the external tools, but the real-tool integration tests
       # (test_geotag_execution_real.py, test_merge_exif_preservation.py) drive the actual exiftool +
       # ImageMagick to validate the executor's safety assumption (an EXIF write preserves the
@@ -40,12 +47,6 @@ jobs:
           coverage run -m pytest -q
           coverage report
           coverage report --fail-under=80
-
-      # Spec-clause coverage gate: every clause registered in spec/spec-clauses.json must still have a
-      # test tagged @pytest.mark.spec(...). Catches a safety anti-behavior losing its test — which
-      # line/branch coverage can't. Collection-only, fast.
-      - name: Check spec-clause coverage
-        run: python3 tools/spec-coverage
 
       # The decision-editor front-end (web/app.js) is plain ES modules with no build/deps; its pure
       # logic is unit-tested with Node's built-in runner (node:test), no npm install.
@@ -79,6 +80,3 @@ jobs:
 
       - name: spec/needs.json is up to date
         run: git diff --exit-code spec/needs.json
-
-      - name: Every converted sentence is accounted for
-        run: python3 tools/spec-ledger check

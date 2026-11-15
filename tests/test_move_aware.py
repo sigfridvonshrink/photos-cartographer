@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Phase 3a — move-aware cache identity (prep Section 10.1 / 10.2).
+"""Phase 3a — move-aware cache identity (RUL-move_recognized).
 
 When the user moves a file from by-date into 6-photos-by-dest (or re-sorts one
 between destinations inside by-dest), prep must recognize the move cache-only and
@@ -47,7 +47,7 @@ def _install_mocks(monkeypatch, hash_calls):
     def spy(p):
         hash_calls.append(p)
         with open(p, "rb") as f:
-            return {"status": "valid", "strategy": "image-content-hash-v1",
+            return {"status": "valid", "strategy": "image-content-hash-v2",
                     "value": "sig-" + f.read().hex()[:16], "engine_version": "t"}
     monkeypatch.setattr(prep.ContentHasher, "fingerprint_image", spy)
     monkeypatch.setattr(utils, "get_imagemagick_version", lambda: "t")   # the version the spy stamps
@@ -87,7 +87,9 @@ def _media_ops(plan):
             if op.type in ("move_no_clobber", "rename_no_clobber", "quarantine_move")]
 
 
-@pytest.mark.spec("idem-reuse-not-recompute-1", "loop-reprep-mandatory-1", "prep-fingerprint-carry-forward-move-1", "prep-handoff-updated-on-move-only-1", "prep-move-carry-forward-drop-old-1", "prep-move-recognition-before-ghost-1", "prep-move-recognition-no-mutate-bydest-1", "prep-no-perform-bydest-move-1", "prep-recognize-bydate-to-bydest-move-1", test="TST-move_aware-by_date_to_by_dest_move_is_recognized")
+@pytest.mark.spec("RUL-reuse_valid_work", "RUL-sort_recorded_by_stat", "BLD-move_row_effects",
+                  "RUL-moved_file_carried", "BLD-carried_row", "RUL-prep_leaves_by_dest_as_found",
+                  test="TST-move_aware-by_date_to_by_dest_move_is_recognized")
 def test_by_date_to_by_dest_move_is_recognized(tmp_path, monkeypatch):
     hash_calls = []
     _install_mocks(monkeypatch, hash_calls)
@@ -120,7 +122,7 @@ def test_by_date_to_by_dest_move_is_recognized(tmp_path, monkeypatch):
     assert any(f["relative_path"] == new_rel for f in handoff["files"])
 
 
-@pytest.mark.spec("prep-recognize-bydest-resort-1", test="TST-move_aware-re_sort_between_destinations_is_recognized")
+@pytest.mark.spec("RUL-move_recognized", test="TST-move_aware-re_sort_between_destinations_is_recognized")
 def test_re_sort_between_destinations_is_recognized(tmp_path, monkeypatch):
     hash_calls = []
     _install_mocks(monkeypatch, hash_calls)
@@ -133,7 +135,7 @@ def test_re_sort_between_destinations_is_recognized(tmp_path, monkeypatch):
     os.rename(organized, ws / "6-photos-by-dest" / "Brussels" / name)
     prep.PlanExecutor(str(ws)).execute(_plan(ws))
 
-    # Now re-sort Brussels -> Bruges (§10.2).
+    # Now re-sort Brussels -> Bruges (RUL-move_recognized).
     (ws / "6-photos-by-dest" / "Bruges").mkdir(parents=True)
     os.rename(ws / "6-photos-by-dest" / "Brussels" / name,
               ws / "6-photos-by-dest" / "Bruges" / name)
@@ -151,7 +153,7 @@ def test_re_sort_between_destinations_is_recognized(tmp_path, monkeypatch):
     assert any(df["path"] == "6-photos-by-dest/Bruges" for df in handoff["destination_folders"])
 
 
-@pytest.mark.spec("prep-ambiguous-move-rescan-1", test="TST-move_aware-ambiguous_match_is_rescanned_not_carried")
+@pytest.mark.spec("RUL-move_recognized", test="TST-move_aware-ambiguous_match_is_rescanned_not_carried")
 def test_ambiguous_match_is_rescanned_not_carried(tmp_path, monkeypatch):
     hash_calls = []
     _install_mocks(monkeypatch, hash_calls)
@@ -176,7 +178,7 @@ def test_ambiguous_match_is_rescanned_not_carried(tmp_path, monkeypatch):
     assert len(hash_calls) >= 2
 
 
-@pytest.mark.spec("idem-recompute-staleness-only-1", "prep-content-change-overrides-carry-1", "prep-fingerprint-recompute-on-change-1", test="TST-move_aware-content_change_is_rescanned_not_carried")
+@pytest.mark.spec("RUL-remake_only_what_depends", "RUL-move_recognized", "RUL-fingerprint_taken_afresh", test="TST-move_aware-content_change_is_rescanned_not_carried")
 def test_content_change_is_rescanned_not_carried(tmp_path, monkeypatch):
     hash_calls = []
     _install_mocks(monkeypatch, hash_calls)
@@ -196,13 +198,13 @@ def test_content_change_is_rescanned_not_carried(tmp_path, monkeypatch):
     assert len(hash_calls) >= 1              # rescanned, not carried
 
 
-# --- §17.4 re-hash diagnostics ------------------------------------------------
+# --- RUL-rehash_explained re-hash diagnostics ------------------------------------
 
 def _rehash(plan):
     return plan.summary["performance_and_cache"]["rehash_summary"]
 
 
-@pytest.mark.spec("prep-rehash-diagnostics-1", test="TST-move_aware-rehash_summary_flags_mtime_changed")
+@pytest.mark.spec("RUL-rehash_explained", test="TST-move_aware-rehash_summary_flags_mtime_changed")
 def test_rehash_summary_flags_mtime_changed(tmp_path, monkeypatch):
     """A previously-cached file whose mtime changed is re-fingerprinted and reported as an UNEXPECTED
     re-hash, reason `mtime-changed`, with the file in the first-N sample and the counts in the run report."""
@@ -279,7 +281,7 @@ def test_rehash_summary_flags_engine_changed(tmp_path, monkeypatch):
 
 def test_rehash_summary_flags_replan_over_an_unexecuted_plan(tmp_path, monkeypatch):
     """Cache rows are written by execute only, so re-planning a workspace whose earlier plan was never
-    executed re-hashes as `new` unless the decode memo (§10.3) covers it. When the memo cannot — it was
+    executed re-hashes as `new` unless the decode memo (DEF-plan_memo) covers it. When the memo cannot — it was
     cleared, or predates this workspace — that reads like a first ingest, so the summary records the real
     cause (`unpersisted_prior_plan`) rather than leaving the operator to infer it."""
     hash_calls = []
@@ -313,7 +315,7 @@ def test_rehash_summary_flags_replan_over_an_unexecuted_plan(tmp_path, monkeypat
 
 
 @pytest.mark.parametrize("stale", ["method", "metadata"])
-@pytest.mark.spec("RUL-moved_file_carried", "BLD-carried_row",
+@pytest.mark.spec("BLD-carried_row", "RUL-moved_file_stale_read_again",
                   test="TST-move_aware-a_stale_row_follows_the_move_and_is_read_again")
 def test_a_stale_row_follows_the_move_and_is_read_again(tmp_path, monkeypatch, stale):
     """A moved file whose row would have been read again at its old path — its fingerprint taken by
@@ -356,3 +358,23 @@ def test_a_name_changed_in_case_is_not_a_move(tmp_path, monkeypatch):
     plan = _plan(ws)
     assert plan.summary["recognized_moves"] == 0
     assert len(hash_calls) == 1
+
+
+@pytest.mark.spec("BLD-handoff_grouping_facts", "RUL-grouping_facts_reported",
+                  test="TST-move_aware-a_recognized_move_counts_as_carried_in_cache_freshness")
+def test_a_recognized_move_counts_as_carried_in_cache_freshness(tmp_path, monkeypatch):
+    """A file whose move prep recognized counts, in the handoff's cache freshness, as metadata carried — not as
+    metadata missing."""
+    _install_mocks(monkeypatch, [])
+    ws = _ws(tmp_path)
+    organized = _seed_one(ws)
+    (ws / "6-photos-by-dest" / "Belgium").mkdir(parents=True)
+    os.rename(organized, ws / "6-photos-by-dest" / "Belgium" / os.path.basename(organized))
+    plan = _plan(ws)
+    assert plan.summary["recognized_moves"] == 1
+    prep.PlanExecutor(str(ws)).execute(plan)
+    handoff = json.load(open(ws / ".photos-ingest" / "photos-11-handoff.json"))
+    for grouping in handoff["destination_folders"] + handoff["camera_groups"]:
+        cf = grouping["cache_freshness"]
+        assert cf["total_files"] == 1 and cf["metadata_carried_forward"] == 1, cf
+        assert cf["metadata_missing"] == 0, cf

@@ -34,6 +34,12 @@ for _short, _mod in (("photos_utils", photos_utils), ("photos_1_prep", photos_1_
                      ("photos_2_geotag", photos_2_geotag), ("photos_3_merge", photos_3_merge)):
     sys.modules.setdefault(_short, _mod)
 
+# The seeded default gpx_root is one deployment's tracks. No test reads it: with a root that is not there
+# geotag refuses to plan, and with one that is, a test would be planning against that machine's real tracks.
+# A test that wants tracks names its own root.
+photos_utils.DEFAULT_CONFIG["gpx_root"] = ""
+photos_utils.CONFIG["gpx_root"] = ""
+
 
 @pytest.fixture(autouse=True)
 def _restore_config():
@@ -62,15 +68,10 @@ def seed_from_live_config(monkeypatch):
                         lambda: {k: v for k, v in photos_utils.CONFIG.items() if k != "jobs"})
 
 
-# --- spec-coverage map dump (see tools/spec-coverage) -----------------------
-# A collection-only hook: when `--spec-dump=PATH` is passed, write a JSON map of
-# {spec_clause_id: [test nodeids]} gathered from every collected test's `@pytest.mark.spec(...)`
-# markers, then the tool cross-refs it against spec/spec-clauses.json. Zero cost in normal runs.
-#
-# `--spec-marks=PATH` writes the same marks for the spec corpus (spec/_ext/corpus.py), one record per marked test.
+# --- the spec corpus's marks ------------------------------------------------
+# A collection-only hook: `--spec-marks=PATH` writes every test's `@pytest.mark.spec(...)` marks for the spec corpus
+# (spec/_ext/corpus.py), one record per marked test. Zero cost in normal runs.
 def pytest_addoption(parser):
-    parser.addoption("--spec-dump", default=None,
-                     help="(spec-coverage) write the spec-clause -> test-nodeid map as JSON to this path")
     parser.addoption("--spec-marks", default=None,
                      help="(the spec corpus) write every spec mark -- ids, test id, title, location -- as JSON here")
 
@@ -100,15 +101,3 @@ def pytest_collection_finish(session):
         import json as _json
         with open(marks_path, "w") as f:
             _json.dump(_spec_marks(session), f, indent=1, sort_keys=True)
-    path = session.config.getoption("--spec-dump")
-    if not path:
-        return
-    import json as _json
-    mapping = {}
-    for item in session.items:
-        for mark in item.iter_markers(name="spec"):
-            for clause in mark.args:
-                mapping.setdefault(str(clause), set()).add(item.nodeid)
-    out = {k: sorted(v) for k, v in mapping.items()}
-    with open(path, "w") as f:
-        _json.dump(out, f, indent=2, sort_keys=True)

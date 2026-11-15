@@ -15,8 +15,8 @@
 """Recognition + quarantine of orphaned exiftool artifacts.
 
 A hard kill (SIGKILL/OOM/power loss) during a geotag metadata write can orphan exiftool's
-`<media>_exiftool_tmp` intermediate (or, were `-overwrite_original` ever dropped, a `<media>_original`
-backup). The live original is always intact (the rename is atomic). Prep recognizes such leftovers,
+`<media>_exiftool_tmp` intermediate. (A `<media>_original` is not one: it is the backup exiftool keeps of a
+user's own edit, and is treated as any file of no media class.) The live original is always intact (the rename is atomic). Prep recognizes such leftovers,
 pulls them out of the media inventory, and quarantines them (recoverable, never deleted) instead of
 mis-parking them forever in 1-strays.
 
@@ -34,7 +34,8 @@ import photos_utils as utils
 
 @pytest.mark.parametrize("name,expected", [
     ("IMG_1234.jpg_exiftool_tmp", "IMG_1234.jpg"),   # temp from -overwrite_original
-    ("shot.CR2_original", "shot.CR2"),               # backup (case-insensitive ext)
+    ("shot.CR2_exiftool_tmp", "shot.CR2"),           # case-insensitive ext
+    ("shot.CR2_original", None),                     # a user's own backup, not a write's leftover
     ("clip.mp4_exiftool_tmp", "clip.mp4"),           # video
     ("IMG_1234.jpg", None),                          # a normal media file, no suffix
     ("notes_original", None),                        # no media extension under the suffix
@@ -60,7 +61,7 @@ def _ws(tmp_path):
 
 def _mock(monkeypatch):
     monkeypatch.setattr(prep.ContentHasher, "fingerprint_image",
-                        lambda p: {"status": "valid", "strategy": "image-content-hash-v1",
+                        lambda p: {"status": "valid", "strategy": "image-content-hash-v2",
                                    "value": "sig-" + os.path.basename(p), "engine_version": "t"})
 
     def meta(folders, max_workers=4, progress_coordinator=None):
@@ -80,6 +81,7 @@ def _plan(ws):
     return prep.WorkspacePrepWorkflow(str(ws), prep.WorkspaceCache(str(ws), in_memory=True)).plan()
 
 
+@pytest.mark.spec("RUL-write_leftovers_quarantined", test="TST-exiftool_leftovers-managed_folder_leftover_is_quarantined")
 def test_managed_folder_leftover_is_quarantined(tmp_path, monkeypatch):
     _mock(monkeypatch)
     ws = _ws(tmp_path)
@@ -106,6 +108,8 @@ def test_managed_folder_leftover_is_quarantined(tmp_path, monkeypatch):
     assert not any(s.endswith("_exiftool_tmp") for s in strays)
 
 
+@pytest.mark.spec("RUL-write_leftovers_by_dest_warned",
+                  test="TST-exiftool_leftovers-bydest_leftover_left_untouched_with_warning")
 def test_bydest_leftover_left_untouched_with_warning(tmp_path, monkeypatch):
     _mock(monkeypatch)
     ws = _ws(tmp_path)
@@ -120,3 +124,69 @@ def test_bydest_leftover_left_untouched_with_warning(tmp_path, monkeypatch):
 
     prep.PlanExecutor(str(ws)).execute(plan)
     assert leftover.exists()                                      # read-only staging untouched
+
+
+# --- a user's own `<photo>_original` backup is not a write's leftover --------
+
+import shutil
+import subprocess
+
+requires_exiftool = pytest.mark.skipif(shutil.which("exiftool") is None, reason="exiftool not available")
+CAM_SMALL = os.path.join(os.path.dirname(__file__), "fixtures", "cam_small.jpg")
+
+
+def _user_backup(folder, name="IMG_1.jpg"):
+    """What exiftool leaves when the USER edits a photo with it: the edited photo, and beside it
+    `<photo>_original`, the camera's original."""
+    folder.mkdir(parents=True, exist_ok=True)
+    photo = folder / name
+    shutil.copy(CAM_SMALL, photo)
+    subprocess.run(["exiftool", "-q", "-Artist=me", str(photo)], check=True, capture_output=True)
+    backup = folder / (name + "_original")
+    assert backup.exists()
+    return backup
+
+
+def _ops_for(plan, rel):
+    return sorted((op.type, (op.verification or {}).get("kind")) for op in plan.operations if op.source == rel)
+
+
+@requires_exiftool
+@pytest.mark.spec("RUL-user_backup_is_a_stray", test="TST-exiftool_leftovers-inbox_user_backup_is_a_stray")
+def test_inbox_user_backup_is_a_stray(tmp_path, monkeypatch):
+    """A `<photo>_original` in the inbox goes where any file of no media class goes — to the strays,
+    never to the quarantine as a leftover; a `<photo>_exiftool_tmp` beside it still does."""
+    _mock(monkeypatch)
+    ws = _ws(tmp_path)
+    backup = _user_backup(ws / "0-sources")
+    (ws / "0-sources" / "notes.txt").write_text("a file of no media class")
+    (ws / "0-sources" / "IMG_9.jpg_exiftool_tmp").write_bytes(b"partial")
+
+    plan = _plan(ws)
+    rel = "0-sources/" + backup.name
+    assert _ops_for(plan, rel) == _ops_for(plan, "0-sources/notes.txt")
+    assert not any(op.type == "quarantine_move" for op in plan.operations if op.source == rel)
+    assert [op.source for op in plan.operations
+            if op.type == "quarantine_move" and (op.verification or {}).get("kind") == "exiftool_leftover"] \
+        == ["0-sources/IMG_9.jpg_exiftool_tmp"]
+
+    prep.PlanExecutor(str(ws)).execute(plan)
+    assert (ws / "1-strays" / backup.name).exists() or any(
+        f == backup.name for _r, _d, fs in os.walk(ws / "1-strays") for f in fs)
+
+
+@requires_exiftool
+@pytest.mark.spec("RUL-user_backup_is_a_stray", test="TST-exiftool_leftovers-organized_user_backup_is_any_other_file")
+def test_organized_user_backup_is_any_other_file(tmp_path, monkeypatch):
+    """Outside the inbox a `<photo>_original` is treated as a file of no media class there is: never
+    quarantined as a leftover."""
+    _mock(monkeypatch)
+    ws = _ws(tmp_path)
+    day = ws / "5-photos-by-date" / "2023-01-02"
+    backup = _user_backup(day)
+    (day / "notes.txt").write_text("a file of no media class")
+
+    plan = _plan(ws)
+    rel = os.path.relpath(backup, ws)
+    assert _ops_for(plan, rel) == _ops_for(plan, os.path.relpath(day / "notes.txt", ws))
+    assert not any(op.type == "quarantine_move" for op in plan.operations if op.source == rel)

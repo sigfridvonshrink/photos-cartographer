@@ -52,7 +52,7 @@ def _install(monkeypatch):
     prep.CONFIG["jobs"] = 1
     def hsh(p):
         with open(p, "rb") as f:
-            return {"status": "valid", "strategy": "image-content-hash-v1",
+            return {"status": "valid", "strategy": "image-content-hash-v2",
                     "value": "sig-" + f.read().hex()[:16], "engine_version": "t"}
     monkeypatch.setattr(prep.ContentHasher, "fingerprint_image", hsh)
 
@@ -79,7 +79,8 @@ def _guard(ws):
 
 # --- initialization ----------------------------------------------------------
 
-@pytest.mark.spec("prep-init-creates-structure-1", "prep-init-moves-base-into-sources-1", "prep-post-init-base-folders-only-1", test="TST-lifecycle-init_creates_structure_and_moves_dump_structure_preserved")
+@pytest.mark.spec("RUL-structure_built_once", "RUL-init_moves_dump_to_inbox", "RUL-top_level_only_managed",
+                  test="TST-lifecycle-init_creates_structure_and_moves_dump_structure_preserved")
 def test_init_creates_structure_and_moves_dump_structure_preserved(tmp_path, monkeypatch):
     _install(monkeypatch)
     ws = _bare(tmp_path)
@@ -108,7 +109,7 @@ def test_init_creates_structure_and_moves_dump_structure_preserved(tmp_path, mon
     assert not _plan(ws).blockers
 
 
-@pytest.mark.spec("prep-crash-init-reenters-harmlessly-1", "prep-crash-safe-rerun-1", "prep-sentinel-written-last-1", test="TST-lifecycle-guard_written_last_then_reentry_is_clean")
+@pytest.mark.spec("RUL-init_taken_up_again", "RUL-prep_replans", "RUL-initialized_marked_last", test="TST-lifecycle-guard_written_last_then_reentry_is_clean")
 def test_guard_written_last_then_reentry_is_clean(tmp_path, monkeypatch):
     _install(monkeypatch)
     ws = _bare(tmp_path)
@@ -124,9 +125,53 @@ def test_guard_written_last_then_reentry_is_clean(tmp_path, monkeypatch):
     assert len(glob.glob(str(ws / "5-photos-by-date" / "**" / "*.jpg"), recursive=True)) == 1  # still organized, no dup
 
 
+@pytest.mark.spec("RUL-rewrite_in_place_atomic", test="TST-lifecycle-an_interrupted_guard_write_leaves_no_damaged_guard")
+def test_an_interrupted_guard_write_leaves_no_damaged_guard(tmp_path, monkeypatch):
+    """The workspace guard, written last by an init run and interrupted — while half written, or written but not yet
+    in its place — is left as it was before, absent, never a damaged guard: the workspace is still uninitialized, and
+    the next run puts the guard down whole."""
+    import tempfile
+    _install(monkeypatch)
+    ws = _bare(tmp_path)
+    (ws / "photo.jpg").write_bytes(b"img")
+    guard_fds, real_mkstemp, real_fdopen, real_replace = set(), tempfile.mkstemp, os.fdopen, prep.replace_durably
+
+    def mkstemp(*a, **k):                                      # the guard's temp file, told from the others
+        fd, path = real_mkstemp(*a, **k)
+        if k.get("prefix") == ".tmp-guard-":
+            guard_fds.add(fd)
+        return fd, path
+
+    def fdopen(fd, *a, **k):
+        f = real_fdopen(fd, *a, **k)
+        if fd in guard_fds:
+            put = f.write
+            def write(s):
+                put(s[:len(s) // 2]); f.flush()
+                raise KeyboardInterrupt
+            f.write = write
+        return f
+
+    def rename_not_reached(tmp, path):
+        if path == _guard(ws):
+            raise KeyboardInterrupt
+        return real_replace(tmp, path)
+    for cut in (lambda m: (m.setattr(tempfile, "mkstemp", mkstemp), m.setattr(os, "fdopen", fdopen)),
+                lambda m: m.setattr(prep, "replace_durably", rename_not_reached)):
+        plan = _plan(ws)
+        assert not plan.blockers, plan.blockers
+        with monkeypatch.context() as m:
+            cut(m)
+            with pytest.raises(KeyboardInterrupt):
+                prep.PlanExecutor(str(ws)).execute(plan)
+        assert not os.path.lexists(_guard(ws))                 # as it was: no guard, not a damaged one
+    prep.PlanExecutor(str(ws)).execute(_plan(ws))
+    assert json.load(open(_guard(ws)))["initialized"] is True  # the guard, whole
+
+
 # --- root-file block (initialized) -------------------------------------------
 
-@pytest.mark.spec("prep-root-entry-blocks-1", "struct-base-folders-only-1", test="TST-lifecycle-loose_root_file_blocks_initialized")
+@pytest.mark.spec("RUL-top_level_only_managed", test="TST-lifecycle-loose_root_file_blocks_initialized")
 def test_loose_root_file_blocks_initialized(tmp_path, monkeypatch):
     _install(monkeypatch)
     ws = _initialized(tmp_path)
@@ -230,7 +275,7 @@ def test_a_log_the_handoff_does_not_vouch_for_is_rewritten(tmp_path, monkeypatch
     assert not prep._prep_nothing_to_do(str(ws), rep)                   # gone: cannot be checked
 
 
-@pytest.mark.spec("prep-dryrun-empty-sources-nothing-to-do-1", test="TST-lifecycle-dry_run_on_prepped_workspace_with_empty_sources_is_nothing_to_do")
+@pytest.mark.spec("RUL-prepped_nothing_to_do", test="TST-lifecycle-dry_run_on_prepped_workspace_with_empty_sources_is_nothing_to_do")
 def test_dry_run_on_prepped_workspace_with_empty_sources_is_nothing_to_do(tmp_path, monkeypatch):
     # dry-run shares execute's fast-stop: an already-prepped, empty-0-sources workspace has nothing to
     # validate, so it stops with "nothing to do" rather than summarizing the stale plan.
@@ -252,9 +297,9 @@ def test_dry_run_on_prepped_workspace_with_empty_sources_is_nothing_to_do(tmp_pa
     assert any("Nothing to do" in e.msg and f"{src} is empty" in e.msg for e in cap.logs())
 
 
-@pytest.mark.spec("prep-execute-empty-sources-nothing-to-do-1", test="TST-lifecycle-execute_on_prepped_workspace_with_empty_sources_is_nothing_to_do")
+@pytest.mark.spec("RUL-prepped_nothing_to_do", test="TST-lifecycle-execute_on_prepped_workspace_with_empty_sources_is_nothing_to_do")
 def test_execute_on_prepped_workspace_with_empty_sources_is_nothing_to_do(tmp_path, monkeypatch):
-    # After a successful prep, 0-sources is the empty steady end-state (shared contract §6). With a
+    # After a successful prep, 0-sources is the empty steady end-state (RUL-empty_inbox_normal). With a
     # (now-stale) saved plan present, re-running execute must stop fast with "nothing to do" rather
     # than replaying it into a case-insensitive clobber error — and NOT reach the executor.
     prep.CONFIG["zfs"] = {"enabled": False}
@@ -344,20 +389,60 @@ def test_execute_with_pending_by_dest_move_is_not_nothing_to_do(tmp_path, monkey
     assert not any("Nothing to do" in e.msg for e in cap.logs())
 
 
+@pytest.mark.spec("BLD-reprep_pending", test="TST-lifecycle-execute_with_a_changed_by_dest_photo_is_not_nothing_to_do")
+def test_execute_with_a_changed_by_dest_photo_is_not_nothing_to_do(tmp_path, monkeypatch):
+    # 0-sources is empty and every by-dest photo is recorded, but one has changed since prep recorded it: prep
+    # must run to read it again (geotag refuses until it does). The fast-stop must NOT fire.
+    prep.CONFIG["zfs"] = {"enabled": False}
+    ws = _initialized(tmp_path)
+    _stale_plan(ws)
+    dest = ws / "6-photos-by-dest" / "2026" / "Bruges"
+    dest.mkdir(parents=True)
+    (dest / "shot.jpg").write_bytes(b"img")
+    st = (dest / "shot.jpg").stat()
+    (ws / ".photos-ingest" / "photos-11-handoff.json").write_text(json.dumps({"files": [
+        {"relative_path": "6-photos-by-dest/2026/Bruges/shot.jpg", "media_class": "image",
+         "size": st.st_size, "mtime_ns": st.st_mtime_ns - 1}]}))          # recorded before its last change
+    ran = []
+    monkeypatch.setattr(prep.Plan, "from_dict", staticmethod(lambda d: object()))
+    monkeypatch.setattr(prep.PlanExecutor, "execute", lambda self, *a, **k: ran.append(1))
+    monkeypatch.chdir(ws)
+    from cartographer.reporting import Reporter, CaptureSink, use_reporter
+    cap = CaptureSink()
+    with use_reporter(Reporter([cap])):
+        try:
+            prep.run(types.SimpleNamespace(command="execute", jobs=1))
+        except SystemExit:
+            pass
+    assert ran == [1]                                   # reached the executor — prep reads it again
+    assert not any("Nothing to do" in e.msg for e in cap.logs())
+
+
+@pytest.mark.spec("RUL-prep_records_sort", "RUL-geotag_plans_on_current_record", "BLD-reprep_pending",
+                  test="TST-lifecycle-by_dest_reprep_pending_helper")
 def test_by_dest_reprep_pending_helper(tmp_path):
     ws = str(tmp_path)
     os.makedirs(os.path.join(ws, "6-photos-by-dest", "A"))
-    open(os.path.join(ws, "6-photos-by-dest", "A", "p.jpg"), "wb").close()
+    p = os.path.join(ws, "6-photos-by-dest", "A", "p.jpg")
+    open(p, "wb").close()
+    st = os.stat(p)
+    rec = {"relative_path": "6-photos-by-dest/A/p.jpg", "media_class": "image",
+           "size": st.st_size, "mtime_ns": st.st_mtime_ns}
     # not recorded -> pending (returns the offender)
     assert utils.by_dest_reprep_pending(ws, {"files": []}) == "6-photos-by-dest/A/p.jpg"
-    # recorded -> not pending
-    assert utils.by_dest_reprep_pending(
-        ws, {"files": [{"relative_path": "6-photos-by-dest/A/p.jpg", "media_class": "image"}]}) is None
+    # recorded as it is -> not pending
+    assert utils.by_dest_reprep_pending(ws, {"files": [rec]}) is None
     # a by-date photo the handoff lists but is gone from disk -> pending
     assert utils.by_dest_reprep_pending(
-        ws, {"files": [{"relative_path": "6-photos-by-dest/A/p.jpg", "media_class": "image"},
-                       {"relative_path": "5-photos-by-date/2026-01-01/gone.jpg", "media_class": "image"}]}) \
+        ws, {"files": [rec, {"relative_path": "5-photos-by-date/2026-01-01/gone.jpg", "media_class": "image"}]}) \
         == "5-photos-by-date/2026-01-01/gone.jpg"
+    # recorded, since changed in size or in modification time -> pending
+    assert utils.by_dest_reprep_pending(ws, {"files": [dict(rec, size=st.st_size + 1)]}) == "6-photos-by-dest/A/p.jpg"
+    assert utils.by_dest_reprep_pending(ws, {"files": [dict(rec, mtime_ns=st.st_mtime_ns - 1)]}) \
+        == "6-photos-by-dest/A/p.jpg"
+    # recorded, now gone -> pending
+    os.remove(p)
+    assert utils.by_dest_reprep_pending(ws, {"files": [rec]}) == "6-photos-by-dest/A/p.jpg"
 
 
 def test_execute_without_plan_runs_plan_first_even_on_empty_sources(tmp_path, monkeypatch):
@@ -379,7 +464,7 @@ def test_execute_without_plan_runs_plan_first_even_on_empty_sources(tmp_path, mo
 
 # --- no-flatten --------------------------------------------------------------
 
-@pytest.mark.spec("prep-no-flatten-sources-1", "RUL-inbox_kept_as_dumped", "BLD-planned_paths_tracked", test="TST-lifecycle-no_flatten_organizes_subtree_without_consolidation")
+@pytest.mark.spec("RUL-inbox_kept_as_dumped", "BLD-planned_paths_tracked", test="TST-lifecycle-no_flatten_organizes_subtree_without_consolidation")
 def test_no_flatten_organizes_subtree_without_consolidation(tmp_path, monkeypatch):
     _install(monkeypatch)
     ws = _initialized(tmp_path)
@@ -393,7 +478,7 @@ def test_no_flatten_organizes_subtree_without_consolidation(tmp_path, monkeypatc
     assert org and org[0].destination.startswith("5-photos-by-date/"), org
 
 
-@pytest.mark.spec("prep-organized-output-unique-path-1")
+@pytest.mark.spec("RUL-suffix_no_clobber", test="TST-lifecycle-no_flatten_same_name_distinct_subtrees_both_survive")
 def test_no_flatten_same_name_distinct_subtrees_both_survive(tmp_path, monkeypatch):
     _install(monkeypatch)
     ws = _initialized(tmp_path)
@@ -406,7 +491,9 @@ def test_no_flatten_same_name_distinct_subtrees_both_survive(tmp_path, monkeypat
     assert len(organized) == 2, organized                     # both survive with distinct names
 
 
-@pytest.mark.spec("RUL-structure_built_once", test="TST-lifecycle-prep_builds_the_structure_once_and_never_removes_a_folder")
+@pytest.mark.spec("RUL-structure_built_once", "RUL-managed_folder_never_removed",
+                  "RUL-missing_folder_never_recreated",
+                  test="TST-lifecycle-prep_builds_the_structure_once_and_never_removes_a_folder")
 def test_prep_builds_the_structure_once_and_never_removes_a_folder(tmp_path, monkeypatch):
     _install(monkeypatch)
     ws = _bare(tmp_path)
@@ -466,7 +553,7 @@ def test_prep_takes_no_decision(tmp_path, monkeypatch):
         assert "user_decision" not in open(rec).read(), rec
 
 
-@pytest.mark.spec("RUL-record_whole_each_phase", "archive-complete-each-phase-1", test="TST-lifecycle-a_prep_only_workspace_has_a_whole_record")
+@pytest.mark.spec("RUL-record_whole_each_phase", test="TST-lifecycle-a_prep_only_workspace_has_a_whole_record")
 def test_a_prep_only_workspace_has_a_whole_record(tmp_path, monkeypatch):
     """Prepped and never geotagged, the workspace still holds a whole record of prep: every photo's
     journey keyed by its fingerprint, ending where the photo now is, with prep's database snapshot beside
@@ -508,3 +595,50 @@ def test_renamed_folders_are_built_and_used_by_role(tmp_path, monkeypatch):
     assert (ws / "0-inbox").is_dir() and list((ws / "0-inbox").iterdir()) == []
     assert len(glob.glob(str(ws / "5-by-date" / "**" / "*.jpg"), recursive=True)) == 1
     assert not (ws / "0-sources").exists() and not (ws / "5-photos-by-date").exists()
+
+
+@pytest.mark.spec("RUL-control_directory_fixed",
+                  test="TST-lifecycle-the_control_directory_is_the_same_whatever_the_configuration")
+def test_the_control_directory_is_the_same_whatever_the_configuration(tmp_path, monkeypatch):
+    """Where a workspace keeps its records does not follow its configuration: seeded with the defaults, or with
+    every folder renamed and the tracks and the library named elsewhere, prep keeps its configuration and its
+    records in `.photos-ingest/`, and nowhere else; a setting naming another place for them is refused, and
+    nothing is written there."""
+    import copy
+    seed = copy.deepcopy(utils.DEFAULT_CONFIG)
+    seed.pop("jobs", None)
+    seed["folders"] = {role: f"x-{name}" for role, name in seed["folders"].items()}
+    for d in ("tracks", "library"):
+        (tmp_path / d).mkdir()
+    seed["gpx_root"], seed["merge"]["library_root"] = str(tmp_path / "tracks"), str(tmp_path / "library")
+    defaults = tmp_path / "defaults.json"
+    defaults.write_text(json.dumps(seed))
+    _install(monkeypatch)
+    records = ("photos-00-config.json", "photos-00-workspace-guard", "photos-00-ingest.db", "photos-11-handoff.json",
+               "photos-15-prep-log.json", "photos-15-prep-ingest.db")
+    for name, folders in (("default", MANAGED), ("renamed", sorted(seed["folders"].values()))):
+        if name == "renamed":
+            monkeypatch.setenv("PHOTOS_CARTOGRAPHER_CONFIG", str(defaults))
+        ws = tmp_path / name
+        ws.mkdir()
+        (ws / "photo.jpg").write_bytes(b"img")
+        plan = _plan(ws)
+        assert not plan.blockers, plan.blockers
+        prep.PlanExecutor(str(ws)).execute(plan)
+        for rec in records:
+            assert (ws / ".photos-ingest" / rec).is_file(), (name, rec)
+        assert (ws / ".photos-ingest" / f"journal-{plan.plan_id}.json").is_file(), name
+        assert sorted(os.listdir(ws)) == sorted([".photos-ingest", *folders]), name
+
+    cfg_p = ws / ".photos-ingest" / "photos-00-config.json"
+    seeded = cfg_p.read_text()
+    for edit, named in ((lambda c: c.__setitem__("control_directory", "x-records"), "control_directory"),
+                        (lambda c: c["folders"].__setitem__("control", "x-records"), "folders.control")):
+        cfg = json.loads(seeded)
+        edit(cfg)
+        cfg_p.write_text(json.dumps(cfg))
+        with pytest.raises(ValueError) as ei:
+            utils.load_or_seed_config(str(ws))
+        assert named in str(ei.value)
+        assert not (ws / "x-records").exists()
+    cfg_p.write_text(seeded)

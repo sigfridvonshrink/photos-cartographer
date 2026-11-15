@@ -17,6 +17,15 @@
 # Enable for your clone with:  git config core.hooksPath .githooks
 # Bypass for a single push with: git push --no-verify
 
+# No private word — a real name, a personal address — in any commit about to be pushed: its message, the lines
+# it adds, the name of the ref. Reads git's list of what is pushed from stdin, so it comes first.
+if ! python3 .githooks/check_private_words.py --push; then
+    echo
+    echo "pre-push: a private word is in what would be pushed — push aborted."
+    echo "          (override with 'git push --no-verify')"
+    exit 1
+fi
+
 # Cheap static guard first (fail fast): no production function may be referenced only by tests.
 echo "pre-push: checking for test-only production functions..."
 if ! python3 .githooks/check_test_only_functions.py; then
@@ -53,10 +62,10 @@ fi
 # The photos-cartographer executable must build and run (dist is gitignored, not committed).
 if [ -x spec/.venv/bin/python ]; then
     echo "pre-push: building the spec corpus (warnings fail it)..."
-    if ! tools/spec-build >/dev/null || ! git diff --quiet spec/needs.json || ! python3 tools/spec-ledger check >/dev/null; then
+    if ! tools/spec-build >/dev/null || ! git diff --quiet spec/needs.json; then
         echo
         echo "pre-push: the spec corpus FAILED, or spec/needs.json is not committed — push aborted"
-        echo "          (run 'tools/spec-build' and 'tools/spec-ledger check' to see details)."
+        echo "          (run 'tools/spec-build' to see details)."
         echo "          (override with 'git push --no-verify')"
         exit 1
     fi

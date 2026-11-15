@@ -18,6 +18,8 @@ bad-coord abort), and a few helper edge branches (scans, malformed handoff recor
 stale, _valid_iana). Complements the per-stage suites. From conftest.py.
 """
 import json
+from _zone import answer_root_zone, with_root_zone
+from _handoff import match_disk
 import os
 import sys
 from datetime import datetime, timezone
@@ -52,11 +54,12 @@ def _run(monkeypatch, ws):
 
 # --- main(): lock + config/handoff error paths ------------------------------
 
-@pytest.mark.spec("geotag-lock-failfast-1")
+@pytest.mark.spec("RUL-lock_fail_fast", "RUL-lock_refusal_says_locked",
+                  test="TST-geotag_orchestration-lock_contention_exits_1")
 def test_lock_contention_exits_1(tmp_path, monkeypatch, capsys):
     ws, ctl = _init_ws(tmp_path)
     (ctl / "photos-00-config.json").write_text(json.dumps({k: v for k, v in utils.CONFIG.items() if k != "jobs"}))
-    (ctl / "photos-11-handoff.json").write_text(json.dumps({"filename_timestamp_format": utils.CONFIG["filename_timestamp_format"], "files": []}))
+    (ctl / "photos-11-handoff.json").write_text(json.dumps({"filename_timestamp_format": utils.CONFIG["filename_timestamp_format"], "files": [], "depends_on": {"cache": {"fingerprint_algorithm_version": utils.FINGERPRINT_ALGORITHM_VERSION}}}))
     held = utils.WorkspaceLock(str(ws))
     assert held.acquire()
     try:
@@ -71,7 +74,7 @@ def test_invalid_config_blocks(tmp_path, monkeypatch, capsys):
     bad = {k: v for k, v in utils.CONFIG.items() if k != "jobs"}
     bad["gpx_interpolation_max_distance_meters"] = -5            # fails validate_config
     (ctl / "photos-00-config.json").write_text(json.dumps(bad))
-    (ctl / "photos-11-handoff.json").write_text(json.dumps({"filename_timestamp_format": utils.CONFIG["filename_timestamp_format"], "files": []}))
+    (ctl / "photos-11-handoff.json").write_text(json.dumps({"filename_timestamp_format": utils.CONFIG["filename_timestamp_format"], "files": [], "depends_on": {"cache": {"fingerprint_algorithm_version": utils.FINGERPRINT_ALGORITHM_VERSION}}}))
     assert _run(monkeypatch, ws) == 2
     assert "Invalid workspace config" in capsys.readouterr().err
 
@@ -79,7 +82,7 @@ def test_invalid_config_blocks(tmp_path, monkeypatch, capsys):
 def test_corrupt_json_config_blocks(tmp_path, monkeypatch, capsys):
     ws, ctl = _init_ws(tmp_path)
     (ctl / "photos-00-config.json").write_text("{not valid json")      # JSONDecodeError is a ValueError
-    (ctl / "photos-11-handoff.json").write_text(json.dumps({"filename_timestamp_format": utils.CONFIG["filename_timestamp_format"], "files": []}))
+    (ctl / "photos-11-handoff.json").write_text(json.dumps({"filename_timestamp_format": utils.CONFIG["filename_timestamp_format"], "files": [], "depends_on": {"cache": {"fingerprint_algorithm_version": utils.FINGERPRINT_ALGORITHM_VERSION}}}))
     assert _run(monkeypatch, ws) == 2
     assert "Invalid workspace config" in capsys.readouterr().err
 
@@ -87,7 +90,7 @@ def test_corrupt_json_config_blocks(tmp_path, monkeypatch, capsys):
 def test_unreadable_config_blocks(tmp_path, monkeypatch, capsys):
     ws, ctl = _init_ws(tmp_path)
     (ctl / "photos-00-config.json").mkdir()                            # a dir -> open() raises (not ValueError)
-    (ctl / "photos-11-handoff.json").write_text(json.dumps({"filename_timestamp_format": utils.CONFIG["filename_timestamp_format"], "files": []}))
+    (ctl / "photos-11-handoff.json").write_text(json.dumps({"filename_timestamp_format": utils.CONFIG["filename_timestamp_format"], "files": [], "depends_on": {"cache": {"fingerprint_algorithm_version": utils.FINGERPRINT_ALGORITHM_VERSION}}}))
     assert _run(monkeypatch, ws) == 2
     assert "could not be read" in capsys.readouterr().err
 
@@ -107,7 +110,17 @@ def test_valid_iana_true_and_false():
     assert cal._valid_iana("Nowhere/Nope") is False
 
 
-def test_timezone_manual_valid_and_accept_without_proposal(tmp_path):
+@pytest.mark.spec("RUL-checked_timezones", test="TST-geotag_orchestration-the_host_s_zone_is_no_place_s")
+@pytest.mark.parametrize("name", ["localtime", "posixrules", "Factory", "", None, 5])
+def test_a_name_for_the_host_s_own_zone_is_no_timezone(name):
+    """`localtime` resolves to wherever the run happens: a decision resting on it would change with the host."""
+    assert cal._valid_iana(name) is False
+    if isinstance(name, str) and name:
+        with pytest.raises(ValueError, match="not a valid IANA timezone"):
+            utils.validate_config({"camera_time_and_timezone_policy": {"default_folder_timezone": name}})
+
+
+def test_timezone_manual_valid_and_no_proposal(tmp_path):
     ws, ctl = _init_ws(tmp_path)
     (ctl / "photos-11-handoff.json").write_text("{}")
     wf = cal.GeotagWorkflow(str(ws))
@@ -115,10 +128,12 @@ def test_timezone_manual_valid_and_accept_without_proposal(tmp_path):
     blk = []
     tz = wf._timezone_decision("d", {"user_decision": {"manual_iana_timezone": "Europe/Paris"}}, blk)
     assert tz["effective_iana_timezone"] == "Europe/Paris" and not blk
-    # accept with no proposal available (no default_folder_timezone) -> stale, still needs input
+    # no proposal available (no ancestor, no default_folder_timezone) -> needs the user's zone
     utils.CONFIG["camera_time_and_timezone_policy"]["default_folder_timezone"] = ""
-    tz2 = wf._timezone_decision("d", {"user_decision": {"accept_proposed_timezone": True}}, blk)
-    assert tz2["stale_user_decision"] is True and tz2["requires_user_input"] is True
+    tz2 = wf._timezone_decision("d", {"user_decision": {}}, blk)
+    assert tz2["requires_user_input"] is True and tz2["effective_iana_timezone"] == ""
+    assert tz2["user_decision"] == {"manual_iana_timezone": "", "country": "",   # the decisions a timezone takes
+                                    "confirmed_despite_recorded_offsets": []}
 
 
 def test_build_file_model_tolerates_malformed_records(tmp_path):
@@ -174,6 +189,7 @@ def _completable_ws(tmp_path):
         cfg["camera_time_and_timezone_policy"], device_groups={"fixed_clock_cameras": [CAM], "phones": []},
         default_folder_timezone="Europe/Brussels", multi_anchor_auto_apply=True)
     (ctl / "photos-00-config.json").write_text(json.dumps(cfg))
+    answer_root_zone(ctl)                        # the zone answered once at the root (RUL-timezone_auto_resolves)
 
     def rec(rel, dto, *, gps=None):
         parsed = {"DateTimeOriginal": dto, "selected_source_naive_timestamp": dto,
@@ -191,15 +207,8 @@ def _completable_ws(tmp_path):
     files = [rec("6-photos-by-dest/T/a.arw", "2024:07:03 14:00:00", gps=(50.0, 4.0)),
              rec("6-photos-by-dest/T/b.arw", "2024:07:03 15:00:00", gps=(51.0, 5.0)),
              rec("6-photos-by-dest/T/c.arw", "2024:07:03 14:30:00")]          # no GPS -> blocked
-    (ctl / "photos-11-handoff.json").write_text(json.dumps({"filename_timestamp_format": utils.CONFIG["filename_timestamp_format"], "files": files, "cache_fingerprint": "pcf"}))
+    (ctl / "photos-11-handoff.json").write_text(json.dumps({"filename_timestamp_format": utils.CONFIG["filename_timestamp_format"], "files": match_disk(ws, files), "cache_fingerprint": "pcf", "depends_on": {"cache": {"fingerprint_algorithm_version": utils.FINGERPRINT_ALGORITHM_VERSION}}}))
     return ws, ctl
-
-
-def _accept_tz(ctl):
-    p = ctl / "photos-21-time-decisions.json"
-    a = json.load(open(p))
-    a["destinations"]["6-photos-by-dest/T"]["destination_timezone"]["user_decision"]["accept_proposed_timezone"] = True
-    p.write_text(json.dumps(a))
 
 
 def test_complete_run_writes_photos22_then_bad_coord_aborts(tmp_path, monkeypatch, capsys):
@@ -223,7 +232,48 @@ def test_complete_run_writes_photos22_then_bad_coord_aborts(tmp_path, monkeypatc
     assert (ctl / "photos-23-gps-decisions.json").read_bytes() == before     # left unchanged
 
 
-@pytest.mark.spec("geotag-gpx-rejected-points-reported-1")
+@pytest.mark.spec("RUL-no_plan_while_a_decision_waits", "BLD-geotag_stage_order",
+                  test="TST-geotag_orchestration-no_plan_while_a_decision_waits")
+def test_no_executable_plan_while_a_decision_waits(tmp_path, monkeypatch, capsys):
+    """A photo neither placed nor left unlocated by the user waits in photos-23; a destination with no
+    timezone waits in photos-21. Either way the run makes no executable plan."""
+    ws, ctl = _completable_ws(tmp_path)
+    assert _run(monkeypatch, ws) == 0, capsys.readouterr().err
+    assert json.load(open(ctl / "photos-23-gps-decisions.json"))["status"] == "requires_user_input"
+    assert not (ctl / "photos-24-executable-plan.json").exists()
+    # the time decisions waiting: no zone said for the destination, none to inherit
+    for n in os.listdir(ctl):
+        if n.startswith("photos-2"):
+            os.remove(ctl / n)
+    cfg = json.load(open(ctl / "photos-00-config.json"))
+    cfg["camera_time_and_timezone_policy"]["default_folder_timezone"] = ""
+    (ctl / "photos-00-config.json").write_text(json.dumps(cfg))
+    assert _run(monkeypatch, ws) == 0, capsys.readouterr().err
+    assert json.load(open(ctl / "photos-21-time-decisions.json"))["status"] == "requires_user_input"
+    assert not (ctl / "photos-24-executable-plan.json").exists()
+
+
+@pytest.mark.spec("RUL-decision_stage_writes_record", test="TST-geotag_orchestration-a_run_with_nothing_to_decide_writes_every_record")
+def test_a_run_with_nothing_to_decide_writes_every_record(tmp_path, monkeypatch, capsys):
+    """Every photo has its own position and the camera's offset resolves from them: nothing needs the user.
+    Each decision stage still writes its record, complete, and the executable plan follows."""
+    ws, ctl = _completable_ws(tmp_path)
+    ho = json.load(open(ctl / "photos-11-handoff.json"))
+    c = next(r for r in ho["files"] if r["relative_path"].endswith("c.arw"))
+    parsed = json.loads(c["metadata_status"]["parsed_json"])
+    parsed.update({"has_native_gps": True, "GPSLatitude": 50.5, "GPSLongitude": 4.5})
+    c["metadata_status"].update({"has_native_gps": True, "parsed_json": json.dumps(parsed)})
+    (ctl / "photos-11-handoff.json").write_text(json.dumps(ho))
+    assert _run(monkeypatch, ws) == 0, capsys.readouterr().err
+    for name in ("photos-21-time-decisions.json", "photos-22-gps-drift-validation.json",
+                 "photos-23-gps-decisions.json"):
+        art = json.load(open(ctl / name))
+        assert art["status"] == "complete" and art["requires_user_input"] is False, name
+    assert json.load(open(ctl / "photos-24-executable-plan.json"))["status"] == "ready"
+
+
+@pytest.mark.spec("BLD-track_points", "RUL-unreadable_point_reported",
+                  test="TST-geotag_orchestration-plan_reports_gpx_load_warnings_capped")
 def test_plan_reports_gpx_load_warnings_capped(tmp_path, monkeypatch, capsys):
     # GPX points rejected at load are reported, not silently dropped (an all-rejected track must not
     # read as merely "empty"), and the list is capped with a remainder count.
@@ -238,7 +288,7 @@ def test_plan_reports_gpx_load_warnings_capped(tmp_path, monkeypatch, capsys):
     assert "... and 3 more." in err
 
 
-@pytest.mark.spec("RUL-invalid_decision_kept", "RUL-invalid_value_located",
+@pytest.mark.spec("RUL-invalid_decision_kept", "RUL-invalid_value_located", "RUL-invalid_decision_reported",
                   test="TST-geotag_orchestration-unparseable_decision_artifact_blocks_and_is_kept")
 @pytest.mark.parametrize("artifact", ["photos-21-time-decisions.json", "photos-22-gps-drift-validation.json",
                                       "photos-23-gps-decisions.json"], ids=["21", "22", "23"])
@@ -262,27 +312,11 @@ def test_unparseable_decision_artifact_blocks_and_is_kept(tmp_path, monkeypatch,
     assert sorted(x.name for x in ctl.iterdir()) == before                    # no backup, no new version
 
 
-def test_recognize_camera_groups_records_timestamps(tmp_path):
-    ws, ctl = _init_ws(tmp_path)
-    wf = cal.GeotagWorkflow(str(ws))
-    utils.CONFIG["camera_time_and_timezone_policy"]["device_groups"] = {"fixed_clock_cameras": [CAM], "phones": []}
-    files = [{"camera_group_key": CAM, "destination": "6-photos-by-dest/T", "has_native_gps": False,
-              "has_timestamp": True, "source_naive_time": "2024:07:03 14:00:00", "camera_identity": {}},
-             {"camera_group_key": CAM, "destination": "6-photos-by-dest/T", "has_native_gps": False,
-              "has_timestamp": False, "source_naive_time": None, "camera_identity": {}},   # missing timestamp
-             {"camera_group_key": CAM, "destination": "6-photos-by-dest/T", "has_native_gps": False,
-              "has_timestamp": True, "source_naive_time": None, "camera_identity": {}}]     # timestamp flag, no value
-    groups, _ = wf.recognize_camera_groups(files)
-    assert groups[CAM]["earliest_source_time"] == "2024:07:03 14:00:00"
-    assert groups[CAM]["latest_source_time"] == "2024:07:03 14:00:00"
-    assert groups[CAM]["missing_timestamp"] == 1
-
-
-@pytest.mark.spec("geotag-sealed-newdump-warn-1", "RUL-sealed_new_dump_left", test="TST-geotag_orchestration-sealed_workspace_with_dump_warns_and_blocks")
+@pytest.mark.spec("RUL-sealed_new_dump_warned", "RUL-sealed_new_dump_left", test="TST-geotag_orchestration-sealed_workspace_with_dump_warns_and_blocks")
 def test_sealed_workspace_with_dump_warns_and_blocks(tmp_path, monkeypatch, capsys):
     ws, ctl = _init_ws(tmp_path)
     (ctl / "photos-00-config.json").write_text(json.dumps({k: v for k, v in utils.CONFIG.items() if k != "jobs"}))
-    (ctl / "photos-11-handoff.json").write_text(json.dumps({"filename_timestamp_format": utils.CONFIG["filename_timestamp_format"], "files": []}))
+    (ctl / "photos-11-handoff.json").write_text(json.dumps({"filename_timestamp_format": utils.CONFIG["filename_timestamp_format"], "files": [], "depends_on": {"cache": {"fingerprint_algorithm_version": utils.FINGERPRINT_ALGORITHM_VERSION}}}))
     open(utils.sealed_marker_path(str(ws)), "w").close()           # seal it
     (ws / "loose.jpg").write_bytes(b"x")                           # a new dump at the root
     assert _run(monkeypatch, ws) == 2                              # sealed -> hard stop
@@ -295,7 +329,7 @@ def test_sealed_workspace_with_dump_warns_and_blocks(tmp_path, monkeypatch, caps
     assert any("SEALED" in b for b in blk) and not warn
 
 
-@pytest.mark.spec("geotag-gpx-after-recognition-1")
+@pytest.mark.spec("BLD-geotag_stage_order", test="TST-geotag_orchestration-unknown_group_aborts_before_gpx_ingest")
 def test_unknown_group_aborts_before_gpx_ingest(tmp_path, monkeypatch):
     # In-memory camera-group recognition runs BEFORE disk-heavy GPX ingestion, so an unknown-group
     # abort costs no GPX I/O (the next run re-ingests GPX only once recognition passes).
@@ -309,7 +343,9 @@ def test_unknown_group_aborts_before_gpx_ingest(tmp_path, monkeypatch):
     assert called == []                        # GPX ingest never reached
 
 
-@pytest.mark.spec("geotag-unknown-group-snippets-1")
+@pytest.mark.spec("RUL-unknown_group_classification_offered", "BLD-unknown_group_snippet",
+                  "RUL-classed_groups_kept_in_offer",
+                  test="TST-geotag_orchestration-unknown_group_template_is_valid_full_json")
 def test_unknown_group_template_is_valid_full_json(tmp_path, monkeypatch, capsys):
     # The cut/paste template must be VALID JSON (no trailing comma -> the ",]" reader-rejection bug)
     # and the COMPLETE final list: each array carries the operator's known groups plus the new one.
@@ -324,6 +360,7 @@ def test_unknown_group_template_is_valid_full_json(tmp_path, monkeypatch, capsys
     extra["metadata_status"]["parsed_json"] = json.dumps(parsed)
     (ws / "6-photos-by-dest/T/z.nef").write_bytes(b"x")
     h["files"].append(extra)
+    match_disk(ws, h["files"])
     (ctl / "photos-11-handoff.json").write_text(json.dumps(h))
 
     assert _run(monkeypatch, ws) == 2
@@ -338,7 +375,7 @@ def test_unknown_group_template_is_valid_full_json(tmp_path, monkeypatch, capsys
     assert CAM in tmpl["fixed_clock_cameras"]                # known group preserved (full list)
 
 
-# --- broken decisions are located blockers, never coerced or passed over (shared contract §14) -----
+# --- broken decisions are located blockers, never coerced or passed over (RUL-invalid_value_located) -----
 
 def _set(path, value):
     """Return an edit that sets the dotted `path` (list indices as ints) of a decision artifact."""
@@ -353,11 +390,12 @@ def _set(path, value):
 _T = ["destinations", "6-photos-by-dest/T"]
 
 @pytest.mark.spec("RUL-checked_shapes", "RUL-checked_positions_and_times", "RUL-invalid_value_located",
+                  "RUL-invalid_decision_reported", "RUL-invalid_decision_kept", "RUL-checked_decision_structure",
                   test="TST-geotag_orchestration-broken_decision_is_a_located_blocker")
 @pytest.mark.parametrize("artifact, edit, message", [
     ("photos-21-time-decisions.json",
-     _set(_T + ["destination_timezone", "user_decision", "accept_proposed_timezone"], "false"),
-     "6-photos-by-dest/T: destination_timezone.user_decision.accept_proposed_timezone must be true or false, not 'false'."),
+     _set(_T + ["camera_group_time_decisions", CAM, "user_decision", "accept_proposal"], "false"),
+     f"6-photos-by-dest/T: camera_group_time_decisions[{CAM}].user_decision.accept_proposal must be true or false, not 'false'."),
     ("photos-21-time-decisions.json", _set(_T + ["destination_timezone", "user_decision"], "yes"),
      "6-photos-by-dest/T: destination_timezone.user_decision must be an object."),
     ("photos-21-time-decisions.json", _set(["destinations"], []), "destinations must be an object."),
@@ -389,7 +427,8 @@ def test_broken_decision_is_a_located_blocker(tmp_path, monkeypatch, capsys, art
     assert p.read_bytes() == before                                           # kept exactly as written
 
 
-@pytest.mark.spec("RUL-checked_shapes", test="TST-geotag_orchestration-drift_confirmation_must_be_a_real_yes")
+@pytest.mark.spec("RUL-checked_shapes", "RUL-checked_decision_structure",
+                  test="TST-geotag_orchestration-drift_confirmation_must_be_a_real_yes")
 def test_drift_confirmation_must_be_a_real_yes(tmp_path):
     # The drift gate is passed only by a written true: "false" (a string) never confirms a bucket.
     ws, ctl = _init_ws(tmp_path)
@@ -398,7 +437,7 @@ def test_drift_confirmation_must_be_a_real_yes(tmp_path):
     for value, confirmed, blocked in (("false", False, True), (True, True, False), (None, False, False)):
         blockers = []
         cell = wf._drift_cell("6-photos-by-dest/T", CAM, time_cell, [], [],
-                              {"user_decision": {"confirmed": value}}, blockers)
+                              {"user_decision": {"confirmed": value, "confirmed_offset_seconds": 0}}, blockers)
         assert bool(cell["effective_drift_offset"]) is confirmed, value
         assert bool(blockers) is blocked, (value, blockers)
     _, shape = wf.build_drift_validation([], {"destinations": {}}, [], None,

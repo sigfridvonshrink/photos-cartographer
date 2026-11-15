@@ -68,7 +68,9 @@ def _pol(**overrides):
     (_cfg(merge={"library_root": " \t"}), "must not be blank"),                # blank library path
     (_pol(device_groups={"phone": ["Pixel"]}), "device_groups.phone is not a device class"),  # misspelt class
 ])
-@pytest.mark.spec("config-values-validated-1", "prep-config-validate-gpx-malformed-1", "prep-config-validate-timestamp-format-1", "validate-enum-structure-1", "validate-filename-format-1", "validate-numeric-thresholds-1", "validate-paths-1", test="TST-config_validation-validate_config_rejects")
+@pytest.mark.spec("RUL-config_validated_before_use", "BLD-gpx_root_checked", "RUL-checked_filename_format",
+                  "RUL-checked_shapes", "RUL-checked_numbers", "RUL-checked_paths", "RUL-checked_fixed_set",
+                  test="TST-config_validation-validate_config_rejects")
 def test_validate_config_rejects(cfg, needle):
     with pytest.raises(ValueError) as ei:
         utils.validate_config(cfg)
@@ -107,7 +109,7 @@ def test_valid_edits_pass():
                                gpx_direct_match_max_seconds=0))
 
 
-# --- destination_distribution_subfolders (geotag §7.1 dev-subfolder gate) ----------------
+# --- destination_distribution_subfolders (RUL-development_after_merge dev-subfolder gate) ----------------
 
 def test_distribution_subfolders_default_valid():
     assert utils.CONFIG["destination_distribution_subfolders"] == ["jpg", "tif"]
@@ -126,7 +128,7 @@ def test_distribution_subfolders_rejects_bad(bad, needle):
     assert needle in str(ei.value), str(ei.value)
 
 
-# --- library-merge config (G5.4; deep validation is the merge phase's, shared §4.3/§14.1) ----
+# --- library-merge config (G5.4; deep validation is the merge phase's, BLD-authored_checks_by_phase) ----
 
 def test_merge_block_seeded_and_default_valid():
     # library_root is seeded with a deployment default (a non-empty path); the merge phase deep-validates
@@ -170,7 +172,7 @@ def test_config_without_merge_block_still_valid():
     utils.validate_config({"gpx_root": ""})        # legacy config (no merge key) is accepted
 
 
-@pytest.mark.spec("prep-config-validation-failure-blocks-1")
+@pytest.mark.spec("RUL-invalid_value_stops")
 def test_load_or_seed_config_rejects_bad_value(tmp_path):
     ws = tmp_path / "ws"
     (ws / ".photos-ingest").mkdir(parents=True)
@@ -182,7 +184,8 @@ def test_load_or_seed_config_rejects_bad_value(tmp_path):
         utils.load_or_seed_config(str(ws))
 
 
-# --- media_extensions: classification lists are config (prep §6.1), fingerprinted (shared §4.2) ----
+# --- media_extensions: classification lists are config (RUL-config_lists_extensions),
+# fingerprinted (RUL-organization_settings_restale) ----
 
 def _mx(image=None, raw=None, video=None):
     """A config whose media_extensions block can be selectively overridden (missing class if None)."""
@@ -211,14 +214,16 @@ def test_media_extensions_default_seeded_and_valid():
     (_mx(image=["j pg"], raw=["arw"], video=["mp4"]), "canonical bare extension"), # whitespace
     (_mx(image=[5], raw=["arw"], video=["mp4"]), "must be a non-empty string"),    # wrong type
 ])
-@pytest.mark.spec("prep-config-validate-numeric-lists-1", "RUL-checked_extension_lists", test="TST-config_validation-media_extensions_rejects_bad")
+@pytest.mark.spec("RUL-checked_numbers", "RUL-checked_extension_lists", test="TST-config_validation-media_extensions_rejects_bad")
 def test_media_extensions_rejects_bad(cfg, needle):
     with pytest.raises(ValueError) as ei:
         utils.validate_config(cfg)
     assert needle in str(ei.value), str(ei.value)
 
 
-@pytest.mark.spec("config-ext-one-class-1", "prep-classify-by-extension-1", "prep-reads-config-authoritative-1", "RUL-config_lists_extensions", "RUL-unlisted_extension_other", "RUL-extension_matched_ignoring_case", test="TST-config_validation-classification_follows_config_after_load")
+@pytest.mark.spec("RUL-extension_one_class", "RUL-extension_matched_ignoring_case", "RUL-config_lists_extensions",
+                  "RUL-unlisted_extension_other",
+                  test="TST-config_validation-classification_follows_config_after_load")
 def test_classification_follows_config_after_load(tmp_path, monkeypatch):
     # A user adds .webp to the image list; after load_or_seed_config it classifies as image, not stray.
     ws = tmp_path / "ws"
@@ -236,7 +241,7 @@ def test_classification_follows_config_after_load(tmp_path, monkeypatch):
         utils._refresh_media_class_map()                       # restore global for other tests
 
 
-@pytest.mark.spec("config-surgical-staleness-1", "prep-extension-lists-config-1", test="TST-config_validation-field_fingerprints_change_with_their_area")
+@pytest.mark.spec("RUL-staleness_by_area", "RUL-config_lists_extensions", test="TST-config_validation-field_fingerprints_change_with_their_area")
 def test_field_fingerprints_change_with_their_area():
     base_fol, base_ext = utils.folders_fingerprint(), utils.media_extensions_fingerprint()
     c = copy.deepcopy(utils.CONFIG); c["media_extensions"]["video"].append("webm")
@@ -245,3 +250,11 @@ def test_field_fingerprints_change_with_their_area():
     c2 = copy.deepcopy(utils.CONFIG); c2["folders"]["sources"] = "0-inbox"
     assert utils.folders_fingerprint(c2) != base_fol
     assert utils.media_extensions_fingerprint(c2) == base_ext  # folder edit doesn't move the ext fp
+
+
+@pytest.mark.spec("RUL-drift_window_positive", test="TST-config_validation-the_drift_window_is_more_than_nothing")
+def test_the_drift_check_s_track_window_is_more_than_nothing():
+    """A window of zero would switch the drift check off without saying so."""
+    with pytest.raises(ValueError, match="drift_check_track_window_seconds must be greater than 0"):
+        utils.validate_config({"drift_check_track_window_seconds": 0})
+    utils.validate_config({"drift_check_track_window_seconds": 1})

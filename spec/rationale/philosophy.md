@@ -18,7 +18,7 @@ judgement, fair game for ordinary debate. For who the tool is for, and how to re
 
 :::{fct} A photo batch is large — thousands of frames, several cameras
 :id: FCT-large_batches
-:status: seed
+:status: ruled
 :aliases: F1
 
 A trip dump or a years-deep library is big and mixed: many RAW/JPEG frames across multiple cameras and phones.
@@ -29,7 +29,7 @@ someday."*
 
 :::{fct} Camera clocks drift — independently, and from day to day
 :id: FCT-clocks_drift
-:status: seed
+:status: ruled
 :aliases: F2
 
 Each body's clock is wrong by its own amount, and that amount changes between days (drift, manual resets to local time
@@ -41,7 +41,7 @@ scattered because the clock was never set — blamed on negligence or forgetfuln
 
 :::{fct} GPX coverage is partial
 :id: FCT-partial_track_coverage
-:status: seed
+:status: ruled
 :aliases: F3
 
 The logger's tracks reach *some* of the library, never all of it — so the track alone can never place every frame; the
@@ -55,7 +55,7 @@ with a pin and the many that didn't.
 
 :::{chc} Photos matter; they are irreplaceable, so they deserve care
 :id: CHC-photos_matter
-:status: seed
+:status: ruled
 :choice_kind: value
 :aliases: P1
 
@@ -64,7 +64,7 @@ Because they matter, no original may be lost or silently altered — correctness
 
 :::{chc} A local, owned, folder-based library
 :id: CHC-local_folder_library
-:status: seed
+:status: ruled
 :choice_kind: choice
 :aliases: P2
 
@@ -74,7 +74,7 @@ catalog.
 
 :::{chc} Ask only what the data can't settle
 :id: CHC-ask_only_what_data_cannot_settle
-:status: seed
+:status: ruled
 :choice_kind: design-value
 :aliases: P3
 
@@ -83,7 +83,7 @@ Resolve everything derivable automatically; ask only real judgment questions, an
 
 :::{chc} 100% placement, even under GPS scarcity
 :id: CHC-total_placement
-:status: seed
+:status: ruled
 :choice_kind: goal
 :aliases: P4
 
@@ -95,7 +95,7 @@ Every photo ends up on the map — precise where tracks allow, rough or manual w
 
 :::{rat} Linux and open-source are not roots
 :id: RAT-linux_and_open_source_not_roots
-:status: seed
+:status: ruled
 :forced: no
 :follows_from: CHC-photos_matter, CHC-local_folder_library
 
@@ -110,7 +110,7 @@ a downstream expression of the "local, owned" ethos (P1, P2), not a structural d
 
 :::{rat} Non-destructive core
 :id: RAT-non_destructive_core
-:status: seed
+:status: ruled
 :forced: yes
 :follows_from: CHC-photos_matter
 
@@ -119,7 +119,7 @@ plan / validate / execute; atomic no-clobber; quarantine, not delete; original-v
 
 :::{rat} No mutation outside a validated plan
 :id: RAT-no_mutation_outside_plan
-:status: seed
+:status: ruled
 :forced: yes
 :follows_from: RAT-non_destructive_core
 
@@ -128,7 +128,7 @@ plan / validate / execute; atomic no-clobber; quarantine, not delete; original-v
 
 :::{rat} Safety cannot rest on the plan being correct
 :id: RAT-safety_not_on_the_plan
-:status: seed
+:status: ruled
 :forced: yes
 :follows_from: RAT-non_destructive_core
 
@@ -137,7 +137,7 @@ No-clobber **re-verified atomically at the moment of each write**, not just at p
 
 :::{rat} Deletion is never automatic
 :id: RAT-no_automatic_deletion
-:status: seed
+:status: ruled
 :forced: yes
 :follows_from: RAT-non_destructive_core
 
@@ -146,7 +146,7 @@ Duplicates are **quarantined**, never removed; pruning is an explicit, separate 
 
 :::{rat} A decision must be withdrawable
 :id: RAT-decision_withdrawable
-:status: seed
+:status: ruled
 :forced: yes
 :follows_from: RAT-non_destructive_core
 
@@ -158,7 +158,7 @@ it, so deleting a decision *restores* the prior state.
 
 :::{rat} Drift is per-camera and per-day, so no global offset is correct
 :id: RAT-offset_per_camera_destination_day
-:status: seed
+:status: ruled
 :forced: yes
 :follows_from: FCT-clocks_drift
 
@@ -167,13 +167,13 @@ Start with the fact. Because each camera's clock is wrong by its own amount, and
 granularity is the entire source of the decisions' "complexity": it is a consequence of real, time-varying drift, not a
 premise.
 
-The offset is **inferred and applied per (camera group, destination, day)**; corrections fall *between* destinations,
-never within one — which is why **one destination = one coherent shoot**.
+The offset is **inferred and applied per (camera group, destination, day)**; corrections fall *between* destinations
+and between days, never within one destination's day — which is why **one destination = one coherent shoot**.
 :::
 
 :::{rat} Intricate, evidence-specific decisions are too error-prone to hand-edit
 :id: RAT-format_editor_split
-:status: seed
+:status: ruled
 :forced: yes
 :follows_from: FCT-clocks_drift
 
@@ -182,7 +182,7 @@ never within one — which is why **one destination = one coherent shoot**.
 
 :::{rat} The record must stay an honest statement of *intent*, not a mutable scratchpad
 :id: RAT-editor_writes_only_decisions
-:status: seed
+:status: ruled
 :forced: yes
 :follows_from: RAT-format_editor_split
 
@@ -191,7 +191,7 @@ The editor writes **only the `user_decision` field** — never derived or eviden
 
 :::{rat} Minimal, cascading asks
 :id: RAT-minimal_cascading_asks
-:status: seed
+:status: ruled
 :forced: yes
 :follows_from: FCT-clocks_drift, CHC-ask_only_what_data_cannot_settle, CHC-local_folder_library
 
@@ -201,18 +201,19 @@ collected — and introduces the document's central trade.
 
 :::{rat} Asking per-photo would be thousands of short-reaching chores
 :id: RAT-decisions_cascade
-:status: seed
+:status: ruled
 :forced: yes
 :follows_from: RAT-minimal_cascading_asks
 
-Decisions **cascade**: *one far-reaching choice high in the tree is traded for many short-reaching ones* — inherit
-unless overridden, remembered across re-runs. (This is where "far-reaching" comes from — a chosen trade, not an
-inherent property.)
+A place's decisions **cascade**: *one far-reaching choice high in the tree is traded for many short-reaching ones* — a
+timezone, a fallback position, set once at the top of a place's folders and inherited unless overridden, remembered across re-runs.
+(This is where "far-reaching" comes from — a chosen trade, not an inherent property.) A clock offset does not: it is
+the camera's for that day, wherever its photos were sorted, and each day's is found from that day's own evidence.
 :::
 
 :::{rat} Inheritance needs an axis to travel along
 :id: RAT-destination_tree_is_a_hierarchy
-:status: seed
+:status: ruled
 :forced: yes
 :follows_from: RAT-decisions_cascade
 
@@ -222,7 +223,7 @@ inherit at all, and every value would fall back to per-photo entry.
 
 :::{rat} The unavoidable human act should pay for itself
 :id: RAT-piggyback_on_the_destination_sort
-:status: seed
+:status: ruled
 :forced: yes
 :follows_from: RAT-minimal_cascading_asks
 
@@ -232,7 +233,7 @@ Timezone, clock offset, and GPS fallback are **piggybacked on the destination so
 
 :::{rat} The tedious part of a judgment call should be pre-computed
 :id: RAT-camera_groups_generated
-:status: seed
+:status: ruled
 :forced: yes
 :follows_from: RAT-minimal_cascading_asks
 
@@ -243,7 +244,7 @@ Timezone, clock offset, and GPS fallback are **piggybacked on the destination so
 
 :::{rat} Recoverable core
 :id: RAT-recoverable_core
-:status: seed
+:status: ruled
 :forced: yes
 :follows_from: CHC-photos_matter, FCT-partial_track_coverage
 
@@ -254,7 +255,7 @@ must act only on what actually changed.
 
 :::{rat} A crash must be recoverable
 :id: RAT-discrete_stages
-:status: seed
+:status: ruled
 :forced: yes
 :follows_from: RAT-recoverable_core
 
@@ -264,7 +265,7 @@ truth**.
 
 :::{rat} Re-runs must not redo settled work or cause churn
 :id: RAT-idempotent_reruns
-:status: seed
+:status: ruled
 :forced: yes
 :follows_from: RAT-recoverable_core
 
@@ -273,7 +274,7 @@ truth**.
 
 :::{rat} Identity must survive EXIF rewrites and renames
 :id: RAT-decoded_pixel_identity
-:status: seed
+:status: ruled
 :forced: yes
 :follows_from: RAT-recoverable_core
 
@@ -284,7 +285,7 @@ A **decoded-pixel fingerprint** (ImageMagick/ffmpeg), not file bytes, as each ph
 
 :::{rat} Total-coverage cascade
 :id: RAT-total_coverage_cascade
-:status: seed
+:status: ruled
 :forced: yes
 :follows_from: CHC-total_placement, FCT-partial_track_coverage
 
@@ -295,17 +296,17 @@ unnecessary.
 
 :::{rat} Placement cannot depend on the track alone
 :id: RAT-folder_gps_fallback
-:status: seed
+:status: ruled
 :forced: yes
 :follows_from: RAT-total_coverage_cascade
 
-A **cascading folder-level GPS fallback** — set one coordinate at a trip's root and it is inherited down the tree (P3
+A **cascading folder-level GPS fallback** — set one coordinate at the top of a place's folders and it is inherited down the tree (P3
 makes this cheap; one answer covers many photos).
 :::
 
 :::{rat} The true unplaceable set must be surfaced, never silently dropped
 :id: RAT-remainder_worklist
-:status: seed
+:status: ruled
 :forced: yes
 :follows_from: RAT-total_coverage_cascade
 
@@ -315,7 +316,7 @@ map.
 
 :::{rat} Every placeable point of the track must be squeezed out
 :id: RAT-track_squeezed
-:status: seed
+:status: ruled
 :forced: yes
 :follows_from: RAT-total_coverage_cascade
 
@@ -325,15 +326,16 @@ manual.
 
 :::{rat} Completeness means precision now *varies* across the library
 :id: RAT-coordinate_carries_its_method
-:status: seed
+:status: ruled
 :forced: yes
 :follows_from: RAT-total_coverage_cascade, RAT-consolidated_log
 
 Completeness means precision now *varies* across the library — so each placement must declare how trustworthy it is
 (via the **traceability** the multi-session reality forces — see below).
 
-**Every coordinate carries its derivation method** — native / GPX direct-match / interpolated / extrapolated / manual
-— so a rough pin is never mistaken for a precise one.
+**Every coordinate carries its derivation method** — native, or one of the tool's: matched on a track point,
+interpolated between two, extrapolated past a track's end, set by hand for the photo or by a folder's fallback — in the
+photo itself, so a rough pin is never mistaken for a precise one, in the library as in the workspace.
 
 *Why it is kept:* "I still want to be able to know, at a later date, how that GPS position was assigned - maybe I want
 to refine it by image/place recognition for example." A new track needs no tag: it changes the GPX folder, which makes
@@ -347,7 +349,7 @@ library."
 
 :::{rat} A multi-session job
 :id: RAT-multi_session_job
-:status: seed
+:status: ruled
 :forced: yes
 :follows_from: FCT-large_batches, CHC-total_placement
 
@@ -371,7 +373,7 @@ sittings.
 
 :::{rat} Durable, resumable record
 :id: RAT-durable_record
-:status: seed
+:status: ruled
 :forced: yes
 :follows_from: RAT-multi_session_job
 
@@ -381,7 +383,7 @@ are **zero-cost benefits** that fall out of building for resumability.
 
 :::{rat} Decisions can't live in the tool between sessions, so they must persist outside it
 :id: RAT-plain_json_record
-:status: seed
+:status: ruled
 :forced: yes
 :follows_from: RAT-durable_record
 
@@ -390,17 +392,18 @@ are **zero-cost benefits** that fall out of building for resumability.
 
 :::{rat} Resuming must not mean re-deciding
 :id: RAT-decisions_reread_cache_only
-:status: seed
+:status: ruled
 :forced: yes
 :follows_from: RAT-durable_record
 
-Decisions are **idempotently re-read each run**; the fast store is **SQLite as a cache only** — derived, rebuildable,
-never the source of truth.
+Decisions are **idempotently re-read each run**, never kept in the fast store, **SQLite**: what it holds is derived
+and rebuildable — but for each photo's own values, pinned before the tool first wrote to it, which nothing else holds
+once it has, and which the archived image of the database keeps.
 :::
 
 :::{rat} A choice made weeks earlier must still explain itself on return
 :id: RAT-consolidated_log
-:status: seed
+:status: ruled
 :forced: yes
 :follows_from: RAT-durable_record
 
@@ -410,7 +413,7 @@ traceability that lets the provenance tag above mean anything).
 
 :::{rat} Built to survive a three-week gap, it survives a thirty-year one
 :id: RAT-longevity_is_free
-:status: seed
+:status: ruled
 :forced: no
 :follows_from: RAT-durable_record
 
@@ -423,7 +426,7 @@ These are real choices but only details.
 
 :::{rat} The exact decomposition into stages
 :id: RAT-stage_cut_points
-:status: seed
+:status: ruled
 :forced: no
 :follows_from: RAT-discrete_stages
 
@@ -433,7 +436,7 @@ checkpoints is forced (P1+F3); the specific cut points are judgment.
 
 :::{rat} The consensus-clustering details
 :id: RAT-clustering_details
-:status: seed
+:status: ruled
 :forced: no
 :follows_from: RAT-offset_per_camera_destination_day
 
@@ -443,7 +446,7 @@ robustness, but the spread thresholds, the tie-breaks, and the confidence grades
 
 :::{rat} The downstream library, not the tree
 :id: RAT-which_folder_library
-:status: seed
+:status: ruled
 :forced: no
 :follows_from: RAT-destination_tree_is_a_hierarchy, CHC-local_folder_library
 
@@ -455,7 +458,7 @@ library consumes the result — digiKam, or any other — and the cosmetic namin
 
 :::{rat} Defaults that are offered, not imposed
 :id: RAT-configurable_folder_names
-:status: seed
+:status: ruled
 :forced: no
 :follows_from: RAT-discrete_stages
 

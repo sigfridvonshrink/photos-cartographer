@@ -77,7 +77,7 @@ def test_read_metadata_concurrently(mock_read, mock_popen, workspace):
 
 @patch("subprocess.Popen")
 @patch("photos_utils.PersistentExifToolWorker.read_metadata")
-@pytest.mark.spec("prep-candidates-sorted-deterministic-1", "prep-concurrency-no-semantic-change-1", "prep-job-count-run-metadata-1", "prep-two-job-counts-same-plan-1", test="TST-concurrency-deterministic_plan_with_jobs")
+@pytest.mark.spec("RUL-jobs_change_nothing", "RUL-jobs_recorded_nowhere", test="TST-concurrency-deterministic_plan_with_jobs")
 def test_deterministic_plan_with_jobs(mock_read, mock_popen, workspace):
     mock_process = MagicMock()
     mock_popen.return_value = mock_process
@@ -94,7 +94,7 @@ def test_deterministic_plan_with_jobs(mock_read, mock_popen, workspace):
     workflow4 = prep.WorkspacePrepWorkflow(workspace, cache4)
     plan4 = workflow4.plan()
     # The job count is a transient, machine-dependent runtime knob and is NOT recorded in the plan
-    # (spec §17 item 6) — neither summary carries a jobs field.
+    # (RUL-jobs_recorded_nowhere) — neither summary carries a jobs field.
     assert "jobs_requested" not in json.dumps(plan4.summary)
     assert "jobs_requested" not in plan4.summary["performance_and_cache"]
 
@@ -183,7 +183,7 @@ def test_progress_coordinator():
 
 @patch("subprocess.Popen")
 @patch("photos_1_prep.PlanValidator.validate_plan_preflight")
-@pytest.mark.spec("prep-journal-all-mutations-1", "prep-progress-not-only-record-1", test="TST-concurrency-quiet_plan_executor_execution")
+@pytest.mark.spec("RUL-every_change_journaled", test="TST-concurrency-quiet_plan_executor_execution")
 def test_quiet_plan_executor_execution(mock_validate, mock_popen, workspace):
     mock_popen.return_value = MagicMock()
 
@@ -207,10 +207,7 @@ def test_quiet_plan_executor_execution(mock_validate, mock_popen, workspace):
         command="prep",
         created_at="now",
         workspace_root=workspace,
-        digikam_root=None,
         config_fingerprint=prep.Fingerprint("sha256", "val"),
-        instruction_fingerprints={},
-        locks_required=[],
         summary={"metadata_plan_status": {}},
         blockers=[],
         warnings=[],
@@ -286,12 +283,14 @@ def test_cli_jobs_argparse(workspace):
         os.makedirs(os.path.join(workspace, _d), exist_ok=True)
 
     # Create dummy exiftool to pass the Popen check
-    exiftool_path = os.path.join(workspace, "exiftool")
+    bin_dir = workspace.rstrip(os.sep) + "-bin"       # beside the workspace: nothing but its folders belongs in it
+    os.makedirs(bin_dir, exist_ok=True)
+    exiftool_path = os.path.join(bin_dir, "exiftool")
     with open(exiftool_path, "w") as f:
         f.write("#!/bin/sh\nexit 0\n")
     os.chmod(exiftool_path, 0o755)
     env = os.environ.copy()
-    env["PATH"] = workspace + os.pathsep + env.get("PATH", "")
+    env["PATH"] = bin_dir + os.pathsep + env.get("PATH", "")
     env["PYTHONPATH"] = repo_root + os.pathsep + env.get("PYTHONPATH", "")
 
     import json
@@ -306,7 +305,7 @@ def test_cli_jobs_argparse(workspace):
 
     with open(canonical, "r") as f:
         plan_data_1 = json.load(f)
-    # -j is accepted but not persisted to the plan (machine-independent plan, spec §17 item 6).
+    # -j is accepted but not persisted to the plan (machine-independent plan, RUL-jobs_recorded_nowhere).
     assert "jobs_requested" not in json.dumps(plan_data_1)
 
     res = subprocess.run(
@@ -325,7 +324,7 @@ def test_cli_jobs_argparse(workspace):
 
 @patch("subprocess.Popen")
 @patch("photos_utils.PersistentExifToolWorker.read_metadata")
-@pytest.mark.spec("prep-partial-output-never-cached-1", test="TST-concurrency-exiftool_pool_failure_blocks_plan")
+@pytest.mark.spec("RUL-tool_failure_never_valid", test="TST-concurrency-exiftool_pool_failure_blocks_plan")
 def test_exiftool_pool_failure_blocks_plan(mock_read_metadata, mock_popen, workspace):
     mock_popen.return_value = MagicMock()
     # If the process errors out constantly
@@ -468,7 +467,7 @@ def test_stale_dependency_under_concurrency_blocks_execution(mock_read_metadata_
 @patch("subprocess.Popen")
 @patch("photos_1_prep.ContentHasher.fingerprint_image")
 @patch("photos_utils.MetadataReader.read_metadata_concurrently")
-@pytest.mark.spec("prep-summary-confirm-artifacts-after-validation-1")
+@pytest.mark.spec("RUL-prep_run_summarised")
 def test_progress_summary_fields(mock_read_metadata_concurrently, mock_hash_image, mock_popen, workspace):
     mock_hash_image.return_value = {"status": "valid", "strategy": "image-content-hash", "value": "dummyhash"}
     mock_popen.return_value = MagicMock()
@@ -503,7 +502,7 @@ def test_progress_summary_fields(mock_read_metadata_concurrently, mock_hash_imag
 
     pc = plan.summary.get("performance_and_cache", {})
     assert pc
-    assert "jobs_requested" not in pc          # job count is not recorded in the plan (spec §17 item 6)
+    assert "jobs_requested" not in pc          # job count is not recorded in the plan (RUL-jobs_recorded_nowhere)
     assert pc["progress_mode"] == "quiet"
     assert pc["dependency_validation_status"] == "pending"
     assert pc["handoff_written_after_successful_validation"] is False
@@ -519,7 +518,6 @@ def test_progress_summary_fields(mock_read_metadata_concurrently, mock_hash_imag
     assert pc["handoff_written_after_successful_validation"] is True
     assert pc["db_upserts_applied"] > 0
     assert pc["db_removes_applied"] >= 0
-    assert pc["db_renames_applied"] >= 0
 
     # Ensure it didn't leak into handoff
     handoff_path = os.path.join(workspace, ".photos-ingest", "photos-11-handoff.json")
@@ -528,3 +526,25 @@ def test_progress_summary_fields(mock_read_metadata_concurrently, mock_hash_imag
         handoff_data = json.load(f)
         assert "performance_and_cache" not in handoff_data
         assert "jobs_requested" not in handoff_data
+
+
+@patch("subprocess.Popen")
+@pytest.mark.spec("BLD-tool_workers", "RUL-tool_failure_retried", test="TST-concurrency-exiftool_gets_two_attempts_a_dead_worker_restarted")
+def test_exiftool_gets_two_attempts_a_dead_worker_restarted(mock_popen):
+    """exiftool gets two attempts at a folder's files, the dead worker restarted between them: one
+    crash is retried and its result kept; only a second crash counts the folder's files failed."""
+    from photos_utils import ProcessCrashedError
+    mock_popen.return_value = MagicMock()
+    coordinator = utils.ProgressCoordinator(quiet=True)
+    with patch("photos_utils.PersistentExifToolWorker.read_metadata",
+               side_effect=[ProcessCrashedError("Crash"), {"f.jpg": {"Make": "Canon"}}]) as read, \
+         patch("photos_utils.PersistentExifToolWorker.restart") as restart:
+        with utils.ExifToolWorkerPool(size=1) as pool:
+            assert pool.execute("folder", coordinator) == {"f.jpg": {"Make": "Canon"}}
+        assert read.call_count == 2 and restart.call_count == 1
+    with patch("photos_utils.PersistentExifToolWorker.read_metadata",
+               side_effect=ProcessCrashedError("Crash")) as read, \
+         patch("photos_utils.PersistentExifToolWorker.restart"):
+        with utils.ExifToolWorkerPool(size=1) as pool:
+            assert pool.execute("folder", coordinator) == {"error": "extraction_failed"}
+        assert read.call_count == 2

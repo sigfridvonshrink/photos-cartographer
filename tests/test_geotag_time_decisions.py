@@ -14,9 +14,11 @@
 
 """Phase 3a (geotag) — photos-21-time-decisions.json: per-destination timezone + per-(camera
 group, destination) offset cells, with the decision-field / rerun-preservation engine and the
-SHA-256 dependency block (spec §17–§21). The GPX offset inference is Phase 3b. From conftest.py.
+SHA-256 dependency block (BLD-decision_record_envelope). The GPX offset inference is Phase 3b. From conftest.py.
 """
 import json
+from _zone import answer_root_zone
+from _handoff import match_disk
 import os
 import sys
 from datetime import datetime, timezone
@@ -56,9 +58,11 @@ def _ws(tmp_path, *, files, device_groups, default_tz=""):
                                                   device_groups=device_groups,
                                                   default_folder_timezone=default_tz)
     (ctl / "photos-00-config.json").write_text(json.dumps(cfg))
+    if default_tz:
+        answer_root_zone(ctl, default_tz)        # the default only proposes: the zone answered once at the root
     for rec in files:
         p = ws / rec["relative_path"]; p.parent.mkdir(parents=True, exist_ok=True); p.write_bytes(b"img")
-    (ctl / "photos-11-handoff.json").write_text(json.dumps({"filename_timestamp_format": utils.CONFIG["filename_timestamp_format"], "files": files}))
+    (ctl / "photos-11-handoff.json").write_text(json.dumps({"filename_timestamp_format": utils.CONFIG["filename_timestamp_format"], "files": match_disk(ws, files), "depends_on": {"cache": {"fingerprint_algorithm_version": utils.FINGERPRINT_ALGORITHM_VERSION}}}))
     return ws
 
 
@@ -84,7 +88,7 @@ def _edit(ws, fn):
 
 # --- first run ---------------------------------------------------------------
 
-@pytest.mark.spec("geotag-timezone-every-destination-1")
+@pytest.mark.spec("BLD-timezone_cell")
 def test_first_run_writes_artifact_requiring_input(tmp_path, monkeypatch):
     ws = _ws(tmp_path, files=[_hfile("6-photos-by-dest/Brussels/a.jpg")],
              device_groups={"fixed_clock_cameras": [CAM], "phones": []})
@@ -111,15 +115,15 @@ def test_smartphone_group_gets_no_offset_cell(tmp_path, monkeypatch):
 
 # --- rerun preservation + completion -----------------------------------------
 
-@pytest.mark.spec("authored-fields-not-overwritten-1", "geotag-decision-fields-precreated-1", "geotag-preserve-user-decisions-1", "loop-geotag-rerun-safe-1", "RUL-decision_kept", "RUL-decision_fields_laid_out", test="TST-geotag_time_decisions-rerun_preserves_decisions_and_completes")
+@pytest.mark.spec("RUL-user_writes_decisions", "RUL-decision_fields_laid_out", "RUL-decision_kept",
+                  test="TST-geotag_time_decisions-rerun_preserves_decisions_and_completes")
 def test_rerun_preserves_decisions_and_completes(tmp_path, monkeypatch):
     ws = _ws(tmp_path, files=[_hfile("6-photos-by-dest/Brussels/a.jpg")],
              device_groups={"fixed_clock_cameras": [CAM], "phones": []}, default_tz="Europe/Brussels")
     _run(monkeypatch, ws)
-    # the user accepts the proposed timezone and sets the camera's clock offset
+    # the user sets the camera's clock offset (the proposed timezone applies itself)
     def fill(art):
         d = art["destinations"]["6-photos-by-dest/Brussels"]
-        d["destination_timezone"]["user_decision"]["accept_proposed_timezone"] = True
         d["camera_group_time_decisions"][CAM]["user_decision"]["manual_offset_seconds"] = -7187
     _edit(ws, fill)
     assert _run(monkeypatch, ws) == 0
@@ -130,7 +134,7 @@ def test_rerun_preserves_decisions_and_completes(tmp_path, monkeypatch):
     assert art["status"] == "complete" and art["requires_user_input"] is False
 
 
-@pytest.mark.spec("RUL-geotag_rerunnable", "loop-geotag-rerunnable-1", test="TST-geotag_time_decisions-rerun_after_success_admitted_until_sealed")
+@pytest.mark.spec("RUL-geotag_rerunnable", test="TST-geotag_time_decisions-rerun_after_success_admitted_until_sealed")
 def test_rerun_after_success_admitted_until_sealed(tmp_path, monkeypatch):
     """A successful execution and a finalize leave geotag re-runnable; only merge's seal stops it."""
     ws = _ws(tmp_path, files=[_hfile("6-photos-by-dest/Brussels/a.jpg")],
@@ -148,7 +152,8 @@ def test_rerun_after_success_admitted_until_sealed(tmp_path, monkeypatch):
     assert not (ctl / cal.TIME_DECISIONS_ARTIFACT).exists()
 
 
-@pytest.mark.spec("RUL-rerun_does_what_changed", "loop-rerun-may-need-decisions-1", "RUL-decision_kept", test="TST-geotag_time_decisions-new_destination_asks_only_its_own_decisions")
+@pytest.mark.spec("RUL-decision_kept", "RUL-rerun_asks_only_affected",
+                  test="TST-geotag_time_decisions-new_destination_asks_only_its_own_decisions")
 def test_new_destination_asks_only_its_own_decisions(tmp_path, monkeypatch):
     """Media added to a new destination asks for that destination's decisions alone; every settled
     decision elsewhere stays as the user left it."""
@@ -157,7 +162,6 @@ def test_new_destination_asks_only_its_own_decisions(tmp_path, monkeypatch):
     _run(monkeypatch, ws)
     def fill(art):
         d = art["destinations"]["6-photos-by-dest/Brussels"]
-        d["destination_timezone"]["user_decision"]["accept_proposed_timezone"] = True
         d["camera_group_time_decisions"][CAM]["user_decision"]["manual_offset_seconds"] = -7187
     _edit(ws, fill)
     assert _run(monkeypatch, ws) == 0 and _artifact(ws)["status"] == "complete"
@@ -165,10 +169,10 @@ def test_new_destination_asks_only_its_own_decisions(tmp_path, monkeypatch):
 
     ho_p = ws / ".photos-ingest" / "photos-11-handoff.json"
     ho = json.loads(ho_p.read_text())
-    ho["files"].append(_hfile("6-photos-by-dest/Rome/b.jpg"))
-    ho_p.write_text(json.dumps(ho))
     (ws / "6-photos-by-dest" / "Rome").mkdir()
     (ws / "6-photos-by-dest" / "Rome" / "b.jpg").write_bytes(b"img")
+    ho["files"].append(_hfile("6-photos-by-dest/Rome/b.jpg"))
+    ho_p.write_text(json.dumps({**ho, "files": match_disk(ws, ho["files"])}))
     assert _run(monkeypatch, ws) == 0
     art = _artifact(ws)
     assert art["destinations"]["6-photos-by-dest/Brussels"] == settled
@@ -177,7 +181,8 @@ def test_new_destination_asks_only_its_own_decisions(tmp_path, monkeypatch):
     assert art["status"] == "requires_user_input"
 
 
-@pytest.mark.spec("geotag-recalc-only-affected-1")
+@pytest.mark.spec("RUL-rerun_does_what_changed",
+                  test="TST-geotag_time_decisions-determinism_unchanged_rerun_is_byte_identical")
 def test_determinism_unchanged_rerun_is_byte_identical(tmp_path, monkeypatch):
     ws = _ws(tmp_path, files=[_hfile("6-photos-by-dest/Brussels/a.jpg")],
              device_groups={"fixed_clock_cameras": [CAM], "phones": []})
@@ -187,9 +192,11 @@ def test_determinism_unchanged_rerun_is_byte_identical(tmp_path, monkeypatch):
     assert (ws / ".photos-ingest" / cal.TIME_DECISIONS_ARTIFACT).read_bytes() == first
 
 
-# --- validation (§9.2) -------------------------------------------------------
+# --- validation (INV-authored_values_checked) ---------------------------------------
 
-@pytest.mark.spec("geotag-invalid-preserved-1", "geotag-validation-hard-blocker-1", "validate-everything-authored-1", "validate-preserve-invalid-1", "validate-timezone-1", "RUL-invalid_value_never_repaired", test="TST-geotag_time_decisions-bad_timezone_blocks_and_leaves_artifact")
+@pytest.mark.spec("RUL-invalid_decision_kept", "RUL-invalid_value_located", "INV-authored_values_checked",
+                  "RUL-checked_timezones", "RUL-invalid_value_never_repaired", "RUL-invalid_decision_reported",
+                  test="TST-geotag_time_decisions-bad_timezone_blocks_and_leaves_artifact")
 def test_bad_timezone_blocks_and_leaves_artifact(tmp_path, monkeypatch, capsys):
     ws = _ws(tmp_path, files=[_hfile("6-photos-by-dest/Brussels/a.jpg")],
              device_groups={"fixed_clock_cameras": [CAM], "phones": []})
@@ -202,7 +209,8 @@ def test_bad_timezone_blocks_and_leaves_artifact(tmp_path, monkeypatch, capsys):
     assert (ws / ".photos-ingest" / cal.TIME_DECISIONS_ARTIFACT).read_bytes() == before   # untouched
 
 
-@pytest.mark.spec("geotag-sanity-validate-1", "validate-locate-no-repair-1", test="TST-geotag_time_decisions-bad_offset_blocks")
+@pytest.mark.spec("RUL-config_validated_before_use", "RUL-invalid_value_located", "RUL-checked_clock_offsets",
+                  test="TST-geotag_time_decisions-bad_offset_blocks")
 def test_bad_offset_blocks(tmp_path, monkeypatch, capsys):
     ws = _ws(tmp_path, files=[_hfile("6-photos-by-dest/Brussels/a.jpg")],
              device_groups={"fixed_clock_cameras": [CAM], "phones": []})
@@ -215,7 +223,8 @@ def test_bad_offset_blocks(tmp_path, monkeypatch, capsys):
 
 # --- dependency block --------------------------------------------------------
 
-@pytest.mark.spec("geotag-dep-cascade-1", "geotag-rehash-before-use-1")
+@pytest.mark.spec("INV-no_stale_use", "RUL-hash_is_the_dependency_check", "RUL-dependencies_recorded_in_record",
+                  test="TST-geotag_time_decisions-depends_on_reverifies")
 def test_depends_on_reverifies(tmp_path, monkeypatch):
     ws = _ws(tmp_path, files=[_hfile("6-photos-by-dest/Brussels/a.jpg")],
              device_groups={"fixed_clock_cameras": [CAM], "phones": []})
@@ -226,11 +235,13 @@ def test_depends_on_reverifies(tmp_path, monkeypatch):
     assert not cal.GeotagWorkflow._verify_handoff_dependency(dep, str(ws))   # change detected
 
 
-@pytest.mark.spec("geotag-timezone-autoresolve-1", "geotag-timezone-inherit-priority-1", "geotag-timezone-unresolved-requires-input-1")
+@pytest.mark.spec("RUL-timezone_auto_resolves", "RUL-timezone_from_nearest", "RUL-written_timezone_over_inherited",
+                  "RUL-no_timezone_to_inherit_waits",
+                  test="TST-geotag_time_decisions-timezone_proposal_inherits_nearest_resolved_ancestor")
 def test_timezone_proposal_inherits_nearest_resolved_ancestor():
     """A destination's timezone proposal prefers the nearest RESOLVED ancestor's timezone over the
-    generic global default; an inherited (or config-default) proposal auto-resolves without per-
-    destination confirmation (nested geography), staying overridable."""
+    generic global default; an inherited proposal auto-resolves without per-destination confirmation
+    (nested geography), staying overridable; the configured default is only proposed."""
     utils.CONFIG["camera_time_and_timezone_policy"]["default_folder_timezone"] = "Europe/Brussels"
     wf = cal.GeotagWorkflow("/tmp/ws")
     blk = []
@@ -249,18 +260,21 @@ def test_timezone_proposal_inherits_nearest_resolved_ancestor():
     overridden = wf._timezone_decision("6-photos-by-dest/Japan/Kyoto",
                                        {"user_decision": {"manual_iana_timezone": "America/New_York"}}, blk, inh)
     assert overridden["effective_iana_timezone"] == "America/New_York" and "decision_mode" not in overridden
-    # no ancestor tz -> the global default proposal, also auto-resolved
+    # no ancestor tz -> the global default, proposed only: the user answers it, here or above
     top = wf._timezone_decision("6-photos-by-dest/Belgium", {}, blk, None)
     assert top["proposed_iana_timezone"] == "Europe/Brussels" and top["proposal_source"] == "config_default"
-    assert top["effective_iana_timezone"] == "Europe/Brussels" and top["requires_user_input"] is False
-    assert "inherited_from" not in top
+    assert top["effective_iana_timezone"] == "" and top["requires_user_input"] is True
+    assert "inherited_from" not in top and "decision_mode" not in top
+    taken = wf._timezone_decision("6-photos-by-dest/Belgium",
+                                  {"user_decision": {"manual_iana_timezone": "Europe/Brussels"}}, blk, None)
+    assert taken["effective_iana_timezone"] == "Europe/Brussels" and taken["requires_user_input"] is False
     # no proposal at all (no ancestor, no default) -> blank, blocks
     utils.CONFIG["camera_time_and_timezone_policy"]["default_folder_timezone"] = None
     blank = wf._timezone_decision("6-photos-by-dest/Belgium", {}, blk, None)
     assert blank["effective_iana_timezone"] == "" and blank["requires_user_input"] is True
 
 
-# --- §22a.3: the drift offset lives in photos-22, never edits photos-21 ------
+# --- BLD-drift_validation: the drift offset lives in photos-22, never edits photos-21 ------
 
 DRIFT_DEST = "6-photos-by-dest/D"
 
@@ -280,9 +294,9 @@ def _drift_gpx(points):
     return idx
 
 
-@pytest.mark.spec("geotag-drift-not-mutate-21-1")
+@pytest.mark.spec("BLD-drift_validation")
 def test_build_drift_validation_leaves_photos21_byte_unmutated(tmp_path):
-    """§22a.3: building photos-22 (GPS-drift validation) refines a manual/tz-derived offset, but the
+    """BLD-drift_validation: building photos-22 (GPS-drift validation) refines a manual/tz-derived offset, but the
     validated drift offset is recorded in photos-22 — building it must NOT touch the photos-21
     time-decisions artifact it reads. Set up a manual-offset bucket with no native-GPS anchor and GPX
     coverage (the drift trigger), write photos-21 to disk as the real run does, then build photos-22
@@ -291,12 +305,11 @@ def test_build_drift_validation_leaves_photos21_byte_unmutated(tmp_path):
     files = [{"relative_path": f"{DRIFT_DEST}/a.arw", "destination": DRIFT_DEST,
               "camera_group_key": CAM, "native_gps": None, "has_native_gps": False,
               "has_timestamp": True, "source_naive_time": "2024:07:03 14:00:00",
-              "source_time_tag": "DateTimeOriginal", "camera_identity": {}}]
+              "source_time_tag": "DateTimeOriginal"}]
     groups = {CAM: {"camera_group_class": "camera"}}
     gpx = _drift_gpx([(50.0, 4.0, datetime(2024, 7, 3, 12, 0, 0, tzinfo=timezone.utc))])
     utils.CONFIG["camera_time_and_timezone_policy"]["default_folder_timezone"] = "Europe/Brussels"
     prior = {"destinations": {DRIFT_DEST: {
-        "destination_timezone": {"user_decision": {"accept_proposed_timezone": True}},
         "camera_group_time_decisions": {CAM: {"user_decision": {"manual_offset_seconds": 0}}}}}}
     art, blk = wf.build_time_decisions(files, groups, prior, gpx)
     assert not blk
@@ -316,3 +329,50 @@ def test_build_drift_validation_leaves_photos21_byte_unmutated(tmp_path):
     # the in-memory photos-21 cell is likewise not mutated by the drift build
     assert art["destinations"][DRIFT_DEST]["camera_group_time_decisions"][CAM][
         "effective_time_anchor"] == {"offset_seconds": 0, "source": "manual"}
+
+
+@pytest.mark.spec("BLD-decision_record_envelope", "INV-no_stale_use", "RUL-dependencies_recorded_in_record",
+                  test="TST-geotag_time_decisions-classifying_a_camera_again_restales_the_time_decisions")
+def test_classifying_a_camera_again_restales_the_time_decisions(tmp_path, monkeypatch):
+    # The record says what it is and what it was made from; classing the camera a phone changes that, and the
+    # record follows: no offset cell, complete, nothing asked.
+    ws = _ws(tmp_path, files=[_hfile("6-photos-by-dest/Brussels/a.jpg")],
+             device_groups={"fixed_clock_cameras": [CAM], "phones": []}, default_tz="Europe/Brussels")
+    assert _run(monkeypatch, ws) == 0
+    before = _artifact(ws)
+    assert {k: before[k] for k in ("artifact_type", "artifact_name", "status", "requires_user_input", "executable")} == \
+        {"artifact_type": "time_decisions", "artifact_name": "photos-21-time-decisions.json",
+         "status": "requires_user_input", "requires_user_input": True, "executable": False}
+    cfg_p = ws / ".photos-ingest" / "photos-00-config.json"
+    cfg = json.loads(cfg_p.read_text())
+    cfg["camera_time_and_timezone_policy"]["device_groups"] = {"fixed_clock_cameras": [], "phones": [CAM]}
+    cfg_p.write_text(json.dumps(cfg))
+    assert _run(monkeypatch, ws) == 0
+    after = _artifact(ws)
+    assert after["depends_on"]["camera_time_policy_fingerprint"] != before["depends_on"]["camera_time_policy_fingerprint"]
+    assert after["destinations"]["6-photos-by-dest/Brussels"]["camera_group_time_decisions"] == {}
+    assert after["status"] == "complete" and after["decision_mode"] == "no_op_or_auto_resolved"
+
+
+@pytest.mark.spec("RUL-unidentified_files_solved_alone", "BLD-unidentified_files", "RUL-unidentified_never_classed",
+                  "RUL-unidentified_no_camera_offset",
+                  test="TST-geotag_time_decisions-a_file_naming_no_camera_is_solved_alone_never_asked")
+def test_a_file_naming_no_camera_is_solved_alone_never_asked(tmp_path, monkeypatch):
+    # A screenshot or a stripped photo names no camera: geotag never asks to class it, gives it no clock offset,
+    # and resolves it by the offset recorded with its time, else by its destination's timezone.
+    ws = _ws(tmp_path, files=[_hfile("6-photos-by-dest/Brussels/shot.png", key=utils.NO_IDENTITY_KEY)],
+             device_groups={"fixed_clock_cameras": [], "phones": []}, default_tz="Europe/Brussels")
+    assert _run(monkeypatch, ws) == 0                                         # not stopped as an unknown group
+    art = _artifact(ws)
+    assert art["destinations"]["6-photos-by-dest/Brussels"]["camera_group_time_decisions"] == {}
+    assert art["status"] == "complete"
+    wf = cal.GeotagWorkflow(str(ws))
+    groups, unknown = wf.recognize_camera_groups([{"camera_group_key": utils.NO_IDENTITY_KEY}])
+    assert groups[utils.NO_IDENTITY_KEY]["camera_group_class"] == "unidentified" and unknown == []
+    f = {"relative_path": "6-photos-by-dest/Brussels/shot.png", "destination": "6-photos-by-dest/Brussels",
+         "camera_group_key": utils.NO_IDENTITY_KEY, "source_naive_time": "2024:07:03 14:00:00",
+         "source_time_tag": "EXIF:DateTimeOriginal", "raw_times": {"OffsetTimeOriginal": "+03:00"}}
+    rows = cal.compute_resolved_utc([f, dict(f, relative_path="6-photos-by-dest/Brussels/b.png", raw_times={})],
+                                    groups, art)
+    assert [(r["time_rule_used"], r["resolved_utc"]) for r in rows] == [
+        ("destination_timezone", "2024-07-03T12:00:00Z"), ("unidentified_native_offset", "2024-07-03T11:00:00Z")]

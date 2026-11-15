@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Phase C1 — end-of-prep DB backup snapshot (photos-15-prep-ingest.db, shared §13.4a).
+"""Phase C1 — end-of-prep DB backup snapshot (photos-15-prep-ingest.db, BLD-database_images).
 
 A transactionally-consistent image of the live cache, captured at the handoff gate, written
 atomically. Mocked hashing/metadata, fast. From conftest.py.
@@ -45,7 +45,7 @@ def _install(monkeypatch):
 
     def hsh(p):
         with open(p, "rb") as f:
-            return {"status": "valid", "strategy": "image-content-hash-v1",
+            return {"status": "valid", "strategy": "image-content-hash-v2",
                     "value": "sig-" + f.read().hex()[:16], "engine_version": "t"}
     monkeypatch.setattr(prep.ContentHasher, "fingerprint_image", hsh)
 
@@ -70,7 +70,7 @@ def _snap(ws):
     return utils.prep_db_snapshot_path(str(ws))
 
 
-@pytest.mark.spec("prep-db-backup-on-success-1")
+@pytest.mark.spec("RUL-database_image_each_phase", test="TST-snapshot-snapshot_written_and_matches_live_cache")
 def test_snapshot_written_and_matches_live_cache(tmp_path, monkeypatch):
     _install(monkeypatch)
     ws = _ws(tmp_path)
@@ -85,7 +85,8 @@ def test_snapshot_written_and_matches_live_cache(tmp_path, monkeypatch):
     assert snap_rows == live_rows and len(snap_rows) >= 1
 
 
-@pytest.mark.spec("db-snapshot-atomic-replace-1", "db-snapshot-per-phase-1", test="TST-snapshot-snapshot_leaves_no_temp_and_refreshes_on_rerun")
+@pytest.mark.spec("RUL-image_capture_atomic", "RUL-database_image_each_phase",
+                  test="TST-snapshot-snapshot_leaves_no_temp_and_refreshes_on_rerun")
 def test_snapshot_leaves_no_temp_and_refreshes_on_rerun(tmp_path, monkeypatch):
     _install(monkeypatch)
     ws = _ws(tmp_path)
@@ -101,7 +102,30 @@ def test_snapshot_leaves_no_temp_and_refreshes_on_rerun(tmp_path, monkeypatch):
     assert not glob.glob(str(ws / ".photos-ingest" / ".tmp-snapshot*"))
 
 
-@pytest.mark.spec("db-snapshot-skip-on-failure-1", test="TST-snapshot-failed_run_leaves_prior_snapshot_intact")
+@pytest.mark.spec("RUL-image_never_working_data", test="TST-snapshot-prep_never_reads_its_image_back")
+def test_prep_never_reads_its_image_back(tmp_path, monkeypatch):
+    """Prep's image is never read back as working data: with it holding no database at all, the next prep run
+    plans and organizes from the database of record, never opening the image, and makes it again."""
+    _install(monkeypatch)
+    ws = _ws(tmp_path)
+    (ws / "0-sources" / "a.jpg").write_bytes(b"AAAA")
+    _run(ws)
+    with open(_snap(ws), "wb") as f:
+        f.write(b"not a database")
+    opened, real_connect = [], sqlite3.connect
+    def connect(database, *a, **k):
+        opened.append(os.path.basename(str(database).split("?")[0]))
+        return real_connect(database, *a, **k)
+    monkeypatch.setattr(sqlite3, "connect", connect)
+    (ws / "0-sources" / "b.jpg").write_bytes(b"BBBB")
+    _run(ws)
+    assert len(glob.glob(str(ws / "5-photos-by-date" / "**" / "*.jpg"), recursive=True)) == 2
+    assert "photos-00-ingest.db" in opened and os.path.basename(_snap(ws)) not in opened, opened
+    with open(_snap(ws), "rb") as f:
+        assert f.read(16) == b"SQLite format 3\x00"                    # made again
+
+
+@pytest.mark.spec("RUL-image_untouched_by_failed_run", test="TST-snapshot-failed_run_leaves_prior_snapshot_intact")
 def test_failed_run_leaves_prior_snapshot_intact(tmp_path, monkeypatch):
     _install(monkeypatch)
     ws = _ws(tmp_path)

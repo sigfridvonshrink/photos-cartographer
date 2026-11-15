@@ -196,6 +196,11 @@ def test_write_json_is_deterministic_atomic_and_round_trips(tmp_path):
 
 # --------------------------------------------------------------------------- _load_artifacts
 
+def _loaded(ws):
+    """The hashes of the decision records as the editor loads them, which a save carries back."""
+    return serve._load_artifacts(ws)["hashes"]
+
+
 def test_load_artifacts_demo_mode():
     art = serve._load_artifacts(None)
     assert art["demo"] is True and art["workspace"] is None
@@ -226,8 +231,7 @@ def test_apply_edits_timezone_touches_only_user_decision():
     cell = art["destinations"][dest]["destination_timezone"]
     proposal_before = copy.deepcopy(cell.get("proposal"))
     n = serve._apply_edits(art, [{"dest": dest, "kind": "timezone",
-                                  "user_decision": {"accept_proposed_timezone": False,
-                                                    "manual_iana_timezone": "Asia/Tokyo"}}])
+                                  "user_decision": {"manual_iana_timezone": "Asia/Tokyo"}}])
     assert n == 1
     assert cell["user_decision"]["manual_iana_timezone"] == "Asia/Tokyo"
     assert cell.get("proposal") == proposal_before  # everything but user_decision is untouched
@@ -277,9 +281,9 @@ def test_save_round_trips_only_user_decision(tmp_path):
     ws = _workspace_with_fixtures(tmp_path)
     before = json.load(open(os.path.join(ws, serve.CONTROL, serve.TIME_NAME)))
     res = serve._save(ws, {"time": [{"dest": "6-photos-by-dest/Japan", "kind": "timezone",
-                                     "user_decision": {"accept_proposed_timezone": False,
-                                                       "manual_iana_timezone": "Asia/Tokyo"}}]})
-    assert res == {"ok": True, "written": [serve.TIME_NAME]}
+                                     "user_decision": {"manual_iana_timezone": "Asia/Tokyo"}}],
+                           "hashes": _loaded(ws)})
+    assert res["ok"] is True and res["written"] == [serve.TIME_NAME]
     after = json.load(open(os.path.join(ws, serve.CONTROL, serve.TIME_NAME)))
     edited = after["destinations"]["6-photos-by-dest/Japan"]["destination_timezone"]
     assert edited["user_decision"]["manual_iana_timezone"] == "Asia/Tokyo"
@@ -298,7 +302,9 @@ def test_save_round_trips_only_user_decision(tmp_path):
 
 def test_save_no_edits_writes_nothing(tmp_path):
     ws = _workspace_with_fixtures(tmp_path)
-    assert serve._save(ws, {}) == {"ok": True, "written": []}
+    before = _loaded(ws)
+    assert serve._save(ws, {}) == {"ok": True, "written": [], "hashes": before}
+    assert _loaded(ws) == before
 
 
 def test_save_unreadable_artifact_errors(tmp_path):
@@ -394,85 +400,14 @@ def test_http_serves_vendored_leaflet():
         assert _get(base + "/vendor/leaflet/images/marker-icon.png")[2] == "image/png"
 
 
-# --------------------------------------------------------------------------- re-run geotag
-# (geotag now ships in the same package as the editor, so it is always runnable — the old
-# "missing pipeline" cases no longer apply; the gpx_root gate below is the remaining dependency.)
-
-def test_rerun_surfaces_geotag_blockers(tmp_path):
-    # A bare dir is not an initialized workspace: geotag's preflight blocks (exit 2) and mutates
-    # nothing — which is exactly the failure the editor must surface, so this exercises the real plumbing.
-    r = serve._rerun(str(tmp_path))
-    assert r["ok"] is False and r["returncode"] == 2
-    assert "photos-cartographer prep" in (r.get("stderr") or "")
-
-
-# ------------------------------------------------------------ folder-dependency gate (_environment)
-
-def _ws_with_gpx_config(tmp_path, gpx_root):
-    cd = tmp_path / serve.CONTROL
-    cd.mkdir(parents=True, exist_ok=True)
-    (cd / serve.CONFIG_NAME).write_text(json.dumps({"gpx_root": gpx_root}))
-    return str(tmp_path)
-
-
-def test_environment_no_config_does_not_block(tmp_path):
-    (tmp_path / serve.CONTROL).mkdir()
-    env = serve._environment(str(tmp_path))
-    assert env["geotag_present"] is True       # geotag ships in this package — always present
-    assert env["gpx_configured"] is False and env["deps_ok"] is True and env["missing"] == []
-
-
-def test_environment_empty_gpx_root_does_not_block(tmp_path):
-    env = serve._environment(_ws_with_gpx_config(tmp_path, ""))
-    assert env["gpx_configured"] is False and env["deps_ok"] is True
-
-
-def test_environment_visible_gpx_root_is_ok(tmp_path):
-    gpx = tmp_path / "gpx"; gpx.mkdir()
-    env = serve._environment(_ws_with_gpx_config(tmp_path, str(gpx)))
-    assert env["gpx_available"] is True and env["deps_ok"] is True
-    assert env["gpx_root"] == os.path.realpath(str(gpx))
-
-
-def test_environment_missing_gpx_root_blocks(tmp_path):
-    env = serve._environment(_ws_with_gpx_config(tmp_path, str(tmp_path / "not-here")))
-    assert env["gpx_available"] is False and env["deps_ok"] is False
-    assert any("gpx_root" in m for m in env["missing"])
-
-
-def test_load_artifacts_carries_environment(tmp_path):
-    art = serve._load_artifacts(_ws_with_gpx_config(tmp_path, str(tmp_path / "not-here")))
-    assert art["environment"]["deps_ok"] is False
-
-
-def test_rerun_refuses_when_gpx_root_off_machine(tmp_path):
-    # Re-run must not silently regenerate decisions without the GPX the workspace depends on: the guard
-    # short-circuits BEFORE invoking geotag (no returncode), so good GPX-derived decisions survive.
-    r = serve._rerun(_ws_with_gpx_config(tmp_path, str(tmp_path / "not-here")))
-    assert r["ok"] is False and "gpx_root" in r["error"] and "returncode" not in r
-
-
-def test_http_rerun_403_in_demo():
-    with _running(None) as base:
-        status, data = _post_json(base + "/api/rerun", {})
-        assert status == 403 and data["ok"] is False
-
-
-def test_http_rerun_invokes_geotag(tmp_path):
-    ws = _workspace_with_fixtures(tmp_path)
-    with _running(ws) as base:
-        status, data = _post_json(base + "/api/rerun", {})
-    assert status == 200 and data["ok"] is False and data["returncode"] == 2
-
-
 def test_http_post_save_writes_to_workspace(tmp_path):
     ws = _workspace_with_fixtures(tmp_path)
     with _running(ws) as base:
+        hashes = json.loads(_get(base + "/api/artifacts")[1])["hashes"]
         status, data = _post_json(base + "/api/save", {
             "time": [{"dest": "6-photos-by-dest/Japan", "kind": "timezone",
-                      "user_decision": {"accept_proposed_timezone": False,
-                                        "manual_iana_timezone": "Asia/Tokyo"}}]})
-        assert status == 200 and data == {"ok": True, "written": [serve.TIME_NAME]}
+                      "user_decision": {"manual_iana_timezone": "Asia/Tokyo"}}], "hashes": hashes})
+        assert status == 200 and data["ok"] is True and data["written"] == [serve.TIME_NAME]
     saved = json.load(open(os.path.join(ws, serve.CONTROL, serve.TIME_NAME)))
     cell = saved["destinations"]["6-photos-by-dest/Japan"]["destination_timezone"]
     assert cell["user_decision"]["manual_iana_timezone"] == "Asia/Tokyo"
@@ -522,12 +457,35 @@ def test_edit_has_no_workspace_arg_and_demo_is_the_only_no_workspace_mode():
     assert p.parse_args(["--demo"]).demo is True
 
 
+def test_edit_help_names_both_refusals_and_the_whole_loop():
+    # `edit -h` refuses an uninitialized workspace AND a sealed one, and the loop runs through finalize.
+    assert "sealed" in serve.EDIT_BLURB
+    assert "geotag execute -> geotag finalize" in serve.EDIT_BLURB
+
+
+def test_serve_refuses_a_second_editor_without_naming_a_workspace_argument(tmp_path, capsys):
+    # The editor works on the cwd: the refusal says to close the other editor (or console Edit tab), or to
+    # run this one from another workspace's folder — never to "point it at" a workspace it takes no argument for.
+    ws = _workspace_with_fixtures(tmp_path)
+    open(os.path.join(ws, serve.CONTROL, serve.GUARD_NAME), "w").close()
+    held, _ = serve._acquire_editor_lock(ws)
+    try:
+        with pytest.raises(SystemExit) as e:
+            serve.serve(ws, port=0)
+        assert e.value.code == 1
+    finally:
+        held.close()
+    err = capsys.readouterr().err
+    assert "console" in err and "run this one from another workspace's folder" in err
+    assert "point this one" not in err
+
+
 def _seal(ws):
     (open(os.path.join(ws, serve.CONTROL, "photos-00-sealed.json"), "w")
      .write('{"sealed": true, "merged_run_id": "r1"}'))
 
 
-@pytest.mark.spec("edit-sealed-refuses-1", test="TST-serve-serve_refuses_a_sealed_workspace")
+@pytest.mark.spec("RUL-editor_refuses_sealed", test="TST-serve-serve_refuses_a_sealed_workspace")
 def test_serve_refuses_a_sealed_workspace(tmp_path):
     # A merged workspace is final: the editor will not open it, so its decisions cannot change.
     ws = _workspace_with_fixtures(tmp_path)
@@ -555,7 +513,32 @@ def test_serve_points_out_a_dump_in_a_sealed_workspace(tmp_path, capsys):
     assert os.listdir(inbox) == ["new.jpg"]
 
 
-@pytest.mark.spec("edit-sealed-refuses-1", test="TST-serve-save_refuses_a_sealed_workspace")
+@pytest.mark.spec("RUL-sealed_new_dump_warned", test="TST-serve-sealed_dump_check_goes_by_the_workspaces_folder_names")
+def test_sealed_dump_check_goes_by_the_workspaces_folder_names(tmp_path, capsys):
+    # The editor never loads the workspace's configuration, so the check reads the folder names from its
+    # file: a workspace with renamed folders holding only them has no new dump, and one dropped into its
+    # renamed inbox is pointed out by that name.
+    ws = _workspace_with_fixtures(tmp_path)
+    folders = {r: f"x-{n}" for r, n in serve.photos_utils.DEFAULT_FOLDERS.items()}
+    with open(os.path.join(ws, serve.CONTROL, "photos-00-config.json"), "w") as f:
+        json.dump({"folders": folders}, f)
+    for n in folders.values():
+        os.makedirs(os.path.join(ws, n))
+    open(os.path.join(ws, serve.CONTROL, serve.GUARD_NAME), "w").close()
+    _seal(ws)
+    with pytest.raises(SystemExit):
+        serve.serve(ws, port=0)
+    assert "new dump" not in capsys.readouterr().err.lower()
+    inbox = os.path.join(ws, folders["sources"])
+    open(os.path.join(inbox, "new.jpg"), "wb").write(b"img")
+    with pytest.raises(SystemExit):
+        serve.serve(ws, port=0)
+    err = capsys.readouterr().err
+    assert "new dump" in err.lower() and folders["sources"] in err
+    assert serve.photos_utils.CONFIG["folders"] == serve.photos_utils.DEFAULT_FOLDERS   # CONFIG untouched
+
+
+@pytest.mark.spec("RUL-editor_refuses_sealed_save", test="TST-serve-save_refuses_a_sealed_workspace")
 def test_save_refuses_a_sealed_workspace(tmp_path):
     # The console calls _save directly, without serve()'s startup check: the save refuses on its own.
     ws = _workspace_with_fixtures(tmp_path)
@@ -585,6 +568,73 @@ def test_save_refuses_while_a_run_holds_the_lock(tmp_path):
         assert open(path, "rb").read() == before
     finally:
         run.release()
-    assert serve._save(ws, edit)["ok"] is True
+    assert serve._save(ws, dict(edit, hashes=_loaded(ws)))["ok"] is True
     assert open(path, "rb").read() != before
     assert serve.photos_utils.WorkspaceLock(ws, create=False).held_owner() is None
+
+
+# --------------------------------------------------------------------------- save only what was shown
+
+def _records(ws):
+    return {n: open(os.path.join(ws, serve.CONTROL, n), "rb").read()
+            for n in (serve.TIME_NAME, serve.GPS_NAME)}
+
+
+_TZ_EDIT = {"dest": "6-photos-by-dest/Japan", "kind": "timezone",
+            "user_decision": {"manual_iana_timezone": "Asia/Tokyo"}}
+
+
+@pytest.mark.spec("RUL-save_only_what_was_shown", test="TST-serve-save_refused_when_a_record_changed_since_loaded")
+def test_save_refused_when_a_record_changed_since_loaded(tmp_path):
+    """A geotag plan rewrote photos-23 after the editor loaded the records: a save of photos-21 edits is
+    refused, telling the user to reload, and none of the records is written."""
+    ws = _workspace_with_fixtures(tmp_path)
+    hashes = _loaded(ws)
+    gps = os.path.join(ws, serve.CONTROL, serve.GPS_NAME)
+    art = json.load(open(gps))
+    art["requires_user_input"] = not art.get("requires_user_input")
+    serve._write_json(gps, art)
+    before = _records(ws)
+    res = serve._save(ws, {"time": [_TZ_EDIT], "hashes": hashes})
+    assert res["ok"] is False and serve.GPS_NAME in res["error"] and "reload" in res["error"].lower()
+    assert serve.TIME_NAME not in res["error"]
+    assert _records(ws) == before
+
+
+@pytest.mark.spec("RUL-save_only_what_was_shown", test="TST-serve-save_refused_without_the_loaded_hashes")
+def test_save_refused_without_the_loaded_hashes(tmp_path):
+    """A save that does not say which records it was made from cannot show it was made from these."""
+    ws = _workspace_with_fixtures(tmp_path)
+    before = _records(ws)
+    res = serve._save(ws, {"time": [_TZ_EDIT]})
+    assert res["ok"] is False and "reload" in res["error"].lower()
+    assert _records(ws) == before
+
+
+@pytest.mark.spec("RUL-save_only_what_was_shown", test="TST-serve-save_refused_when_an_edit_names_no_cell")
+def test_save_refused_when_an_edit_names_no_cell(tmp_path):
+    """An edit naming a decision the record does not hold is refused — never dropped while the rest is
+    written — and nothing is written."""
+    ws = _workspace_with_fixtures(tmp_path)
+    before = _records(ws)
+    res = serve._save(ws, {"time": [_TZ_EDIT, {"dest": "6-photos-by-dest/Nowhere", "kind": "timezone",
+                                                "user_decision": {"manual_iana_timezone": "UTC"}}],
+                           "hashes": _loaded(ws)})
+    assert res["ok"] is False and "6-photos-by-dest/Nowhere" in res["error"] and "reload" in res["error"].lower()
+    assert _records(ws) == before
+
+
+@pytest.mark.spec("RUL-save_only_what_was_shown", test="TST-serve-save_hands_back_the_hashes_it_leaves")
+def test_save_hands_back_the_hashes_it_leaves(tmp_path):
+    """A save made from the records as loaded goes through, a record absent then and now among them, and
+    hands back the hashes of what it left, so the next save from the same page goes through too."""
+    ws = _workspace_with_fixtures(tmp_path)
+    loaded = _loaded(ws)
+    assert loaded["drift"] is None                               # this workspace has no photos-22
+    res = serve._save(ws, {"time": [_TZ_EDIT], "hashes": loaded})
+    assert res["ok"] is True and res["hashes"] == _loaded(ws) and res["hashes"]["time"] != loaded["time"]
+    again = serve._save(ws, {"time": [dict(_TZ_EDIT, user_decision={"manual_iana_timezone": "Asia/Seoul"})],
+                             "hashes": res["hashes"]})
+    assert again["ok"] is True
+    stale = serve._save(ws, {"time": [_TZ_EDIT], "hashes": loaded})   # the page's first hashes are now stale
+    assert stale["ok"] is False

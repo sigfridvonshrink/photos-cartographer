@@ -39,9 +39,9 @@ import errno
 # ==============================================================================
 # CONFIGURATION BLOCK
 # ==============================================================================
-from .photos_utils import CONFIG, CAMERA_IDENTITY_FIELDS, folder_name, managed_folder_names, dedup_priority, is_track_file, missing_managed_folders, misplaced_top_level_entries, FOLDER_ROLES, UNTIMED_PREFIX, untimed_stem, carries_stem, filename_format_changed, code_fingerprint
+from .photos_utils import CONFIG, CAMERA_IDENTITY_FIELDS, folder_name, managed_folder_names, dedup_priority, is_track_file, missing_managed_folders, misplaced_top_level_entries, FOLDER_ROLES, UNTIMED_PREFIX, untimed_stem, carries_stem, filename_format_changed, code_fingerprint, hidden_folder_holds_files
 from .reporting import get_reporter, emit_next_step
-from .photos_utils import (_move_no_clobber, _move_link_unlink, _get_renameat2,
+from .photos_utils import (replace_durably, _move_no_clobber, _move_link_unlink, _get_renameat2,
                           WorkspaceCache, WorkspaceLock, ContentHasher, PlanFingerprintMemo,
                           CACHE_SCHEMA_VERSION, FINGERPRINT_ALGORITHM_VERSION,
                           allocate_suffix)
@@ -94,12 +94,12 @@ PREP_LOG_SCHEMA_VERSION = 1
 
 
 def _append_quarantine_manifest(manifest_dir, entry):
-    """Append `entry` to `manifest_dir/manifest.json` — the recoverable quarantine record (prep §15).
+    """Append `entry` to `manifest_dir/manifest.json` — the recoverable quarantine record (BLD-quarantine_layout).
 
     Never silently truncates history: if the existing manifest is unreadable (corrupt JSON, not an
     array, or unreadable), it is PRESERVED under a `.corrupt-<ts>-<rand>` backup before a fresh one is
     started, so the prior records can still be recovered by hand. The write is atomic (temp in the
-    same dir → atomic rename, shared §15), so a crash mid-write can never leave the torn manifest that
+    same dir → atomic rename, BLD-quarantine_layout), so a crash mid-write can never leave the torn manifest that
     the recovery path otherwise has to clean up after."""
     os.makedirs(manifest_dir, exist_ok=True)
     manifest_path = os.path.join(manifest_dir, "manifest.json")
@@ -114,7 +114,7 @@ def _append_quarantine_manifest(manifest_dir, entry):
             backup = (f"{manifest_path}.corrupt-{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}"
                       f"-{uuid.uuid4().hex[:6]}")
             try:
-                os.replace(manifest_path, backup)
+                replace_durably(manifest_path, backup)
                 get_reporter().warn(f"Warning: quarantine manifest {manifest_path} was unreadable ({e}); preserved "
                                     f"it as {os.path.basename(backup)} and started a fresh manifest.")
             except OSError:
@@ -125,7 +125,7 @@ def _append_quarantine_manifest(manifest_dir, entry):
     try:
         with os.fdopen(fd, 'w') as mf:
             json.dump(existing, mf, indent=2)
-        os.replace(tmp, manifest_path)
+        replace_durably(tmp, manifest_path)
     except Exception:
         if os.path.exists(tmp):
             try:
@@ -135,15 +135,15 @@ def _append_quarantine_manifest(manifest_dir, entry):
         raise
 
 
-def build_prep_log(prior_photos, operations, cache_files, quarantine_evidence, is_init, run_id):
-    """Build the per-photo, content-fingerprint-keyed prep transformation log (prep Section 16.1).
+def build_prep_log(prior_photos, operations, cache_files, quarantine_evidence, run_id):
+    """Build the per-photo, content-fingerprint-keyed prep transformation log (BLD-prep_log_build).
 
     Pure and derived — it introduces no new authority, only consolidating records prep already
     produced: this run's validated plan operations, the final cache rows (for the fingerprint and
     current location), and the run's quarantine evidence — merged onto `prior_photos` (the prior
     log's `photos`, carried forward). Each NEW step is stamped with `run_id` so it is attributable
-    to the run that caused it (§16.1 item 2); carried-forward steps keep their original run, so a
-    no-op run leaves the log unchanged (§16.1 item 6). Returns (photos_dict, warnings)."""
+    to the run that caused it; carried-forward steps keep their original run, so a
+    no-op run leaves the log unchanged (RUL-no_op_run). Returns (photos_dict, warnings)."""
     warnings = []
 
     def _step(action, **kw):
@@ -172,7 +172,7 @@ def build_prep_log(prior_photos, operations, cache_files, quarantine_evidence, i
         elif "Separate redundant JPG" in reason:
             j["steps"].append(_step("redundant_jpeg_separated", **{"from": src, "to": dst}))
         elif "Chronological Organization" in reason:
-            # every move and rename names where the photo came from as well as where it went (§13.3)
+            # every move and rename names where the photo came from as well as where it went (BLD-log_format)
             j["steps"].append(_step("organized", **{"from": src, "to": dst.split('/', 1)[0] + "/"}))
             j["steps"].append(_step("provisional_rename", **{"from": os.path.basename(src), "to": os.path.basename(dst)}))
         path_origin[dst] = origin
@@ -244,7 +244,7 @@ def build_prep_log(prior_photos, operations, cache_files, quarantine_evidence, i
         current = fp_to_current.get(fp) or (prior.get("prep_path") if prior else None)
         if not (prior or run_steps or quar):
             # No prep transformation recorded for this content. In a prep-organized band that
-            # means lost history (warn + partial, §13.3a); by-dest/user-curated media is skipped.
+            # means lost history (warn + partial, RUL-partial_history_shown); by-dest/user-curated media is skipped.
             top = current.split('/', 1)[0] if current else ""
             if top in _bands:
                 photos[fp] = {"content_fingerprint": fp, "prep_path": current, "journey": [],
@@ -261,7 +261,10 @@ def build_prep_log(prior_photos, operations, cache_files, quarantine_evidence, i
         else:
             entry = {"content_fingerprint": fp, "prep_path": current, "journey": run_steps}
         if quar:
-            entry["deduplicated"] = {"retained": entry.get("prep_path"), "quarantined": quar}
+            # This run's duplicates are added after an earlier run's, never in their place
+            # (RUL-log_entry_append_only).
+            earlier = (entry.get("deduplicated") or {}).get("quarantined", [])
+            entry["deduplicated"] = {"retained": entry.get("prep_path"), "quarantined": earlier + quar}
         photos[fp] = entry
     return photos, warnings
 
@@ -293,7 +296,7 @@ class OperationPlanner:
 def current_metadata_dependencies() -> dict:
     """What prep's metadata reading depends on, as of now: the extractor and its version, and the versions
     of the field set, extraction options, metadata schema and camera-group derivation. A plan records it;
-    execution recomputes it and refuses the plan if it differs (§5)."""
+    execution recomputes it and refuses the plan if it differs (BLD-prep_dependencies)."""
     from .photos_utils import (get_exiftool_version, FIELD_SET_VERSION, METADATA_SCHEMA_VERSION,
                                CAMERA_GROUP_KEY_VERSION, EXTRACTION_OPTIONS_FINGERPRINT)
     return {
@@ -311,7 +314,7 @@ class PlanValidator:
     def validate_plan_preflight(plan: Plan, current_workspace: str):
         """
         Validates the plan just before execution.
-        Checks instruction fingerprints and destination clobbering.
+        Checks the plan's dependencies and destination clobbering.
         """
         if plan.plan_version != PLAN_SCHEMA_VERSION:
             raise ValueError(f"Stale plan: plan_version {plan.plan_version} is not the supported schema {PLAN_SCHEMA_VERSION}; regenerate the plan.")
@@ -342,7 +345,7 @@ class PlanValidator:
             raise ValueError(f"Stale plan: metadata dependencies changed since planning. Expected: {plan.metadata_dependencies}, Current: {current_md_deps}")
 
         # Config staleness: the workspace config must be byte-identical to what the plan
-        # was built against (prep Section 21). load_or_seed_config and _hash_file both
+        # was built against (BLD-prep_dependencies). load_or_seed_config and _hash_file both
         # sha256 the raw file bytes, so this compares like-for-like.
         from .photos_utils import config_path
         cfg = config_path(current_workspace)
@@ -396,22 +399,7 @@ class PlanValidator:
                             if stat.st_size != precond.get("size") or stat.st_mtime_ns != precond.get("mtime_ns"):
                                 raise ValueError(f"Stale plan: cache-upsert target changed after planning: {rel_path}")
 
-        # 1. Check instruction fingerprints
-        for rel_path, expected_fp in plan.instruction_fingerprints.items():
-            try:
-                abs_path = RootGuard.resolve_and_check_path(current_workspace, rel_path)
-            except ValueError as e:
-                raise ValueError(f"Invalid instruction file path {rel_path}: {e}")
-
-            if not os.path.exists(abs_path):
-                raise ValueError(f"Instruction file {rel_path} is missing. Plan is stale.")
-
-            current_fp = OperationPlanner._hash_file(abs_path)
-            if current_fp.value != expected_fp.value:
-                raise ValueError(f"Instruction file {rel_path} has changed since plan generation. Plan is stale.")
-
-
-        # 2. Reserve and check destinations
+        # 1. Reserve and check destinations
         # We simulate the plan sequentially to detect clobbers correctly without false positives from temporary renaming states.
         virtual_fs = set()
         for root, dirs, files in os.walk(current_workspace):
@@ -436,7 +424,7 @@ class PlanValidator:
                     raise ValueError(f"Destination case-insensitive clobber risk: {op.destination}")
                 virtual_fs.add(resolved_dest.lower())
 
-# 3. Check preconditions (e.g. source file hasn't changed)
+        # 2. Check preconditions (e.g. source file hasn't changed)
         # Only check original files on disk. Intermediate files created by the plan won't exist yet!
         created_in_plan = set()
         checked_sources = set()
@@ -460,7 +448,7 @@ class PlanValidator:
 
                 checked_sources.add(op.source)
 
-        # 4. Inventory (prep §14.3 item 2): a file that appeared anywhere prep scans since planning is
+        # 3. Inventory (RUL-new_file_restales_plan): a file that appeared anywhere prep scans since planning is
         # unplanned — the plan neither moves nor records it — so the plan is stale and a new plan
         # incorporates it. (A planned file that vanished already fails its precondition above.)
         current, scan_blockers = _rescan_inventory(current_workspace)
@@ -497,9 +485,9 @@ class PlanExecutor:
 
     def execute(self, plan: Plan, journal_path: str = None):
         # A distinct id for this execution run (vs plan.plan_id which identifies the plan);
-        # surfaced in the handoff (prep Section 16).
+        # surfaced in the handoff (BLD-handoff_content).
         self.execution_id = f"{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}-{uuid.uuid4().hex[:6]}"
-        # Workspace lifecycle (prep Section 3.1 / 14.3 step 11): if the sentinel is absent this is
+        # Workspace lifecycle (RUL-initialized_marked_last): if the sentinel is absent this is
         # an INIT run — the plan creates the structure and moves the base dump into 0-sources, and
         # the sentinel is written LAST (below, only on full success), so a crash re-enters init.
         from .photos_utils import guard_path as _guard_path
@@ -513,7 +501,7 @@ class PlanExecutor:
         if journal_path is None:
             from .photos_utils import journal_path as _journal_path
             journal_path = _journal_path(self.workspace_root, plan.plan_id)
-        # The workspace lock is held for the whole run by main() (shared contract Section 2);
+        # The workspace lock is held for the whole run by main() (RUL-lock_through_the_run);
         # execute() does not acquire it (callers that bypass main() — e.g. tests — run lock-free).
         cache = None
         try:
@@ -528,7 +516,7 @@ class PlanExecutor:
                 get_reporter().error(f"Preflight validation failed: {e}", stream="stdout")
                 raise
 
-            # 2. Start Journal (version-stamped so a stale/foreign journal is detectable, §5)
+            # 2. Start Journal (version-stamped so a stale/foreign journal is detectable, BLD-prep_dependencies)
             journal = JournalWriter(journal_path)
             journal.start_journal(plan.plan_id, depends_on={
                 "tool": "photos-1-prep",
@@ -555,31 +543,21 @@ class PlanExecutor:
                     get_reporter().warn(f"Warning: {snap['stderr'] or 'ZFS snapshot failed'}; skipping snapshot.",
                                         stream="stdout")
 
-            # 4. Execute Operations
-            if plan.command != 'prep':
-                raise ValueError(f"Plan command '{plan.command}' is not supported by photos-1-prep. Only 'prep' plans are allowed.")
-
+            # 4. Execute Operations. The preflight above has refused a plan of another command, an operation of a
+            #    kind prep does not carry out or one in photos by destination, and a plan holding a blocker.
             self.coordinator.start_phase("executing - applying operations", len(plan.operations))
 
-            # Apply all post-verification cache effects as one transaction (§14.3.7): create the
+            # Apply all post-verification cache effects as one transaction (BLD-workspace_database): create the
             # cache up front and open a batch; commit once after the loop, roll back on failure
             # (the finally below). The filesystem stays the source of truth either way.
             if cache is None:
                 cache = WorkspaceCache(self.workspace_root)
             cache.begin_batch()
-            # The database's version row describes the rows this execute leaves (prep §9).
+            # The database's version row describes the rows this execute leaves (BLD-cache_versions).
             cache.set_meta("cache_schema_version", str(CACHE_SCHEMA_VERSION))
             cache.set_meta("fingerprint_algorithm_version", FINGERPRINT_ALGORITHM_VERSION)
 
             for op in plan.operations:
-                if op.type not in PREP_ALLOWED_OPERATION_TYPES:
-                    raise ValueError(f"Operation type '{op.type}' is not allowed in photos-1-prep.")
-                if op.type in ['move_no_clobber', 'rename_no_clobber', 'quarantine_move']:
-                    if op.source and op.source.startswith(folder_name('photos_by_dest') + '/'):
-                        raise ValueError(f"Operation {op.type} forbidden on source in {folder_name('photos_by_dest')}: {op.source}")
-                    if op.destination and op.destination.startswith(folder_name('photos_by_dest') + '/'):
-                        raise ValueError(f"Operation {op.type} forbidden on destination in {folder_name('photos_by_dest')}: {op.destination}")
-
                 op_started = datetime.now(timezone.utc).isoformat()
                 status = "success"
                 details = {}
@@ -624,14 +602,14 @@ class PlanExecutor:
                                     raise ValueError(f"Precondition failed: mtime changed for {op.source}.")
 
                             # Quarantine records its evidence BEFORE moving the file
-                            # (evidence-before-quarantine, §15): the manifest entry is the only durable
+                            # (RUL-evidence_before_quarantine): the manifest entry is the only durable
                             # record of WHY a file was quarantined, so writing it first guarantees a
                             # crash never strands a file in quarantine with no record. If the move then
                             # fails/crashes, the file stays at its source and a re-run re-quarantines it
                             # (fresh evidence under a new plan id); the pre-written entry of the
                             # interrupted run becomes a benign, prunable orphan rather than a lost record.
                             if op.type == "quarantine_move":
-                                plan_id = op.verification.get("plan_id", "unknown_plan")
+                                plan_id = op.verification["plan_id"]
                                 manifest_dir = os.path.join(self.workspace_root, ".photos-ingest-quarantine", plan_id)
                                 manifest_entry = op.verification.copy()
                                 manifest_entry["operation_id"] = op.operation_id
@@ -654,11 +632,6 @@ class PlanExecutor:
                                 elif fx.get("action") == "remove":
                                     cache.remove_file(fx["relative_path"])
                                     self.coordinator.increment("db_removes_applied")
-                                elif fx.get("action") == "rename":
-                                    old = fx["old_path"]
-                                    new = fx["new_path"]
-                                    cache.rename_file(old, new, os.path.join(self.workspace_root, new))
-                                    self.coordinator.increment("db_renames_applied")
 
                     # Cache-only operations: update SQLite state without mutating media files
                     elif op.type == "db_remove":
@@ -711,19 +684,21 @@ class PlanExecutor:
                 self.coordinator.increment_completed()
 
                 # Abort further execution on first failure to prevent cascading issues
-                if status in ["failed", "failed_recovered", "failed_intervention_required"]:
+                if status == "failed":
                     break
-            # All ops applied + verified -> commit the batched cache effects once.
-            cache.commit_batch()
+            # Commit the batched cache effects once, only when every op was carried out and checked; a
+            # failed run's are rolled back (the finally below), leaving the database as the earlier run
+            # left it (BLD-database_effects_one_transaction).
+            failed_ops = [r for r in journal.journal.operations if r.status == "failed"]
+            if not failed_ops:
+                cache.commit_batch()
             self.coordinator.finish_phase()
 
 # 5. Finish Journal
-            if any(r.status in ["failed", "failed_recovered", "failed_intervention_required"] for r in journal.journal.operations):
-                # If operations were skipped due to an abort, or failed mid-flight
+            if failed_ops:
                 journal.journal.details = getattr(journal.journal, 'details', {})
                 journal.save()
                 journal.finish_journal("failed_intervention_required")
-                failed_ops = [r for r in journal.journal.operations if r.status in ["failed", "failed_intervention_required", "failed_recovered"]]
                 raise RuntimeError(f"Execution failed; intervention required. See journal. Failed ops: {failed_ops}")
             else:
                 journal.finish_journal("success")
@@ -741,18 +716,12 @@ class PlanExecutor:
                 if plan.summary and "performance_and_cache" in plan.summary:
                     plan.summary["performance_and_cache"]["db_upserts_applied"] = self.coordinator.counters.get("db_upserts_applied", 0)
                     plan.summary["performance_and_cache"]["db_removes_applied"] = self.coordinator.counters.get("db_removes_applied", 0)
-                    plan.summary["performance_and_cache"]["db_renames_applied"] = self.coordinator.counters.get("db_renames_applied", 0)
 
                 # Generate handoff manifest ONLY if success
                 if plan.command == "prep":
                     self.coordinator.start_phase("executing - generating handoff manifest")
                     if cache is None:
                         cache = WorkspaceCache(self.workspace_root)
-
-                    # Abort handoff if blockers exist from plan validation or execution issues indicating invalid dependencies
-                    if plan.blockers:
-                        raise RuntimeError("Cannot generate handoff manifest: plan execution completed but metadata dependencies are invalid due to plan blockers.")
-
 
                     # 1. Gather files and metadata
                     all_files = cache.get_all_files()
@@ -766,16 +735,12 @@ class PlanExecutor:
                         # byte-hashed). Non-media has no fingerprint and is not applicable.
                         fp_status = "not_applicable"
                         if record.get('content_hash'):
-                            try:
-                                ch_dict = json.loads(record['content_hash'])
-                                fp_status = ch_dict.get('status', 'unknown_fingerprint')
-                            except Exception:
-                                fp_status = "unknown_fingerprint"
+                            fp_status = json.loads(record['content_hash'])['status']
 
                         if record['media_class'] not in ['image', 'video', 'raw']:
                             fp_status = "not_applicable"
 
-                        folder_class = rel_path.split('/')[0] if '/' in rel_path else "root"
+                        folder_class = rel_path.split('/')[0]
 
                         md_record = all_metadata.get(rel_path)
 
@@ -874,7 +839,7 @@ class PlanExecutor:
                             "folder_class": folder_class
                         })
 
-                    # Real duplicate/conflict evidence from the quarantine ops (prep Section 12.2/16).
+                    # Real duplicate/conflict evidence from the quarantine ops (BLD-handoff_grouping_facts).
                     quarantine_evidence = []
                     for op in plan.operations:
                         if op.type == "quarantine_move":
@@ -924,11 +889,11 @@ class PlanExecutor:
 
                     cache_fingerprint = OperationPlanner.compute_index_fingerprint(final_files)
 
-                    # End-of-prep transformation log (prep Section 16.1 / shared Section 13.3): a
+                    # End-of-prep transformation log (BLD-prep_log_build): a
                     # per-photo, content-fingerprint-keyed, human-readable record of everything prep
                     # did — complete and self-sufficient even if no later phase runs. Derived from
                     # this run's plan + quarantine evidence, merged onto the prior log carried forward
-                    # (incremental, §16.1 item 6). Written BEFORE the handoff, which records its hash:
+                    # (incremental, BLD-prep_log_build). Written BEFORE the handoff, which records its hash:
                     # a crash between the two leaves a handoff that does not vouch for the log, so
                     # finalize refuses it and prep's next run rewrites both.
                     from .photos_utils import prep_log_path
@@ -942,16 +907,16 @@ class PlanExecutor:
                             prior_photos = {}
                     log_photos, log_warnings = build_prep_log(
                         prior_photos, plan.operations, cache.get_all_files(),
-                        quarantine_evidence, self._was_uninitialized, plan.plan_id)
+                        quarantine_evidence, plan.plan_id)
                     # No per-run metadata at the top level: the log must be byte-identical on a
-                    # no-op run (§16.1 item 6). Run attribution lives per-step (the "run" field).
+                    # no-op run (RUL-no_op_run). Run attribution lives per-step (the "run" field).
                     log_obj = {"schema_version": PREP_LOG_SCHEMA_VERSION, "tool": "photos-1-prep",
                                "photos": log_photos}
                     lfd, ltmp = tempfile.mkstemp(dir=os.path.dirname(plp), prefix=".tmp-prep-log-", suffix=".json", text=True)
                     try:
                         with os.fdopen(lfd, 'w') as lf:
                             json.dump(log_obj, lf, indent=2, sort_keys=True)
-                        os.replace(ltmp, plp)
+                        replace_durably(ltmp, plp)
                         if plan.summary and "performance_and_cache" in plan.summary:
                             plan.summary["performance_and_cache"]["prep_log_written"] = True
                         for _w in log_warnings:
@@ -974,19 +939,21 @@ class PlanExecutor:
                         "schema_version": 1,
                         "tool": "photos-1-prep",
                         # Per-run identifiers live in run_metadata, separate from the deterministic
-                        # content, so they don't perturb content_fingerprint across no-op re-runs (§16).
+                        # content, so they don't perturb content_fingerprint across no-op re-runs
+                        # (RUL-handoff_deterministic).
                         "run_metadata": {"plan_id": plan.plan_id, "execution_id": self.execution_id},
                         "cache_fingerprint": cache_fingerprint,
                         "hash_algorithm": "sha256",
                         # The folders prep actually scans/organizes — `1-strays` is deliberately EXCLUDED:
                         # strays are abandoned once moved there (written, never re-scanned), so they are
-                        # not part of the deterministic content downstream phases depend on (§3 / §16.2).
+                        # not part of the deterministic content downstream phases depend on (BLD-handoff_content).
                         "folders_scanned": [
                             {"name": n, "mutable": n != folder_name('photos_by_dest')}
                             for n in managed_folder_names(CONFIG)
                         ],
                         "files": final_files,
-                        # The format prep named the files in: fixed for the workspace from here (shared §6).
+                        # The format prep named the files in: fixed for the workspace from here
+                        # (RUL-format_fixed_once_named).
                         "filename_timestamp_format": CONFIG["filename_timestamp_format"],
                         "camera_groups": camera_groups,
                         "destination_folders": destination_folders,
@@ -1032,22 +999,22 @@ class PlanExecutor:
                         }
                     }
 
-                    # Write out atomically AND deterministically (prep §16.2; shared contract §15): route through
-                    # write_json_artifact (temp → atomic rename, sort_keys) so the handoff bytes are
+                    # Write out atomically AND deterministically (RUL-handoff_deterministic, BLD-handoff_content):
+                    # route through write_json_artifact (temp → atomic rename, sort_keys) so the handoff bytes are
                     # byte-stable for a given workspace state. Geotag records a json_dependency on
                     # this file's exact bytes, so a non-deterministic dump (the old indent-only
                     # json.dump) could flip its SHA-256 and spuriously restale photos-21/22/23.
                     from .photos_utils import handoff_path, write_json_artifact, handoff_content_fingerprint
                     # The content fingerprint over the deterministic content (excludes run_metadata +
                     # diagnostics + the journal pointer) — geotag depends on THIS, not the volatile
-                    # file bytes, so a no-op re-run does not restale it (§16).
+                    # file bytes, so a no-op re-run does not restale it (RUL-run_only_refresh_restales_nothing).
                     handoff["content_fingerprint"] = handoff_content_fingerprint(handoff)
                     target_handoff_path = handoff_path(self.workspace_root)
                     os.makedirs(os.path.dirname(target_handoff_path), exist_ok=True)
                     try:
                         write_json_artifact(target_handoff_path, handoff)
-                        # Belt-and-suspenders (§16): the just-written handoff must re-read to the SAME
-                        # content_fingerprint, or geotag's recompute would mismatch — which can only
+                        # Belt-and-suspenders (RUL-handoff_verified_by_content): the just-written handoff must re-read
+                        # to the SAME content_fingerprint, or geotag's recompute would mismatch — which can only
                         # happen if a non-round-trip-stable field crept into the handoff. Fail loudly here
                         # rather than ship a handoff geotag would (silently) treat as forever-stale.
                         with open(target_handoff_path) as _hf:
@@ -1058,9 +1025,9 @@ class PlanExecutor:
                         self.coordinator.finish_phase()
                     except Exception as e:
                         raise RuntimeError(f"Failed to write handoff manifest: {e}")
-                # End-of-prep DB backup snapshot (shared contract Section 13.4a): a transactionally
+                # End-of-prep DB backup snapshot (BLD-database_images): a transactionally
                 # consistent image of the live cache, captured at the same success gate as the
-                # handoff and written no-clobber + atomically — VACUUM INTO a temp name, then atomic
+                # handoff and written atomically over the earlier one — VACUUM INTO a temp name, then atomic
                 # rename. A failed/interrupted capture leaves the prior snapshot intact. This
                 # refreshes prep's OWN snapshot only (never another phase's).
                 if cache is not None:
@@ -1070,7 +1037,7 @@ class PlanExecutor:
                         plan.summary["performance_and_cache"]["prep_db_snapshot_written"] = True
 
                 # On an INIT run, write the root sentinel LAST — only after every operation and
-                # the handoff have succeeded (prep Section 3.1 / 14.3 step 11). Because it is last,
+                # the handoff have succeeded (RUL-initialized_marked_last). Because it is last,
                 # a crash anywhere earlier leaves the workspace uninitialized and the next run
                 # safely re-enters the init path. No-op on an already-initialized workspace.
                 if self._was_uninitialized:
@@ -1080,7 +1047,7 @@ class PlanExecutor:
                     with os.fdopen(gfd, 'w') as gf:
                         gf.write(json.dumps({"initialized": True, "tool": "photos-1-prep",
                                              "initialized_by_run": plan.plan_id}))
-                    os.replace(gtmp, guard)
+                    replace_durably(gtmp, guard)
 
             self.coordinator.print_summary(plan_summary=plan.summary)
         finally:
@@ -1162,14 +1129,14 @@ class WorkspacePrepWorkflow:
                          bare_first: bool = False) -> str:
         # Delegates to the shared no-clobber suffix convention (photos_utils.allocate_suffix) so prep's
         # by-date de-collision and the merge phase's library-collision rename can never drift.
-        # `bare_first` (shared contract §7.2): the by-date timestamp naming takes the bare name first;
+        # `bare_first` (RUL-suffix_choice_by_phase): the by-date timestamp naming takes the bare name first;
         # the init-move / extension-normalize callers leave it False (they run only on a real collision).
         return allocate_suffix(base, ext, index, start_idx, bare_first)
 
     def _flag_dir_symlinks(self, root, dir_names, blockers):
         """Flag any subdirectory symlink encountered during a walk as a forbidden escape. os.walk does
         not descend into them (followlinks=False), so without this they would be silently ignored
-        rather than blocked — the spec forbids symlinks among managed files (prep §6.2 item 3; shared contract §5.3)."""
+        rather than blocked — the spec forbids symlinks among managed files (RUL-no_links)."""
         for dd in dir_names:
             p = os.path.join(root, dd)
             if os.path.islink(p):
@@ -1248,13 +1215,13 @@ class WorkspacePrepWorkflow:
 
     def _recognize_carried_moves(self, files, existing_cache, existing_metadata,
                                  current_metadata_context, current_magick_version):
-        """Move-aware cache identity (prep §10.1 / 10.2). Recognize a file the user moved from by-date
+        """Move-aware cache identity (RUL-move_recognized). Recognize a file the user moved from by-date
         into 6-photos-by-dest (or re-sorted between destinations inside by-dest) by a cache-only
         bijective (size, mtime_ns, basename) stat match, and carry its cached hash + metadata forward
         to the new path instead of re-hashing / re-extracting it. By-dest is read-only, so there is no
         filesystem operation: the old (now-missing) row is dropped by ghost-prune and the carried row is
         upserted at the new path. A row is carried whole only if it would be reused where it was — its
-        fingerprint taken by this build's method and its metadata fresh (prep §9). A stale row's move is
+        fingerprint taken by this build's method and its metadata fresh (BLD-carried_row). A stale row's move is
         still recognized — an ImageMagick or exiftool change is a reason to check what the row says, not
         to forget whose it is — and the file is read whole at its new path, starting from that row.
         Returns (carried_forward, relocated, moved_unmatched), relocated mapping each such file's new
@@ -1313,7 +1280,7 @@ class WorkspacePrepWorkflow:
     def _aggregate_worker_results(self, worker_results, metadata_plan_status, blockers, warnings,
                                   unpersisted_prior_plan=False, memo_paths=frozenset()):
         """Sort + aggregate the per-file worker results on the main thread (deterministic). Appends to the
-        passed metadata_plan_status / blockers / warnings; emits the §17.4 re-hash diagnostics. Returns
+        passed metadata_plan_status / blockers / warnings; emits the re-hash diagnostics (RUL-rehash_explained). Returns
         (all_db_files, db_files, by_dest_files, rehash_summary) — the last is the dict that goes verbatim
         into performance_and_cache. Verbatim lift from plan(); iteration order unchanged."""
         # 1. Collect and sort all worker results by workspace-relative path
@@ -1336,7 +1303,7 @@ class WorkspacePrepWorkflow:
                 if _rr != "new" and len(rehash_samples) < 5:
                     rehash_samples.append((rel_path, _rr))
 
-        # What the decode memo actually SAVED (prep §10.3 / §17.4): an entry the memo offered still has
+        # What the decode memo actually SAVED (RUL-rehash_memo_count_reported): an entry the memo offered still has
         # to clear the freshness gate, so entries offered and decodes avoided are different numbers.
         memo_hits = sum(1 for res in worker_results
                         if res.get("cache_reused") and res["relative_path"] in memo_paths)
@@ -1344,7 +1311,7 @@ class WorkspacePrepWorkflow:
             get_reporter().log(f"Reused {memo_hits} fingerprint(s) from the previous plan "
                                "(not yet executed, so not in the cache).")
 
-        # Re-hash diagnostics (prep §17.4): always-on when any media was re-fingerprinted. Split the
+        # Re-hash diagnostics (RUL-rehash_explained): always-on when any media was re-fingerprinted. Split the
         # EXPECTED new-file hashes from previously-cached files that re-hashed, name the reason buckets,
         # and show a small first-N sample of the unexpected ones (a flag would be useless — by the time
         # you know you want it, the re-hash already happened). The full per-reason counts go to the run
@@ -1365,7 +1332,7 @@ class WorkspacePrepWorkflow:
                     get_reporter().log(f"    {_r}: {_p}")
             # A cache-less re-plan counts every file as `new`, which reads like a first ingest when it
             # is really work being redone. Name the cause instead of leaving the operator to infer it.
-            # The decode memo (§10.3) normally absorbs this, so by the time the note fires the memo has
+            # The decode memo (RUL-plan_memo_kept) normally absorbs this, so by the time the note fires the memo has
             # missed too — it was cleared, or this is the first plan since the memo was introduced.
             if unpersisted_prior_plan and _new_rehash and not memo_hits:
                 get_reporter().log(
@@ -1389,10 +1356,10 @@ class WorkspacePrepWorkflow:
         return all_db_files, db_files, by_dest_files, rehash_summary
 
     def _check_band_and_stray_media(self, all_db_files, blockers, warnings):
-        """Band-misplacement guard + stray-media detection (prep §6.1 / §6.2 item 6). Appends to the
-        passed `blockers`/`warnings` lists (and logs the stray notices). Verbatim lift from plan() —
+        """Band-misplacement guard + stray-media detection (RUL-band_misplacement_blocks, RUL-stray_media_hinted).
+        Appends to the passed `blockers`/`warnings` lists (and logs the stray notices). Verbatim lift from plan() —
         same iteration order, so the appended order is unchanged."""
-        # Band-misplacement guard (prep Section 6.1 / 6.2 item 6): photos and videos live in
+        # Band-misplacement guard (RUL-band_misplacement_blocks): photos and videos live in
         # separate bands. A video under the photo bands (5-photos-by-date / 6-photos-by-dest),
         # or an image/raw under the video band (4-videos-by-date), is a hand-introduced break
         # prep never creates itself — hard-block, do not proceed.
@@ -1406,16 +1373,20 @@ class WorkspacePrepWorkflow:
             elif top == _video_band and mc in ('image', 'raw'):
                 blockers.append(f"Band misplacement: {mc} under {_video_band}: {f['relative_path']}")
 
-        # Stray-media detection (prep Section 6.1): a dump file prep is about to set aside as a stray
+        # Stray-media detection (BLD-stray_media_probe): a dump file prep is about to set aside as a stray
         # (class `other`, in 0-sources) whose extension exiftool reports as image/* or video/* is most
         # likely a media format the workspace's media_extensions config doesn't list. Probe each
         # DISTINCT stray extension once (not per file) and warn — non-blocking — so the operator can add
         # it to media_extensions and re-run to organize those files instead of parking them in 1-strays.
+        # On the run that initializes the workspace the dump is still outside the managed folders, bound for
+        # 0-sources, so its files are the inbox's too (RUL-stray_media_hinted).
         from .photos_utils import exiftool_mime_type
         _sources_top = folder_name('sources')
         _stray_ext_sample = {}
         for f in all_db_files:
-            if f.get('media_class') == 'other' and f['relative_path'].split('/')[0] == _sources_top:
+            _top = f['relative_path'].split('/')[0]
+            if f.get('media_class') == 'other' and (
+                    _top == _sources_top or (self._initializing and _top not in self.managed_folders)):
                 e = os.path.splitext(f['relative_path'])[1].lower().lstrip('.')
                 if e and e not in _stray_ext_sample:
                     _stray_ext_sample[e] = f['absolute_path']
@@ -1423,18 +1394,18 @@ class WorkspacePrepWorkflow:
             mime = exiftool_mime_type(sample)
             if mime and (mime.startswith('image/') or mime.startswith('video/')):
                 msg = (f"Dump contains .{e} files that exiftool sees as media ({mime}) but media_extensions "
-                       f"config does not list — they will be set aside in {folder_name('strays')}. Add '.{e}' to the "
-                       f"right media_extensions class in photos-00-config.json and re-run prep to organize them.")
+                       f"config does not list — they will be set aside in {folder_name('strays')}. Add '{e}' (lowercase, no "
+                       f"dot) to the right media_extensions class in photos-00-config.json and re-run prep to organize them.")
                 warnings.append(msg)
                 get_reporter().log(f"  Notice: {msg}")
 
     def _build_run_report(self, operations, no_op_count, metadata_plan_status, all_db_files,
                           recognized_moves, by_dest_files, blockers, warnings, qf,
                           current_exiftool_version, current_field_set_version):
-        """Assemble the user-visible run report (prep §19) — pure read-only re-presentation of data
+        """Assemble the user-visible run report (RUL-prep_run_summarised) — pure read-only re-presentation of data
         already on hand (operation/metadata/camera-group/GPS counts). Returns the report dict. Verbatim
         lift from plan(); no state mutated."""
-        # User-visible run report (prep Section 19), re-presenting data already on hand.
+        # User-visible run report (RUL-prep_run_summarised), re-presenting data already on hand.
         import collections as _collections
         _media_op_types = {"mkdir", "move_no_clobber", "rename_no_clobber", "quarantine_move"}
         _q_ops = [op for op in operations if op.type == "quarantine_move"]
@@ -1479,9 +1450,10 @@ class WorkspacePrepWorkflow:
         return report
 
     def _recognize_exiftool_leftovers(self, files, warnings):
-        """Recognize orphaned exiftool intermediates/backups (`<media>_exiftool_tmp` / `<media>_original`)
-        left by a hard-killed geotag write — pull them out of the media inventory (quarantined below,
-        recoverable) rather than mis-inventorying them as `other`. A leftover under read-only by-dest is
+        """Recognize orphaned exiftool intermediates (`<media>_exiftool_tmp`) left by a hard-killed geotag
+        write — pull them out of the media inventory (quarantined below, recoverable) rather than
+        mis-inventorying them as `other`. A `<media>_original` is a user's own backup, not a leftover, and
+        stays in the inventory as a file of no media class (RUL-user_backup_is_a_stray). A leftover under read-only by-dest is
         left untouched (only warned). Returns (kept_files, exiftool_leftovers). Verbatim lift from plan()."""
         from .photos_utils import exiftool_artifact_base
         _bydest_prefix = folder_name('photos_by_dest') + '/'
@@ -1497,7 +1469,7 @@ class WorkspacePrepWorkflow:
         return _kept, exiftool_leftovers
 
     def _scan_inventory(self, files, blockers):
-        """Inventory walk (prep §6 / §7.1): scan the workspace root + managed folders, bar symlinks,
+        """Inventory walk (RUL-no_links, BLD-prep_skip_set): scan the workspace root + managed folders, bar symlinks,
         skip control / strays / gpx subtrees, and build the sorted `files` list; append
         forbidden-symlink and misplaced-entry blockers. Mutates the passed `files` / `blockers`.
         Verbatim lift from plan()."""
@@ -1507,8 +1479,7 @@ class WorkspacePrepWorkflow:
         _sources = folder_name('sources')
         for f in os.listdir(self.workspace_root):
             path = os.path.join(self.workspace_root, f)
-            # A symlink at the workspace root is forbidden outright (never followed, prep §6.2 item 2/3;
-            # shared contract §5.3) — flagged
+            # A symlink at the workspace root is forbidden outright (never followed, RUL-no_links) — flagged
             # BEFORE the isdir-gated skips/walk. os.path.isdir() FOLLOWS a directory symlink, so a
             # dot-named symlink-to-directory would otherwise be skipped as if it were the control dir
             # (.photos-ingest*, which are always real directories, never symlinks), and a non-dot one
@@ -1524,7 +1495,7 @@ class WorkspacePrepWorkflow:
                 continue
             # Everything else at the base is a dump entry.
             if not self._initializing:
-                # Initialized workspace (shared contract §4): the base holds only the managed folders
+                # Initialized workspace (RUL-top_level_only_managed): the base holds only the managed folders
                 # and hidden entries. Every other root entry — a file, a non-managed folder, a named
                 # pipe — is a misplaced dump and a hard block, found by the check every phase shares
                 # (below); a hidden file is left where it is, never inventoried.
@@ -1562,8 +1533,21 @@ class WorkspacePrepWorkflow:
                     self._flag_dir_symlinks(root, _dirs, blockers)   # nested dir symlinks are forbidden too
                     # Do not descend into hidden subdirs: their files are not managed media (a non-dot
                     # file inside a `.thumbnails/` is still dump junk). In 0-sources those files are
-                    # picked up by _collect_dump_dotfiles for quarantine; elsewhere they are skipped.
+                    # picked up by _collect_dump_dotfiles for quarantine. Elsewhere a hidden folder holding
+                    # files stops the plan, naming it: its files would never be inventoried, fingerprinted,
+                    # link-checked or handed on, and would stay behind in the workspace
+                    # (RUL-hidden_folder_among_photos_blocks); an empty one is left to the walk as today.
                     # (Matches the init dump-folder walk, which also prunes dot-subdirs.)
+                    if d != _sources:
+                        for dd in sorted(_dirs):
+                            hp = os.path.join(root, dd)
+                            if dd.startswith('.') and not os.path.islink(hp) and hidden_folder_holds_files(hp):
+                                blockers.append(
+                                    f"Hidden folder holding files: {os.path.relpath(hp, self.workspace_root)}. "
+                                    "Prep does not read a hidden folder, so the files in it would be neither "
+                                    "checked nor handed on, and would stay behind in the workspace. Move them "
+                                    "into a folder whose name does not start with a dot (or remove the folder "
+                                    "if they are not wanted), then re-plan.")
                     _dirs[:] = [dd for dd in _dirs if not dd.startswith('.')]
                     for fname in filenames:
                         if not fname.startswith('.'):
@@ -1573,7 +1557,7 @@ class WorkspacePrepWorkflow:
                                 blockers.append(f"Forbidden symlink detected: {rel_path}")
                             else:
                                 files.append(rel_path)
-        # A track file is never media (shared contract §8): anywhere prep inventories it, the plan is
+        # A track file is never media (RUL-track_files_block_prep): anywhere prep inventories it, the plan is
         # blocked and the file left where it is — never parked in 1-strays, where clearing the strays
         # would delete it. Tracks belong under gpx_root.
         for rel_path in [f for f in files if is_track_file(f)]:
@@ -1626,7 +1610,7 @@ class WorkspacePrepWorkflow:
         md_fresh = is_metadata_cache_fresh(file_record, cached_md, current_metadata_context)
 
         # A cached fingerprint is fresh only when taken by this build's method for its class: the
-        # strategy, and for a photo the ImageMagick version (prep §9).
+        # strategy, and for a photo the ImageMagick version (BLD-fingerprint_method).
         from .photos_utils import fingerprint_reusable, fingerprint_valid
         # A media file's cached fingerprint must be one this build would reuse; a file of no media class
         # has none to judge.
@@ -1682,8 +1666,8 @@ class WorkspacePrepWorkflow:
         # Media is identified ONLY by its decoded-content fingerprint (image/raw -> identify,
         # video -> ffmpeg stream MD5). It is never byte-hashed: a whole-file SHA-256 is reserved
         # for artifacts and would change under the EXIF/GPS rewrites a fingerprint must survive
-        # (shared contract Section 9.1). Non-media (other-class) is not fingerprinted at all
-        # (prep Section 9) — it is moved inert to 1-strays and never enters a content decision.
+        # (RUL-fingerprint_survives_mutation). Non-media (other-class) is not fingerprinted at all
+        # (RUL-strays_leave_no_trace) — it is moved inert to 1-strays and never enters a content decision.
         content_hash_res = None
         if media_class in ['image', 'raw']:
             content_hash_res = ContentHasher.fingerprint_image(abs_path)
@@ -1692,7 +1676,12 @@ class WorkspacePrepWorkflow:
 
         parent_folder = os.path.dirname(abs_path)
 
-        if parent_folder in failed_metadata_folders:
+        if media_class == "other" and parent_folder in failed_metadata_folders:
+            # A file of no media class has no metadata prep needs: exiftool failing for its folder leaves it not
+            # applicable, never a blocker (RUL-inbox_non_media_never_blocks).
+            meta = {"extraction_status": "not_applicable"}
+            result["metadata_plan_status"] = "not_applicable"
+        elif parent_folder in failed_metadata_folders:
             meta = {}
             meta["extraction_status"] = "extraction_failed"
             meta["extraction_error"] = "folder_metadata_extraction_failed"
@@ -1708,7 +1697,7 @@ class WorkspacePrepWorkflow:
                 result["metadata_plan_status"] = "extracted_ok"
         elif media_class != "other" and md_fresh:
             # Fingerprinted again (another method) but its metadata was fresh, so it was not read again:
-            # the cached record is reused as it is (prep §9).
+            # the cached record is reused as it is (RUL-reuse_valid_work).
             meta = None
             result["metadata_plan_status"] = "reused_from_cache"
         else:
@@ -1761,7 +1750,7 @@ class WorkspacePrepWorkflow:
         return result
 
     def _overlay_plan_memo(self, existing_cache, existing_metadata):
-        """Lay the plan-time decode memo (prep §10.3) UNDER the workspace cache: memo rows fill in paths
+        """Lay the plan-time decode memo (RUL-database_over_memo) UNDER the workspace cache: memo rows fill in paths
         the cache has no row for, cache rows always win. Returns (files, metadata, memo_hit_count).
 
         Splitting each memo record back into its file part and its metadata-row part means every
@@ -1803,10 +1792,10 @@ class WorkspacePrepWorkflow:
                 set(memo_files))
 
     def _save_plan_memo(self, all_db_files):
-        """Persist this run's observations to the decode memo (prep §10.3) and drop paths it no longer
+        """Persist this run's observations to the decode memo (RUL-memo_tracks_workspace) and drop paths it no longer
         saw. Every entry is a file observed at its CURRENT path — nothing here anticipates a planned
-        move, which is what keeps this outside the plan/execute op model (prep §5): there is no
-        speculative post-move state on disk, only a record of bytes already read."""
+        move, which is what keeps this outside the plan/execute op model (RUL-planning_writes_only_its_records):
+        there is no speculative post-move state on disk, only a record of bytes already read."""
         try:
             memo = PlanFingerprintMemo(self.workspace_root)
             try:
@@ -1834,12 +1823,12 @@ class WorkspacePrepWorkflow:
         return ghost_prunes
 
     def _plan_init_moves(self, st, db_files):
-        """Init move (prep §7.1): on an init run, move each base-dump entry into 0-sources with
+        """Init move (RUL-init_moves_dump_to_inbox): on an init run, move each base-dump entry into 0-sources with
         its structure preserved (no flatten), case-insensitively collision-suffixed. Mutates the
         op-building cluster carried on `st`. Verbatim from plan() with `<cluster> -> st.<cluster>`."""
         for f in db_files:
             rel_path = st.current_paths[f['relative_path']]
-            # Init move (prep Section 7.1): move each base-entry file into 0-sources with its
+            # Init move (RUL-init_moves_dump_to_inbox): move each base-entry file into 0-sources with its
             # STRUCTURE PRESERVED — no flatten (MyDump/sub/a.jpg -> 0-sources/MyDump/sub/a.jpg).
             # On an initialized workspace, base entries are hard-blocked at scan, so this fires
             # only on an init run (no-flatten holds afterward).
@@ -1872,8 +1861,8 @@ class WorkspacePrepWorkflow:
                     st.current_paths[f['relative_path']] = dest
 
     def _plan_extension_case(self, st, db_files, quarantined):
-        """Extension-case normalization (prep §7.3): a media file outside the inbox whose extension is
-        not lowercase is renamed to lowercase via a two-step temp rename (no-clobber,
+        """Extension-case normalization (RUL-media_extension_lowercase): a media file outside the inbox
+        whose extension is not lowercase is renamed to lowercase via a two-step temp rename (no-clobber,
         case-insensitive-collision safe). An inbox file takes its lowercase extension in the move that
         files it; a duplicate and a stray keep their names. Mutates the op-building cluster on `st`."""
         _sources_prefix = folder_name('sources') + '/'
@@ -1957,7 +1946,7 @@ class WorkspacePrepWorkflow:
                     st.current_paths[f['relative_path']] = final_rel
 
     def _plan_redundant_jpgs(self, st, db_files, quarantined):
-        """RAW+JPEG pairing (prep §7.4): when a RAW and a same-stem JPEG (`.jpg` or `.jpeg`) share an
+        """RAW+JPEG pairing (RUL-redundant_jpeg_set_aside): when a RAW and a same-stem JPEG (`.jpg` or `.jpeg`) share an
         inbox folder, move the JPEG — and only the JPEG — to 3-redundant-jpgs (the RAW is the keeper).
         Mutates the op-building cluster on `st`."""
         base_groups = {}
@@ -1970,8 +1959,8 @@ class WorkspacePrepWorkflow:
             folder = os.path.dirname(rel_path)
             base_groups.setdefault((folder, name), []).append(f)
 
-        # A redundant JPG is named from its timestamp like a dated file (shared §6), against every name
-        # already outside the inbox, so it can never collide with one wherever either is moved later.
+        # A redundant JPG is named from its timestamp like a dated file (RUL-redundant_jpg_timestamp_named),
+        # against every name already outside the inbox, so it can never collide with one wherever either is moved later.
         _src = folder_name('sources') + "/"
         taken = {os.path.basename(st.current_paths[f['relative_path']]).lower() for f in db_files
                  if f['relative_path'] not in quarantined
@@ -2012,7 +2001,7 @@ class WorkspacePrepWorkflow:
                             st.current_paths[f['relative_path']] = dest
 
     def _plan_content_groups(self, db_files, by_dest_files, blockers):
-        """Content-fingerprint grouping (prep §7.5/§9): group media by (content_hash, media_class)
+        """Content-fingerprint grouping (RUL-duplicates_quarantined): group media by (content_hash, media_class)
         for dedup, skipping non-media; a missing/invalid fingerprint on a mutable file is a blocker
         (by-dest is exempt). A RAW and its JPEG never share a group: their classes differ. Appends to
         `blockers`; returns content_groups."""
@@ -2020,7 +2009,7 @@ class WorkspacePrepWorkflow:
         for f in db_files + by_dest_files:
             # Non-media (other-class) is never fingerprinted and never content-deduplicated; it is
             # routed to 1-strays below. The absence of a fingerprint on `other` is never a blocker
-            # (prep Section 9 / 3.2).
+            # (RUL-strays_leave_no_trace).
             if f['media_class'] == 'other':
                 continue
 
@@ -2044,7 +2033,7 @@ class WorkspacePrepWorkflow:
         return content_groups
 
     def _plan_quarantine_artifacts(self, st, exiftool_leftovers, dump_dotfiles, plan_id_for_quarantine):
-        """Quarantine the scan-recognized non-media artifacts (prep §15): orphaned exiftool
+        """Quarantine the scan-recognized non-media artifacts (BLD-quarantine_layout): orphaned exiftool
         intermediates/backups and hidden dump dotfiles — evidence-before-quarantine quarantine_move
         ops, recoverable, never deleted (no cache row, empty db effects). Mutates st.operations.
         Verbatim from plan() with `operations -> st.operations`."""
@@ -2091,7 +2080,7 @@ class WorkspacePrepWorkflow:
                 database_effects_after_verification=[]))
 
     def _plan_dedup(self, st, content_groups, quarantined, plan_id_for_quarantine):
-        """Content dedup (prep §7.5): within each (content_hash, media_class) group keep the file in the
+        """Content dedup (RUL-copy_kept_by_folder): within each (content_hash, media_class) group keep the file in the
         highest-priority folder — where it lies before this plan moves anything, ties by path — and
         quarantine the rest (evidence-before-quarantine quarantine_move, recoverable; by-dest never
         mutated). Records each quarantined rel-path in `quarantined` (every later stage skips it).
@@ -2147,7 +2136,7 @@ class WorkspacePrepWorkflow:
             return None
 
     def _expected_name(self, rel_path, top, dt):
-        """The name a media file outside the inbox should carry when its own does not (shared §6): its
+        """The name a media file outside the inbox should carry when its own does not (BLD-name_check): its
         recorded time in the format, suffix aside, or — with no recorded time, or in the
         missing-metadata folder — its dump name behind the untimed mark. None when the name fits, and
         for a dated file with no time, which prep moves to the missing-metadata folder and names."""
@@ -2162,7 +2151,7 @@ class WorkspacePrepWorkflow:
 
     @staticmethod
     def _not_media_blocker(rel_path):
-        """The blocker for a file of no media class outside the inbox (prep §6.1)."""
+        """The blocker for a file of no media class outside the inbox (RUL-other_outside_inbox_blocks)."""
         ext = os.path.splitext(rel_path)[1].lower().lstrip('.')
         return (f"File of no media class outside {folder_name('sources')}/: {rel_path}. Move it out of the "
                 f"workspace, or add '{ext}' to the right media_extensions class if it is media.")
@@ -2175,8 +2164,8 @@ class WorkspacePrepWorkflow:
                 "to name it.")
 
     def _plan_organize(self, st, db_files, quarantined, plan_id_for_quarantine, blockers, by_dest_files=()):
-        """Organize pass (prep §7.6/§8): classify each non-quarantined file as already-conforming
-        (no-op) vs to-organize vs non-media stray; move strays into 1-strays/<plan-id>/ and place
+        """Organize pass (RUL-photos_by_date, RUL-by_date_in_day_folder): classify each non-quarantined file
+        as already-conforming (no-op) vs to-organize vs non-media stray; move strays into 1-strays/<plan-id>/ and place
         each to-organize file into its date band (`band/YYYY-MM-DD/`, or missing-metadata for the
         untimestamped) with a collision-suffixed name. Mutates the op-building cluster on `st`.
         Verbatim from plan() with `<cluster> -> st.<cluster>`."""
@@ -2187,8 +2176,8 @@ class WorkspacePrepWorkflow:
         _sources = folder_name('sources')
         _sources_prefix = _sources + '/'
         _by_date_bands = {folder_name('photos_by_date'), folder_name('videos_by_date')}
-        # The format is fixed once files are named in it (shared §6): a change stops the plan as a whole
-        # rather than calling every name it would invalidate misnamed.
+        # The format is fixed once files are named in it (RUL-format_fixed_once_named): a change stops the plan
+        # as a whole rather than calling every name it would invalidate misnamed.
         _fmt = CONFIG["filename_timestamp_format"]
         recorded_fmt = self._recorded_filename_format()
         fmt_changed = recorded_fmt is not None and recorded_fmt != _fmt
@@ -2209,8 +2198,8 @@ class WorkspacePrepWorkflow:
             if f['relative_path'] in quarantined: continue
             rel_path = st.current_paths[f['relative_path']]
             # Non-media (other-class): never date-organized. Move it out of the 0-sources inbox
-            # into 1-strays/<plan-id>/<rel> (structure preserved), inert and untracked (prep
-            # Section 3.2 / 7.6), so 0-sources is left empty. Outside the inbox one stops the plan: an
+            # into 1-strays/<plan-id>/<rel> (structure preserved), inert and untracked
+            # (RUL-inbox_non_media_to_strays), so 0-sources is left empty. Outside the inbox one stops the plan: an
             # extension taken off the media lists, or a file put there by hand — only the user knows which.
             if f['media_class'] == 'other':
                 if rel_path.startswith(_sources_prefix):
@@ -2230,7 +2219,7 @@ class WorkspacePrepWorkflow:
                 if top in _by_date_bands:
                     # By-date files must live under a `band/YYYY-MM-DD/` day folder. One already there
                     # (matching its own timestamp) is conforming -> no-op; a flat or wrong-day file is
-                    # re-located into the correct day folder (Section 7.6 migration).
+                    # re-located into the correct day folder (RUL-by_date_in_day_folder).
                     dt = self._file_datetime(f)
                     parts = rel_path.split('/')
                     if dt is not None and len(parts) == 3 and parts[1] == dt.strftime("%Y-%m-%d"):
@@ -2265,23 +2254,24 @@ class WorkspacePrepWorkflow:
         for f, rel_path in to_organize:
             dt = self._file_datetime(f)
             base, ext = os.path.splitext(os.path.basename(rel_path))
-            ext = ext.lstrip('.').lower()     # the move that files it lowercases its extension (§7.3)
+            ext = ext.lstrip('.').lower()     # the move that files it lowercases its extension
+                                              # (BLD-two_step_case_rename)
 
             if dt is not None:
                 target_folder = (folder_name('videos_by_date') if f['media_class'] == 'video'
                                  else folder_name('photos_by_date'))
                 prefix = dt.strftime(CONFIG["filename_timestamp_format"])
                 # Group by-date media into a YYYY-MM-DD/ day subfolder; the filename keeps the full
-                # timestamp (Section 8). The day uses the date portion of the source-naive timestamp.
+                # timestamp (BLD-day_folder_name). The day uses the date portion of the source-naive timestamp.
                 target_dir = os.path.join(target_folder, dt.strftime("%Y-%m-%d"))
             else:
                 target_dir = folder_name('missing_metadata')   # untimestamped -> flat, no day folder
                 prefix = untimed_stem(base)
 
-            # §7.2: the first file at a given timestamp gets the bare name; the -NNN suffix appears only
-            # on a genuine collision (matches geotag's final naming, so an uncorrected file's
-            # provisional and final names coincide — §7.3). A same-named file can only be in this same
-            # day folder, so the global index is exact (see Pass 1).
+            # RUL-suffix_choice_by_phase: the first file at a given timestamp gets the bare name; the -NNN suffix
+            # appears only on a genuine collision (matches geotag's final naming, so an uncorrected file's
+            # provisional and final names coincide — RUL-uncorrected_keeps_its_name). A same-named file can only be
+            # in this same day folder, so the global index is exact (see Pass 1).
             final_name = self._allocate_suffix(prefix, ext, global_index, bare_first=True)
             dest = os.path.join(target_dir, final_name)
 
@@ -2307,7 +2297,7 @@ class WorkspacePrepWorkflow:
             st.current_paths[f['relative_path']] = dest
 
     def _plan_folder_removals(self, st):
-        """Plan the removal of every folder the plan leaves empty (prep §14.3): under the inbox and the two
+        """Plan the removal of every folder the plan leaves empty (BLD-folder_removals): under the inbox and the two
         by-date folders, and — on the first run — the dump's own folders at the top level. The plan's
         moves are replayed over the files on disk (hidden ones included); a folder holding none of the
         files left — on disk now, or made by a move on its way — is removed, deepest first. Execute removes
@@ -2349,7 +2339,7 @@ class WorkspacePrepWorkflow:
 
     def _plan_cache_effects(self, st, all_db_files, carried_forward, existing_cache, existing_metadata, current_metadata_context, ghost_prunes,
                             recognized_moves):
-        """Cache effects (prep §5/§16): a db_upsert op reconciling unchanged-state cache rows
+        """Cache effects (BLD-database_ops): a db_upsert op reconciling unchanged-state cache rows
         (skipping mutated/carried/relocated files and rows already fresh) plus the recognized-move
         carried upserts, and a db_remove op for the ghost prunes. Mutates st.operations. Verbatim
         from plan() with `<cluster> -> st.<cluster>`."""
@@ -2454,16 +2444,16 @@ class WorkspacePrepWorkflow:
         media_mutated_originals = set()
 
         # Seed photos-00-config.json on first run, then read it as authoritative, before
-        # any config-dependent value is used or fingerprinted (shared contract Section 4 / prep Section 3).
+        # any config-dependent value is used or fingerprinted (BLD-seed_before_fingerprints).
         from .photos_utils import load_or_seed_config
         self._config_fingerprint = load_or_seed_config(self.workspace_root)
 
-        # Workspace lifecycle (prep Section 3.1): INITIALIZED once the root sentinel exists.
+        # Workspace lifecycle (BLD-workspace_guard): INITIALIZED once the root sentinel exists.
         from .photos_utils import guard_path, FOLDER_ROLES
         self._initializing = not os.path.exists(guard_path(self.workspace_root))
         if self._initializing:
             # Plan creation of the full 0-6 structure (idempotent mkdir; the sentinel is written
-            # last by execute, prep Section 14.3 step 11).
+            # last by execute, BLD-workspace_guard).
             for _r in FOLDER_ROLES:
                 operations.append(Operation(
                     operation_id=f"op-{uuid.uuid4().hex[:8]}",
@@ -2491,7 +2481,8 @@ class WorkspacePrepWorkflow:
         # quarantine below rather than leaving them to litter the workspace. The control dirs are
         # never touched (see _collect_dump_dotfiles).
         dump_dotfiles = self._collect_dump_dotfiles(blockers)
-        # Everything scanned, recorded so execute can refuse a workspace that changed since (prep §14.3).
+        # Everything scanned, recorded so execute can refuse a workspace that changed since
+        # (RUL-new_file_restales_plan).
         inventory = sorted(files + dump_dotfiles)
 
         files, exiftool_leftovers = self._recognize_exiftool_leftovers(files, warnings)
@@ -2514,10 +2505,10 @@ class WorkspacePrepWorkflow:
         existing_cache = self.cache.get_all_files()
         existing_metadata = self.cache.get_all_metadata()
 
-        # Cache rows are written by EXECUTE only (planning never mutates, prep §5). So a plan that was
-        # never executed throws its fingerprints away, and the next plan re-hashes everything as `new`
+        # Cache rows are written by EXECUTE only (planning never mutates, RUL-planning_writes_only_its_records). So a
+        # plan that was never executed throws its fingerprints away, and the next plan re-hashes everything as `new`
         # — technically accurate per file, but misleading at the run level. An empty cache alongside an
-        # existing plan artifact is exactly that situation; record it so the §17.4 summary can say so.
+        # existing plan artifact is exactly that situation; record it so the summary (BLD-rehash_summary) can say so.
         from .photos_utils import prep_plan_path
         unpersisted_prior_plan = (not existing_cache) and os.path.exists(prep_plan_path(self.workspace_root))
 
@@ -2549,7 +2540,7 @@ class WorkspacePrepWorkflow:
                 existing_metadata[_new] = dict(existing_metadata[_old], relative_path=_new)
         recognized_moves = {**{n: cf["source"] for n, cf in carried_forward.items()}, **relocated}
 
-        # Plan-time decode memo (prep §10.3). Move recognition above deliberately runs against the
+        # Plan-time decode memo (RUL-memo_proves_no_move). Move recognition above deliberately runs against the
         # EXECUTED state only — a memo row proves nothing about where prep has put a file — so the
         # overlay happens after it, and cache rows always win over memo rows.
         existing_cache, existing_metadata, memo_paths = self._overlay_plan_memo(
@@ -2593,8 +2584,8 @@ class WorkspacePrepWorkflow:
 
         # The -j/--jobs count is a transient, machine-dependent runtime knob: it is NOT recorded in the
         # plan (nor in the config file, nor the handoff), so a plan is byte-identical across job counts
-        # and portable between machines (determinism, prep spec §17 items 3/6). No command option affects
-        # what prep plans, so the plan records none.
+        # and portable between machines (determinism, RUL-jobs_change_nothing, RUL-jobs_recorded_nowhere).
+        # No command option affects what prep plans, so the plan records none.
 
         self.coordinator.start_phase("planning - hashing files", len(files))
 
@@ -2652,8 +2643,8 @@ class WorkspacePrepWorkflow:
             media_mutated_originals)
         self._plan_init_moves(st, db_files)
 
-        # Duplicates are set aside first, from where they lie (prep §7): no later stage moves or renames
-        # a file this plan quarantines, so its record keeps its dump path and name.
+        # Duplicates are set aside first, from where they lie (RUL-duplicate_set_aside_as_found): no later stage moves
+        # or renames a file this plan quarantines, so its record keeps its dump path and name.
         content_groups = self._plan_content_groups(db_files, by_dest_files, blockers)
 
         quarantined = set()
@@ -2711,10 +2702,7 @@ class WorkspacePrepWorkflow:
             command="prep",
             created_at=datetime.now(timezone.utc).isoformat(),
             workspace_root=self.workspace_root,
-            digikam_root=None,
             config_fingerprint=Fingerprint(algorithm="sha256", value=self._config_fingerprint),
-            instruction_fingerprints={},
-            locks_required=["workspace"],
             summary={
             "message": "Prep Plan generated",
             "no_op_files": no_op_count,
@@ -2737,7 +2725,6 @@ class WorkspacePrepWorkflow:
                 "db_effects_seen": len([fx for op in operations for fx in (op.database_effects_after_verification or [])]),
                 "db_upserts_applied": 0,
                 "db_removes_applied": 0,
-                "db_renames_applied": 0,
                 "dependency_validation_status": "pending",
                 "handoff_written_after_successful_validation": False,
                 "rehash_summary": rehash_summary,
@@ -2796,7 +2783,7 @@ def _quarantine_dir_footprint(dpath: str):
 
 def prune_quarantine(workspace_root, plan_ids=None, older_than_days=None, do_delete=False, prune_all=False):
     """Delete recoverable quarantine — the ONLY operation that ever removes quarantine
-    content (prep Section 15.3). Default is a non-destructive dry-run; `do_delete`
+    content (RUL-prune_explicit). Default is a non-destructive dry-run; `do_delete`
     (--yes) actually deletes. Selectable by exact plan-id and/or age; deleting with no
     selector requires `prune_all` (--all). Runs under the workspace lock and only ever
     touches `.photos-ingest-quarantine/`."""
@@ -2809,6 +2796,12 @@ def prune_quarantine(workspace_root, plan_ids=None, older_than_days=None, do_del
         reporter.log("No quarantine directory; nothing to prune.", stream="stdout")
         return
 
+    # An age below one day would select every dated run — the whole quarantine — while looking like a
+    # selector (RUL-prune_age_at_least_one_day). The command line refuses it when parsing; the console reaches
+    # here without that parsing, so it is refused here too, before anything is listed or removed.
+    if older_than_days is not None and older_than_days < 1:
+        raise RuntimeError(f"--older-than-days must be at least 1 (got {older_than_days}); nothing was removed.")
+
     all_dirs = [e.name for e in os.scandir(base) if e.is_dir()]
     has_selector = bool(plan_ids) or older_than_days is not None
     selected = set()
@@ -2820,9 +2813,13 @@ def prune_quarantine(workspace_root, plan_ids=None, older_than_days=None, do_del
                 reporter.warn(f"Warning: plan-id not found in quarantine: {pid}")
     if older_than_days is not None:
         cutoff = datetime.now(timezone.utc) - timedelta(days=older_than_days)
-        for d in all_dirs:
+        for d in sorted(all_dirs):
             t = _parse_plan_id_time(d)
-            if t is not None and t < cutoff:
+            if t is None:
+                # Its name gives no age, so age never selects it (RUL-prune_age_at_least_one_day); listed so
+                # the user sees it was passed over, and why.
+                reporter.log(f"Not selected by age: {d} — its name gives no age", stream="stdout")
+            elif t < cutoff:
                 selected.add(d)
     if not has_selector:
         selected = set(all_dirs)
@@ -2831,7 +2828,7 @@ def prune_quarantine(workspace_root, plan_ids=None, older_than_days=None, do_del
         raise RuntimeError("Refusing to delete all quarantine without a selector. "
                            "Pass --plan-id / --older-than-days, or --all to confirm.")
 
-    # The workspace lock is held for the whole run by main() (shared contract Section 2).
+    # The workspace lock is held for the whole run by main() (RUL-lock_through_the_run).
     total_files = 0
     total_bytes = 0
     for d in sorted(selected):
@@ -2856,7 +2853,7 @@ import argparse
 PREP_BLURB = (
     "prep — get a raw photo dump workspace-ready (phase 1 of 3).\n\n"
     "Consolidates a dump into the managed 0-6 folders: normalizes extensions, de-duplicates and "
-    "quarantines (recoverably, never deletes), organizes media by date and into by-dest, and builds "
+    "quarantines (recoverably, never deletes), organizes media by date, records the photos you sort into by-dest, and builds "
     "the hash cache + handoff that the next phase consumes. Planning never mutates; execution applies "
     "only a validated plan. Run inside the workspace directory.\n\n"
     "Next: `photos-cartographer geotag` to place photos in time + on the map."
@@ -2873,6 +2870,19 @@ def positive_int(value):
     return parsed
 
 
+def _days_at_least_one(value):
+    """`--older-than-days`: a whole number of days, at least 1 (RUL-prune_age_at_least_one_day). Argparse names
+    the option in its refusal."""
+    try:
+        parsed = int(value)
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"must be a whole number of days, at least 1 (got {value!r})")
+    if parsed < 1:
+        raise argparse.ArgumentTypeError(f"must be at least 1 day (got {parsed}); a smaller age would select "
+                                         "the whole quarantine")
+    return parsed
+
+
 def add_arguments(parser):
     """Register prep's `-j` + subcommands on `parser` — the top parser when run standalone
     (`python -m cartographer.photos_1_prep`), or the `prep` subparser in the combined
@@ -2882,7 +2892,7 @@ def add_arguments(parser):
 
     # prep command. plan/dry-run/execute all use the canonical control-dir plan path
     # (photos_utils.prep_plan_path) — `plan` writes it, `dry-run`/`execute` read it — so there are no
-    # --output/--plan flags: the phase always knows where its plan lives (shared contract §5).
+    # --output/--plan flags: the phase always knows where its plan lives (RUL-plan_at_fixed_place).
     subparsers.add_parser("plan", help="Generate the prep plan (saved to .photos-ingest/photos-10-prep-plan.json)")
 
     subparsers.add_parser("dry-run", help="Validate and display the saved prep plan")
@@ -2891,7 +2901,8 @@ def add_arguments(parser):
 
     prune_parser = subparsers.add_parser("prune-quarantine", help="Delete recoverable quarantine (dry-run by default).")
     prune_parser.add_argument("--plan-id", action="append", dest="plan_ids", help="Quarantine <plan_id> directory to prune (repeatable).")
-    prune_parser.add_argument("--older-than-days", type=int, help="Prune quarantine directories older than N days.")
+    prune_parser.add_argument("--older-than-days", type=_days_at_least_one,
+                              help="Prune quarantine directories older than N days (N at least 1).")
     prune_parser.add_argument("--all", action="store_true", dest="prune_all", help="Confirm deleting ALL quarantine when no selector is given.")
     prune_parser.add_argument("--yes", action="store_true", help="Actually delete (default is a dry-run that only lists).")
     parser.set_defaults(_run=run, _parser=parser)
@@ -2900,7 +2911,7 @@ def add_arguments(parser):
 def _prep_nothing_to_do(workspace_root, reporter) -> bool:
     """True (after logging a friendly notice) when this workspace is already prepped AND there is
     genuinely nothing to apply — initialized (guard present), `0-sources` holding nothing at all (the
-    steady end-state, prep §18: an empty folder left there is work, a planned removal), AND no pending by-date→by-dest move the handoff hasn't recorded yet. Both
+    steady end-state, RUL-prepped_nothing_to_do: an empty folder left there is work, a planned removal), AND no pending by-date→by-dest move the handoff hasn't recorded yet. Both
     `dry-run` and `execute` use this to stop fast (exit 0) instead of replaying a now-stale saved plan
     (which would clobber the files it already moved). Returns False — logging nothing — otherwise.
 
@@ -2964,13 +2975,13 @@ def run(args):
     # prints); a caller — tests, the future web console — can inject one before calling run().
     reporter = get_reporter()
 
-    # Workspace lifecycle (prep Section 3.1): a workspace is INITIALIZED once the root sentinel
+    # Workspace lifecycle (BLD-workspace_guard): a workspace is INITIALIZED once the root sentinel
     # photos-00-workspace-guard exists. An uninitialized workspace (no guard) is the deliberate
     # entry point — prep initializes it (plan/execute detect this via guard-absence and create the
     # structure, move the base dump into 0-sources, and write the guard last). So prep does NOT
     # hard-require the sentinel here. A SEALED workspace is refused below (after the lock).
 
-    # Whole-run workspace lock (shared contract Section 2): acquired once here, before any
+    # Whole-run workspace lock (RUL-lock_before_reading, RUL-lock_fail_fast): acquired once here, before any
     # scan/plan/dry-run/execute, held for the entire run, released on exit. Fail-fast.
     run_lock = WorkspaceLock(workspace_root)
     if not run_lock.acquire():
@@ -2996,20 +3007,45 @@ def run(args):
         reporter.log("Lock released.")
 
 
+def _shape_blockers(workspace_root) -> list:
+    """What is wrong with an initialized workspace's shape, as its top level shows it (RUL-shape_checked_first);
+    [] for one not yet initialized, whose first run builds the shape, or one whose configuration cannot be read —
+    the plan says that."""
+    from .photos_utils import guard_path, config_path, load_config, top_level_links
+    if not (os.path.exists(guard_path(workspace_root)) and os.path.exists(config_path(workspace_root))):
+        return []
+    try:
+        load_config(workspace_root)             # the folders are named by the workspace's configuration
+    except Exception:
+        return []
+    out = [f"Forbidden symlink detected: {f}" for f in top_level_links(workspace_root)]
+    missing = missing_managed_folders(workspace_root)
+    if missing:
+        out.append("Workspace is non-conforming: missing managed folder(s): "
+                   f"{', '.join(missing)}. They were likely removed inadvertently; restore them (or "
+                   "move the remaining media into a fresh workspace) before running — prep will not "
+                   "recreate them.")
+    out.extend(f"Misplaced entry at workspace root (dumps belong in {folder_name('sources')}/): {f}"
+               for f in misplaced_top_level_entries(workspace_root))
+    return out
+
+
 def _run_locked(args, workspace_root, reporter):
     """Prep's command, its workspace lock already held: by `run` above, or by geotag's run when it
-    records a sort itself (geotag §13.1.1) — one lock for the whole run, taken before anything is read
-    (shared contract §1)."""
+    records a sort itself (BLD-geotag_auto_reprep) — one lock for the whole run, taken before anything is read
+    (RUL-lock_before_reading)."""
     CONFIG["jobs"] = getattr(args, "jobs", 4)
-    # A workspace lies on one filesystem (shared contract §15), so every move in it is one rename.
-    # Checked on every invocation, prune-quarantine included, before anything is read or changed.
-    from .photos_utils import workspace_volume_error
-    vol_err = workspace_volume_error(workspace_root)
+    # A workspace lies on one filesystem (RUL-workspace_one_filesystem), so every move in it is one rename.
+    # Checked on every invocation, prune-quarantine included, before anything else is read or changed — but for
+    # the seal, which a command it refuses checks first and reads nothing more (BLD-phases_check_seal).
+    from .photos_utils import workspace_volume_error, is_sealed as _is_sealed
+    _refused_sealed = args.command in ("plan", "dry-run", "execute") and _is_sealed(workspace_root)
+    vol_err = None if _refused_sealed else workspace_volume_error(workspace_root)
     if vol_err:
         reporter.error(vol_err)
         sys.exit(2)
 
-    # Sealed/terminal-workspace guard (prep Section 6.2 item 1 / shared 13.7): a successful
+    # Sealed/terminal-workspace guard (RUL-sealed_refuses): a successful
     # merge seals the workspace. Prep then hard-stops and mutates nothing. Applies to the prep
     # operations (plan/dry-run/execute); prune-quarantine is a separate maintenance command.
     from .photos_utils import is_sealed, likely_new_dump, folder_name as _folder_name
@@ -3019,6 +3055,18 @@ def _run_locked(args, workspace_root, reporter):
             reporter.log(f"  A likely new dump is present (at the workspace root or in {_folder_name('sources')}). "
                          "A sealed workspace is final — move new media into a fresh workspace.")
         sys.exit(2)
+
+    # The shape of an initialized workspace, checked before anything is scanned, planned or changed
+    # (RUL-shape_checked_first): what the top level alone shows — a link there, a managed folder missing, an
+    # entry that does not belong. A link deeper in the tree is found by the scan, which is what finds it.
+    if args.command in ("plan", "dry-run", "execute"):
+        _shape = _shape_blockers(workspace_root)
+        if _shape:
+            reporter.error("\nPrep cannot proceed:")
+            for b in _shape:
+                reporter.error(f"  - {b}")
+            reporter.log("Nothing was scanned, planned or changed.")
+            sys.exit(2)
 
     if args.command == "plan":
         # External-tool preflight (shared contract: decline cleanly, don't crash mid-scan).
@@ -3096,10 +3144,6 @@ def _run_locked(args, workspace_root, reporter):
         with open(pp, "r") as f:
             plan_data = json.load(f)
         plan = Plan.from_dict(plan_data)
-
-        # Use an in-memory database for dry-run
-        cache = WorkspaceCache(workspace_root, in_memory=True)
-        executor = PlanExecutor(workspace_root)
 
         try:
             PlanValidator.validate_plan_preflight(plan, workspace_root)

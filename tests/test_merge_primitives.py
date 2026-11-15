@@ -26,9 +26,9 @@ import photos_utils as utils
 import pytest
 
 
-# --- LibraryLock (shared contract §15.2 / merge §12) ---------------------------
+# --- LibraryLock (BLD-library_lock) -------------------------------------------
 
-@pytest.mark.spec("merge-library-lock-is-dotfile-cross-workspace-1", "RUL-library_lock_holds_only_holder", test="TST-merge_primitives-library_lock_keyed_to_root_records_owner")
+@pytest.mark.spec("BLD-library_lock", "RUL-library_lock_holds_only_holder", test="TST-merge_primitives-library_lock_keyed_to_root_records_owner")
 def test_library_lock_keyed_to_root_records_owner(tmp_path):
     lib = tmp_path / "library"
     lib.mkdir()
@@ -68,7 +68,7 @@ def test_workspace_lock_still_works_after_refactor(tmp_path):
 
 # --- Library identity marker + init-library writer -----------------------------
 
-@pytest.mark.spec("lib-marker-only-identity-1", test="TST-merge_primitives-library_marker_path_and_identity")
+@pytest.mark.spec("RUL-library_known_by_mark", test="TST-merge_primitives-library_marker_path_and_identity")
 def test_library_marker_path_and_identity(tmp_path):
     lib = tmp_path / "library"
     lib.mkdir()
@@ -91,9 +91,9 @@ def test_write_library_marker_is_idempotent_no_clobber(tmp_path):
     assert open(p1).read() == "x"                      # untouched
 
 
-# --- Workspace seal marker writer (merge §9.4 / shared §13.7) -------------------
+# --- Workspace seal marker writer (BLD-seal_marker) ----------------------------
 
-@pytest.mark.spec("merge-seal-separate-file-not-guard-field-1", "seal-marker-separate-file-1", test="TST-merge_primitives-write_sealed_marker")
+@pytest.mark.spec("BLD-seal_marker", "RUL-seal_is_authority", test="TST-merge_primitives-write_sealed_marker")
 def test_write_sealed_marker(tmp_path):
     ws = tmp_path / "ws"
     ws.mkdir()
@@ -105,14 +105,15 @@ def test_write_sealed_marker(tmp_path):
     assert digest == utils.sha256_file(utils.sealed_marker_path(str(ws)))
 
 
-# --- Library-file fingerprint cache (merge §7 / shared §13.4) -------------------
+# --- Library-file fingerprint cache (BLD-library_file_fingerprinted) -----------
 
 def _fp(value="abc123"):
-    return {"status": "valid", "value": value, "strategy": "image-content-hash-v1",
+    return {"status": "valid", "value": value, "strategy": "image-content-hash-v2",
             "engine_version": "im-7.1"}
 
 
-@pytest.mark.spec("merge-cache-library-fingerprint-in-workspace-db-1", "merge-fingerprint-cached-onfly-1", test="TST-merge_primitives-library_fingerprint_cache_roundtrip_and_staleness")
+@pytest.mark.spec("RUL-library_fingerprint_kept",
+                  test="TST-merge_primitives-library_fingerprint_cache_roundtrip_and_staleness")
 def test_library_fingerprint_cache_roundtrip_and_staleness(tmp_path):
     cache = utils.WorkspaceCache(str(tmp_path), in_memory=True)
     try:
@@ -121,7 +122,7 @@ def test_library_fingerprint_cache_roundtrip_and_staleness(tmp_path):
         cache.cache_library_fingerprint(p, 100, 111, _fp("deadbeef"))
         hit = cache.get_cached_library_fingerprint(p, 100, 111, "im-7.1")
         assert hit["value"] == "deadbeef"
-        assert hit["strategy"] == "image-content-hash-v1"
+        assert hit["strategy"] == "image-content-hash-v2"
         assert hit["engine_version"] == "im-7.1"
         # Changed file (different size or mtime) -> miss, must be re-fingerprinted.
         assert cache.get_cached_library_fingerprint(p, 101, 111, "im-7.1") is None
@@ -133,7 +134,7 @@ def test_library_fingerprint_cache_roundtrip_and_staleness(tmp_path):
         cache.close()
 
 
-@pytest.mark.spec("RUL-library_file_read_once", "BLD-library_file_fingerprinted",
+@pytest.mark.spec("BLD-library_file_fingerprinted", "RUL-library_fingerprint_kept",
                   test="TST-merge_primitives-a_library_row_is_reused_only_from_the_method_in_use")
 @pytest.mark.parametrize("row,current", [
     ({"engine_version": "im-7.2"}, "im-7.1"),           # another ImageMagick
@@ -153,7 +154,7 @@ def test_a_library_row_is_reused_only_from_the_method_in_use(tmp_path, row, curr
         cache.close()
 
 
-# --- Deep merge-config validation (merge §4 / shared §14.1) --------------------
+# --- Deep merge-config validation (BLD-library_root_validated) -----------------
 
 def _cfg(lib):
     return {"merge": {"library_root": str(lib)}}
@@ -165,7 +166,7 @@ def test_validate_merge_config_accepts_valid(tmp_path):
     utils.validate_merge_config(_cfg(lib), str(ws))      # no raise
 
 
-@pytest.mark.spec("merge-validate-library-root-path-1")
+@pytest.mark.spec("RUL-library_place_checked")
 def test_validate_merge_config_rejects_bad_inputs(tmp_path):
     import pytest
     ws = tmp_path / "ws"; ws.mkdir()
@@ -182,7 +183,7 @@ def test_validate_merge_config_rejects_bad_inputs(tmp_path):
         utils.validate_merge_config(_cfg(inside), str(ws))
 
 
-@pytest.mark.spec("lib-root-validated-outside-1", test="TST-merge_primitives-validate_merge_config_rejects_library_inside_workspace")
+@pytest.mark.spec("RUL-library_place_checked", test="TST-merge_primitives-validate_merge_config_rejects_library_inside_workspace")
 def test_validate_merge_config_rejects_library_inside_workspace(tmp_path):
     import pytest
     ws = tmp_path / "ws"; ws.mkdir()
@@ -203,7 +204,7 @@ def test_a_library_holding_the_workspace_is_refused(tmp_path, holder):
     utils.validate_merge_config(_cfg(sibling), str(ws))   # a sibling of the workspace is fine
 
 
-# --- Shared suffix convention (shared §7.2; merge §7 append-at-max+1) ----------
+# --- Shared suffix convention (BLD-name_suffix; RUL-merge_suffix_above_highest append-at-max+1) ---
 
 def test_allocate_suffix_sequential_and_case_insensitive():
     idx = set()
@@ -216,7 +217,7 @@ def test_allocate_suffix_sequential_and_case_insensitive():
     assert utils.allocate_suffix("x", "tif", set(), start_idx=5) == "x-005.tif"
     # No extension form.
     assert utils.allocate_suffix("base", "", set()) == "base-001"
-    # bare_first (prep's by-date naming, §7.2): the un-suffixed name is taken first, then -NNN.
+    # bare_first (prep's by-date naming, RUL-suffix_choice_by_phase): the un-suffixed name is taken first, then -NNN.
     bidx = set()
     assert utils.allocate_suffix("ts", "jpg", bidx, bare_first=True) == "ts.jpg"
     assert utils.allocate_suffix("ts", "jpg", bidx, bare_first=True) == "ts-001.jpg"   # collision
@@ -244,7 +245,7 @@ def test_max_suffix():
     assert utils.max_suffix("FOO", ["foo-005.arw"]) == 5
 
 
-@pytest.mark.spec("fname-allocation-per-phase-1", "RUL-merge_suffix_above_highest", test="TST-merge_primitives-append_at_max_plus_one_integration")
+@pytest.mark.spec("RUL-suffix_choice_by_phase", "RUL-merge_suffix_above_highest", test="TST-merge_primitives-append_at_max_plus_one_integration")
 def test_append_at_max_plus_one_integration():
     # The merge collision-rename composition: root + max(library, incoming) + 1.
     lib_names = ["ts.arw", "ts-002.arw"]
@@ -255,9 +256,43 @@ def test_append_at_max_plus_one_integration():
     assert utils.allocate_suffix(root, "arw", occupied, start_idx=start) == "ts-005.arw"
 
 
-# --- Archive re-seal (merge §9.4 / shared §13.6) -------------------------------
+# --- The cross-filesystem copy's temporary name (BLD-cross_fs_temp) -------------
 
-@pytest.mark.spec("archive-artifact-ownership-1", "merge-reseal-no-rederive-1", "merge-reseal-reads-not-rederive-geotag-1", test="TST-merge_primitives-reseal_writes_own_manifest_and_never_touches_the_25")
+@pytest.mark.spec("RUL-temp_name_own", test="TST-merge_primitives-a_temporary_copy_bears_a_name_no_photo_bears")
+def test_a_temporary_copy_bears_a_name_no_photo_bears(tmp_path, monkeypatch):
+    """A move into the library across filesystems copies the photo to a temporary name beside its place: a name of its
+    own — a fresh one for every copy, neither the photo's nor any other file's there — and one no photo bears: a
+    hidden name, which prep never takes for media (RUL-not_inventoried), with an extension of no media class. The
+    sweep of a crash's leftover copies goes by that name, and no photo answers to it."""
+    place = tmp_path / "library" / "Trip"
+    place.mkdir(parents=True)
+    resident = "2024-07-03--14-00-00.jpg"
+    (place / resident).write_bytes(b"already in the library")
+    temps, real_copy = [], utils.shutil.copyfile
+
+    def copy(src, dst, *a, **k):
+        temps.append(os.path.basename(dst))
+        return real_copy(src, dst, *a, **k)
+    monkeypatch.setattr(utils.shutil, "copyfile", copy)
+    photos = ["2024-07-03--15-00-00.jpg", "2024-07-03--15-00-00-001.arw", "2024-07-03--16-00-00.mp4"]
+    for name in photos:
+        src = tmp_path / name
+        src.write_bytes(b"photo " + name.encode())
+        utils._move_cross_fs_no_clobber(str(src), str(place / name))
+    assert len(temps) == len(photos) and len(set(temps)) == len(photos), temps     # a fresh name for every copy
+    for temp in temps:
+        assert temp not in photos + [resident], temp
+        assert temp.startswith("."), temp                                         # hidden: never media to prep
+        assert utils.media_class_for_ext(os.path.splitext(temp)[1]) == "other", temp
+        assert temp.startswith(utils.XDEV_TMP_PREFIX) and temp.endswith(utils.XDEV_TMP_SUFFIX)  # what the sweep takes
+    assert not [n for n in photos + [resident]
+                if n.startswith(utils.XDEV_TMP_PREFIX) and n.endswith(utils.XDEV_TMP_SUFFIX)]   # no photo answers to it
+    assert sorted(os.listdir(place)) == sorted(photos + [resident])               # and no copy is left behind
+
+
+# --- Archive re-seal (RUL-merge_reseals) ---------------------------------------
+
+@pytest.mark.spec("RUL-phase_writes_own_records", "RUL-reseal_rederives_nothing", test="TST-merge_primitives-reseal_writes_own_manifest_and_never_touches_the_25")
 def test_reseal_writes_own_manifest_and_never_touches_the_25(tmp_path):
     ws = tmp_path / "ws"
     cd = utils.ensure_control_dir(str(ws))
@@ -292,5 +327,5 @@ def test_reseal_writes_own_manifest_and_never_touches_the_25(tmp_path):
     assert "photos-00-ingest.db" not in c                  # not present in this fixture
     assert c["photos-11-handoff.json"]["sha256"] == utils.sha256_file(
         os.path.join(cd, "photos-11-handoff.json"))
-    # §13.0a: geotag's own manifest is bundled (read), never rewritten.
+    # RUL-phase_writes_own_records: geotag's own manifest is bundled (read), never rewritten.
     assert utils.sha256_file(cal_manifest) == cal_before

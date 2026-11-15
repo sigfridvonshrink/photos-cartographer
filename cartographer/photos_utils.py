@@ -29,7 +29,7 @@ import fcntl
 import contextlib
 import socket
 
-# --- Managed media folders (prep Section 3). The NAMES are config (single source of truth,
+# --- Managed media folders (RUL-folder_names_not_roles). The NAMES are config (single source of truth,
 # seeded into photos-00-config.json); the ROLES, their dedup-retention order, which role is
 # the inbox / read-only by-dest / strays, and photo-vs-video band membership are pipeline
 # logic and stay in code here. Reference folders by role, never by literal name. ---
@@ -52,7 +52,7 @@ FOLDER_DEDUP_PRIORITY = ["photos_by_dest", "photos_by_date", "videos_by_date",
 _MANAGED_ROLES = ["sources", "missing_metadata", "redundant_jpgs",
                   "videos_by_date", "photos_by_date", "photos_by_dest"]
 
-# --- Media classification by extension (prep Section 6.1). The extension LISTS are config (single
+# --- Media classification by extension (RUL-config_lists_extensions). The extension LISTS are config (single
 # source of truth, seeded into photos-00-config.json, frozen per workspace, fingerprinted for
 # staleness); the CLASS VOCABULARY (image/raw/video) is pipeline logic and stays in code, with `other`
 # as the residual (anything not listed). Extensions are canonical: lowercase, no leading dot. ---
@@ -76,17 +76,22 @@ CONFIG = {
         }
     },
     "gpx_root": "/srv/pictures/gpslogs/gpx",
+    # Every setting below bounds ONE thing: none is read for a second purpose, so each can be retuned
+    # without moving another.
+    # A track point this close in time to a photo is the photo's place.
     "gpx_direct_match_max_seconds": 60.0,
     # The interpolation gap is intentionally generous: at a narrow destination (museum/castle/park)
     # the photographer is stationary or slow and GPS goes sparse/absent (indoors, tree cover,
     # battery-save), so bracketing track points can be far apart in TIME yet close in SPACE. The
     # distance + speed caps below are the real safety net (a long gap only interpolates if you moved
-    # <1 km net), so the time gap can be large without placing a photo somewhere it wasn't. (Mirrors
-    # photo_anchor_interpolation_max_gap_seconds, which is already 1800 for the same kind of bracket.)
+    # <1 km net), so the time gap can be large without placing a photo somewhere it wasn't.
     "gpx_interpolation_max_gap_seconds": 1800.0,
     "gpx_interpolation_max_distance_meters": 1000.0,
     "gpx_interpolation_max_speed_kmh": 150.0,
-    # Position-based thresholds for the calibration time-anchor inference (geotag §19):
+    # Two tracks that cover a photo's time and put it farther apart than this are two devices in two
+    # places: nothing says which carried the camera, so the photo is not placed.
+    "gpx_tracks_agree_max_distance_meters": 1000.0,
+    # Position-based thresholds for the calibration time-anchor inference (BLD-anchor_matching):
     # how close a native-GPS frame must be to a GPX point/segment to anchor its real time, and how
     # far supporting anchors' offsets may spread before they conflict. Consumed by geotag.
     # 50m (not a tighter value) tolerates the poorer GPS agreement typical at destinations — old-town
@@ -94,6 +99,18 @@ CONFIG = {
     "gpx_anchor_max_point_distance_meters": 50.0,
     "gpx_anchor_max_segment_distance_meters": 50.0,
     "gpx_anchor_offset_spread_max_seconds": 120.0,
+    # The longest gap between two track points whose segment may anchor a frame lying beside it.
+    "gpx_anchor_max_segment_gap_seconds": 1800.0,
+    # A track that leaves a frame's place and is back within this long passed it once, not twice.
+    "gpx_anchor_same_pass_max_seconds": 120.0,
+    # A track that stayed by a frame's place longer than this cannot say when in the stay the frame was
+    # taken: the offset it gives is imprecise, never applied without being accepted, and drift-checked.
+    # "By the place" is within this distance of the track's closest approach to the frame.
+    "gpx_anchor_stay_max_seconds": 120.0,
+    "gpx_anchor_stay_distance_meters": 10.0,
+    # An accepted or kept offset still stands while the offset now proposed from the camera's own GPS is
+    # within this of it; farther, the proposal is another one and asks again.
+    "gpx_anchor_decision_tolerance_seconds": 120.0,
     # The largest camera-clock error the time-anchor inference will entertain: a GPX point/segment can
     # only anchor a frame if its timestamp is within this window of the frame's naive time (treated as
     # UTC). Bounds the offset by construction, so a track that merely passes through the SAME PLACE on a
@@ -103,12 +120,23 @@ CONFIG = {
     # A genuinely huge clock error (battery reset) falls outside this and is left for a manual offset.
     "gpx_anchor_max_clock_error_seconds": 172800.0,
     # How far past either end of the GPX track a photo's resolved time may be placed by velocity
-    # extrapolation before it is left unplaced (geotag §23/§25 GPS placement). 300s covers a few
+    # extrapolation before it is left unplaced (BLD-track_placement). 300s covers a few
     # edge-of-visit frames (before the first fix / after the last); kept modest because extrapolation
     # has no second bracket and projects the endpoint velocity (risky if the track ended on a drive-away).
     "gpx_extrapolation_max_seconds": 300.0,
-    "photo_anchor_interpolation_max_gap_seconds": 1800.0,
-    "photo_anchor_extrapolation_max_seconds": 300.0,
+    # Extrapolation follows the track's heading over its last stretch of this length (not its last two
+    # points, whose jitter a long projection magnifies), and only while the projection stays within the
+    # distance below and the track was moving no faster than the speed below; otherwise the photo is
+    # placed at the track's end itself.
+    "gpx_extrapolation_heading_seconds": 60.0,
+    "gpx_extrapolation_max_distance_meters": 1000.0,
+    "gpx_extrapolation_max_speed_kmh": 150.0,
+    # One camera's clock offsets found from its own GPS on one day in two destinations, farther apart than
+    # this, are one clock read two ways: neither takes effect until the user says which.
+    "clock_offset_same_day_max_difference_seconds": 120.0,
+    # The drift check shows, and is offered only where there is, track within this long of the photos it
+    # checks: a correction is scrubbed along that track, so it reaches no farther than this.
+    "drift_check_track_window_seconds": 172800.0,
     "camera_time_and_timezone_policy": {
         "default_folder_timezone": "",
         "device_groups": {
@@ -124,13 +152,13 @@ CONFIG = {
     },
     "filename_timestamp_format": "%Y-%m-%d--%H-%M-%S",
     # Format-distribution subfolder names that mark the later development/processing phase
-    # (geotag spec Section 7.1). Their presence anywhere under 6-photos-by-dest hard-stops
+    # (RUL-development_after_merge). Their presence anywhere under 6-photos-by-dest hard-stops
     # geotag (development must not start before time/GPS are fixed). Consumed by geotag.
     "destination_distribution_subfolders": ["jpg", "tif"],
-    # Library-merge settings (shared contract Section 4.3 item 7). Seeded by prep and
+    # Library-merge settings (BLD-config_keys). Seeded by prep and
     # CONSUMED by the merge phase, which does the deep
-    # validation — library_root must be an existing directory outside the managed 0-6 tree, and
-    # the policy values are enum-checked there (merge spec Section 4). Prep only type-validates.
+    # validation — library_root must be an existing directory that is neither the workspace nor
+    # inside it (BLD-library_root_validated). Prep only type-validates.
     "merge": {
         "library_root": "/srv/pictures/5-finished"            # permanent library dir
     }
@@ -170,7 +198,7 @@ def default_config() -> dict:
             if missing:      # it would seed a configuration every phase then refuses
                 raise ValueError(f"Seed defaults {src} are missing setting(s): "
                                  + ", ".join(k for k, _ in missing))
-            unknown = [k for k in unknown_config_settings(data) if k != "jobs"]   # jobs is stripped on seeding
+            unknown = unknown_config_settings(data)
             if unknown:
                 raise ValueError(f"Seed defaults {src} hold setting(s) cartographer does not know: "
                                  + ", ".join(unknown))
@@ -179,15 +207,73 @@ def default_config() -> dict:
     return copy.deepcopy(DEFAULT_CONFIG)
 
 
+# Names a zone database keeps that are no place's zone: `localtime` is the machine's own, the others its
+# defaults — a decision resting on one would change with the host the run happens on.
+_HOST_ZONE_NAMES = ("localtime", "posixrules", "Factory")
+
+
+def valid_iana_timezone(tz) -> bool:
+    """True iff `tz` names a real IANA timezone — one that resolves, and is a place's, not the host's."""
+    import zoneinfo
+    if not isinstance(tz, str) or not tz or tz in _HOST_ZONE_NAMES:
+        return False
+    try:
+        zoneinfo.ZoneInfo(tz)
+        return True
+    except (zoneinfo.ZoneInfoNotFoundError, ValueError, OSError):
+        return False
+
+
+_COUNTRY_TABLE = None
+
+
+def _zone_database_file(name):
+    """The text of one of the zone database's tables (`zone.tab`, `iso3166.tab`), from where this Python
+    reads its zones — the system's database, else the `tzdata` package — or None where neither has it."""
+    import zoneinfo
+    for root in zoneinfo.TZPATH:
+        try:
+            with open(os.path.join(root, name), encoding="utf-8") as f:
+                return f.read()
+        except OSError:
+            continue
+    try:
+        from importlib import resources
+        return (resources.files("tzdata") / "zoneinfo" / name).read_text(encoding="utf-8")
+    except Exception:
+        return None
+
+
+def country_table() -> dict:
+    """{ISO 3166 code: {"name": English name, "zones": [its timezones, sorted]}} from the zone database's
+    own tables — every country a timezone belongs to, and so every country of more than one. {} where the
+    host's zone database ships without them. Read once."""
+    global _COUNTRY_TABLE
+    if _COUNTRY_TABLE is None:
+        zones, names = {}, {}
+        for line in (_zone_database_file("zone.tab") or "").splitlines():
+            cols = line.split("\t")
+            if line.startswith("#") or len(cols) < 3:
+                continue
+            if valid_iana_timezone(cols[2]):
+                zones.setdefault(cols[0], set()).add(cols[2])
+        for line in (_zone_database_file("iso3166.tab") or "").splitlines():
+            cols = line.split("\t")
+            if not line.startswith("#") and len(cols) >= 2:
+                names[cols[0]] = cols[1].strip()
+        _COUNTRY_TABLE = {c: {"name": names.get(c, c), "zones": sorted(z)} for c, z in sorted(zones.items())}
+    return _COUNTRY_TABLE
+
+
 def selected_gpx_root() -> str:
     root = CONFIG.get("gpx_root") or ""
     return os.path.realpath(os.path.abspath(root)) if root else ""
 
-# Track formats (shared contract §8): a file in one of these is a track, never media. Geotag reads only GPX.
+# Track formats (BLD-track_file): a file in one of these is a track, never media. Geotag reads only GPX.
 TRACK_EXTENSIONS = (".gpx", ".kml", ".kmz", ".fit", ".tcx", ".nmea", ".igc")
 
 def is_track_file(name: str) -> bool:
-    """A track file in any format, by name (shared contract §8): anywhere prep inventories, one is a
+    """A track file in any format, by name (RUL-track_files_block_prep): anywhere prep inventories, one is a
     blocker, never media."""
     return name.lower().endswith(TRACK_EXTENSIONS)
 
@@ -195,7 +281,7 @@ def is_gpx_file(name: str) -> bool:
     """A GPX track file, by name — the one track format geotag reads under gpx_root."""
     return name.lower().endswith(".gpx")
 
-# Media classification by extension (prep Section 6.1). The ext->class map is DERIVED from the active
+# Media classification by extension (RUL-config_lists_extensions). The ext->class map is DERIVED from the active
 # CONFIG's `media_extensions` lists, rebuilt by _refresh_media_class_map() at import and whenever
 # load_or_seed_config swaps in a workspace's authoritative config. `other` is the residual.
 def _media_extensions(cfg=None):
@@ -218,14 +304,14 @@ def _refresh_media_class_map():
 
 def media_class_for_ext(ext: str, cfg=None) -> str:
     """Classify a file by extension into image/raw/video/other (case-insensitive, leading dot
-    optional). The extension lists are config (prep Section 6.1); `other` is the residual. Pass `cfg`
+    optional). The extension lists are config (RUL-config_lists_extensions); `other` is the residual. Pass `cfg`
     to classify against a specific config rather than the active global CONFIG."""
     m = _build_media_class_map(cfg) if cfg is not None else _MEDIA_CLASS_BY_EXT
     return m.get((ext or "").lower().lstrip('.'), "other")
 
 def exiftool_mime_type(path: str):
     """exiftool's reported MIMEType for one file (e.g. 'image/x-fujifilm-raf', 'video/mp4'), or None if
-    exiftool is absent/fails or reports nothing. Used by prep's stray-media detection (Section 6.1) to
+    exiftool is absent/fails or reports nothing. Used by prep's stray-media detection (BLD-stray_media_probe) to
     flag a dump extension that exiftool sees as image/video but the workspace's media_extensions config
     doesn't list. This is the single mockable seam for that probe."""
     import subprocess
@@ -239,19 +325,19 @@ def exiftool_mime_type(path: str):
     return (r.stdout or "").strip() or None
 
 
-# Exiftool intermediates/backups of a media file: `<media>_exiftool_tmp` (the temp `-overwrite_original`
-# writes then atomically renames over the original) and `<media>_original` (the backup exiftool keeps
-# when `-overwrite_original` is NOT used). A clean Ctrl-C is self-cleaned by exiftool, but a hard kill
-# (SIGKILL/OOM/power loss) can orphan one in a managed folder; prep recognizes and quarantines these
-# (the live original is always intact — the rename is atomic). Geotag's writer also unlinks a
-# stale `_exiftool_tmp` for a file right before it rewrites it.
-_EXIFTOOL_ARTIFACT_SUFFIXES = ("_exiftool_tmp", "_original")
+# The intermediate of a write to a media file: `<media>_exiftool_tmp`, the new file geotag has exiftool write
+# beside the photo and then renames over it (BLD-metadata_safe_write). A hard kill (SIGKILL/OOM/power loss) can
+# orphan one in a managed folder; prep recognizes and quarantines these (the live original is always intact —
+# the rename is atomic). Geotag's writer also unlinks a stale `_exiftool_tmp` for a file right before it
+# rewrites it. `<media>_original` is NOT one: no write of the pipeline leaves it, so that name is the backup
+# exiftool keeps of a USER's own edit — the camera's original — and is treated as any file of no media class
+# (RUL-user_backup_is_a_stray).
+_EXIFTOOL_ARTIFACT_SUFFIXES = ("_exiftool_tmp",)
 
 def exiftool_artifact_base(name: str) -> str:
-    """If `name` is an exiftool intermediate/backup OF A MEDIA FILE, return the underlying media
+    """If `name` is an exiftool write's intermediate OF A MEDIA FILE, return the underlying media
     filename; otherwise None. The media-extension check on the stripped name keeps unrelated files
-    (e.g. a user's `notes_original.txt`) from matching — only `<media-ext>_original` /
-    `<media-ext>_exiftool_tmp` qualify."""
+    from matching — only `<media-ext>_exiftool_tmp` qualifies."""
     for suffix in _EXIFTOOL_ARTIFACT_SUFFIXES:
         if name.endswith(suffix):
             base = name[: -len(suffix)]
@@ -292,13 +378,13 @@ def missing_managed_folders(ws: str, cfg=None) -> list:
             if not os.path.isdir(os.path.join(ws, folder_name(r, cfg)))]
 
 def top_level_links(ws: str) -> list:
-    """Every symbolic link at the workspace's top level, hidden or not, dangling or not (shared
-    contract §4): each blocks, and none is followed. Sorted names."""
+    """Every symbolic link at the workspace's top level, hidden or not, dangling or not
+    (RUL-top_level_only_managed, RUL-link_never_followed): each blocks, and none is followed. Sorted names."""
     return sorted(n for n in os.listdir(ws) if os.path.islink(os.path.join(ws, n)))
 
 def misplaced_top_level_entries(ws: str, cfg=None) -> list:
-    """The entries at an initialized workspace's top level that do not belong there (shared contract
-    §4): anything but a managed folder or a hidden entry — a file, a folder, a named pipe or any other
+    """The entries at an initialized workspace's top level that do not belong there (RUL-top_level_only_managed):
+    anything but a managed folder or a hidden entry — a file, a folder, a named pipe or any other
     kind. Links are reported by `top_level_links`, and a managed folder's name held by something that
     is not a folder by `missing_managed_folders`, so neither is listed here. Every phase blocks on
     the same list. Sorted names."""
@@ -318,7 +404,7 @@ CAMERA_IDENTITY_FIELDS = [
     "SerialNumber", "Make", "Model", "OwnerName",
 ]
 
-# --- Workspace control directory layout (shared contract Section 5) ----------
+# --- Workspace control directory layout (BLD-control_directory_contents) ----
 # Every pipeline control/artifact file lives under CONTROL_DIR; the media scan
 # skips it wholesale. These helpers are the single source of truth for the names
 # and locations so the writers and the scanner can never disagree.
@@ -332,7 +418,7 @@ def guard_path(ws: str) -> str:
     return os.path.join(ws, CONTROL_DIR, "photos-00-workspace-guard")
 
 def sealed_marker_path(ws: str) -> str:
-    """The terminal/seal marker a successful merge writes (prep Section 6.2 / shared 13.7).
+    """The terminal/seal marker a successful merge writes (BLD-seal_marker).
     Its presence seals the workspace: every phase hard-stops and mutates nothing. Prep only
     READS it; the merge phase (photos-3-merge) writes it on a successful merge."""
     return os.path.join(ws, CONTROL_DIR, "photos-00-sealed.json")
@@ -341,25 +427,47 @@ def is_sealed(ws: str) -> bool:
     return os.path.exists(sealed_marker_path(ws))
 
 def likely_new_dump(ws: str) -> bool:
-    """Whether anything sits where a dump would land (shared contract §13.7 item 3): an entry at the
+    """Whether anything sits where a dump would land (RUL-sealed_new_dump_warned): an entry at the
     workspace's top level, file or folder, other than its managed folders and hidden entries, or
     anything at all in the inbox. Every command refusing a sealed workspace asks this, so each points
-    out a dump dropped there the same way, and none moves it."""
-    managed = {folder_name(r) for r in FOLDER_ROLES}
+    out a dump dropped there the same way, and none moves it. It asks before the workspace's
+    configuration is loaded (the editor never loads it), so the folders are named by that file, read
+    here (`workspace_folders`), not by CONFIG."""
+    folders = workspace_folders(ws)
+    managed = {folders[r] for r in FOLDER_ROLES}
     if any(not n.startswith('.') and n not in managed for n in os.listdir(ws)):
         return True
-    inbox = os.path.join(ws, folder_name('sources'))
+    inbox = os.path.join(ws, folders['sources'])
     return os.path.isdir(inbox) and bool(os.listdir(inbox))
 
 def config_path(ws: str) -> str:
     # Path only; load_or_seed_config (below) seeds it on first prep run, then reads it as authoritative.
     return os.path.join(ws, CONTROL_DIR, "photos-00-config.json")
 
+def read_workspace_config(ws: str):
+    """The workspace's configuration as its file holds it, or None where the file cannot be read or is
+    not a JSON object. Only reads: CONFIG is left as it is, so a caller that has not loaded the
+    workspace's configuration (a seal check, the console) can still go by it, as a fresh run would."""
+    try:
+        with open(config_path(ws), encoding="utf-8") as f:
+            cfg = json.load(f)
+    except (OSError, ValueError):
+        return None
+    return cfg if isinstance(cfg, dict) else None
+
+def workspace_folders(ws: str) -> dict:
+    """The folder names (role -> name) the workspace's configuration file gives, read without touching
+    CONFIG; the built-in names where that file cannot be read or does not name every folder."""
+    folders = (read_workspace_config(ws) or {}).get("folders")
+    if isinstance(folders, dict) and all(isinstance(folders.get(r), str) for r in FOLDER_ROLES):
+        return folders
+    return dict(DEFAULT_FOLDERS)
+
 def db_path(ws: str) -> str:
     return os.path.join(ws, CONTROL_DIR, "photos-00-ingest.db")
 
 def plan_memo_db_path(ws: str) -> str:
-    """The plan-time decode memo (prep §10.3) — a SEPARATE database from the workspace cache.
+    """The plan-time decode memo (BLD-plan_memo) — a SEPARATE database from the workspace cache.
 
     Separate on purpose: `plan` opens `db_path` READ-ONLY, which is what makes "planning never mutates
     the cache" true by construction rather than by discipline, and that must stay true. The memo is not
@@ -369,7 +477,7 @@ def plan_memo_db_path(ws: str) -> str:
     return os.path.join(ws, CONTROL_DIR, "photos-00-plan-memo.db")
 
 def track_memo_db_path(ws: str) -> str:
-    """Geotag's parse memo for the tracks (shared §10): each track file's parsed points, keyed by the
+    """Geotag's parse memo for the tracks (BLD-idempotency): each track file's parsed points, keyed by the
     SHA-256 of its bytes, so a track unchanged since the last run is not parsed again. Scratch: no
     decision, no history, safe to delete at any time, neither journalled nor archived."""
     return os.path.join(ws, CONTROL_DIR, "photos-00-track-memo.db")
@@ -377,7 +485,7 @@ def track_memo_db_path(ws: str) -> str:
 PREP_PLAN_ARTIFACT = "photos-10-prep-plan.json"
 
 def prep_plan_path(ws: str) -> str:
-    """The prep-phase plan artifact (prep §14.1), written by `plan` and consumed by `dry-run`/`execute`
+    """The prep-phase plan artifact (BLD-canonical_plan_paths), written by `plan` and consumed by `dry-run`/`execute`
     from this canonical control-dir path — no flag tells the phase where to look. `photos-10-` precedes
     the `photos-11-handoff.json` it leads to. Re-planning backs up any prior plan via
     backup_existing_artifact (the shared `-NNN` suffix), so a superseded plan stays recoverable."""
@@ -387,17 +495,39 @@ def handoff_path(ws: str) -> str:
     return os.path.join(ws, CONTROL_DIR, "photos-11-handoff.json")
 
 
+def hidden_folder_holds_files(path: str) -> bool:
+    """Whether the folder at `path` holds a file anywhere beneath it — any entry but a folder, hidden or not; a
+    link counts. Prep does not read into a hidden folder, so one holding files inside a managed folder other than
+    the inbox stops it (RUL-hidden_folder_among_photos_blocks); one holding only empty folders does not."""
+    for root, dirs, files in os.walk(path):
+        if files or any(os.path.islink(os.path.join(root, d)) for d in dirs):
+            return True
+    return False
+
+
 def by_dest_reprep_pending(ws: str, handoff: dict):
-    """An example by-dest photo/raw the handoff has NOT recorded — or a by-date photo the handoff still
-    lists but that is gone from disk — else None. Non-None means the user moved files into/within
-    `6-photos-by-dest` since the last prep, so the handoff is stale and a re-prep (`prep plan` then
-    `prep execute`) is needed before geotag. The cheap, exact signal shared by geotag's re-prep gate and
-    prep's nothing-to-do guard, so the two never disagree about whether prep still has work to do."""
+    """An example photo whose record in the handoff no longer holds, else None: a by-dest photo/raw the
+    handoff has NOT recorded, a by-date photo the handoff still lists but that is gone from disk, or a
+    by-dest photo the handoff records that is gone or differs in size or modification time from its
+    record (BLD-reprep_pending) — or a hidden folder in by-dest holding files, which prep blocks on. Non-None
+    means the user moved, removed or changed files since the last prep, so
+    the handoff is stale and a re-prep (`prep plan` then `prep execute`) is needed before geotag.
+    `stat`-level only, no file read. The cheap, exact signal shared by geotag's re-prep gate and prep's
+    nothing-to-do guard, so the two never disagree about whether prep still has work to do."""
     recorded = {f.get("relative_path") for f in (handoff.get("files") or [])}
     by_dest = folder_name('photos_by_dest')
     base = os.path.join(ws, by_dest)
     if os.path.isdir(base):
         for root, _dirs, files in os.walk(base):
+            # A hidden folder is walked no further than prep walks it (RUL-hidden_folder_among_photos_blocks): a
+            # photo inside one is never asked to be recorded, for no re-prep could. A hidden folder holding files
+            # is itself the example — prep blocks on it, naming it, so re-running prep is still the way on.
+            hidden = sorted(d for d in _dirs if d.startswith('.'))
+            _dirs[:] = [d for d in _dirs if not d.startswith('.')]
+            for d in hidden:
+                p = os.path.join(root, d)
+                if not os.path.islink(p) and hidden_folder_holds_files(p):
+                    return os.path.relpath(p, ws)
             for f in sorted(files):
                 if f.startswith('.'):
                     continue
@@ -407,13 +537,21 @@ def by_dest_reprep_pending(ws: str, handoff: dict):
     by_date = folder_name('photos_by_date')
     for f in (handoff.get("files") or []):
         rel = f.get("relative_path") or ""
-        if rel.startswith(by_date + "/") and f.get("media_class") in ("image", "raw") \
-                and not os.path.exists(os.path.join(ws, rel)):
+        if f.get("media_class") not in ("image", "raw"):
+            continue
+        if rel.startswith(by_date + "/") and not os.path.exists(os.path.join(ws, rel)):
             return rel
+        if rel.startswith(by_dest + "/"):
+            try:
+                st = os.stat(os.path.join(ws, rel))
+            except OSError:
+                return rel                  # recorded, now gone
+            if (f.get("size"), f.get("mtime_ns")) != (st.st_size, st.st_mtime_ns):
+                return rel                  # recorded, since changed
     return None
 
 def prep_log_path(ws: str) -> str:
-    """End-of-prep transformation log (prep §16.1 / shared §13.3)."""
+    """End-of-prep transformation log (BLD-phase_logs)."""
     return os.path.join(ws, CONTROL_DIR, "photos-15-prep-log.json")
 
 def prep_log_blocker(ws: str, handoff: dict):
@@ -434,9 +572,29 @@ def prep_log_blocker(ws: str, handoff: dict):
                 "`prep execute` again")
     return None
 
+def retaken_fingerprints(prep_log: dict):
+    """`(earlier, problem)` from prep's log: for each photo whose fingerprint was taken again with a new
+    value, the value before it — `{new: old}`, one step back per `fingerprint_retaken` step — or, where one
+    value is said to follow from two, or two from one, the old-to-new mapping not being one to one, `({}, why)`
+    (BACKLOG 11; BLD-original_values_follow_fingerprint)."""
+    earlier, later = {}, {}
+    for entry in ((prep_log or {}).get("photos") or {}).values():
+        for st in (entry or {}).get("journey") or []:
+            if not isinstance(st, dict) or st.get("action") != "fingerprint_retaken":
+                continue
+            old, new = st.get("from"), st.get("to")
+            if not old or not new:
+                continue
+            if earlier.get(new, old) != old or later.get(old, new) != new:
+                return {}, (f"prep's log maps fingerprint {old[:12]}… or {new[:12]}… to more than one value; "
+                            "a photo's own values cannot follow it")
+            earlier[new], later[old] = old, new
+    return earlier, None
+
+
 def entries_not_carried(earlier: dict, later: dict) -> list:
     """Fingerprints whose entry in an earlier phase's log is not carried whole into a later phase's
-    copy (§13.0a): a later phase only adds, so the later entry keeps every field the earlier one has,
+    copy (BLD-log_copy_checked): a later phase only adds, so the later entry keeps every field the earlier one has,
     unchanged, and its journey begins with the earlier journey, step for step."""
     out = []
     for fp, entry in sorted((earlier or {}).items()):
@@ -448,12 +606,12 @@ def entries_not_carried(earlier: dict, later: dict) -> list:
     return out
 
 def prep_db_snapshot_path(ws: str) -> str:
-    """End-of-prep DB backup snapshot (shared §13.4a)."""
+    """End-of-prep DB backup snapshot (BLD-database_images)."""
     return os.path.join(ws, CONTROL_DIR, "photos-15-prep-ingest.db")
 
 def workspace_id(ws: str):
     """The workspace's own identity: the id of the prep run that initialized it, which prep records in
-    the guard (prep §3.1) and nothing changes after — unlike the folder's name. None if unreadable."""
+    the guard (BLD-archive_manifest) and nothing changes after — unlike the folder's name. None if unreadable."""
     try:
         with open(guard_path(ws)) as f:
             return (json.load(f) or {}).get("initialized_by_run")
@@ -464,13 +622,13 @@ def workspace_id(ws: str):
 def _not_archived(name: str) -> bool:
     """A control-directory file the archival package does not carry: transient (a lock, a temp file,
     SQLite's rollback journal), the plan and track memos (scratch), or an archive itself."""
-    return (name.endswith(".lock") or name.startswith(".tmp-") or name.endswith("-journal")
+    return (name.endswith(".lock") or name.startswith(".tmp-") or name.endswith(".tmp") or name.endswith("-journal")
             or name in (os.path.basename(plan_memo_db_path("")), os.path.basename(track_memo_db_path("")))
             or name.endswith("-archive.tar.gz"))
 
 
 def control_archive_members(ws: str, exclude=()) -> list:
-    """The control directory's files the archival package carries (§13.2), as workspace-relative
+    """The control directory's files the archival package carries (BLD-archive_manifest), as workspace-relative
     paths in sorted order: every file but the transient ones and those in `exclude`."""
     root = os.path.join(ws, CONTROL_DIR)
     out = []
@@ -484,7 +642,7 @@ def control_archive_members(ws: str, exclude=()) -> list:
 
 
 def write_control_archive(ws: str, archive_path: str, members) -> None:
-    """Write the archival package (§13.2): a gzipped tar of `members` (workspace-relative paths), in
+    """Write the archival package (BLD-archive_manifest): a gzipped tar of `members` (workspace-relative paths), in
     the given order, to a temp name in the control directory, then an atomic rename."""
     import tarfile
     import uuid
@@ -493,7 +651,7 @@ def write_control_archive(ws: str, archive_path: str, members) -> None:
         with tarfile.open(tmp, "w:gz") as tar:
             for rel in members:
                 tar.add(os.path.join(ws, rel), arcname=rel, recursive=False)
-        os.replace(tmp, archive_path)
+        replace_durably(tmp, archive_path)
     finally:
         if os.path.exists(tmp):
             os.remove(tmp)
@@ -501,7 +659,7 @@ def write_control_archive(ws: str, archive_path: str, members) -> None:
 
 def write_db_snapshot(conn, dest_path: str) -> None:
     """Capture a transactionally-consistent point-in-time image of `conn`'s database to `dest_path`
-    (shared contract §13.4a): VACUUM INTO a temp name, VERIFY it, then atomic rename — so an
+    (BLD-database_images): VACUUM INTO a temp name, VERIFY it, then atomic rename — so an
     interrupted capture leaves either the prior snapshot or the complete new one, never a corrupt/torn
     file. Shared by prep (photos-15-prep-ingest.db) and geotag finalize (photos-26-geotag-ingest.db)."""
     import uuid
@@ -510,14 +668,14 @@ def write_db_snapshot(conn, dest_path: str) -> None:
         if os.path.exists(tmp):
             os.remove(tmp)
         conn.execute("VACUUM INTO ?", (tmp,))
-        # Verify the temp is a sound SQLite image before exposing it under the final name (§13.4a.2).
+        # Verify the temp is a sound SQLite image before exposing it under the final name (BLD-database_images).
         chk = sqlite3.connect(tmp)
         try:
             if (chk.execute("PRAGMA quick_check").fetchone() or [None])[0] != "ok":
                 raise RuntimeError("snapshot failed its integrity check")
         finally:
             chk.close()
-        os.replace(tmp, dest_path)
+        replace_durably(tmp, dest_path)
     except Exception as e:
         if os.path.exists(tmp):
             try:
@@ -532,7 +690,7 @@ def journal_path(ws: str, run_id: str) -> str:
 def sha256_file(path: str) -> str:
     """SHA-256 over a file's exact bytes — the byte-hash used to verify JSON-artifact
     dependencies (the prep handoff and the numbered geotag artifacts are re-hashed from
-    their exact bytes before use, shared contract §9.1 / geotag §4)."""
+    their exact bytes before use, RUL-hash_is_the_dependency_check)."""
     h = hashlib.sha256()
     with open(path, "rb") as f:
         for chunk in iter(lambda: f.read(65536), b""):
@@ -541,31 +699,33 @@ def sha256_file(path: str) -> str:
 
 def sha256_text(text: str) -> str:
     """SHA-256 over a UTF-8 string — used for field-scoped config fingerprints (a SHA-256 over a
-    canonical serialization of a config sub-block, shared contract §4.2)."""
+    canonical serialization of a config sub-block, BLD-config_fingerprints)."""
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
 def folders_fingerprint(cfg=None) -> str:
-    """Field-scoped fingerprint of the folder-name set (shared contract §4.2). A change restales prep's
+    """Field-scoped fingerprint of the folder-name set (BLD-config_fingerprints). A change restales prep's
     plan (organization/routing keyed on the names) and the geotag/merge plans (which locate by-dest by
     name); it does not touch caches that don't depend on folder names."""
     return sha256_text(json.dumps(_folders(cfg), sort_keys=True))
 
 def media_extensions_fingerprint(cfg=None) -> str:
-    """Field-scoped fingerprint of the media-extension classification lists (shared contract §4.2). A
+    """Field-scoped fingerprint of the media-extension classification lists (BLD-config_fingerprints). A
     change restales prep's plan: it flips files between media and stray and between image/raw/video, so
     the organization itself changes."""
     return sha256_text(json.dumps(_media_extensions(cfg), sort_keys=True))
 
 def json_dependency(name: str, ws: str, abs_path: str) -> dict:
-    """The §4 JSON-artifact dependency entry for a numbered artifact / the prep handoff: its name,
-    workspace-relative path, and the SHA-256 of its exact bytes. Recorded in a downstream
-    artifact's `depends_on` so the dependency can be re-read and re-hashed before use (§6)."""
+    """The JSON-artifact dependency entry (RUL-dependencies_recorded_in_record) for a numbered artifact / the
+    prep handoff: its name, workspace-relative path, and the SHA-256 of its exact bytes. Recorded in a downstream
+    artifact's `depends_on` so the dependency can be re-read and re-hashed before use
+    (RUL-hash_is_the_dependency_check)."""
     return {"dependency_type": "json_artifact", "artifact_name": name,
             "artifact_path": os.path.relpath(abs_path, ws), "sha256": sha256_file(abs_path)}
 
 # Per-run audit keys that describe THIS run, not the organized workspace state, and so must NOT enter
-# the handoff content fingerprint — they change run to run even when the result does not (§16.2):
-# the top-level run_metadata/diagnostics/content_fingerprint + the execution-journal and prep-log pointers, and —
+# the handoff content fingerprint — they change run to run even when the result does not
+# (BLD-handoff_content_fingerprint): the top-level run_metadata/diagnostics/content_fingerprint + the
+# execution-journal and prep-log pointers, and —
 # nested inside camera_groups / destination_folders — the cache-freshness counts (extracted-vs-reused
 # flips on a no-op re-run) and the conflicts/duplicates (only populated on the run that quarantined).
 _HANDOFF_VOLATILE_KEYS = frozenset({
@@ -581,20 +741,20 @@ def _strip_handoff_volatile(obj):
     return obj
 
 def handoff_content_fingerprint(handoff: dict) -> str:
-    """SHA-256 over the DETERMINISTIC content of the prep handoff (§16.2) — the file inventory, camera-
-    group identity, folder mutability, and the cache/config/extractor fingerprints — with every per-run
-    AUDIT field recursively removed (`run_metadata`, `diagnostics`, the execution-journal pointer, the
-    `content_fingerprint` field itself, and the nested `cache_freshness` / `conflicts_or_duplicates`).
+    """SHA-256 over the DETERMINISTIC content of the prep handoff (BLD-handoff_content_fingerprint) — the
+    file inventory, camera-group identity, folder mutability, and the cache/config/extractor fingerprints —
+    with every per-run AUDIT field recursively removed (`run_metadata`, `diagnostics`, the execution-journal
+    pointer, the `content_fingerprint` field itself, and the nested `cache_freshness` / `conflicts_or_duplicates`).
     Byte-stable for a given workspace state, so a no-op prep re-run (which only refreshes run metadata
     and freshness counts) leaves it unchanged and never restales geotag's downstream artifacts.
-    The whole-file SHA-256 stays the archival-integrity hash (§13), not the staleness trigger (§4.2)."""
+    The whole-file SHA-256 stays the archival-integrity hash, not the staleness trigger (BLD-handoff_hashes)."""
     return hashlib.sha256(
         json.dumps(_strip_handoff_volatile(handoff), sort_keys=True).encode("utf-8")).hexdigest()
 
 def verify_json_dependency(dep: dict, ws: str) -> bool:
     """Re-read the named JSON dependency from disk and re-hash its exact bytes, returning True iff
-    it still matches the recorded SHA-256 (§6: no mtime/size/cached shortcuts). A missing file or
-    any mismatch is stale → False."""
+    it still matches the recorded SHA-256 (RUL-hash_is_the_dependency_check: no mtime/size/cached shortcuts).
+    A missing file or any mismatch is stale → False."""
     p = os.path.join(ws, dep.get("artifact_path", ""))
     try:
         return os.path.isfile(p) and sha256_file(p) == dep.get("sha256")
@@ -612,7 +772,7 @@ def plan_dependencies_fresh(ws: str, depends_on: dict, current_fingerprints: dic
     phase's expensive/unique work (e.g. geotag's GPX rebuild). For each entry in `depends_on`:
 
     - a **json_artifact** dep is re-read and re-hashed via :func:`verify_json_dependency` (always
-      checked — small files, cheap; §6 exact-bytes, no mtime shortcut);
+      checked — small files, cheap; RUL-hash_is_the_dependency_check, no mtime shortcut);
     - a **handoff_content** dep is checked iff the caller supplied the current fingerprint under that
       key in `current_fingerprints` (comparing to the recorded `content_fingerprint`);
     - any **scalar fingerprint** (config/folders/media-extensions/…) is checked iff the caller
@@ -645,23 +805,25 @@ FINALIZED_MEDIA_ARTIFACT = "photos-26-finalized-media.json"
 
 def finalized_media_path(ws: str) -> str:
     """Where finalize records each by-dest photo as geotag left it (size, mtime): merge refuses a photo
-    that has changed since (shared §9)."""
+    that has changed since (BLD-finalized_media)."""
     return os.path.join(ws, CONTROL_DIR, FINALIZED_MEDIA_ARTIFACT)
 
 
 def write_json_artifact(path: str, obj: dict) -> str:
     """Atomically write a numbered artifact as deterministic, pretty-printed, sorted JSON
     (temp → atomic rename). Returns its SHA-256. Artifacts must be byte-deterministic for a given
-    workspace state so downstream re-hashing is stable (§4)."""
+    workspace state so downstream re-hashing is stable."""
     _atomic_write_text(path, json.dumps(obj, indent=2, sort_keys=True))
     return sha256_file(path)
 
 def backup_existing_artifact(path: str):
-    """If an artifact already exists at `path`, rename it aside to the next free `<stem>-NNN<ext>`
+    """If an artifact already exists at `path`, copy it aside to the next free `<stem>-NNN<ext>`
     sibling — the shared `-{idx:03d}` no-clobber suffix (see allocate_suffix) — and return the backup
     path; if nothing is there, return None. Used before re-writing a canonical plan/decision artifact
-    so the prior version is preserved rather than clobbered (shared contract §5). The rename is an
-    atomic same-directory os.replace, so the prior bytes are never lost mid-swap."""
+    so the prior version is preserved rather than clobbered (BLD-plan_backups). Copied, never moved:
+    the artifact stays at its path at every instant, so a run killed between the backup and the write
+    leaves the decisions where the next run reads them — never an empty slot it would take for "nothing
+    decided yet". The copy lands under its final name only whole (temp + atomic rename)."""
     if not os.path.lexists(path):
         return None
     d = os.path.dirname(path) or "."
@@ -669,7 +831,9 @@ def backup_existing_artifact(path: str):
     existing = {n.lower() for n in os.listdir(d)}
     name = allocate_suffix(stem, ext.lstrip("."), existing, start_idx=1, bare_first=False)
     backup = os.path.join(d, name)
-    os.replace(path, backup)
+    tmp = os.path.join(d, ".tmp-" + name)
+    shutil.copy2(path, tmp)
+    replace_durably(tmp, backup)
     return backup
 
 def write_versioned_json(path: str, obj: dict):
@@ -704,7 +868,7 @@ def ensure_control_dir(ws: str) -> str:
 # --- Library (merge phase) -----------------------------------------------------
 # The permanent library at library_root is final and owned: it carries NONE of the workspace
 # scaffolding (no 0-6 folders, no guard, no lifecycle). Its sole identity is a single dotfile
-# marker in its root; its lock is another dotfile (merge spec §4/§12, shared contract §15.1/§15.2).
+# marker in its root; its lock is another dotfile (BLD-library_marker, BLD-library_lock).
 # These names + helpers are consumed by the merge phase (photos-3-merge); prep/geotag
 # neither read nor write them.
 LIBRARY_MARKER = ".photos-library"
@@ -715,7 +879,7 @@ def library_marker_path(library_root: str) -> str:
 
 def is_library(library_root: str) -> bool:
     """True iff library_root carries the .photos-library marker — the ONLY check that a directory is
-    a library (merge spec §4). No structural inspection of the library beyond this marker."""
+    a library (RUL-library_known_by_mark). No structural inspection of the library beyond this marker."""
     return os.path.isfile(library_marker_path(library_root))
 
 def write_library_marker(library_root: str) -> str:
@@ -730,20 +894,20 @@ def write_library_marker(library_root: str) -> str:
     return p
 
 def library_lock_path(library_root: str) -> str:
-    """The library-side lock dotfile (shared contract §15.2): <library_root>/.photos-merge.lock."""
+    """The library-side lock dotfile (BLD-library_lock): <library_root>/.photos-merge.lock."""
     return os.path.join(library_root, LIBRARY_LOCK)
 
 def write_sealed_marker(ws: str, run_id: str, library_root: str) -> str:
     """Write the terminal/sealed marker photos-00-sealed.json on a fully successful merge
-    (merge spec §9.4 / shared contract §13.7). Atomic (write_json_artifact); returns its SHA-256.
+    (BLD-seal_marker). Atomic (write_json_artifact); returns its SHA-256.
     Afterwards is_sealed(ws) is True and every media-mutating phase hard-stops on this workspace."""
     ensure_control_dir(ws)
     return write_json_artifact(sealed_marker_path(ws),
                                {"sealed": True, "merged_run_id": run_id, "library_root": library_root})
 
-# Shared no-clobber suffix convention (shared contract §7.2): `<base>[.ext]` for the first free name,
+# Shared no-clobber suffix convention (BLD-name_suffix): `<base>[.ext]` for the first free name,
 # then `<base>-NNN[.ext]`, allocated against a case-insensitive occupied-name set. Prep's by-date naming
-# takes the bare name first and suffixes only on a collision (`bare_first=True`, §7.2); merge renames a
+# takes the bare name first and suffixes only on a collision (`bare_first=True`, BLD-name_suffix); merge renames a
 # colliding incoming file (`bare_first=False` — the bare root belongs to the resident library file, so
 # the incoming is ALWAYS suffixed, appended from max+1; see suffix_root/max_suffix). Single source of
 # truth so the phases can never drift in how a differentiating suffix is formed.
@@ -759,8 +923,8 @@ def untimed_stem(base: str) -> str:
 
 
 def filename_format_changed(recorded, current) -> str:
-    """The blocker for a filename format changed after prep named a workspace's files in another (shared
-    §6): the format is fixed for the workspace, so the way on is to set it back."""
+    """The blocker for a filename format changed after prep named a workspace's files in another
+    (RUL-format_fixed_once_named): the format is fixed for the workspace, so the way on is to set it back."""
     return (f"The filename format has changed since prep named this workspace's files ({recorded!r}, now "
             f"{current!r}). Set filename_timestamp_format back to {recorded!r}; the new format can be used "
             "in the next workspace.")
@@ -789,7 +953,7 @@ def allocate_suffix(base: str, ext: str, index: set, start_idx: int = 1, bare_fi
     """Allocate the next free name not already in `index` (compared case-insensitively), adding the
     chosen lower-cased name to `index` so sequential allocations in the same batch never collide.
 
-    With `bare_first` (prep's by-date naming, §7.2), the un-suffixed `<base>[.ext]` is tried first and
+    With `bare_first` (prep's by-date naming, BLD-name_suffix), the un-suffixed `<base>[.ext]` is tried first and
     used when free — a lone file gets a bare timestamp name, the `-NNN` suffix appears only on a genuine
     collision. Without it (the default; merge collision renames and prep's init-move/extension-normalize
     paths, which are only ever reached once the bare name is already taken), the bare name is skipped and
@@ -831,11 +995,11 @@ def max_suffix(root: str, names) -> int:
             hi = max(hi, int(m.group(1)))
     return hi
 
-# Library-merge archival re-seal (merge spec §9.4 step 1 / shared contract §13.6). On a successful
+# Library-merge archival re-seal (RUL-merge_reseals). On a successful
 # merge, the package gains merge's own artifacts; merge re-bundles by recomputing every present
 # artifact's SHA-256 into its OWN photos-35-archive-manifest.json, which supersedes geotag's
 # photos-26 manifest (parallel to the photos-15→25→35 log chain). It reads each artifact and never
-# rewrites another phase's file (shared contract §13.0a). Consumed by photos-3-merge.
+# rewrites another phase's file (RUL-phase_writes_own_records). Consumed by photos-3-merge.
 MERGE_ARCHIVE_MANIFEST = "photos-35-archive-manifest.json"
 GEOTAG_ARCHIVE_MANIFEST = "photos-26-archive-manifest.json"
 MERGE_ARCHIVE = "photos-35-archive.tar.gz"
@@ -848,8 +1012,8 @@ def reseal_archival_package(ws: str, *, workspace_name: str, plan_id: str, execu
     """Re-seal the archival package after a successful merge: list every file of the control directory
     the package carries (merge's photos-31/35 records and the live DB among them) with its SHA-256 in
     merge's own photos-35-archive-manifest.json, which supersedes geotag's photos-26 manifest, and
-    archive them with it into photos-35-archive.tar.gz (shared contract §13.6). Reads each file; never
-    mutates another phase's (§13.0a). Returns the manifest's SHA-256."""
+    archive them with it into photos-35-archive.tar.gz (BLD-archive_manifest). Reads each file; never
+    mutates another phase's (RUL-phase_writes_own_records). Returns the manifest's SHA-256."""
     members = control_archive_members(ws, exclude=(MERGE_ARCHIVE_MANIFEST,))
     contents = {os.path.relpath(rel, CONTROL_DIR): {"path": rel, "sha256": sha256_file(os.path.join(ws, rel))}
                 for rel in members}
@@ -891,8 +1055,8 @@ def quarantine_footprint(ws: str) -> dict:
             plan_ids.append(entry.name)
             for root, _dirs, fnames in os.walk(entry.path):
                 for fn in fnames:
-                    if fn == "manifest.json":
-                        continue
+                    if fn == "manifest.json" or (root == entry.path and fn.startswith(".tmp-manifest-")):
+                        continue        # the manifest, or what an interrupted rewrite of it left: not a quarantined file
                     try:
                         total_bytes += os.path.getsize(os.path.join(root, fn))
                         total_files += 1
@@ -943,7 +1107,7 @@ def _atomic_write_text(path: str, text: str) -> None:
     try:
         with os.fdopen(fd, "w") as f:
             f.write(text)
-        os.replace(tmp, path)
+        replace_durably(tmp, path)
     except Exception:
         try:
             os.unlink(tmp)
@@ -953,13 +1117,11 @@ def _atomic_write_text(path: str, text: str) -> None:
 
 def missing_config_settings(cfg: dict, template: dict = None, prefix: str = "") -> list:
     """The settings of the built-in template that `cfg` lacks, as dotted paths, each with the template's
-    value: [(path, value)]. A workspace's configuration names every setting itself (shared contract §3):
+    value: [(path, value)]. A workspace's configuration names every setting itself (RUL-config_complete):
     a missing one is never filled from the program's defaults, which may change between releases."""
     template = DEFAULT_CONFIG if template is None else template
     out = []
     for key, value in template.items():
-        if key == "jobs":
-            continue
         path = f"{prefix}{key}"
         if key not in cfg:
             out.append((path, value))
@@ -970,15 +1132,15 @@ def missing_config_settings(cfg: dict, template: dict = None, prefix: str = "") 
 
 def unknown_config_settings(cfg: dict, template: dict = None, prefix: str = "") -> list:
     """The settings in `cfg` the built-in template does not know, as dotted paths. A workspace's
-    configuration holds exactly the template's settings (shared contract §3): an unknown one — a
+    configuration holds exactly the template's settings (RUL-config_no_unknown_settings): an unknown one — a
     misspelling, a class or folder role of the user's own, a setting a release removed — would
     otherwise be ignored while the user believes it took effect. `jobs` is a runtime override, never
-    a setting."""
+    a setting: the template does not hold it, so a file holding it is refused like any unknown one."""
     template = DEFAULT_CONFIG if template is None else template
     out = []
     for key, value in cfg.items():
         path = f"{prefix}{key}"
-        if key == "jobs" or key not in template:
+        if key not in template:
             out.append(path)
         elif isinstance(template[key], dict) and isinstance(value, dict):
             out.extend(unknown_config_settings(value, template[key], path + "."))
@@ -987,7 +1149,7 @@ def unknown_config_settings(cfg: dict, template: dict = None, prefix: str = "") 
 
 def load_config(workspace_root: str) -> str:
     """Read the workspace's `photos-00-config.json` as the one configuration of this run — every phase
-    reads it through here (shared contract §3). It must exist (only prep seeds it, `load_or_seed_config`),
+    reads it through here (BLD-config_loader). It must exist (only prep seeds it, `load_or_seed_config`),
     parse, be complete — every setting of the built-in template present — and validate; anything else
     raises ValueError naming the file and what is wrong. The file then REPLACES the active CONFIG
     wholesale, the runtime `jobs` override aside, and the extension-to-class map is rebuilt from it.
@@ -1025,13 +1187,13 @@ def load_or_seed_config(workspace_root: str) -> str:
     """Seed `photos-00-config.json` from `default_config()` on first run (an external
     `photos-config-defaults.json` beside the executable if present, else the built-in
     DEFAULT_CONFIG), then read it through `load_config` as the authoritative config for this
-    workspace. Prep alone calls this: it is the configuration's only seeder (shared contract §3).
-    `jobs` is a runtime override and is never persisted to the file."""
+    workspace. Prep alone calls this: it is the configuration's only seeder (RUL-config_writers).
+    `jobs` is a runtime override and is never persisted to the file: no seed holds it, `default_config`
+    refusing one that does."""
     ensure_control_dir(workspace_root)
     path = config_path(workspace_root)
     if not os.path.exists(path):
-        seed = {k: v for k, v in default_config().items() if k != "jobs"}
-        _atomic_write_text(path, json.dumps(seed, indent=2, sort_keys=True))
+        _atomic_write_text(path, json.dumps(default_config(), indent=2, sort_keys=True))
     return load_config(workspace_root)
 
 
@@ -1088,8 +1250,12 @@ _GPX_NUMERIC_KEYS = (
     "gpx_interpolation_max_distance_meters", "gpx_interpolation_max_speed_kmh",
     "gpx_anchor_max_point_distance_meters", "gpx_anchor_max_segment_distance_meters",
     "gpx_anchor_offset_spread_max_seconds", "gpx_anchor_max_clock_error_seconds",
-    "gpx_extrapolation_max_seconds",
-    "photo_anchor_interpolation_max_gap_seconds", "photo_anchor_extrapolation_max_seconds",
+    "gpx_extrapolation_max_seconds", "gpx_extrapolation_heading_seconds",
+    "gpx_extrapolation_max_distance_meters", "gpx_extrapolation_max_speed_kmh",
+    "gpx_tracks_agree_max_distance_meters", "gpx_anchor_max_segment_gap_seconds",
+    "gpx_anchor_same_pass_max_seconds", "gpx_anchor_stay_max_seconds", "gpx_anchor_stay_distance_meters",
+    "gpx_anchor_decision_tolerance_seconds", "drift_check_track_window_seconds",
+    "clock_offset_same_day_max_difference_seconds",
 )
 
 def validate_config(cfg: dict, workspace_root: str = None):
@@ -1098,7 +1264,7 @@ def validate_config(cfg: dict, workspace_root: str = None):
     ValueError with a clear 'config: <path> ...' message on any violation. A missing or unknown setting
     is `load_config`'s refusal (`missing_config_settings`, `unknown_config_settings`), not this check's. The same validate-on-load discipline applies
     to the geotag decision JSON ([[validate-human-input]]). Given the workspace, it also
-    refuses a gpx_root that overlaps the managed folders (shared contract §8)."""
+    refuses a gpx_root that overlaps the managed folders (BLD-gpx_root_checked)."""
     if not isinstance(cfg, dict):
         raise ValueError("config: top level must be a JSON object.")
 
@@ -1186,8 +1352,8 @@ def validate_config(cfg: dict, workspace_root: str = None):
     mg = cfg.get("merge")
     if mg is not None:
         # Prep seeds and type-validates the library-merge block; the merge phase does the deep
-        # validation (library_root is an existing directory outside the managed 0-6 tree, policy
-        # enums) before it consumes them (shared contract Section 14.1 / merge spec Section 4).
+        # validation (library_root is an existing directory, neither the workspace nor inside it)
+        # before it consumes it (BLD-authored_checks_by_phase).
         if not isinstance(mg, dict):
             raise ValueError("config: merge must be an object.")
         if "library_root" in mg:
@@ -1196,6 +1362,10 @@ def validate_config(cfg: dict, workspace_root: str = None):
     for k in _GPX_NUMERIC_KEYS:
         if k in cfg:
             _check_number(k, cfg[k], minimum=0)
+    # At zero the drift check would find track only at the very second of a photo: switched off in effect,
+    # with nothing saying so.
+    if "drift_check_track_window_seconds" in cfg and cfg["drift_check_track_window_seconds"] <= 0:
+        raise ValueError("config: drift_check_track_window_seconds must be greater than 0.")
 
     pol = cfg.get("camera_time_and_timezone_policy")
     if pol is not None:
@@ -1212,10 +1382,7 @@ def validate_config(cfg: dict, workspace_root: str = None):
             tz = pol["default_folder_timezone"]
             _check_string("camera_time_and_timezone_policy.default_folder_timezone", tz)
             if tz:
-                try:
-                    from zoneinfo import ZoneInfo
-                    ZoneInfo(tz)
-                except Exception:
+                if not valid_iana_timezone(tz):
                     raise ValueError(f"config: camera_time_and_timezone_policy.default_folder_timezone "
                                      f"{tz!r} is not a valid IANA timezone.")
         dg = pol.get("device_groups")
@@ -1235,7 +1402,7 @@ def validate_config(cfg: dict, workspace_root: str = None):
 
 
 def _check_gpx_root_outside(cfg, workspace_root):
-    """gpx_root must lie outside the managed 0-6 folders (shared contract §8): neither inside one nor
+    """gpx_root must lie outside the managed 0-6 folders (RUL-tracks_outside_managed_folders): neither inside one nor
     containing one, so the tracks never sit where prep inventories. Relative paths resolve against the
     workspace, links are resolved."""
     root = cfg["gpx_root"]
@@ -1248,12 +1415,9 @@ def _check_gpx_root_outside(cfg, workspace_root):
                              f"it overlaps {name}/.")
 
 
-# Policy values the merge phase currently supports (merge spec §4 / stage-2 decision: v1 is
-# identity placement + incoming-suffix collision only; any other value is a hard blocker).
-
 def validate_merge_config(cfg: dict, ws: str):
-    """Deep-validate the library-merge config before the merge phase consumes it (merge spec §4;
-    shared contract §14.1). Prep only type-validates merge (validate_config); merge calls THIS, which
+    """Deep-validate the library-merge config before the merge phase consumes it (BLD-library_root_validated).
+    Prep only type-validates merge (validate_config); merge calls THIS, which
     additionally requires `library_root` to be a non-empty, existing directory neither inside the
     workspace nor holding it (`library_place_error`). Raises ValueError
     located to the offending field. Library *identity* (the .photos-library marker) is a separate
@@ -1287,6 +1451,34 @@ def library_place_error(lib: str, ws: str):
     return None
 
 
+def library_workspace_error(lib: str):
+    """Why `lib` cannot be a library because of ANY workspace it is, lies inside, or holds, or None — a library
+    lies outside every workspace, not only the one at hand (RUL-library_outside_every_workspace, DEF-library). A
+    folder holding a `.photos-ingest` control directory is a workspace here, initialized or not. Upwards the whole
+    way to the filesystem root is checked; downwards ONLY `lib` itself and its immediate children — a full walk of a
+    library is too costly, so a workspace nested two or more levels down inside it is not found here."""
+    lib_real = os.path.realpath(os.path.abspath(lib))
+    d = lib_real
+    while True:
+        if os.path.isdir(os.path.join(d, CONTROL_DIR)):
+            where = "is the workspace" if d == lib_real else "lies inside the workspace"
+            return (f"{lib!r} {where} {d} — a library lies outside every workspace; choose a folder that is "
+                    "not, does not lie in, and does not hold a workspace.")
+        parent = os.path.dirname(d)
+        if parent == d:
+            break
+        d = parent
+    try:
+        children = sorted(os.path.join(lib_real, n) for n in os.listdir(lib_real))   # the top folder alone
+    except OSError:
+        children = []
+    for child in children:
+        if os.path.isdir(os.path.join(child, CONTROL_DIR)):
+            return (f"{lib!r} holds the workspace {child} — a library lies outside every workspace; choose a "
+                    "folder that is not, does not lie in, and does not hold a workspace.")
+    return None
+
+
 def detect_zfs_dataset(path: str):
     """Return the name of the ZFS dataset backing `path`, or None. Resolves to a real
     absolute path first, so a bare '.' (which `zfs list` rejects) becomes a valid argument."""
@@ -1311,8 +1503,8 @@ def zfs_dataset(ws: str, *, target_path=None, dataset_key: str = "workspace"):
 
 def take_zfs_snapshot(ws: str, snapshot_id: str, label: str, *, target_path=None,
                       dataset_key: str = "workspace"):
-    """Take an optional pre-mutation ZFS snapshot — shared by prep (§14.3, workspace), geotag
-    execute (§29 step 6, workspace), and merge execute (merge spec §10.3 step 3, the LIBRARY volume).
+    """Take an optional pre-mutation ZFS snapshot — shared (BLD-one_snapshot_mechanism) by prep (workspace),
+    geotag execute (workspace), and merge execute (BLD-merge_snapshots, the LIBRARY volume).
     `label` is the phase ("prep" / "geotag" / "merge") so the phases' snapshots never resolve to the
     same name even on a shared dataset: `<dataset>@<zfs.snapshot_prefix><label>-<snapshot_id>`.
 
@@ -1322,9 +1514,14 @@ def take_zfs_snapshot(ws: str, snapshot_id: str, label: str, *, target_path=None
     land there, not in the workspace tree.
 
     Returns None when ZFS is disabled; otherwise a record
-    `{required, snapshot_name (None if no dataset was found), command, exit_code, stdout, stderr, ok}`.
+    `{required, snapshot_name (None if no dataset was found), command, exit_code, stdout, stderr, ok}`,
+    plus `already_existed: True` when the snapshot was there before this call.
     It NEVER raises — the caller records the result in its own journal/summary and, if `required` and
-    not `ok`, aborts before mutating (keeping the audit record + abort decision in the phase)."""
+    not `ok`, aborts before mutating (keeping the audit record + abort decision in the phase).
+
+    A snapshot names its plan (RUL-snapshot_per_plan), so executing the same plan again (a geotag
+    resume, a merge re-run) asks for a name that exists: that snapshot already precedes this plan's
+    changes, so it counts as taken, never as a failure."""
     import subprocess
     zfs = CONFIG.get("zfs") or {}
     if not zfs.get("enabled", False):
@@ -1346,16 +1543,32 @@ def take_zfs_snapshot(ws: str, snapshot_id: str, label: str, *, target_path=None
         rec = {"required": required, "snapshot_name": snap, "command": " ".join(cmd),
                "exit_code": getattr(e, "returncode", -1), "stdout": getattr(e, "stdout", "") or "",
                "stderr": getattr(e, "stderr", "") or str(e), "ok": False}
+        # The plan's snapshot is already there (RUL-snapshot_per_plan): this plan was executed before.
+        if _zfs_snapshot_exists(snap):
+            rec["ok"] = True
+            rec["already_existed"] = True
     # Surface a log line whenever a snapshot is actually taken, naming it — one place so EVERY phase
     # (prep/geotag/merge) that snapshots before mutating reports it. Failures are left to the caller
     # (it warns or aborts per `required`); the durable record still goes to the journal/summary.
     if rec["ok"]:
         try:
             from .reporting import get_reporter
-            get_reporter().log(f"ZFS snapshot taken: {snap}")
+            get_reporter().log(f"ZFS snapshot already taken: {snap}" if rec.get("already_existed")
+                               else f"ZFS snapshot taken: {snap}")
         except Exception:
             pass
     return rec
+
+
+def _zfs_snapshot_exists(snap: str) -> bool:
+    """Whether the ZFS snapshot named exactly `snap` exists. Never raises: no answer counts as no."""
+    import subprocess
+    try:
+        res = subprocess.run(["zfs", "list", "-H", "-t", "snapshot", "-o", "name", snap],
+                             capture_output=True, text=True, check=True, stdin=subprocess.DEVNULL)
+        return res.stdout.strip() == snap
+    except Exception:
+        return False
 
 # 2: every field taken from an explicit group order (METADATA_GROUP_ORDER), the group-qualified
 #    XMP:/QuickTime: date fields gone (they were never filled), no raw payload kept.
@@ -1497,10 +1710,27 @@ class ProcessCrashedError(Exception):
     pass
 
 
+_HEX_SIGNATURE = re.compile(r"[0-9a-fA-F]+")   # ImageMagick's `%#`: a hex digest
+
+
+def frames_fingerprint(signatures):
+    """An image's fingerprint from its frames' signatures, in order (RUL-fingerprint_covers_every_frame): a
+    single frame's is its signature, as ImageMagick gives it; a file of several frames takes the SHA-256 of
+    their signatures joined one per line, so every frame and their order count. None when there are none.
+    Both image paths — the persistent worker and the per-file `identify` — fold their output through this,
+    so they give one value for one file."""
+    sigs = [s for s in (signatures or []) if s]
+    if not sigs:
+        return None
+    if len(sigs) == 1:
+        return sigs[0]
+    return hashlib.sha256("\n".join(sigs).encode("ascii")).hexdigest()
+
+
 class PersistentMagickWorker:
     """A persistent `magick -script -` process — the ImageMagick analog of exiftool's `-stay_open` —
     reused across files for the content signature instead of spawning `identify` once per file
-    (§17.5). One worker per scanning thread (thread-local); restarted on crash; closed at exit. The
+    (BLD-tool_workers). One worker per scanning thread (thread-local); restarted on crash; closed at exit. The
     `magick -script` signature is byte-identical to `identify -format %#` (verified)."""
     _instances = []
     _lock = threading.Lock()
@@ -1523,14 +1753,15 @@ class PersistentMagickWorker:
         self.closed = False
 
     def signature(self, filepath: str):
-        """The decoded-content signature (`%#`) of `filepath` over sRGB/8-bit-normalized pixels.
-        Returns the hex string, or None on empty output. Raises ProcessCrashedError if the worker
-        process dies (e.g. on an unreadable image — `magick -script` aborts) so the caller can
-        restart + retry."""
+        """The decoded-content fingerprint of `filepath` over sRGB/8-bit-normalized pixels: every frame's
+        signature (`%#`), one line each, folded by `frames_fingerprint` (RUL-fingerprint_covers_every_frame).
+        `-print` would evaluate `%#` once, for the first frame only; `-write info:-` writes it per frame.
+        Returns the value, or None on empty output. Raises ProcessCrashedError if the worker process dies
+        (e.g. on an unreadable image — `magick -script` aborts) so the caller can restart + retry."""
         if self.closed:
             raise ProcessCrashedError("Magick worker closed")
         esc = str(filepath).replace("\\", "\\\\").replace('"', '\\"')
-        cmd = (f'-read "{esc}" -colorspace sRGB -depth 8 -print "%#\\n" '
+        cmd = (f'-read "{esc}" -colorspace sRGB -depth 8 -format "%#\\n" -write info:- '
                f'-delete 0--1 -print "{{ready}}\\n"\n')
         try:
             self.process.stdin.write(cmd)
@@ -1538,18 +1769,26 @@ class PersistentMagickWorker:
         except OSError as e:
             raise ProcessCrashedError(f"Failed to write to magick: {e}")
         out = []
-        for _ in range(64):          # a real reply is 1-2 lines then {ready}; cap to never hang on a broken process
+        # One signature line per frame, then {ready}: no cap on the count, so a file of many frames never fails.
+        # A process that dies ends the read at EOF; one that answers anything but a signature is taken as
+        # broken, so the read can never run on without end.
+        while True:
             try:
                 line = self.process.stdout.readline()
             except OSError as e:
                 raise ProcessCrashedError(f"Failed to read from magick: {e}")
             if not line:
                 raise ProcessCrashedError("Unexpected EOF from magick process.")
-            if line.strip() == "{ready}":
-                return out[0] if out else None
-            if line.strip():
-                out.append(line.strip())
-        raise ProcessCrashedError("magick produced no {ready} sentinel")
+            if not isinstance(line, str):
+                raise ProcessCrashedError("magick answered something other than text")
+            line = line.strip()
+            if line == "{ready}":
+                return frames_fingerprint(out)
+            if not line:
+                continue
+            if not _HEX_SIGNATURE.fullmatch(line):
+                raise ProcessCrashedError(f"magick answered something other than a signature: {line[:80]!r}")
+            out.append(line)
 
     def close(self, remove=True):
         if not self.closed:
@@ -1606,7 +1845,7 @@ class ContentHasher:
         """
         engine_version = get_imagemagick_version()
         if get_magick_command():
-            # Persistent `magick -script -` worker, one per thread, reused across files (§17.5) —
+            # Persistent `magick -script -` worker, one per thread, reused across files (BLD-tool_workers) —
             # restarted on crash (an unreadable image aborts the script process).
             last_error = "ImageMagick failed"
             for _attempt in range(2):
@@ -1632,7 +1871,8 @@ class ContentHasher:
         if not identify_cmd:
             return {"status": "failed", "strategy": IMAGE_FINGERPRINT_STRATEGY, "value": None,
                     "error": "ImageMagick not found", "engine_version": engine_version}
-        cmd = identify_cmd + ["-format", "%#", "-colorspace", "sRGB", "-depth", "8", filepath]
+        # One signature per frame, one per line, folded as the worker folds its own (RUL-fingerprint_covers_every_frame).
+        cmd = identify_cmd + ["-format", "%#\\n", "-colorspace", "sRGB", "-depth", "8", filepath]
         last_error = "ImageMagick failed"
         for _attempt in range(2):
             try:
@@ -1649,9 +1889,10 @@ class ContentHasher:
                         break
                     stdout_data += chunk
                 proc.wait()
-                if proc.returncode == 0 and stdout_data.strip():
+                value = frames_fingerprint([ln.strip() for ln in stdout_data.splitlines()])
+                if proc.returncode == 0 and value:
                     return {"status": "valid", "strategy": IMAGE_FINGERPRINT_STRATEGY,
-                            "value": stdout_data.strip(), "engine_version": engine_version}
+                            "value": value, "engine_version": engine_version}
                 last_error = f"ImageMagick exited {proc.returncode}"
             except subprocess.TimeoutExpired:
                 last_error = "ImageMagick timed out"
@@ -1666,7 +1907,12 @@ class ContentHasher:
         # keypresses (e.g. 'q'), switching it to no-echo and often leaving it that way — the terminal
         # is then left where typed characters are invisible. We also detach stdin entirely
         # (stdin=DEVNULL) so no subprocess can ever touch the terminal via stdin.
-        cmd = ["ffmpeg", "-nostdin", "-i", filepath, "-c", "copy", "-f", "md5", "-"]
+        # `-map 0` takes every stream of the file — without it ffmpeg picks one video and one audio stream,
+        # and two clips differing only in another stream would share a fingerprint
+        # (RUL-fingerprint_covers_every_stream). `-copy_unknown` copies a stream of a type ffmpeg does not know
+        # rather than failing the file on it.
+        cmd = ["ffmpeg", "-nostdin", "-i", filepath, "-map", "0", "-c", "copy", "-copy_unknown",
+               "-f", "md5", "-"]
         last_error = None
         for attempt in range(2):                       # safe restart on a transient ffmpeg failure
             try:
@@ -1896,16 +2142,18 @@ class ExifToolWorkerPool:
         except queue.Empty:
             return {"error": "extraction_failed"} # Worker queue blocked forever
 
+        # Two attempts at the folder, so every file in it gets two, a dead worker restarted between
+        # them (BLD-tool_workers, RUL-tool_failure_retried); only then are its files counted failed.
         try:
-            result = worker.read_metadata(folder_path)
-            return result
-        except ProcessCrashedError as e:
-            if progress_coordinator:
-                progress_coordinator.increment("worker_crashes")
-            worker = self.replace_or_restart(worker)
-            return {"error": "extraction_failed"}
-        except Exception as e:
-            worker = self.replace_or_restart(worker)
+            for _attempt in range(2):
+                try:
+                    return worker.read_metadata(folder_path)
+                except ProcessCrashedError:
+                    if progress_coordinator:
+                        progress_coordinator.increment("worker_crashes")
+                    worker = self.replace_or_restart(worker)
+                except Exception:
+                    worker = self.replace_or_restart(worker)
             return {"error": "extraction_failed"}
         finally:
             if worker:
@@ -1972,8 +2220,18 @@ def recorded_time(parsed):
     return None, None
 
 
-IMAGE_FINGERPRINT_STRATEGY = "image-content-hash-v1"   # ImageMagick signature of the decoded pixels
-VIDEO_FINGERPRINT_STRATEGY = "video-md5-v1"            # ffmpeg MD5 of the streams as stored (-c copy)
+# The method a fingerprint was taken by, recorded with it, so a value of one method is never reused or compared
+# as another's. v2 (RUL-fingerprint_covers_every_frame, RUL-fingerprint_covers_every_stream): an image's covers
+# every frame, a video's every stream; v1 took an image's first frame and a video's default streams only, so a v1
+# value is taken again rather than reused (fingerprint_reusable, get_cached_library_fingerprint).
+IMAGE_FINGERPRINT_STRATEGY = "image-content-hash-v2"   # ImageMagick signatures of the decoded pixels, every frame
+VIDEO_FINGERPRINT_STRATEGY = "video-md5-v2"            # ffmpeg MD5 of every stream as stored (-map 0 -c copy)
+
+
+# The camera-group key of a file whose metadata names no camera — no serial, make, model or owner: a screenshot,
+# a scan, a photo a messaging app stripped. It is no camera group; geotag solves each such file on its own
+# (BLD-unidentified_files).
+NO_IDENTITY_KEY = "unknown"
 
 
 class MetadataReader:
@@ -1985,7 +2243,7 @@ class MetadataReader:
     def _parse_exiftool_item(item: Dict[str, Any]) -> Dict[str, Any]:
         """The fields prep keeps of a file, from exiftool's group-qualified record: each from the first
         group of its order (`metadata_field`), a time field from the first holding a valid time — the same
-        field in the next group before the next field (prep §12)."""
+        field in the next group before the next field (BLD-metadata_extraction)."""
         parsed, groups = {}, {}
         for field in METADATA_FIELDS:
             valid = (lambda v: parse_naive_time(v) is not None) if field in RECORDED_TIME_TAGS else None
@@ -1997,7 +2255,7 @@ class MetadataReader:
             v = parsed.get(k)
             if v is not None:
                 ident_parts.append(str(v).strip())
-        parsed["camera_group_key"] = "|".join(ident_parts) if ident_parts else "unknown"
+        parsed["camera_group_key"] = "|".join(ident_parts) if ident_parts else NO_IDENTITY_KEY
 
         # Passive boolean helper checks
 
@@ -2158,7 +2416,7 @@ class ProgressCoordinator:
                                             self._completed, self._total or None, self._detail))
 
     def print_summary(self, plan_summary=None):
-        # The run summary is a deliverable (prep Section 19), not transient progress, so it prints
+        # The run summary is a deliverable (RUL-prep_run_summarised), not transient progress, so it prints
         # even when live progress is quiet/redirected. The TtySink owns the rendering (report path,
         # quiet-suppressed flat fallback) — identical to the former in-class logic.
         from .reporting import SummaryEvent
@@ -2170,15 +2428,15 @@ class ProgressCoordinator:
 # ============================================================================
 # Shared workspace infrastructure (extracted from photos-1-prep so geotag
 # can import it too). The DB and lock are phase-neutral: prep and geotag
-# share one photos-00-ingest.db and one whole-run lock (shared contract §2/§13.4).
+# share one photos-00-ingest.db and one whole-run lock (RUL-one_workspace_lock, BLD-workspace_database).
 # ============================================================================
 
 # SQLite cache schema version and content-hash scheme version, recorded in the cache `meta`
 # table, the journal, and the handoff depends_on so a stale/foreign cache or journal is
-# detectable downstream (prep Section 5). The per-hash engine binding (e.g. ImageMagick
+# detectable downstream (BLD-cache_versions). The per-hash engine binding (e.g. ImageMagick
 # version) is carried separately in each content hash's engine_version.
 CACHE_SCHEMA_VERSION = 3   # 2: file_cache without the byte-hash column; 3: metadata_cache without the raw payload
-FINGERPRINT_ALGORITHM_VERSION = "1"
+FINGERPRINT_ALGORITHM_VERSION = "2"   # 2: every frame of an image, every stream of a video
 
 
 def cache_schema_mismatch(cache) -> Optional[str]:
@@ -2203,7 +2461,8 @@ def fingerprint_reusable(content_hash_json, media_class, current_magick_version)
     """Whether a cached fingerprint can be reused: a valid one, taken by the method this build uses for
     its class — the same strategy, and for a photo the same ImageMagick version. A fingerprint that
     records no ImageMagick version is not reusable, and a failed one never is: the failure may have
-    been the machine's (a tool missing, a decode crashing), so every run takes it again (prep §11.3)."""
+    been the machine's (a tool missing, a decode crashing), so every run takes it again
+    (RUL-failed_fingerprint_retried)."""
     if not fingerprint_valid(content_hash_json):
         return False
     ch = json.loads(content_hash_json)
@@ -2214,7 +2473,7 @@ def fingerprint_reusable(content_hash_json, media_class, current_magick_version)
         return ch.get("strategy") == VIDEO_FINGERPRINT_STRATEGY
     return True
 
-# --- Atomic no-clobber move (prep Section 4 / 14.3.4) -------------------------
+# --- Atomic no-clobber move (BLD-no_clobber_rename) ---------------------------
 # No-clobber is enforced at plan time (the clobber simulation) AND here at execution
 # time, atomically, so a destination that appears between validation and the move (or a
 # clobber planning somehow missed) can never overwrite an irreplaceable original.
@@ -2259,7 +2518,7 @@ def _rename_no_clobber_same_fs(src: str, dest: str):
         # renameat2 not supported on this kernel/fs — fall through to the hardlink fallback.
     _move_link_unlink(src, dest)                         # raises FileExistsError / OSError(EXDEV)
 
-# Recognizable, deterministic prefix/suffix for the cross-fs copy temp (shared contract §15.3). A
+# Recognizable, deterministic prefix/suffix for the cross-fs copy temp (BLD-cross_fs_temp). A
 # crash mid-copy leaves a `<prefix>*<suffix>` orphan in the DESTINATION dir; because merge holds the
 # library lock (only one merge per library at a time), merge can safely sweep these on the next run.
 XDEV_TMP_PREFIX = ".tmp-xdev-"
@@ -2279,6 +2538,48 @@ def _same_bytes(a: str, b: str, chunk: int = 1 << 20) -> bool:
                 return True
 
 
+def fingerprint_method_blocker(handoff: dict) -> list:
+    """[] when the handoff's fingerprints were taken by this build's method, else one blocker
+    (RUL-fingerprint_method_is_the_builds). Geotag and merge compare the handoff's fingerprints with ones they take
+    themselves; a value of another method differs for the same file — or, worse, agrees for different ones — so a
+    handoff of another method is never compared against: prep takes them again."""
+    recorded = (((handoff or {}).get("depends_on") or {}).get("cache") or {}).get("fingerprint_algorithm_version")
+    if str(recorded) == str(FINGERPRINT_ALGORITHM_VERSION):
+        return []
+    return [f"The prep handoff's fingerprints were taken by another method (version {recorded!r}) than this "
+            f"build's ({FINGERPRINT_ALGORITHM_VERSION!r}), and the two cannot be compared. Run prep again — "
+            "`photos-cartographer prep plan` then `photos-cartographer prep execute` — so every fingerprint is "
+            "taken afresh, then geotag again."]
+
+
+def links_under(ws: str, folder: str) -> list:
+    """Every symbolic link, to a file or a folder, anywhere under the managed folder `folder` of workspace `ws`, as
+    workspace-relative paths, sorted (RUL-geotag_merge_check_links). Nothing is followed and no file is read."""
+    base = os.path.join(ws, folder)
+    found = []
+    if not os.path.isdir(base):
+        return found
+    for root, dirs, files in os.walk(base):
+        for n in list(dirs) + files:
+            p = os.path.join(root, n)
+            if os.path.islink(p):
+                found.append(os.path.relpath(p, ws))
+    return sorted(found)
+
+
+def replace_durably(tmp: str, path: str):
+    """Put the fully written `tmp` in `path`'s place so that a power cut at any moment leaves the earlier file or
+    the whole new one (RUL-rewrite_in_place_atomic): the new bytes are synced to disk BEFORE the rename — a rename
+    on disk ahead of its data is how a file comes back empty — and the folder after it."""
+    fd = os.open(tmp, os.O_RDONLY)
+    try:
+        os.fsync(fd)
+    finally:
+        os.close(fd)
+    os.replace(tmp, path)
+    _fsync_dir(os.path.dirname(path) or ".")
+
+
 def _fsync_dir(path: str):
     """Flush a directory's entries to disk, so a rename or creation in it survives a power cut."""
     fd = os.open(path, os.O_RDONLY)
@@ -2289,7 +2590,7 @@ def _fsync_dir(path: str):
 
 
 def _move_cross_fs_no_clobber(src: str, dest: str):
-    """Cross-filesystem no-clobber move (shared contract §15.3; merge §11) — the fallback when a plain
+    """Cross-filesystem no-clobber move (BLD-cross_fs_temp, BLD-merge_move) — the fallback when a plain
     move cannot cross filesystems (EXDEV). Copy src to a temporary name on the DESTINATION filesystem,
     check it holds src's very bytes, fsync it, atomically rename it into the final target (failing if
     the target exists — no clobber), fsync the destination folder so the rename is on disk, then remove
@@ -2329,9 +2630,9 @@ def _move_no_clobber(src: str, dest: str, cross_fs=False):
     """Move src -> dest, failing (FileExistsError) instead of overwriting an existing destination.
     Primary path is an atomic same-filesystem MOVE (_rename_no_clobber_same_fs). Only a caller that
     passes `cross_fs=True` — merge, whose library may be on another volume — falls back to the cross-fs
-    copy-then-remove workaround (§15.3) when the move cannot cross filesystems (EXDEV). A workspace lies
-    on one filesystem (checked every run, `workspace_volume_breaks`), so prep and geotag never cross one:
-    for them EXDEV is raised like any other failure, never turned into a copy.
+    copy-then-remove workaround (BLD-cross_fs_merge_only) when the move cannot cross filesystems (EXDEV).
+    A workspace lies on one filesystem (checked every run, `workspace_volume_breaks`), so prep and geotag
+    never cross one: for them EXDEV is raised like any other failure, never turned into a copy.
 """
     try:
         _rename_no_clobber_same_fs(src, dest)
@@ -2348,8 +2649,8 @@ def _dev_of(path: str) -> int:
 
 
 def workspace_volume_breaks(workspace_root: str) -> list:
-    """Workspace-relative folders that lie on another filesystem than the workspace root (shared
-    contract §15): a workspace must lie on one filesystem, so every move within it is one rename. Walks
+    """Workspace-relative folders that lie on another filesystem than the workspace root
+    (BLD-workspace_one_filesystem): a workspace must lie on one filesystem, so every move within it is one rename. Walks
     every folder — the control directory and the quarantine included — without following links, and
     does not descend into a folder found elsewhere. Sorted; empty when the workspace is whole."""
     root_dev = _dev_of(workspace_root)
@@ -2381,15 +2682,15 @@ def workspace_volume_error(workspace_root: str):
             f"Nothing was touched.")
 
 class PlanFingerprintMemo:
-    """Plan-time decode memo (prep §10.3): the fingerprint + metadata prep observed for a file at a
+    """Plan-time decode memo (BLD-plan_memo): the fingerprint + metadata prep observed for a file at a
     given path, remembered across planning runs so a re-plan does not decode the same unchanged bytes
     twice.
 
     Why it exists: cache rows are written by EXECUTE only — planning never mutates the workspace cache
-    (prep §5), and `plan` enforces that by opening it read-only. A plan that is never executed therefore
-    used to discard every fingerprint it computed, so the next plan re-decoded the entire workspace. On a
-    real library that is hours of ImageMagick/ffmpeg work thrown away because the operator re-planned
-    before executing (a config edit, a corrected folder, an interrupted run).
+    (RUL-planning_writes_only_its_records), and `plan` enforces that by opening it read-only. A plan
+    that is never executed therefore used to discard every fingerprint it computed, so the next plan
+    re-decoded the entire workspace. On a real library that is hours of ImageMagick/ffmpeg work thrown
+    away because the operator re-planned before executing (a config edit, a corrected folder, an interrupted run).
 
     Why it does not weaken the rule: the memo lives in its own database file (`plan_memo_db_path`), so
     the workspace cache stays read-only during planning and keeps its single meaning — the state of the
@@ -2415,8 +2716,7 @@ class PlanFingerprintMemo:
                     relative_path TEXT PRIMARY KEY,
                     size INTEGER,
                     mtime_ns INTEGER,
-                    record_json TEXT,
-                    seen_ns INTEGER
+                    record_json TEXT
                 )
             """)
 
@@ -2458,13 +2758,12 @@ class PlanFingerprintMemo:
                 continue
             stored = {k: v for k, v in rec.items() if k != "absolute_path"}   # path is machine-specific
             rows.append({"relative_path": rec["relative_path"], "size": rec.get("size"),
-                         "mtime_ns": rec.get("mtime_ns"), "record_json": json.dumps(stored, sort_keys=True),
-                         "seen_ns": int(datetime.now(timezone.utc).timestamp() * 1e9)})
+                         "mtime_ns": rec.get("mtime_ns"), "record_json": json.dumps(stored, sort_keys=True)})
         with self._lock, self.conn:
             self.conn.execute("DELETE FROM plan_fingerprint_memo")
             self.conn.executemany("""
-                INSERT INTO plan_fingerprint_memo (relative_path, size, mtime_ns, record_json, seen_ns)
-                VALUES (:relative_path, :size, :mtime_ns, :record_json, :seen_ns)
+                INSERT INTO plan_fingerprint_memo (relative_path, size, mtime_ns, record_json)
+                VALUES (:relative_path, :size, :mtime_ns, :record_json)
             """, rows)
         return len(rows)
 
@@ -2541,7 +2840,7 @@ class WorkspaceCache:
                 )
             """)
 
-            # Cache identity/version row (prep Section 5): seeded at creation; prep's execute rewrites the
+            # Cache identity/version row (BLD-cache_versions): seeded at creation; prep's execute rewrites the
             # fingerprint-algorithm version, and prep's plan stops on a schema version not this build's.
             self.conn.execute("CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT)")
             self.conn.execute("INSERT OR IGNORE INTO meta (key, value) VALUES (?, ?)",
@@ -2549,7 +2848,7 @@ class WorkspaceCache:
             self.conn.execute("INSERT OR IGNORE INTO meta (key, value) VALUES (?, ?)",
                               ("fingerprint_algorithm_version", FINGERPRINT_ALGORITHM_VERSION))
 
-            # Library-file fingerprint cache (merge spec §7 / shared contract §13.4). The permanent
+            # Library-file fingerprint cache (BLD-library_file_fingerprinted). The permanent
             # library has no database of its own; when merge fingerprints a resident library file to
             # resolve a collision, it caches the result HERE in the workspace DB, keyed by absolute
             # library path + size + mtime_ns, so the same unchanged library file is fingerprinted at
@@ -2589,7 +2888,7 @@ class WorkspaceCache:
             return {row['relative_path']: dict(row) for row in cur.fetchall()}
 
     def begin_batch(self):
-        """Defer per-op commits; effects then commit once via commit_batch (§14.3.7)."""
+        """Defer per-op commits; effects then commit once via commit_batch."""
         self._batch_depth += 1
 
     def commit_batch(self):
@@ -2608,7 +2907,7 @@ class WorkspaceCache:
 
     @contextlib.contextmanager
     def transaction(self):
-        """Batch post-verification cache effects into one transaction (prep Section 14.3.7).
+        """Batch post-verification cache effects into one transaction (BLD-move_row_effects).
         While active, the write methods skip their per-op commit; this commits once on a clean
         exit and rolls back on exception. Reference-counted, so nesting is safe."""
         self.begin_batch()
@@ -2634,12 +2933,6 @@ class WorkspaceCache:
         with self._write_ctx():
             self.conn.execute("DELETE FROM file_cache WHERE relative_path = ?", (relative_path,))
             self.conn.execute("DELETE FROM metadata_cache WHERE relative_path = ?", (relative_path,))
-
-    def rename_file(self, old_rel_path: str, new_rel_path: str, new_abs_path: str):
-        # Retained for executor rename support and shared index tests
-        with self._write_ctx():
-            self.conn.execute("UPDATE file_cache SET relative_path = ?, absolute_path = ? WHERE relative_path = ?", (new_rel_path, new_abs_path, old_rel_path))
-            self.conn.execute("UPDATE metadata_cache SET relative_path = ? WHERE relative_path = ?", (new_rel_path, old_rel_path))
 
     def upsert_file(self, data: Dict[str, Any]):
         with self._write_ctx():
@@ -2715,7 +3008,7 @@ class WorkspaceCache:
                 """, md_row)
 
     def cache_library_fingerprint(self, library_path: str, size: int, mtime_ns: int, fp: Dict[str, Any]):
-        """Cache a resident library file's content fingerprint (merge spec §7 / shared contract §13.4),
+        """Cache a resident library file's content fingerprint (BLD-library_file_fingerprinted),
         keyed by absolute library path + size + mtime_ns. `fp` is a ContentHasher fingerprint dict
         (value / strategy / engine_version). Re-keying on (path,size,mtime_ns) means a changed library
         file naturally misses and is re-fingerprinted."""
@@ -2837,7 +3130,7 @@ class _FlockLock:
 
 
 class LibraryLock(_FlockLock):
-    """The library-side lock (shared contract §15.2 / merge spec §12), keyed to library_root as a
+    """The library-side lock (BLD-library_lock), keyed to library_root as a
     `.photos-merge.lock` dotfile in the library root. Serializes merge runs writing the SAME library
     even when they originate from different workspaces (each with its own WorkspaceLock). Same
     fail-fast, stale-detectable discipline. The library_root must already exist and be a library (the
@@ -2848,11 +3141,11 @@ class LibraryLock(_FlockLock):
 
 
 class WorkspaceLock(_FlockLock):
-    """The whole-run workspace lock (shared contract §2), keyed to the control dir's
+    """The whole-run workspace lock (RUL-lock_through_the_run), keyed to the control dir's
     photos-00-workspace.lock. Inherits the non-blocking flock + owner-identity discipline from
     _FlockLock; only the keyed path (and ensuring the control dir exists) differs."""
     def __init__(self, workspace_root: str, create: bool = True):
-        # Only prep creates the control directory (shared contract §1, §5.3). Every other taker passes
+        # Only prep creates the control directory (BLD-control_dir_by_prep_only). Every other taker passes
         # create=False, having checked the directory exists — so a run in a folder that is not a
         # workspace leaves nothing behind, not even its lock file.
         from .photos_utils import lock_path, ensure_control_dir

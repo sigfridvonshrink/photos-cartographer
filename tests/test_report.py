@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Phase 5a — the §19 user-visible run report + media-class helper.
+"""Phase 5a — the RUL-prep_run_summarised user-visible run report + media-class helper.
 
 Mocked hashing/metadata (content-based hash so identical files dedup), fast.
 photos_1_prep / photos_utils come from conftest.py.
@@ -40,7 +40,7 @@ def _ws(tmp_path):
 def _mock(monkeypatch):
     def spy(p):
         with open(p, "rb") as f:
-            return {"status": "valid", "strategy": "image-content-hash-v1",
+            return {"status": "valid", "strategy": "image-content-hash-v2",
                     "value": "sig-" + f.read().hex()[:16], "engine_version": "t"}
     monkeypatch.setattr(prep.ContentHasher, "fingerprint_image", spy)
     monkeypatch.setattr(utils, "get_imagemagick_version", lambda: "t")   # the version the spy stamps
@@ -133,7 +133,7 @@ def test_print_summary_renders_categories(capsys):
         },
         "performance_and_cache": {"dependency_validation_status": "success",
                                   "handoff_written_after_successful_validation": True,
-                                  "db_upserts_applied": 5, "db_removes_applied": 1, "db_renames_applied": 0},
+                                  "db_upserts_applied": 5, "db_removes_applied": 1},
     }
     coord.print_summary(plan_summary=summary)
     err = capsys.readouterr().err

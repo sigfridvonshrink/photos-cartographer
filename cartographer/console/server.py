@@ -23,6 +23,7 @@ import json
 import os
 import socket
 import sys
+import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
 
@@ -138,21 +139,27 @@ def _json_status(path):
 def _current_fingerprints(workspace):
     """Current values for the CHEAP artifact-dep freshness check (`plan_dependencies_fresh`). The
     costly geotag GPX fingerprint is deliberately omitted — that's the phase's deep check, run at
-    execute. Keys match what the phases record in `depends_on`."""
-    fps = {
-        "folders_fingerprint": U.folders_fingerprint(),
-        "media_extensions_fingerprint": U.media_extensions_fingerprint(),
-    }
+    execute. Keys match what the phases record in `depends_on`.
+
+    The configuration-derived values come from the workspace's own file, read here, not from the
+    process's CONFIG: that holds the built-in defaults until a phase has run in this process, and a
+    phase run on the command line judges against the workspace's file (RUL-one_configuration), so the
+    console must too. Reading leaves CONFIG as it is. An unreadable file supplies none of them."""
+    fps = {}
     try:
         fps["config_fingerprint"] = U.sha256_file(U.config_path(workspace))
     except OSError:
         pass
-    try:
-        fps["filename_format_fingerprint"] = U.sha256_text(U.CONFIG["filename_timestamp_format"])
-        fps["camera_group_fingerprint"] = U.sha256_text(
-            json.dumps(U.CONFIG.get("camera_time_and_timezone_policy") or {}, sort_keys=True))
-    except Exception:
-        pass
+    cfg = U.read_workspace_config(workspace)
+    if cfg is not None:
+        try:
+            fps["folders_fingerprint"] = U.folders_fingerprint(cfg)
+            fps["media_extensions_fingerprint"] = U.media_extensions_fingerprint(cfg)
+            fps["filename_format_fingerprint"] = U.sha256_text(cfg["filename_timestamp_format"])
+            fps["camera_group_fingerprint"] = U.sha256_text(
+                json.dumps(cfg.get("camera_time_and_timezone_policy") or {}, sort_keys=True))
+        except Exception:
+            pass
     try:
         fps["code_fingerprint"] = U.code_fingerprint()
     except Exception:
@@ -385,7 +392,7 @@ def _runnable_actions(workspace, phases, sealed, busy, initialized=True):
       "finalized already" if geotag_done else "geotag execute must succeed first")
     g("merge/init-library", True)        # one-time setup, runnable anytime (unless sealed/busy)
     # merge plan needs BOTH geotag finalized AND a blessed library (the phase hard-blocks without the
-    # library — §3 precond 5), so gate on both and name whichever is missing. This makes init-library a
+    # library — RUL-library_mark_required), so gate on both and name whichever is missing. This makes init-library a
     # visible enabler of merge/plan instead of letting it be clicked into a runtime "not a blessed
     # library" failure.
     library_ok = _library_blessed(workspace)
@@ -394,6 +401,41 @@ def _runnable_actions(workspace, phases, sealed, busy, initialized=True):
     g("merge/dry-run", me["plan_exists"], "run merge plan first")
     g("merge/execute", me["executable"], "needs a clean, fresh merge plan")
     return out
+
+
+_EDITOR_LOCKS = {}                      # workspace -> the decision editor's lock file, held once the Edit tab opened
+_EDITOR_LOCKS_GUARD = threading.Lock()
+
+
+def _editor_refusal(workspace):
+    """Why the folded-in decision editor may not serve `workspace` now, or None. The Edit tab holds to
+    the bars the standalone editor's serve() sets before it opens a workspace: an initialized workspace,
+    one not sealed (RUL-editor_refuses_sealed), and the decision editor's lock, one editor at a time
+    (BLD-control_directory_contents). The lock is taken on the tab's first request and held until the
+    console stops, as serve() holds it for its whole session; while another editor holds it, the tab
+    is refused."""
+    if not os.path.exists(U.guard_path(workspace)):
+        return "not an initialized workspace — run prep first"
+    if U.is_sealed(workspace):
+        return "workspace is sealed (already merged): the decision editor will not open it"
+    key = os.path.abspath(workspace)
+    with _EDITOR_LOCKS_GUARD:
+        if key not in _EDITOR_LOCKS:
+            lock, owner = _editor._acquire_editor_lock(workspace)
+            if lock is None:
+                d = owner or {}
+                return (f"another decision editor is already editing this workspace (pid {d.get('pid', '?')} "
+                        f"on {d.get('host', '?')}, since {d.get('started_at', '?')}) — close it first")
+            _EDITOR_LOCKS[key] = lock
+    return None
+
+
+def _release_editor_locks():
+    """Release every decision editor lock the console took (at shutdown)."""
+    with _EDITOR_LOCKS_GUARD:
+        for lock in _EDITOR_LOCKS.values():
+            lock.close()                 # closing the file releases the flock
+        _EDITOR_LOCKS.clear()
 
 
 def _state(workspace):
@@ -497,6 +539,11 @@ class Handler(BaseHTTPRequestHandler):
         # Folded-in decision editor (v2.4): its API is delegated to the editor's own functions on the
         # cwd workspace; its assets are served under /edit/ so the whole thing lives on one origin
         # (the single SSH tunnel still suffices). The editor's /api/* paths don't collide with ours.
+        # Each holds to the standalone editor's bars first (_editor_refusal).
+        if path in ("/api/artifacts", "/api/photo"):
+            refusal = _editor_refusal(self.workspace)
+            if refusal:
+                return self._send(409, {"ok": False, "error": refusal})
         if path == "/api/artifacts":
             return self._send(200, _editor._load_artifacts(self.workspace))
         if path == "/api/photo":
@@ -524,18 +571,19 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         path = self.path.split("?", 1)[0]
-        if path not in ("/api/run", "/api/cancel", "/api/save", "/api/rerun"):
+        if path not in ("/api/run", "/api/cancel", "/api/save"):
             return self._send(404, {"error": "not found"})
         try:
             n = int(self.headers.get("Content-Length") or 0)
             payload = json.loads(self.rfile.read(n) or b"{}")
         except (ValueError, OSError) as e:
             return self._send(400, {"ok": False, "error": f"bad request: {e}"})
-        # Folded-in editor writes (decision edits) + its geotag re-run, delegated to the editor.
+        # Folded-in editor writes (decision edits), delegated to the editor once its bars are met.
         if path == "/api/save":
+            refusal = _editor_refusal(self.workspace)
+            if refusal:
+                return self._send(200, {"ok": False, "error": refusal})
             return self._send(200, _editor._save(self.workspace, payload))
-        if path == "/api/rerun":
-            return self._send(200, _editor._rerun(self.workspace))
         if path == "/api/cancel":
             # Interrupt the running job (Ctrl-C equivalent). Cancelling a MUTATING execute needs an
             # explicit confirm (mirrors the execute gate); plan/dry-run/etc. stop immediately. The run
@@ -618,6 +666,7 @@ def serve(workspace, port, host):
         print("\nstopping…")
     finally:
         server.server_close()
+        _release_editor_locks()
         print("stopped.")
     return 0
 

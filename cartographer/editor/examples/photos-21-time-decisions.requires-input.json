@@ -1,9 +1,1664 @@
 {
   "artifact_name": "photos-21-time-decisions.json",
   "artifact_type": "time_decisions",
+  "countries": {
+    "AD": {
+      "name": "Andorra",
+      "zones": [
+        "Europe/Andorra"
+      ]
+    },
+    "AE": {
+      "name": "United Arab Emirates",
+      "zones": [
+        "Asia/Dubai"
+      ]
+    },
+    "AF": {
+      "name": "Afghanistan",
+      "zones": [
+        "Asia/Kabul"
+      ]
+    },
+    "AG": {
+      "name": "Antigua & Barbuda",
+      "zones": [
+        "America/Antigua"
+      ]
+    },
+    "AI": {
+      "name": "Anguilla",
+      "zones": [
+        "America/Anguilla"
+      ]
+    },
+    "AL": {
+      "name": "Albania",
+      "zones": [
+        "Europe/Tirane"
+      ]
+    },
+    "AM": {
+      "name": "Armenia",
+      "zones": [
+        "Asia/Yerevan"
+      ]
+    },
+    "AO": {
+      "name": "Angola",
+      "zones": [
+        "Africa/Luanda"
+      ]
+    },
+    "AQ": {
+      "name": "Antarctica",
+      "zones": [
+        "Antarctica/Casey",
+        "Antarctica/Davis",
+        "Antarctica/DumontDUrville",
+        "Antarctica/Mawson",
+        "Antarctica/McMurdo",
+        "Antarctica/Palmer",
+        "Antarctica/Rothera",
+        "Antarctica/Syowa",
+        "Antarctica/Troll",
+        "Antarctica/Vostok"
+      ]
+    },
+    "AR": {
+      "name": "Argentina",
+      "zones": [
+        "America/Argentina/Buenos_Aires",
+        "America/Argentina/Catamarca",
+        "America/Argentina/Cordoba",
+        "America/Argentina/Jujuy",
+        "America/Argentina/La_Rioja",
+        "America/Argentina/Mendoza",
+        "America/Argentina/Rio_Gallegos",
+        "America/Argentina/Salta",
+        "America/Argentina/San_Juan",
+        "America/Argentina/San_Luis",
+        "America/Argentina/Tucuman",
+        "America/Argentina/Ushuaia"
+      ]
+    },
+    "AS": {
+      "name": "Samoa (American)",
+      "zones": [
+        "Pacific/Pago_Pago"
+      ]
+    },
+    "AT": {
+      "name": "Austria",
+      "zones": [
+        "Europe/Vienna"
+      ]
+    },
+    "AU": {
+      "name": "Australia",
+      "zones": [
+        "Antarctica/Macquarie",
+        "Australia/Adelaide",
+        "Australia/Brisbane",
+        "Australia/Broken_Hill",
+        "Australia/Darwin",
+        "Australia/Eucla",
+        "Australia/Hobart",
+        "Australia/Lindeman",
+        "Australia/Lord_Howe",
+        "Australia/Melbourne",
+        "Australia/Perth",
+        "Australia/Sydney"
+      ]
+    },
+    "AW": {
+      "name": "Aruba",
+      "zones": [
+        "America/Aruba"
+      ]
+    },
+    "AX": {
+      "name": "\u00c5land Islands",
+      "zones": [
+        "Europe/Mariehamn"
+      ]
+    },
+    "AZ": {
+      "name": "Azerbaijan",
+      "zones": [
+        "Asia/Baku"
+      ]
+    },
+    "BA": {
+      "name": "Bosnia & Herzegovina",
+      "zones": [
+        "Europe/Sarajevo"
+      ]
+    },
+    "BB": {
+      "name": "Barbados",
+      "zones": [
+        "America/Barbados"
+      ]
+    },
+    "BD": {
+      "name": "Bangladesh",
+      "zones": [
+        "Asia/Dhaka"
+      ]
+    },
+    "BE": {
+      "name": "Belgium",
+      "zones": [
+        "Europe/Brussels"
+      ]
+    },
+    "BF": {
+      "name": "Burkina Faso",
+      "zones": [
+        "Africa/Ouagadougou"
+      ]
+    },
+    "BG": {
+      "name": "Bulgaria",
+      "zones": [
+        "Europe/Sofia"
+      ]
+    },
+    "BH": {
+      "name": "Bahrain",
+      "zones": [
+        "Asia/Bahrain"
+      ]
+    },
+    "BI": {
+      "name": "Burundi",
+      "zones": [
+        "Africa/Bujumbura"
+      ]
+    },
+    "BJ": {
+      "name": "Benin",
+      "zones": [
+        "Africa/Porto-Novo"
+      ]
+    },
+    "BL": {
+      "name": "St Barthelemy",
+      "zones": [
+        "America/St_Barthelemy"
+      ]
+    },
+    "BM": {
+      "name": "Bermuda",
+      "zones": [
+        "Atlantic/Bermuda"
+      ]
+    },
+    "BN": {
+      "name": "Brunei",
+      "zones": [
+        "Asia/Brunei"
+      ]
+    },
+    "BO": {
+      "name": "Bolivia",
+      "zones": [
+        "America/La_Paz"
+      ]
+    },
+    "BQ": {
+      "name": "Caribbean NL",
+      "zones": [
+        "America/Kralendijk"
+      ]
+    },
+    "BR": {
+      "name": "Brazil",
+      "zones": [
+        "America/Araguaina",
+        "America/Bahia",
+        "America/Belem",
+        "America/Boa_Vista",
+        "America/Campo_Grande",
+        "America/Cuiaba",
+        "America/Eirunepe",
+        "America/Fortaleza",
+        "America/Maceio",
+        "America/Manaus",
+        "America/Noronha",
+        "America/Porto_Velho",
+        "America/Recife",
+        "America/Rio_Branco",
+        "America/Santarem",
+        "America/Sao_Paulo"
+      ]
+    },
+    "BS": {
+      "name": "Bahamas",
+      "zones": [
+        "America/Nassau"
+      ]
+    },
+    "BT": {
+      "name": "Bhutan",
+      "zones": [
+        "Asia/Thimphu"
+      ]
+    },
+    "BW": {
+      "name": "Botswana",
+      "zones": [
+        "Africa/Gaborone"
+      ]
+    },
+    "BY": {
+      "name": "Belarus",
+      "zones": [
+        "Europe/Minsk"
+      ]
+    },
+    "BZ": {
+      "name": "Belize",
+      "zones": [
+        "America/Belize"
+      ]
+    },
+    "CA": {
+      "name": "Canada",
+      "zones": [
+        "America/Atikokan",
+        "America/Blanc-Sablon",
+        "America/Cambridge_Bay",
+        "America/Creston",
+        "America/Dawson",
+        "America/Dawson_Creek",
+        "America/Edmonton",
+        "America/Fort_Nelson",
+        "America/Glace_Bay",
+        "America/Goose_Bay",
+        "America/Halifax",
+        "America/Inuvik",
+        "America/Iqaluit",
+        "America/Moncton",
+        "America/Rankin_Inlet",
+        "America/Regina",
+        "America/Resolute",
+        "America/St_Johns",
+        "America/Swift_Current",
+        "America/Toronto",
+        "America/Vancouver",
+        "America/Whitehorse",
+        "America/Winnipeg"
+      ]
+    },
+    "CC": {
+      "name": "Cocos (Keeling) Islands",
+      "zones": [
+        "Indian/Cocos"
+      ]
+    },
+    "CD": {
+      "name": "Congo (Dem. Rep.)",
+      "zones": [
+        "Africa/Kinshasa",
+        "Africa/Lubumbashi"
+      ]
+    },
+    "CF": {
+      "name": "Central African Rep.",
+      "zones": [
+        "Africa/Bangui"
+      ]
+    },
+    "CG": {
+      "name": "Congo (Rep.)",
+      "zones": [
+        "Africa/Brazzaville"
+      ]
+    },
+    "CH": {
+      "name": "Switzerland",
+      "zones": [
+        "Europe/Zurich"
+      ]
+    },
+    "CI": {
+      "name": "C\u00f4te d\u2019Ivoire",
+      "zones": [
+        "Africa/Abidjan"
+      ]
+    },
+    "CK": {
+      "name": "Cook Islands",
+      "zones": [
+        "Pacific/Rarotonga"
+      ]
+    },
+    "CL": {
+      "name": "Chile",
+      "zones": [
+        "America/Coyhaique",
+        "America/Punta_Arenas",
+        "America/Santiago",
+        "Pacific/Easter"
+      ]
+    },
+    "CM": {
+      "name": "Cameroon",
+      "zones": [
+        "Africa/Douala"
+      ]
+    },
+    "CN": {
+      "name": "China",
+      "zones": [
+        "Asia/Shanghai",
+        "Asia/Urumqi"
+      ]
+    },
+    "CO": {
+      "name": "Colombia",
+      "zones": [
+        "America/Bogota"
+      ]
+    },
+    "CR": {
+      "name": "Costa Rica",
+      "zones": [
+        "America/Costa_Rica"
+      ]
+    },
+    "CU": {
+      "name": "Cuba",
+      "zones": [
+        "America/Havana"
+      ]
+    },
+    "CV": {
+      "name": "Cape Verde",
+      "zones": [
+        "Atlantic/Cape_Verde"
+      ]
+    },
+    "CW": {
+      "name": "Cura\u00e7ao",
+      "zones": [
+        "America/Curacao"
+      ]
+    },
+    "CX": {
+      "name": "Christmas Island",
+      "zones": [
+        "Indian/Christmas"
+      ]
+    },
+    "CY": {
+      "name": "Cyprus",
+      "zones": [
+        "Asia/Famagusta",
+        "Asia/Nicosia"
+      ]
+    },
+    "CZ": {
+      "name": "Czech Republic",
+      "zones": [
+        "Europe/Prague"
+      ]
+    },
+    "DE": {
+      "name": "Germany",
+      "zones": [
+        "Europe/Berlin",
+        "Europe/Busingen"
+      ]
+    },
+    "DJ": {
+      "name": "Djibouti",
+      "zones": [
+        "Africa/Djibouti"
+      ]
+    },
+    "DK": {
+      "name": "Denmark",
+      "zones": [
+        "Europe/Copenhagen"
+      ]
+    },
+    "DM": {
+      "name": "Dominica",
+      "zones": [
+        "America/Dominica"
+      ]
+    },
+    "DO": {
+      "name": "Dominican Republic",
+      "zones": [
+        "America/Santo_Domingo"
+      ]
+    },
+    "DZ": {
+      "name": "Algeria",
+      "zones": [
+        "Africa/Algiers"
+      ]
+    },
+    "EC": {
+      "name": "Ecuador",
+      "zones": [
+        "America/Guayaquil",
+        "Pacific/Galapagos"
+      ]
+    },
+    "EE": {
+      "name": "Estonia",
+      "zones": [
+        "Europe/Tallinn"
+      ]
+    },
+    "EG": {
+      "name": "Egypt",
+      "zones": [
+        "Africa/Cairo"
+      ]
+    },
+    "EH": {
+      "name": "Western Sahara",
+      "zones": [
+        "Africa/El_Aaiun"
+      ]
+    },
+    "ER": {
+      "name": "Eritrea",
+      "zones": [
+        "Africa/Asmara"
+      ]
+    },
+    "ES": {
+      "name": "Spain",
+      "zones": [
+        "Africa/Ceuta",
+        "Atlantic/Canary",
+        "Europe/Madrid"
+      ]
+    },
+    "ET": {
+      "name": "Ethiopia",
+      "zones": [
+        "Africa/Addis_Ababa"
+      ]
+    },
+    "FI": {
+      "name": "Finland",
+      "zones": [
+        "Europe/Helsinki"
+      ]
+    },
+    "FJ": {
+      "name": "Fiji",
+      "zones": [
+        "Pacific/Fiji"
+      ]
+    },
+    "FK": {
+      "name": "Falkland Islands",
+      "zones": [
+        "Atlantic/Stanley"
+      ]
+    },
+    "FM": {
+      "name": "Micronesia",
+      "zones": [
+        "Pacific/Chuuk",
+        "Pacific/Kosrae",
+        "Pacific/Pohnpei"
+      ]
+    },
+    "FO": {
+      "name": "Faroe Islands",
+      "zones": [
+        "Atlantic/Faroe"
+      ]
+    },
+    "FR": {
+      "name": "France",
+      "zones": [
+        "Europe/Paris"
+      ]
+    },
+    "GA": {
+      "name": "Gabon",
+      "zones": [
+        "Africa/Libreville"
+      ]
+    },
+    "GB": {
+      "name": "Britain (UK)",
+      "zones": [
+        "Europe/London"
+      ]
+    },
+    "GD": {
+      "name": "Grenada",
+      "zones": [
+        "America/Grenada"
+      ]
+    },
+    "GE": {
+      "name": "Georgia",
+      "zones": [
+        "Asia/Tbilisi"
+      ]
+    },
+    "GF": {
+      "name": "French Guiana",
+      "zones": [
+        "America/Cayenne"
+      ]
+    },
+    "GG": {
+      "name": "Guernsey",
+      "zones": [
+        "Europe/Guernsey"
+      ]
+    },
+    "GH": {
+      "name": "Ghana",
+      "zones": [
+        "Africa/Accra"
+      ]
+    },
+    "GI": {
+      "name": "Gibraltar",
+      "zones": [
+        "Europe/Gibraltar"
+      ]
+    },
+    "GL": {
+      "name": "Greenland",
+      "zones": [
+        "America/Danmarkshavn",
+        "America/Nuuk",
+        "America/Scoresbysund",
+        "America/Thule"
+      ]
+    },
+    "GM": {
+      "name": "Gambia",
+      "zones": [
+        "Africa/Banjul"
+      ]
+    },
+    "GN": {
+      "name": "Guinea",
+      "zones": [
+        "Africa/Conakry"
+      ]
+    },
+    "GP": {
+      "name": "Guadeloupe",
+      "zones": [
+        "America/Guadeloupe"
+      ]
+    },
+    "GQ": {
+      "name": "Equatorial Guinea",
+      "zones": [
+        "Africa/Malabo"
+      ]
+    },
+    "GR": {
+      "name": "Greece",
+      "zones": [
+        "Europe/Athens"
+      ]
+    },
+    "GS": {
+      "name": "South Georgia & the South Sandwich Islands",
+      "zones": [
+        "Atlantic/South_Georgia"
+      ]
+    },
+    "GT": {
+      "name": "Guatemala",
+      "zones": [
+        "America/Guatemala"
+      ]
+    },
+    "GU": {
+      "name": "Guam",
+      "zones": [
+        "Pacific/Guam"
+      ]
+    },
+    "GW": {
+      "name": "Guinea-Bissau",
+      "zones": [
+        "Africa/Bissau"
+      ]
+    },
+    "GY": {
+      "name": "Guyana",
+      "zones": [
+        "America/Guyana"
+      ]
+    },
+    "HK": {
+      "name": "Hong Kong",
+      "zones": [
+        "Asia/Hong_Kong"
+      ]
+    },
+    "HN": {
+      "name": "Honduras",
+      "zones": [
+        "America/Tegucigalpa"
+      ]
+    },
+    "HR": {
+      "name": "Croatia",
+      "zones": [
+        "Europe/Zagreb"
+      ]
+    },
+    "HT": {
+      "name": "Haiti",
+      "zones": [
+        "America/Port-au-Prince"
+      ]
+    },
+    "HU": {
+      "name": "Hungary",
+      "zones": [
+        "Europe/Budapest"
+      ]
+    },
+    "ID": {
+      "name": "Indonesia",
+      "zones": [
+        "Asia/Jakarta",
+        "Asia/Jayapura",
+        "Asia/Makassar",
+        "Asia/Pontianak"
+      ]
+    },
+    "IE": {
+      "name": "Ireland",
+      "zones": [
+        "Europe/Dublin"
+      ]
+    },
+    "IL": {
+      "name": "Israel",
+      "zones": [
+        "Asia/Jerusalem"
+      ]
+    },
+    "IM": {
+      "name": "Isle of Man",
+      "zones": [
+        "Europe/Isle_of_Man"
+      ]
+    },
+    "IN": {
+      "name": "India",
+      "zones": [
+        "Asia/Kolkata"
+      ]
+    },
+    "IO": {
+      "name": "British Indian Ocean Territory",
+      "zones": [
+        "Indian/Chagos"
+      ]
+    },
+    "IQ": {
+      "name": "Iraq",
+      "zones": [
+        "Asia/Baghdad"
+      ]
+    },
+    "IR": {
+      "name": "Iran",
+      "zones": [
+        "Asia/Tehran"
+      ]
+    },
+    "IS": {
+      "name": "Iceland",
+      "zones": [
+        "Atlantic/Reykjavik"
+      ]
+    },
+    "IT": {
+      "name": "Italy",
+      "zones": [
+        "Europe/Rome"
+      ]
+    },
+    "JE": {
+      "name": "Jersey",
+      "zones": [
+        "Europe/Jersey"
+      ]
+    },
+    "JM": {
+      "name": "Jamaica",
+      "zones": [
+        "America/Jamaica"
+      ]
+    },
+    "JO": {
+      "name": "Jordan",
+      "zones": [
+        "Asia/Amman"
+      ]
+    },
+    "JP": {
+      "name": "Japan",
+      "zones": [
+        "Asia/Tokyo"
+      ]
+    },
+    "KE": {
+      "name": "Kenya",
+      "zones": [
+        "Africa/Nairobi"
+      ]
+    },
+    "KG": {
+      "name": "Kyrgyzstan",
+      "zones": [
+        "Asia/Bishkek"
+      ]
+    },
+    "KH": {
+      "name": "Cambodia",
+      "zones": [
+        "Asia/Phnom_Penh"
+      ]
+    },
+    "KI": {
+      "name": "Kiribati",
+      "zones": [
+        "Pacific/Kanton",
+        "Pacific/Kiritimati",
+        "Pacific/Tarawa"
+      ]
+    },
+    "KM": {
+      "name": "Comoros",
+      "zones": [
+        "Indian/Comoro"
+      ]
+    },
+    "KN": {
+      "name": "St Kitts & Nevis",
+      "zones": [
+        "America/St_Kitts"
+      ]
+    },
+    "KP": {
+      "name": "Korea (North)",
+      "zones": [
+        "Asia/Pyongyang"
+      ]
+    },
+    "KR": {
+      "name": "Korea (South)",
+      "zones": [
+        "Asia/Seoul"
+      ]
+    },
+    "KW": {
+      "name": "Kuwait",
+      "zones": [
+        "Asia/Kuwait"
+      ]
+    },
+    "KY": {
+      "name": "Cayman Islands",
+      "zones": [
+        "America/Cayman"
+      ]
+    },
+    "KZ": {
+      "name": "Kazakhstan",
+      "zones": [
+        "Asia/Almaty",
+        "Asia/Aqtau",
+        "Asia/Aqtobe",
+        "Asia/Atyrau",
+        "Asia/Oral",
+        "Asia/Qostanay",
+        "Asia/Qyzylorda"
+      ]
+    },
+    "LA": {
+      "name": "Laos",
+      "zones": [
+        "Asia/Vientiane"
+      ]
+    },
+    "LB": {
+      "name": "Lebanon",
+      "zones": [
+        "Asia/Beirut"
+      ]
+    },
+    "LC": {
+      "name": "St Lucia",
+      "zones": [
+        "America/St_Lucia"
+      ]
+    },
+    "LI": {
+      "name": "Liechtenstein",
+      "zones": [
+        "Europe/Vaduz"
+      ]
+    },
+    "LK": {
+      "name": "Sri Lanka",
+      "zones": [
+        "Asia/Colombo"
+      ]
+    },
+    "LR": {
+      "name": "Liberia",
+      "zones": [
+        "Africa/Monrovia"
+      ]
+    },
+    "LS": {
+      "name": "Lesotho",
+      "zones": [
+        "Africa/Maseru"
+      ]
+    },
+    "LT": {
+      "name": "Lithuania",
+      "zones": [
+        "Europe/Vilnius"
+      ]
+    },
+    "LU": {
+      "name": "Luxembourg",
+      "zones": [
+        "Europe/Luxembourg"
+      ]
+    },
+    "LV": {
+      "name": "Latvia",
+      "zones": [
+        "Europe/Riga"
+      ]
+    },
+    "LY": {
+      "name": "Libya",
+      "zones": [
+        "Africa/Tripoli"
+      ]
+    },
+    "MA": {
+      "name": "Morocco",
+      "zones": [
+        "Africa/Casablanca"
+      ]
+    },
+    "MC": {
+      "name": "Monaco",
+      "zones": [
+        "Europe/Monaco"
+      ]
+    },
+    "MD": {
+      "name": "Moldova",
+      "zones": [
+        "Europe/Chisinau"
+      ]
+    },
+    "ME": {
+      "name": "Montenegro",
+      "zones": [
+        "Europe/Podgorica"
+      ]
+    },
+    "MF": {
+      "name": "St Martin (French)",
+      "zones": [
+        "America/Marigot"
+      ]
+    },
+    "MG": {
+      "name": "Madagascar",
+      "zones": [
+        "Indian/Antananarivo"
+      ]
+    },
+    "MH": {
+      "name": "Marshall Islands",
+      "zones": [
+        "Pacific/Kwajalein",
+        "Pacific/Majuro"
+      ]
+    },
+    "MK": {
+      "name": "North Macedonia",
+      "zones": [
+        "Europe/Skopje"
+      ]
+    },
+    "ML": {
+      "name": "Mali",
+      "zones": [
+        "Africa/Bamako"
+      ]
+    },
+    "MM": {
+      "name": "Myanmar (Burma)",
+      "zones": [
+        "Asia/Yangon"
+      ]
+    },
+    "MN": {
+      "name": "Mongolia",
+      "zones": [
+        "Asia/Hovd",
+        "Asia/Ulaanbaatar"
+      ]
+    },
+    "MO": {
+      "name": "Macau",
+      "zones": [
+        "Asia/Macau"
+      ]
+    },
+    "MP": {
+      "name": "Northern Mariana Islands",
+      "zones": [
+        "Pacific/Saipan"
+      ]
+    },
+    "MQ": {
+      "name": "Martinique",
+      "zones": [
+        "America/Martinique"
+      ]
+    },
+    "MR": {
+      "name": "Mauritania",
+      "zones": [
+        "Africa/Nouakchott"
+      ]
+    },
+    "MS": {
+      "name": "Montserrat",
+      "zones": [
+        "America/Montserrat"
+      ]
+    },
+    "MT": {
+      "name": "Malta",
+      "zones": [
+        "Europe/Malta"
+      ]
+    },
+    "MU": {
+      "name": "Mauritius",
+      "zones": [
+        "Indian/Mauritius"
+      ]
+    },
+    "MV": {
+      "name": "Maldives",
+      "zones": [
+        "Indian/Maldives"
+      ]
+    },
+    "MW": {
+      "name": "Malawi",
+      "zones": [
+        "Africa/Blantyre"
+      ]
+    },
+    "MX": {
+      "name": "Mexico",
+      "zones": [
+        "America/Bahia_Banderas",
+        "America/Cancun",
+        "America/Chihuahua",
+        "America/Ciudad_Juarez",
+        "America/Hermosillo",
+        "America/Matamoros",
+        "America/Mazatlan",
+        "America/Merida",
+        "America/Mexico_City",
+        "America/Monterrey",
+        "America/Ojinaga",
+        "America/Tijuana"
+      ]
+    },
+    "MY": {
+      "name": "Malaysia",
+      "zones": [
+        "Asia/Kuala_Lumpur",
+        "Asia/Kuching"
+      ]
+    },
+    "MZ": {
+      "name": "Mozambique",
+      "zones": [
+        "Africa/Maputo"
+      ]
+    },
+    "NA": {
+      "name": "Namibia",
+      "zones": [
+        "Africa/Windhoek"
+      ]
+    },
+    "NC": {
+      "name": "New Caledonia",
+      "zones": [
+        "Pacific/Noumea"
+      ]
+    },
+    "NE": {
+      "name": "Niger",
+      "zones": [
+        "Africa/Niamey"
+      ]
+    },
+    "NF": {
+      "name": "Norfolk Island",
+      "zones": [
+        "Pacific/Norfolk"
+      ]
+    },
+    "NG": {
+      "name": "Nigeria",
+      "zones": [
+        "Africa/Lagos"
+      ]
+    },
+    "NI": {
+      "name": "Nicaragua",
+      "zones": [
+        "America/Managua"
+      ]
+    },
+    "NL": {
+      "name": "Netherlands",
+      "zones": [
+        "Europe/Amsterdam"
+      ]
+    },
+    "NO": {
+      "name": "Norway",
+      "zones": [
+        "Europe/Oslo"
+      ]
+    },
+    "NP": {
+      "name": "Nepal",
+      "zones": [
+        "Asia/Kathmandu"
+      ]
+    },
+    "NR": {
+      "name": "Nauru",
+      "zones": [
+        "Pacific/Nauru"
+      ]
+    },
+    "NU": {
+      "name": "Niue",
+      "zones": [
+        "Pacific/Niue"
+      ]
+    },
+    "NZ": {
+      "name": "New Zealand",
+      "zones": [
+        "Pacific/Auckland",
+        "Pacific/Chatham"
+      ]
+    },
+    "OM": {
+      "name": "Oman",
+      "zones": [
+        "Asia/Muscat"
+      ]
+    },
+    "PA": {
+      "name": "Panama",
+      "zones": [
+        "America/Panama"
+      ]
+    },
+    "PE": {
+      "name": "Peru",
+      "zones": [
+        "America/Lima"
+      ]
+    },
+    "PF": {
+      "name": "French Polynesia",
+      "zones": [
+        "Pacific/Gambier",
+        "Pacific/Marquesas",
+        "Pacific/Tahiti"
+      ]
+    },
+    "PG": {
+      "name": "Papua New Guinea",
+      "zones": [
+        "Pacific/Bougainville",
+        "Pacific/Port_Moresby"
+      ]
+    },
+    "PH": {
+      "name": "Philippines",
+      "zones": [
+        "Asia/Manila"
+      ]
+    },
+    "PK": {
+      "name": "Pakistan",
+      "zones": [
+        "Asia/Karachi"
+      ]
+    },
+    "PL": {
+      "name": "Poland",
+      "zones": [
+        "Europe/Warsaw"
+      ]
+    },
+    "PM": {
+      "name": "St Pierre & Miquelon",
+      "zones": [
+        "America/Miquelon"
+      ]
+    },
+    "PN": {
+      "name": "Pitcairn",
+      "zones": [
+        "Pacific/Pitcairn"
+      ]
+    },
+    "PR": {
+      "name": "Puerto Rico",
+      "zones": [
+        "America/Puerto_Rico"
+      ]
+    },
+    "PS": {
+      "name": "Palestine",
+      "zones": [
+        "Asia/Gaza",
+        "Asia/Hebron"
+      ]
+    },
+    "PT": {
+      "name": "Portugal",
+      "zones": [
+        "Atlantic/Azores",
+        "Atlantic/Madeira",
+        "Europe/Lisbon"
+      ]
+    },
+    "PW": {
+      "name": "Palau",
+      "zones": [
+        "Pacific/Palau"
+      ]
+    },
+    "PY": {
+      "name": "Paraguay",
+      "zones": [
+        "America/Asuncion"
+      ]
+    },
+    "QA": {
+      "name": "Qatar",
+      "zones": [
+        "Asia/Qatar"
+      ]
+    },
+    "RE": {
+      "name": "R\u00e9union",
+      "zones": [
+        "Indian/Reunion"
+      ]
+    },
+    "RO": {
+      "name": "Romania",
+      "zones": [
+        "Europe/Bucharest"
+      ]
+    },
+    "RS": {
+      "name": "Serbia",
+      "zones": [
+        "Europe/Belgrade"
+      ]
+    },
+    "RU": {
+      "name": "Russia",
+      "zones": [
+        "Asia/Anadyr",
+        "Asia/Barnaul",
+        "Asia/Chita",
+        "Asia/Irkutsk",
+        "Asia/Kamchatka",
+        "Asia/Khandyga",
+        "Asia/Krasnoyarsk",
+        "Asia/Magadan",
+        "Asia/Novokuznetsk",
+        "Asia/Novosibirsk",
+        "Asia/Omsk",
+        "Asia/Sakhalin",
+        "Asia/Srednekolymsk",
+        "Asia/Tomsk",
+        "Asia/Ust-Nera",
+        "Asia/Vladivostok",
+        "Asia/Yakutsk",
+        "Asia/Yekaterinburg",
+        "Europe/Astrakhan",
+        "Europe/Kaliningrad",
+        "Europe/Kirov",
+        "Europe/Moscow",
+        "Europe/Samara",
+        "Europe/Saratov",
+        "Europe/Ulyanovsk",
+        "Europe/Volgograd"
+      ]
+    },
+    "RW": {
+      "name": "Rwanda",
+      "zones": [
+        "Africa/Kigali"
+      ]
+    },
+    "SA": {
+      "name": "Saudi Arabia",
+      "zones": [
+        "Asia/Riyadh"
+      ]
+    },
+    "SB": {
+      "name": "Solomon Islands",
+      "zones": [
+        "Pacific/Guadalcanal"
+      ]
+    },
+    "SC": {
+      "name": "Seychelles",
+      "zones": [
+        "Indian/Mahe"
+      ]
+    },
+    "SD": {
+      "name": "Sudan",
+      "zones": [
+        "Africa/Khartoum"
+      ]
+    },
+    "SE": {
+      "name": "Sweden",
+      "zones": [
+        "Europe/Stockholm"
+      ]
+    },
+    "SG": {
+      "name": "Singapore",
+      "zones": [
+        "Asia/Singapore"
+      ]
+    },
+    "SH": {
+      "name": "St Helena",
+      "zones": [
+        "Atlantic/St_Helena"
+      ]
+    },
+    "SI": {
+      "name": "Slovenia",
+      "zones": [
+        "Europe/Ljubljana"
+      ]
+    },
+    "SJ": {
+      "name": "Svalbard & Jan Mayen",
+      "zones": [
+        "Arctic/Longyearbyen"
+      ]
+    },
+    "SK": {
+      "name": "Slovakia",
+      "zones": [
+        "Europe/Bratislava"
+      ]
+    },
+    "SL": {
+      "name": "Sierra Leone",
+      "zones": [
+        "Africa/Freetown"
+      ]
+    },
+    "SM": {
+      "name": "San Marino",
+      "zones": [
+        "Europe/San_Marino"
+      ]
+    },
+    "SN": {
+      "name": "Senegal",
+      "zones": [
+        "Africa/Dakar"
+      ]
+    },
+    "SO": {
+      "name": "Somalia",
+      "zones": [
+        "Africa/Mogadishu"
+      ]
+    },
+    "SR": {
+      "name": "Suriname",
+      "zones": [
+        "America/Paramaribo"
+      ]
+    },
+    "SS": {
+      "name": "South Sudan",
+      "zones": [
+        "Africa/Juba"
+      ]
+    },
+    "ST": {
+      "name": "Sao Tome & Principe",
+      "zones": [
+        "Africa/Sao_Tome"
+      ]
+    },
+    "SV": {
+      "name": "El Salvador",
+      "zones": [
+        "America/El_Salvador"
+      ]
+    },
+    "SX": {
+      "name": "St Maarten (Dutch)",
+      "zones": [
+        "America/Lower_Princes"
+      ]
+    },
+    "SY": {
+      "name": "Syria",
+      "zones": [
+        "Asia/Damascus"
+      ]
+    },
+    "SZ": {
+      "name": "Eswatini (Swaziland)",
+      "zones": [
+        "Africa/Mbabane"
+      ]
+    },
+    "TC": {
+      "name": "Turks & Caicos Is",
+      "zones": [
+        "America/Grand_Turk"
+      ]
+    },
+    "TD": {
+      "name": "Chad",
+      "zones": [
+        "Africa/Ndjamena"
+      ]
+    },
+    "TF": {
+      "name": "French S. Terr.",
+      "zones": [
+        "Indian/Kerguelen"
+      ]
+    },
+    "TG": {
+      "name": "Togo",
+      "zones": [
+        "Africa/Lome"
+      ]
+    },
+    "TH": {
+      "name": "Thailand",
+      "zones": [
+        "Asia/Bangkok"
+      ]
+    },
+    "TJ": {
+      "name": "Tajikistan",
+      "zones": [
+        "Asia/Dushanbe"
+      ]
+    },
+    "TK": {
+      "name": "Tokelau",
+      "zones": [
+        "Pacific/Fakaofo"
+      ]
+    },
+    "TL": {
+      "name": "East Timor",
+      "zones": [
+        "Asia/Dili"
+      ]
+    },
+    "TM": {
+      "name": "Turkmenistan",
+      "zones": [
+        "Asia/Ashgabat"
+      ]
+    },
+    "TN": {
+      "name": "Tunisia",
+      "zones": [
+        "Africa/Tunis"
+      ]
+    },
+    "TO": {
+      "name": "Tonga",
+      "zones": [
+        "Pacific/Tongatapu"
+      ]
+    },
+    "TR": {
+      "name": "Turkey",
+      "zones": [
+        "Europe/Istanbul"
+      ]
+    },
+    "TT": {
+      "name": "Trinidad & Tobago",
+      "zones": [
+        "America/Port_of_Spain"
+      ]
+    },
+    "TV": {
+      "name": "Tuvalu",
+      "zones": [
+        "Pacific/Funafuti"
+      ]
+    },
+    "TW": {
+      "name": "Taiwan",
+      "zones": [
+        "Asia/Taipei"
+      ]
+    },
+    "TZ": {
+      "name": "Tanzania",
+      "zones": [
+        "Africa/Dar_es_Salaam"
+      ]
+    },
+    "UA": {
+      "name": "Ukraine",
+      "zones": [
+        "Europe/Kyiv",
+        "Europe/Simferopol"
+      ]
+    },
+    "UG": {
+      "name": "Uganda",
+      "zones": [
+        "Africa/Kampala"
+      ]
+    },
+    "UM": {
+      "name": "US minor outlying islands",
+      "zones": [
+        "Pacific/Midway",
+        "Pacific/Wake"
+      ]
+    },
+    "US": {
+      "name": "United States",
+      "zones": [
+        "America/Adak",
+        "America/Anchorage",
+        "America/Boise",
+        "America/Chicago",
+        "America/Denver",
+        "America/Detroit",
+        "America/Indiana/Indianapolis",
+        "America/Indiana/Knox",
+        "America/Indiana/Marengo",
+        "America/Indiana/Petersburg",
+        "America/Indiana/Tell_City",
+        "America/Indiana/Vevay",
+        "America/Indiana/Vincennes",
+        "America/Indiana/Winamac",
+        "America/Juneau",
+        "America/Kentucky/Louisville",
+        "America/Kentucky/Monticello",
+        "America/Los_Angeles",
+        "America/Menominee",
+        "America/Metlakatla",
+        "America/New_York",
+        "America/Nome",
+        "America/North_Dakota/Beulah",
+        "America/North_Dakota/Center",
+        "America/North_Dakota/New_Salem",
+        "America/Phoenix",
+        "America/Sitka",
+        "America/Yakutat",
+        "Pacific/Honolulu"
+      ]
+    },
+    "UY": {
+      "name": "Uruguay",
+      "zones": [
+        "America/Montevideo"
+      ]
+    },
+    "UZ": {
+      "name": "Uzbekistan",
+      "zones": [
+        "Asia/Samarkand",
+        "Asia/Tashkent"
+      ]
+    },
+    "VA": {
+      "name": "Vatican City",
+      "zones": [
+        "Europe/Vatican"
+      ]
+    },
+    "VC": {
+      "name": "St Vincent",
+      "zones": [
+        "America/St_Vincent"
+      ]
+    },
+    "VE": {
+      "name": "Venezuela",
+      "zones": [
+        "America/Caracas"
+      ]
+    },
+    "VG": {
+      "name": "Virgin Islands (UK)",
+      "zones": [
+        "America/Tortola"
+      ]
+    },
+    "VI": {
+      "name": "Virgin Islands (US)",
+      "zones": [
+        "America/St_Thomas"
+      ]
+    },
+    "VN": {
+      "name": "Vietnam",
+      "zones": [
+        "Asia/Ho_Chi_Minh"
+      ]
+    },
+    "VU": {
+      "name": "Vanuatu",
+      "zones": [
+        "Pacific/Efate"
+      ]
+    },
+    "WF": {
+      "name": "Wallis & Futuna",
+      "zones": [
+        "Pacific/Wallis"
+      ]
+    },
+    "WS": {
+      "name": "Samoa (western)",
+      "zones": [
+        "Pacific/Apia"
+      ]
+    },
+    "YE": {
+      "name": "Yemen",
+      "zones": [
+        "Asia/Aden"
+      ]
+    },
+    "YT": {
+      "name": "Mayotte",
+      "zones": [
+        "Indian/Mayotte"
+      ]
+    },
+    "ZA": {
+      "name": "South Africa",
+      "zones": [
+        "Africa/Johannesburg"
+      ]
+    },
+    "ZM": {
+      "name": "Zambia",
+      "zones": [
+        "Africa/Lusaka"
+      ]
+    },
+    "ZW": {
+      "name": "Zimbabwe",
+      "zones": [
+        "Africa/Harare"
+      ]
+    }
+  },
   "depends_on": {
     "camera_group_key_version": 1,
-    "camera_time_policy_fingerprint": "91162f868be20fabdeca9cc1a35beb977d6abf786f01899fadb7b2888ad7c847",
+    "camera_time_policy_fingerprint": "0e6123b50ca057182dbd6fd1585db9e2cabfd6bc2d0c1ce45f239e9a1b7e2ac6",
     "gpx_fingerprint": "example-gpx-fingerprint",
     "handoff": {
       "artifact_name": "photos-11-handoff.json",
@@ -18,7 +1673,12 @@
         "NIKON|D750|B": {
           "camera_group": "NIKON|D750|B",
           "camera_group_class": "camera",
-          "effective_time_anchor": "",
+          "day": "2024-07-03",
+          "decision_mode": "to_be_confirmed_against_tracks",
+          "effective_time_anchor": {
+            "offset_seconds": -7200,
+            "source": "timezone_unconfirmed"
+          },
           "proposal": {
             "confidence": "review_required",
             "proposal_source": "timezone_naive",
@@ -27,12 +1687,12 @@
             "proposed_real_utc": "2024-07-03T11:00:00Z",
             "rank": "timezone_derived"
           },
-          "requires_user_input": true,
+          "requires_user_input": false,
           "stale_user_decision": false,
           "user_decision": {
             "accept_proposal": false,
-            "manual_offset_seconds": "",
-            "manual_real_utc": ""
+            "accepted_offset_seconds": "",
+            "manual_offset_seconds": ""
           }
         }
       },
@@ -41,7 +1701,6 @@
       ],
       "destination_path": "6-photos-by-dest",
       "destination_timezone": {
-        "decision_mode": "auto_resolved",
         "effective_iana_timezone": "Europe/Brussels",
         "proposal_confidence": "high",
         "proposal_source": "config_default",
@@ -49,8 +1708,9 @@
         "requires_user_input": false,
         "stale_user_decision": false,
         "user_decision": {
-          "accept_proposed_timezone": false,
-          "manual_iana_timezone": ""
+          "confirmed_despite_recorded_offsets": [],
+          "country": "",
+          "manual_iana_timezone": "Europe/Brussels"
         }
       }
     },
@@ -59,7 +1719,12 @@
         "NIKON|D750|B": {
           "camera_group": "NIKON|D750|B",
           "camera_group_class": "camera",
-          "effective_time_anchor": "",
+          "day": "2024-07-03",
+          "decision_mode": "to_be_confirmed_against_tracks",
+          "effective_time_anchor": {
+            "offset_seconds": -7200,
+            "source": "timezone_unconfirmed"
+          },
           "proposal": {
             "confidence": "review_required",
             "proposal_source": "timezone_naive",
@@ -68,12 +1733,12 @@
             "proposed_real_utc": "2024-07-03T11:00:00Z",
             "rank": "timezone_derived"
           },
-          "requires_user_input": true,
+          "requires_user_input": false,
           "stale_user_decision": false,
           "user_decision": {
             "accept_proposal": false,
-            "manual_offset_seconds": "",
-            "manual_real_utc": ""
+            "accepted_offset_seconds": "",
+            "manual_offset_seconds": ""
           }
         }
       },
@@ -92,7 +1757,8 @@
         "requires_user_input": false,
         "stale_user_decision": false,
         "user_decision": {
-          "accept_proposed_timezone": false,
+          "confirmed_despite_recorded_offsets": [],
+          "country": "",
           "manual_iana_timezone": ""
         }
       }
@@ -102,7 +1768,12 @@
         "NIKON|D750|B": {
           "camera_group": "NIKON|D750|B",
           "camera_group_class": "camera",
-          "effective_time_anchor": "",
+          "day": "2024-07-03",
+          "decision_mode": "to_be_confirmed_against_tracks",
+          "effective_time_anchor": {
+            "offset_seconds": -7200,
+            "source": "timezone_unconfirmed"
+          },
           "proposal": {
             "confidence": "review_required",
             "proposal_source": "timezone_naive",
@@ -111,12 +1782,12 @@
             "proposed_real_utc": "2024-07-03T11:15:00Z",
             "rank": "timezone_derived"
           },
-          "requires_user_input": true,
+          "requires_user_input": false,
           "stale_user_decision": false,
           "user_decision": {
             "accept_proposal": false,
-            "manual_offset_seconds": "",
-            "manual_real_utc": ""
+            "accepted_offset_seconds": "",
+            "manual_offset_seconds": ""
           }
         }
       },
@@ -134,7 +1805,8 @@
         "requires_user_input": false,
         "stale_user_decision": false,
         "user_decision": {
-          "accept_proposed_timezone": false,
+          "confirmed_despite_recorded_offsets": [],
+          "country": "",
           "manual_iana_timezone": ""
         }
       }
@@ -145,28 +1817,40 @@
           "camera_group": "SONY|ILCE-6400|A",
           "camera_group_class": "camera",
           "date": "2024-07-03",
-          "effective_time_anchor": "",
-          "proposal": {
-            "confidence": "review_required",
-            "proposal_source": "timezone_naive",
-            "proposed_from_timezone": "Europe/Brussels",
-            "proposed_offset_seconds": -7200,
-            "proposed_real_utc": "2024-07-03T12:00:00Z",
-            "rank": "timezone_derived"
+          "day": "2024-07-03",
+          "decision_mode": "auto_resolved",
+          "effective_time_anchor": {
+            "offset_seconds": -7200,
+            "source": "same_day_auto"
           },
-          "requires_user_input": true,
+          "proposal": {
+            "confidence": "high",
+            "proposal_source": "same_day_elsewhere",
+            "proposed_offset_seconds": -7200,
+            "rank": "same_day",
+            "shared_from": {
+              "bucket": "SONY|ILCE-6400|A",
+              "destination": "6-photos-by-dest/Japan"
+            }
+          },
+          "requires_user_input": false,
           "stale_user_decision": false,
           "user_decision": {
             "accept_proposal": false,
-            "manual_offset_seconds": "",
-            "manual_real_utc": ""
+            "accepted_offset_seconds": "",
+            "manual_offset_seconds": ""
           }
         },
         "SONY|ILCE-6400|A@2024-07-04": {
           "camera_group": "SONY|ILCE-6400|A",
           "camera_group_class": "camera",
           "date": "2024-07-04",
-          "effective_time_anchor": "",
+          "day": "2024-07-04",
+          "decision_mode": "to_be_confirmed_against_tracks",
+          "effective_time_anchor": {
+            "offset_seconds": -7200,
+            "source": "timezone_unconfirmed"
+          },
           "proposal": {
             "confidence": "review_required",
             "proposal_source": "timezone_naive",
@@ -175,18 +1859,19 @@
             "proposed_real_utc": "2024-07-04T12:00:00Z",
             "rank": "timezone_derived"
           },
-          "requires_user_input": true,
+          "requires_user_input": false,
           "stale_user_decision": false,
           "user_decision": {
             "accept_proposal": false,
-            "manual_offset_seconds": "",
-            "manual_real_utc": ""
+            "accepted_offset_seconds": "",
+            "manual_offset_seconds": ""
           }
         },
         "SONY|ILCE-6400|A@2024-12-22": {
           "camera_group": "SONY|ILCE-6400|A",
           "camera_group_class": "camera",
           "date": "2024-12-22",
+          "day": "2024-12-22",
           "effective_time_anchor": "",
           "proposal": {
             "confidence": "review_required",
@@ -200,8 +1885,8 @@
           "stale_user_decision": false,
           "user_decision": {
             "accept_proposal": false,
-            "manual_offset_seconds": "",
-            "manual_real_utc": ""
+            "accepted_offset_seconds": "",
+            "manual_offset_seconds": ""
           }
         }
       },
@@ -210,6 +1895,7 @@
       ],
       "destination_path": "6-photos-by-dest/Belgium/Brussels",
       "destination_timezone": {
+        "decision_mode": "auto_resolved",
         "effective_iana_timezone": "Europe/Brussels",
         "inherited_from": "6-photos-by-dest/Belgium",
         "proposal_confidence": "review_required",
@@ -218,7 +1904,8 @@
         "requires_user_input": false,
         "stale_user_decision": false,
         "user_decision": {
-          "accept_proposed_timezone": true,
+          "confirmed_despite_recorded_offsets": [],
+          "country": "",
           "manual_iana_timezone": ""
         }
       }
@@ -226,14 +1913,22 @@
     "6-photos-by-dest/Japan": {
       "camera_group_time_decisions": {
         "SONY|ILCE-6400|A": {
+          "anchored_by": [
+            {
+              "gpx_file": "trip-2024-07-03.gpx",
+              "sha256": null
+            }
+          ],
           "camera_group": "SONY|ILCE-6400|A",
           "camera_group_class": "camera",
+          "day": "2024-07-03",
           "decision_mode": "auto_resolved",
           "effective_time_anchor": {
             "offset_seconds": -7200,
             "source": "gpx_anchor_auto"
           },
           "proposal": {
+            "acceptance_tolerance_seconds": 120.0,
             "anchor_count": 2,
             "anchors": [
               {
@@ -271,6 +1966,7 @@
             ],
             "confidence": "high",
             "conflicting_count": 0,
+            "conflicting_files": [],
             "groups": [
               {
                 "count": 2,
@@ -278,12 +1974,14 @@
                 "representative": {
                   "camera_source_naive_time": "2024:07:03 14:00:00",
                   "distance_m": 0.0,
+                  "gpx_file": "trip-2024-07-03.gpx",
                   "match_type": "gpx_point_match",
                   "real_utc": "2024-07-03T12:00:00Z",
                   "source_file": "6-photos-by-dest/Japan/anchor-1.arw"
                 }
               }
             ],
+            "imprecise_seconds": 0,
             "proposal_source": "gpx_self_anchor",
             "proposed_offset_seconds": -7200,
             "proposed_real_utc": "2024-07-03T12:00:00Z",
@@ -299,14 +1997,15 @@
               "no_nearby_track": 0,
               "outside_time_window": 0
             },
-            "supporting_count": 1
+            "supporting_count": 1,
+            "tied": false
           },
           "requires_user_input": false,
           "stale_user_decision": false,
           "user_decision": {
             "accept_proposal": false,
-            "manual_offset_seconds": "",
-            "manual_real_utc": ""
+            "accepted_offset_seconds": "",
+            "manual_offset_seconds": ""
           }
         }
       },
@@ -324,7 +2023,8 @@
         "requires_user_input": false,
         "stale_user_decision": false,
         "user_decision": {
-          "accept_proposed_timezone": false,
+          "confirmed_despite_recorded_offsets": [],
+          "country": "",
           "manual_iana_timezone": ""
         }
       }
@@ -345,7 +2045,8 @@
         "requires_user_input": false,
         "stale_user_decision": false,
         "user_decision": {
-          "accept_proposed_timezone": false,
+          "confirmed_despite_recorded_offsets": [],
+          "country": "",
           "manual_iana_timezone": ""
         }
       }
