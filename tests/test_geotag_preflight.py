@@ -261,6 +261,17 @@ def test_dev_subfolder_blocks(tmp_path):
     assert any("Development has already started" in b for b in blockers), blockers
 
 
+@pytest.mark.spec("RUL-development_subfolder_any_case", "BLD-development_subfolder_case",
+                  test="TST-geotag_preflight-dev_subfolder_of_any_case_blocks")
+@pytest.mark.parametrize("name", ["JPG", "JpG", "Tif"])
+def test_dev_subfolder_of_any_case_blocks(tmp_path, name):
+    ws = _ws(tmp_path)
+    (ws / "6-photos-by-dest" / "Trip" / name).mkdir()
+    for execute in (False, True):
+        blockers, _, _ = cal.GeotagWorkflow(str(ws)).preflight(for_execute=execute)
+        assert any("Development has already started" in b and f"Trip/{name}" in b for b in blockers), blockers
+
+
 @pytest.mark.spec("BLD-loop_gates", "RUL-development_after_merge", test="TST-geotag_preflight-dev_subfolder_blocks_at_execute")
 def test_dev_subfolder_blocks_at_execute(tmp_path):
     # RUL-development_after_merge is presence-strict AND re-checked at execute/finalize: an empty jpg/tif subfolder

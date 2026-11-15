@@ -990,6 +990,18 @@ corrections would invalidate them. Nor is the workspace a place for processing i
 to the library. A development folder's presence alone is the signal; nothing guesses whether it really holds output.
 :::
 
+:::{rat} A folder's name is read as the user meant it
+:id: RAT-development_name_any_case
+:status: ruled
+:forced: yes
+:follows_from: RAT-development_after_corrections
+:justifies: RUL-development_subfolder_any_case
+
+The breakout folders are named by people and by the tools they export with, and `JPG` or `Tif` means what `jpg` and
+`tif` do; on a filesystem that ignores case they are the same folder. A check that knew only the configured spelling
+would let development begun under another one pass unseen, the very case the gate exists to stop.
+:::
+
 ## 10. Change only what needs changing
 
 :::{rat} Redoing settled work buys no safety

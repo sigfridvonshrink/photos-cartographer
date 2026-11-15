@@ -593,6 +593,16 @@ development gate and that photos by destination holds only photos ({need}`BLD-me
 is one named in `destination_distribution_subfolders`. Geotag's preflight stops as well on a photo in `6-photos-by-dest` whose handoff record holds no fingerprint, named.
 :::
 
+:::{bld} A development subfolder's name, case folded
+:id: BLD-development_subfolder_case
+:status: ruled
+:realises: RUL-development_subfolder_any_case
+:uses: BLD-loop_gates
+
+Geotag's and merge's preflights SHALL take a folder under `6-photos-by-dest` for a development subfolder when its name,
+case folded, is one of `destination_distribution_subfolders`, case folded.
+:::
+
 :::{bld} Geotag marks what it wrote
 :id: BLD-rerun_recognition
 :status: ruled

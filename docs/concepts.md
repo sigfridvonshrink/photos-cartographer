@@ -411,8 +411,8 @@ outside the inbox not named as prep named it (prep gives the name it should carr
 
 **Geotag plan** — `0-sources/` not empty, photos still in `5-photos-by-date/`, or a sort prep hasn't
 recorded (run prep, or let geotag run it); anything but photos in `6-photos-by-dest/`, or a `jpg` / `tif`
-development subfolder; a camera group not yet classed; a photo there with no recorded time (it belongs
-in `2-missing-metadata/`) or with no fingerprint (move it out, or repair it so ImageMagick can read it,
+development subfolder (`JPG` or `Tif` as well — the case does not matter); a camera group not yet
+classed; a photo there with no recorded time (it belongs in `2-missing-metadata/`) or with no fingerprint (move it out, or repair it so ImageMagick can read it,
 then run prep); a `gpx_root` that is not there, or tracks of which not one can be read; a local time at a
 daylight-saving change; a decision file that doesn't parse or holds an invalid value (it is kept as
 written for you to fix); prep's record made by another fingerprint method (run prep again). And a photo

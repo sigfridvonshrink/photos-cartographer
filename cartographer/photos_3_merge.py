@@ -1306,14 +1306,15 @@ class MergeWorkflow:
     def _scan_by_dest(self, by_dest):
         """Return (dev_subfolders_found, non_photo_files, hidden_entries) under 6-photos-by-dest. A hidden
         entry is any file or folder named with a leading dot, at any depth; hidden folders are still walked."""
-        dev_names = set(CONFIG.get("destination_distribution_subfolders") or [])
+        # matched case folded: `JPG/` is the breakout as much as `jpg/` (BLD-development_subfolder_case)
+        dev_names = {n.casefold() for n in CONFIG.get("destination_distribution_subfolders") or []}
         base = os.path.join(self.workspace_root, by_dest)
         dev_found, nonphoto, hidden = [], [], []
         if not os.path.isdir(base):
             return dev_found, nonphoto, hidden
         for root, dirs, files in os.walk(base):
             for d in dirs:
-                if d in dev_names:
+                if d.casefold() in dev_names:
                     dev_found.append(os.path.relpath(os.path.join(root, d), self.workspace_root))
                 if d.startswith('.'):
                     hidden.append(os.path.relpath(os.path.join(root, d), self.workspace_root))
