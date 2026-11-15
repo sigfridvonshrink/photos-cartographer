@@ -310,8 +310,8 @@ another destination, the same day elsewhere; else the timezone-derived offset; e
 
 Same wrapper as §4.1 with `artifact_type: "gps_decisions"` / `artifact_name:
 "photos-23-gps-decisions.json"`, but no `countries`; its `depends_on` holds `resolved_utc_cache_fingerprint`,
-`gpx_fingerprint`, `gps_policy_fingerprint` and `handoff`, and it carries `track_disagreements` when there
-were any (§5.4). `destinations` is keyed by destination path; each destination is §5.2.
+`gpx_fingerprint`, `gps_policy_fingerprint` and `handoff`, and it carries `track_disagreements` and
+`lower_track_disagreements` when there were any (§5.4). `destinations` is keyed by destination path; each destination is §5.2.
 
 ### 5.2 A destination
 
@@ -383,7 +383,13 @@ The record's top-level `track_disagreements` (read-only, present only when it ha
 tracks that cover the same time in places farther apart than `gpx_tracks_agree_max_distance_meters`, and how
 many photos neither placed because of it — `[ { "gpx_files": ["a.gpx", "b.gpx"], "photos": 12 } ]`, the names
 as in `tracks.gpx_files` above. Those photos fell to their folder's fallback or are in `review_items`; the cure
-is to take the track that is not this trip's out of `gpx_root`.
+is to file your own track in a folder `gpx_track_precedence` ranks, or to take the track that is not this trip's out
+of `gpx_root`. Only tracks of one rank are compared this way.
+
+`lower_track_disagreements` (read-only, present only when it happened) lists each lower-ranked track that put
+photos more than `gpx_tracks_agree_max_distance_meters` from where a higher-ranked one placed them, and how many —
+`[ { "gpx_file": "receiver/r.gpx", "outranked_by": "phone/p.gpx", "photos": 3 } ]`. The higher-ranked track placed
+them; nothing here asks. It measures the worse device's error.
 
 ### 5.5 `summary` (read-only counts)
 

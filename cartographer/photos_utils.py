@@ -91,6 +91,10 @@ CONFIG = {
     # Two tracks that cover a photo's time and put it farther apart than this are two devices in two
     # places: nothing says which carried the camera, so the photo is not placed.
     "gpx_tracks_agree_max_distance_meters": 1000.0,
+    # Folders directly under gpx_root, best device first: a track ranks as the folder it is filed in, a track
+    # in none of them below all of them. Where tracks of different rank cover a photo's time the highest places
+    # it and anchors the clock; tracks of one rank that disagree place nothing. Empty: every track ranks alike.
+    "gpx_track_precedence": [],
     # Position-based thresholds for the calibration time-anchor inference (BLD-anchor_matching):
     # how close a native-GPS frame must be to a GPX point/segment to anchor its real time, and how
     # far supporting anchors' offsets may spread before they conflict. Consumed by geotag.
@@ -1291,6 +1295,17 @@ def validate_config(cfg: dict, workspace_root: str = None):
                 raise ValueError(f"config: folders.{role} and folders.{seen[name]} both name "
                                  f"{name!r} (folder names must be unique).")
             seen[name] = role
+
+    tp = cfg.get("gpx_track_precedence")
+    if tp is not None:
+        if not isinstance(tp, list):
+            raise ValueError("config: gpx_track_precedence must be a list of folder names.")
+        for name in tp:
+            if not isinstance(name, str) or not name or "/" in name or "\x00" in name or name.startswith("."):
+                raise ValueError(f"config: gpx_track_precedence entry {name!r} must be a folder directly under "
+                                 f"gpx_root (a single path component: no '/', no NUL, no leading '.').")
+        if len(set(tp)) != len(tp):
+            raise ValueError("config: gpx_track_precedence names a folder twice.")
 
     mx = cfg.get("media_extensions")
     if mx is not None:

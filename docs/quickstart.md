@@ -47,6 +47,12 @@ browser; its map tiles and place search use OpenStreetMap at runtime and degrade
 > Just want to look around first? `photos-cartographer edit --demo` opens a read-only tour on bundled
 > example data — no workspace, no setup. See the [editor guide](editor.md).
 
+### Upgrading from 3.0.0
+
+Replace both files. A workspace begun under 3.0.0 needs one setting added to its
+`.photos-ingest/photos-00-config.json`: `"gpx_track_precedence": []` keeps every track ranked alike, as
+before; see [ranking your devices](concepts.md#placing-each-photo) for what to put in it.
+
 ### Upgrading from 2.0.0
 
 Replace both files: a `photos-config-defaults.json` from 2.0.0 lacks settings this version needs, and a

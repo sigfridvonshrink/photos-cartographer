@@ -705,7 +705,7 @@ re-run can recover. Refusing to run leaves it where the user put it until they m
 :status: ruled
 :forced: yes
 :follows_from: RAT-no_mutation_outside_plan, RAT-coordinate_carries_its_method
-:justifies: RUL-tracks_in_dependencies
+:justifies: RUL-tracks_in_dependencies, RUL-track_ranking_in_dependencies
 
 The tracks are evidence for the clock offsets and positions geotag proposes, and a track added, corrected or removed can
 change them. A decision made against the old tracks, or a plan built from them, could then be wrong while still looking

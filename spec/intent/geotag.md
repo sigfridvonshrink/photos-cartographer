@@ -603,6 +603,38 @@ Geotag SHALL treat each track a track file holds as a track of its own, never jo
 Geotag SHALL NOT place a photo or anchor a clock across a break between two segments of one track.
 :::
 
+:::{rul} A track ranks by the folder it is filed in
+:id: RUL-tracks_ranked_by_folder
+:status: ruled
+:criticality: high
+:verify: required
+:uses: DEF-tracks, DEF-configuration
+
+Where the configuration ranks folders of the tracks, each track SHALL rank as the folder it is filed in, a track in no
+ranked folder below every ranked one, and tracks of one rank alike.
+:::
+
+:::{rul} A ranked folder the tracks lack is told
+:id: RUL-ranked_folder_missing_told
+:status: ruled
+:criticality: med
+:verify: required
+:refines: RUL-tracks_ranked_by_folder
+
+The user SHALL be told of each folder the configuration ranks that the tracks do not hold.
+:::
+
+:::{rul} The ranking is a dependency of what the tracks decide
+:id: RUL-track_ranking_in_dependencies
+:status: ruled
+:criticality: high
+:verify: required
+:refines: RUL-tracks_in_dependencies
+
+Geotag SHALL record the ranking of the tracks with their fingerprint, so that a change to the ranking makes stale every
+record a change to the tracks would.
+:::
+
 
 ## 9. Camera groups
 
@@ -723,6 +755,18 @@ its old destination carried with it.
 
 A track SHALL anchor a camera's clock only at times within the largest clock error the configuration allows of the
 camera's own time, whatever timezone the camera was set to.
+:::
+
+:::{rul} A lower-ranked track anchors only where no higher one recorded
+:id: RUL-lower_track_anchors_where_higher_absent
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+:refines: RUL-tracks_ranked_by_folder
+
+A lower-ranked track SHALL anchor a camera's clock at a time only where no higher-ranked track has a point at that
+time or two around it that a photo could be placed between.
 :::
 
 :::{rul} The offset is the one most photos agree on
@@ -1000,16 +1044,28 @@ A track SHALL place a photo only within the limits the configuration sets — ne
 Of the ways a track can place a photo, geotag SHALL take the first that applies: a track point at its time, the place between the two points around it, the place past an end of the track — an end being where that track's own recording starts, stops or breaks off.
 :::
 
-:::{rul} Tracks in two places place nothing
+:::{rul} The highest-ranked track that covers a photo places it
+:id: RUL-highest_ranked_track_places
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+:refines: RUL-tracks_ranked_by_folder
+
+Of the tracks that place a photo, the highest-ranked SHALL place it, whatever a lower-ranked track says — a track that
+places it only past its end counting where no track places it on a point or between two.
+:::
+
+:::{rul} Tracks of one rank in two places place nothing
 :id: RUL-disagreeing_tracks_place_nothing
-:status: seed
+:status: ruled
 :criticality: high
 :anti: yes
 :verify: required
 :refines: RUL-track_placement_bounded
 
-Where tracks that cover a photo's time put it in places farther apart than the configuration lets tracks differ, the
-tracks SHALL NOT place it.
+Where tracks of the highest rank that cover a photo's time put it in places farther apart than the configuration lets
+tracks differ, the tracks SHALL NOT place it.
 :::
 
 :::{rul} Tracks that disagree are named
@@ -1040,6 +1096,28 @@ Every position geotag writes SHALL say, in the photo itself, how it was found: o
 
 A position the tracks give a photo SHALL be recorded in the workspace's record with the track that gave it and the
 time it was placed at.
+:::
+
+:::{rul} A position is recorded with how far the lower-ranked tracks put it
+:id: RUL-lower_track_distance_recorded
+:status: ruled
+:criticality: med
+:verify: required
+:refines: RUL-placement_recorded_with_its_track
+
+A position the tracks give a photo SHALL be recorded with each lower-ranked track that placed it the same way and how far
+from the position that track put it.
+:::
+
+:::{rul} Lower-ranked tracks that disagree are counted
+:id: RUL-lower_track_disagreements_told
+:status: ruled
+:criticality: med
+:verify: required
+:refines: RUL-lower_track_distance_recorded
+
+The user SHALL be told, for each lower-ranked track, how many photos it put farther from where a higher-ranked track
+placed them than the configuration lets tracks differ.
 :::
 
 :::{rul} The track is not written in the photo

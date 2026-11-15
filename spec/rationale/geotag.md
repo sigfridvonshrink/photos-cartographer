@@ -312,7 +312,37 @@ why the photos it should have placed were not.
 :follows_from: FCT-partial_track_coverage, CHC-photos_matter
 :justifies: RUL-tracks_never_joined, RUL-disagreeing_tracks_place_nothing
 
-Each track file is one device's record, and the tracks folder may hold several for the same hours: a phone and a logger in the same pocket, or a companion who spent the afternoon elsewhere. Read as one line through all the points in time order, two devices five kilometres apart become a zigzag between them, and a photo is placed at whichever was logged a second nearer — or halfway. Kept apart, two tracks that agree are one party and either serves; two that do not are a question only the user can answer, by taking out the track that is not theirs.
+Each track file is one device's record, and the tracks folder may hold several for the same hours: a phone and a logger in the same pocket, or a companion who spent the afternoon elsewhere. Read as one line through all the points in time order, two devices five kilometres apart become a zigzag between them, and a photo is placed at whichever was logged a second nearer — or halfway. Kept apart, two tracks that agree are one party and either serves; two of one rank that do not are a question only the user can answer, by filing their own track higher or taking out the one that is not theirs.
+:::
+
+:::{rat} The better device is believed first
+:id: RAT-better_device_first
+:status: ruled
+:forced: no
+:follows_from: RAT-track_is_one_device, CHC-ask_only_what_data_cannot_settle
+:justifies: RUL-tracks_ranked_by_folder, RUL-highest_ranked_track_places, RUL-lower_track_anchors_where_higher_absent, RUL-ranked_folder_missing_told
+
+The owner records each trip twice — a phone and a standalone receiver — and the phone turns out the more accurate: *"I
+want the device track to be used when phone track unavailable."* Without a ranking, where both cover a photo the one a
+second nearer in time wins, and where they lie apart the photo is not placed at all, so the worse device places photos
+the better one covers and two devices of one person read as two people. Which device is better is known to the user,
+not to the files, so the user says it once, in the configuration, by where the tracks are filed: a folder is visible
+and chosen, where a file's `creator` is whatever the app wrote — and the same for a companion's phone with the same app.
+A lower track then serves only where the better one recorded nothing, for an anchor as for a position, so placement and
+the clock offset rest on the same evidence. A ranked folder that is not there — misspelt, or not yet created — would
+silently rank nothing, so it is said.
+:::
+
+:::{rat} The worse device's distance is a measure
+:id: RAT-outranked_distance_measured
+:status: ruled
+:forced: no
+:follows_from: RAT-better_device_first, RAT-coordinate_carries_its_method
+:justifies: RUL-lower_track_distance_recorded, RUL-lower_track_disagreements_told
+
+Where the better track wins, the other is not wrong evidence to discard but a second reading of the same walk: how far it
+puts each photo is the measure of its error, which says how far it can be trusted where it alone recorded. Asking about
+it would cost a question for something the ranking has settled; recording and counting it costs nothing.
 :::
 
 :::{rat} Missing is not the same as none

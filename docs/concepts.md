@@ -288,10 +288,20 @@ until you give it a position or leave it unlocated. Every position geotag writes
 
 The tracks are read from `gpx_root`: every `*.gpx` file beneath it. Each file is one device's record,
 and each track in a file a track of its own: no photo is placed, and no clock found, from points of two
-different tracks, and a break in a recording is never bridged. Where two tracks cover a photo's time but
-put it farther apart than `gpx_tracks_agree_max_distance_meters`, neither places it, and geotag names the
-two files: take the one that isn't this trip's out of `gpx_root`. With `gpx_root` set to `""`, or no
-track in it, geotag runs without tracks.
+different tracks, and a break in a recording is never bridged.
+
+If you record a trip on two devices, rank them: `gpx_track_precedence` lists folders directly under
+`gpx_root`, best device first — say `["phone", "receiver"]`, with each device's tracks filed in its folder.
+Where both cover a photo's time, the better one places it, and the clock is anchored on it; the other is
+used only where the better one recorded nothing. Tracks in no listed folder rank below all listed ones. How
+far the worse track put each photo is kept in the plan, and `geotag plan` counts the photos it put farther
+off than `gpx_tracks_agree_max_distance_meters`, as a measure of that device's error.
+
+Where two tracks of the same rank cover a photo's time but put it farther apart than
+`gpx_tracks_agree_max_distance_meters`, neither places it, and geotag names the two files. One of them is
+someone else's trip: file your own in a ranked folder, or take theirs out of `gpx_root`.
+
+With `gpx_root` set to `""`, or no track in it, geotag runs without tracks.
 
 ---
 
@@ -340,6 +350,8 @@ Areas that matter for the concepts above:
   `default_folder_timezone` offered.
 - **`gpx_root`** and the **`gpx_*` thresholds** — each setting bounds one thing and is read for nothing
   else, so you can retune one without moving another.
+- **`gpx_track_precedence`** — the folders under `gpx_root` your devices' tracks are filed in, best
+  first ([placing each photo](#placing-each-photo)); empty ranks every track alike.
 - **`filename_timestamp_format`** — fixed once the workspace's files carry it: changing it afterwards
   stops every phase.
 

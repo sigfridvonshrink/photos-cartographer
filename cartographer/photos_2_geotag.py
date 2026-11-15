@@ -685,7 +685,7 @@ class GeotagWorkflow:
     # --- Stage 3: GPX index (BLD-track_points) ---------------------------
 
     def load_gpx(self):
-        idx = GPXIndex(selected_gpx_root(), track_memo_db_path(self.workspace_root)).build(self.coordinator)
+        idx = GPXIndex(selected_gpx_root(), track_memo_db_path(self.workspace_root), CONFIG["gpx_track_precedence"]).build(self.coordinator)
         self._gpx_fingerprint = idx.fingerprint
         return idx
 
@@ -1360,6 +1360,7 @@ class GeotagWorkflow:
 
         destinations = {}
         disagreeing = {}                                      # (track, track) -> photos they place apart
+        outranked = {}                                        # (lower track, the one placing) -> photos apart
         fallback_eff = {}                                     # (dest, None) -> effective fallback coord
         ordered, containers = _expand_destinations(by_dest)
         self.coordinator.start_phase("deciding GPS placement", len(files))
@@ -1386,6 +1387,12 @@ class GeotagWorkflow:
                 cat, coord = classify_gps(f, ru, gpx, CONFIG, eff_fb, fd, why)
                 if why.get("reason") == "tracks_disagree":
                     disagreeing[tuple(why["gpx_files"])] = disagreeing.get(tuple(why["gpx_files"]), 0) + 1
+                for lt in (coord or {}).get("lower_tracks") or []:
+                    # a lower-ranked track farther from the place than tracks may differ: counted, never asked
+                    # (RUL-lower_track_disagreements_told)
+                    if lt["apart_meters"] > CONFIG["gpx_tracks_agree_max_distance_meters"]:
+                        k = (lt["gpx_file"], coord["gpx_file"])
+                        outranked[k] = outranked.get(k, 0) + 1
                 counts["files_total"] += 1
                 if cat == "preserve_native":
                     counts["preserve_native_gps"] += 1
@@ -1445,6 +1452,12 @@ class GeotagWorkflow:
         self.track_disagreements = [{"gpx_files": list(k), "photos": n} for k, n in sorted(disagreeing.items())]
         if self.track_disagreements:
             artifact["track_disagreements"] = self.track_disagreements
+        # A lower-ranked track the placing one outranked, where it put photos farther away than tracks may differ:
+        # the measure of the worse device's error, told and kept, never a question (RUL-lower_track_disagreements_told).
+        self.lower_track_disagreements = [{"gpx_file": k[0], "outranked_by": k[1], "photos": n}
+                                          for k, n in sorted(outranked.items())]
+        if self.lower_track_disagreements:
+            artifact["lower_track_disagreements"] = self.lower_track_disagreements
         return artifact, blockers
 
     def _folder_fallback_cell(self, dest, prior_fb, inherited, blockers):
@@ -1548,7 +1561,7 @@ class GeotagWorkflow:
             eff_fb = (g_d.get("folder_fallback") or {}).get("effective_fallback")
             reviews = {ri["relative_path"]: (ri.get("user_decision") or {})
                        for ri in ((g_d.get("gps_decisions") or {}).get("review_items") or [])}
-            track_of = {}
+            track_of, lower_of = {}, {}
             unlocated = []
             tz = ((t_dests.get(dest, {}).get("destination_timezone")) or {}).get("effective_iana_timezone") or ""
             rename_inputs = [{"relative_path": f["relative_path"],
@@ -1564,6 +1577,7 @@ class GeotagWorkflow:
                                           eff_fb, reviews.get(rel))
                 if coord and coord.get("gpx_file"):
                     track_of[rel] = coord["gpx_file"]
+                    lower_of[rel] = coord.get("lower_tracks")
                 how = ("native" if cat == "preserve_native" else "unlocated" if coord is None
                        else _TRACK_MARKER.get(coord.get("method")) or cat)
                 placement[how] = placement.get(how, 0) + 1
@@ -1591,6 +1605,9 @@ class GeotagWorkflow:
                     elif o["type"] == "metadata_gps_write" and o.get("gps_origin") == "recompute_automated":
                         # the track that placed it, and the instant it was placed at: what the position rests on
                         o["provenance"] = {"gpx_file": track_of.get(rel), "resolved_utc": ru}
+                        if lower_of.get(rel):
+                            # how far each lower-ranked track put it (RUL-lower_track_distance_recorded)
+                            o["provenance"]["lower_tracks"] = lower_of[rel]
                     elif o["type"] == "metadata_gps_write" and o.get("gps_origin") == "apply_manual":
                         o["provenance"] = {"because": manual_gps_pointer(cat, dest, rel, g_d.get("folder_fallback"))}
                         o["pre_state"] = held_pre_state(f)        # the position it replaces, for the log
@@ -1877,7 +1894,7 @@ class GeotagWorkflow:
         ws = self.workspace_root
         with open(executable_plan_path(ws)) as f:
             plan = json.load(f)
-        gpx = GPXIndex(selected_gpx_root(), track_memo_db_path(ws)).build(self.coordinator)
+        gpx = GPXIndex(selected_gpx_root(), track_memo_db_path(ws), CONFIG["gpx_track_precedence"]).build(self.coordinator)
         stale = self.revalidate_plan(plan, gpx)
         if stale:
             return {"status": "rejected", "plan_id": plan.get("plan_id"), "stale": stale}
@@ -2087,7 +2104,7 @@ class GeotagWorkflow:
         # handoff is left out: a
         # prep run after execute records geotag's own writes and renames in it, and that is the loop, not a
         # change of decision.
-        gpx = GPXIndex(selected_gpx_root(), track_memo_db_path(ws)).build(self.coordinator)
+        gpx = GPXIndex(selected_gpx_root(), track_memo_db_path(ws), CONFIG["gpx_track_precedence"]).build(self.coordinator)
         stale = self.revalidate_plan(plan, gpx, with_handoff=False)
         if stale:
             return [f"The executed plan no longer holds ({'; '.join(stale)}) — re-run `geotag plan` and "
@@ -2694,6 +2711,10 @@ def run(args):
                     reporter.log(f"Wrote {GPS_DECISIONS_ARTIFACT}: status={gps_artifact['status']} "
                           f"({tot['preserve_native_gps']} native, {tot['automatic_gpx_interpolation']} interp, "
                           f"{tot['automatic_gpx_extrapolation']} extrap, {tot['blocked']} blocked).", stream="stdout")
+                    for ld in wf.lower_track_disagreements:
+                        reporter.log(f"  Track {ld['gpx_file']} put {ld['photos']} photo(s) more than "
+                                     f"{CONFIG['gpx_tracks_agree_max_distance_meters']:g} m from where the "
+                                     f"higher-ranked {ld['outranked_by']} placed them; the higher-ranked placed them.")
                     for td in wf.track_disagreements:
                         # two tracks of one file (RUL-track_is_one_trk) are taken out of the file, not gpx_root
                         where = ("its file" if all(" (track " in n for n in td["gpx_files"]) else "gpx_root")

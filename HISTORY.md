@@ -2,6 +2,28 @@
 
 *What was decided and why, newest first. A record: never corrected forward. Per-commit detail is `git log`.*
 
+## 2026-11-15 — tracks ranked by the device that recorded them (BACKLOG 29)
+
+**The better device is believed first.** The owner records each trip on a phone and a standalone receiver, and the
+phone is the more accurate: *"I want the device track to be used when phone track unavailable."* Until now no track
+outranked another — where both covered a photo the one a second nearer in time placed it, and where they lay apart the
+photo was not placed at all, as if two people had walked. Ruled *"all as recommended"*:
+
+- **by folder** — `gpx_track_precedence` lists folders directly under `gpx_root`, best first; a track ranks as the
+  folder it is filed in, one in none below all. A file's `creator` was rejected: whatever the app wrote, and the same
+  for a companion's phone with the same app. A listed folder that is not there is warned of.
+- **rank before method** — of the tracks that record the photo's time, by a point or between two, the best-ranked
+  places it, even by a fill against a lower track's point at the second; a projection past an end counts only where no
+  track records the time. Clock offsets are anchored the same way: a lower track only where no higher one recorded.
+- **disagreement** — a lower track never stops a photo; tracks of one rank that disagree still do, which keeps the
+  guard for a companion's trip filed outside the ranked folders. `RUL-disagreeing_tracks_place_nothing`, held at
+  seed for this, is ruled.
+- **a measure, not a question** — each position keeps how far each lower track put it, and photos-23 counts, per
+  track, the photos it put farther off than tracks may differ: the worse device's error.
+- **a dependency** — the ranking enters the tracks' fingerprint, so changing it restales what the tracks decided.
+
+A workspace begun under 3.0.0 needs the setting added (`[]` ranks every track alike, as before).
+
 ## 2026-11-14 — v3.0.0
 
 **The conversion is finished: geotag is in the corpus, the original specs are retired, and every rule has a test.**

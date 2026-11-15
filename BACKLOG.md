@@ -4,7 +4,7 @@
 
 - **What this is:** [`README.md`](README.md). **The record:** [`HISTORY.md`](HISTORY.md).
 
-*Open items: **36** — 2, 6 to 7, 11, 13 to 16, 18, 20 to 32, 35 to 40, 42 to 49.* 🛑 Numbers are never reused; the next is **50**.
+*Open items: **35** — 2, 6 to 7, 11, 13 to 16, 18, 20 to 28, 30 to 32, 35 to 40, 42 to 49.* 🛑 Numbers are never reused; the next is **50**.
 
 ---
 
@@ -355,38 +355,6 @@ Placement was made a bisection per track; anchoring was not. Not a correctness m
 kept in the workspace, limited to the photos' dates) would cut it at the source.
 
 **What to do:** index points by a coarse grid or by time window per track, behind the same functions and tests.
-
-### 29. Which track is trusted first, by the device that recorded it
-
-**Why:** The owner records each trip twice — a standalone receiver and the phone — and the phone turns out the more
-accurate. *"I want the device track to be used when phone track unavailable."* Today no track outranks another: where
-both cover a photo's time the one whose nearest point is closer in time wins, whichever device it came from, and
-where they lie farther apart than `gpx_tracks_agree_max_distance_meters` the photo is not placed at all. So the less
-accurate track places photos the better one covers, and two tracks of one person can be read as two people.
-
-**What to do:** let a track carry its provenance and the configuration rank provenances; where tracks overlap, the
-highest-ranked that places the photo wins, and a lower one is used only where no higher one places it. The same
-ranking would settle which track anchors a clock offset. The placement already records the track file used; it would
-record the provenance and that a higher-ranked track was absent.
-
-**Open:**
-- How a track's provenance is known: the GPX `creator` attribute, a subfolder of `gpx_root`, a filename pattern, or
-  a list in the configuration. The file's own `creator` needs no filing discipline but is whatever the app wrote.
-- What "unavailable" means for the preferred track: no file for the time, or a file that cannot place the photo — a
-  gap, a jump, only a projection past its end. Whether a lower-ranked track's point at the photo's time beats a
-  higher-ranked track's interpolation or projection.
-- Whether ranked tracks that disagree still place nothing (one of them is wrong, and the rank says which to
-  believe), or whether disagreement stops a photo only between tracks of equal rank — keeping the guard for a
-  second person's trip.
-- Whether a disagreement between the two own devices is reported, as a measure of the lower one's error.
-- What the user does when tracks disagree, until then and after. Today (`RUL-disagreeing_tracks_place_nothing`, held
-  at seed for this item) the photo waits as a review item naming the two files, and the ways out are to take a track
-  out of `gpx_root`, to place the photo by hand or to leave it unplaced. Taking out one's own track is what the owner
-  does only for someone else's trip, the other two are per photo, and a track removed leaves no record of why. Ruled
-  2026-11-14: settled here, by precedence — with it, two own devices that disagree are no question; whether a
-  recorded "trust this track" answer is still wanted for tracks of equal rank is part of this item.
-- Whether a preference is a decision of the workspace (recorded with the plan, restaling photos-21 to 23 when
-  changed) — it should be, like every other setting that changes what is written.
 
 ### 30. Measuring the human input a trip costs
 

@@ -158,9 +158,11 @@ class GPXIndex:
     `memo_path` a file whose bytes were parsed before is not parsed again: its points come from the
     track memo (RUL-other_databases_scratch), which yields exactly what parsing would."""
 
-    def __init__(self, gpx_root, memo_path=None):
+    def __init__(self, gpx_root, memo_path=None, precedence=()):
         self.gpx_root = gpx_root
         self.memo_path = memo_path
+        # the folders under gpx_root, best device first (RUL-tracks_ranked_by_folder)
+        self.precedence = list(precedence or ())
         self.points = []
         self.fingerprint = None
         self.status = "disabled"
@@ -184,6 +186,17 @@ class GPXIndex:
                             [(f, pts, [p.time_utc for p in pts]) for (f, _t), pts in sorted(by_track.items())])
         return self._tracks[1]
 
+    def rank(self, rel):
+        """The rank of the track file at `rel` under gpx_root (RUL-tracks_ranked_by_folder): the place of the
+        folder directly under gpx_root it is filed in among `precedence`, 0 the best; a file in no ranked
+        folder ranks below every ranked one, all such files alike."""
+        top = rel.split("/", 1)[0] if "/" in rel else None
+        return self.precedence.index(top) if top in self.precedence else len(self.precedence)
+
+    def ranked(self):
+        """True when the tracks are of more than one rank — where precedence matters at all."""
+        return len({self.rank(f) for f, _p, _t in self.tracks()}) > 1
+
     def build(self, coordinator=None):
         if not self.gpx_root:
             self.status = "disabled"
@@ -195,6 +208,11 @@ class GPXIndex:
             self.fingerprint = hashlib.sha256(("gpx-missing|" + self.gpx_root).encode()).hexdigest()
             return self
 
+        # a ranked folder that is not there ranks nothing, and is said (RUL-ranked_folder_missing_told)
+        self.warnings.extend(f"gpx_track_precedence names {name!r}, which is not a folder directly under gpx_root: "
+                             f"no track ranks by it" for name in self.precedence
+                             if not os.path.isdir(os.path.join(self.gpx_root, name))
+                             or os.path.islink(os.path.join(self.gpx_root, name)))
         gpx_files, linked = [], []
         for r, dirs, files in os.walk(self.gpx_root):
             gpx_files.extend((os.path.relpath(os.path.join(r, f), self.gpx_root), os.path.join(r, f))
@@ -214,6 +232,9 @@ class GPXIndex:
         h = hashlib.sha256()
         h.update(self.gpx_root.encode("utf-8"))
         h.update(b"gpx-index-v1")
+        # the ranking decides which track places and anchors: a change to it is a change to the tracks
+        # (RUL-track_ranking_in_dependencies)
+        h.update(("precedence|" + json.dumps(self.precedence)).encode("utf-8"))
         for rel, abs_path in gpx_files:
             if coordinator:
                 coordinator.set_detail(rel)
@@ -493,7 +514,8 @@ def frame_candidates(frame, gpx, cfg):
     window = cfg["gpx_anchor_max_clock_error_seconds"]
     naive_utc = naive.replace(tzinfo=timezone.utc)
     out = []
-    for src, pts, times in gpx.tracks():
+    tracks = gpx.tracks()
+    for src, pts, times in tracks:
         # only the stretch of the track inside the window
         lo = bisect.bisect_left(times, naive_utc - timedelta(seconds=window))
         hi = bisect.bisect_right(times, naive_utc + timedelta(seconds=window))
@@ -534,8 +556,20 @@ def frame_candidates(frame, gpx, cfg):
             as_close = [m[0] for m in r if m[2] <= dist + stay_dist]
             out.append(_candidate("gpx_point_match" if rank == 0 else "gpx_segment_interpolation", gt, dist, src,
                                   naive, dur, (max(as_close) - min(as_close)).total_seconds()))
+    if out and gpx.ranked():
+        # a lower-ranked track anchors only at a time no higher-ranked one recorded
+        # (RUL-lower_track_anchors_where_higher_absent)
+        out = [c for c in out if not any(gpx.rank(f) < gpx.rank(c["gpx_file"]) and _covers(p, t, c["gpx_time"], cfg)
+                                         for f, p, t in tracks)]
     out.sort(key=lambda c: (c["gpx_time"], c["gpx_file"] or ""))
     return out
+
+
+def _covers(pts, times, instant, cfg):
+    """True when one track has a point at `instant`, or two around it a photo could be placed between, within the
+    placement limits (BLD-track_placement) — the track recorded where its device was then."""
+    p, _why = _place_on_track(pts, times, instant, cfg)
+    return p is not None and p["method"] != "extrapolated"
 
 
 def _frame_skip_reason(frame, gpx, cfg):
@@ -1009,26 +1043,35 @@ _METHOD_RANK = {"direct_match": 0, "interpolated": 1, "extrapolated": 2}
 
 def place_gps(target_utc, gpx, cfg, why=None):
     """Place a photo at its resolved UTC against the GPX tracks (BLD-track_placement), or None when no reliable
-    placement exists. Each track places it on its own (_place_on_track) and the closest evidence wins: a point at its
-    time before the place between two, before a projection past an end; then the track nearest in time.
-    Tracks that cover the instant and put the photo in different places — farther apart than
-    `gpx_tracks_agree_max_distance_meters` — are two devices in two places, and nothing here says which carried the camera: the
-    photo is not placed. `why`, a dict, is filled with the reason when nothing places it."""
+    placement exists. Each track places it on its own (_place_on_track). A projection past one track's end is no
+    witness against a track that covers the instant, so the projections count only where no track covers it. Of
+    those that count, the highest-ranked tracks decide (RUL-highest_ranked_track_places), and of them the closest
+    evidence wins: a point at its time before the place between two, before a projection past an end; then the
+    track nearest in time. Tracks of that rank that put the photo in different places — farther apart than
+    `gpx_tracks_agree_max_distance_meters` — are two devices in two places, and nothing here says which carried the
+    camera: the photo is not placed (RUL-disagreeing_tracks_place_nothing). A lower-ranked track never stops it; how
+    far each put it is kept with the placement, as `lower_tracks` (RUL-lower_track_distance_recorded). `why`, a
+    dict, is filled with the reason when nothing places it."""
     placed, missed = [], []
-    for _src, pts, times in gpx.tracks():
+    for src, pts, times in gpx.tracks():
         p, w = _place_on_track(pts, times, target_utc, cfg)
-        (placed if p is not None else missed).append(p if p is not None else w)
+        if p is not None:
+            p["rank"] = gpx.rank(src)
+            placed.append(p)
+        else:
+            missed.append(w)
     if not placed:
         if why is not None:
             why.update(min(missed, key=lambda w: w["seconds_from_track"]) if missed else {"reason": "no_tracks"})
             if "seconds_from_track" in why:
                 why["seconds_from_track"] = round(why["seconds_from_track"])
         return None
-    placed.sort(key=lambda p: (_METHOD_RANK[p["method"]], p["seconds_from_track"], p["gpx_file"], p["gpx_track"]))
-    best = placed[0]
-    # a projection past one track's end is no witness against a track that covers the instant
-    rivals = [p for p in placed[1:] if (p["method"] == "extrapolated") == (best["method"] == "extrapolated")]
-    for p in rivals:
+    pool = [p for p in placed if p["method"] != "extrapolated"] or placed
+    top = min(p["rank"] for p in pool)
+    ranked = sorted((p for p in pool if p["rank"] == top),
+                    key=lambda p: (_METHOD_RANK[p["method"]], p["seconds_from_track"], p["gpx_file"], p["gpx_track"]))
+    best = ranked[0]
+    for p in ranked[1:]:
         apart = haversine(best["lat"], best["lon"], p["lat"], p["lon"])
         if apart > cfg["gpx_tracks_agree_max_distance_meters"]:
             if why is not None:
@@ -1038,7 +1081,15 @@ def place_gps(target_utc, gpx, cfg, why=None):
                 why.update({"reason": "tracks_disagree", "gpx_files": sorted((name(best), name(p))),
                             "apart_meters": round(apart)})
             return None
-    return {k: v for k, v in best.items() if k not in ("seconds_from_track", "gpx_track")}
+    out = {k: v for k, v in best.items() if k not in ("seconds_from_track", "gpx_track", "rank")}
+    lower = sorted((p for p in pool if p["rank"] > top), key=lambda p: (p["gpx_file"], p["gpx_track"]))
+    if lower:
+        files = [p["gpx_file"] for p in lower]
+        out["lower_tracks"] = [{"gpx_file": (f"{p['gpx_file']} (track {p['gpx_track'] + 1})"
+                                             if files.count(p["gpx_file"]) > 1 else p["gpx_file"]),
+                                "apart_meters": round(haversine(best["lat"], best["lon"], p["lat"], p["lon"]))}
+                               for p in lower]
+    return out
 
 
 def _valid_coord(lat, lon):
