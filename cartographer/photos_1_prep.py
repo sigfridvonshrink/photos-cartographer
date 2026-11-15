@@ -511,6 +511,11 @@ class ExecuteRefused(ValueError):
     not taken. The command ends as a refusal (BLD-exit_statuses)."""
 
 
+class PruneRefused(RuntimeError):
+    """`prune-quarantine` refused its selection, having listed or removed nothing: an age below one day, or a delete
+    naming nothing without `--all`. The command ends as a refusal (BLD-exit_statuses)."""
+
+
 class ExecuteFailed(RuntimeError):
     """Prep's execute began carrying out its plan and did not finish it: an operation failed, or the records that
     close the run could not be written. The command ends as an execution that failed (BLD-exit_statuses)."""
@@ -2866,7 +2871,7 @@ def prune_quarantine(workspace_root, plan_ids=None, older_than_days=None, do_del
     # selector (RUL-prune_age_at_least_one_day). The command line refuses it when parsing; the console reaches
     # here without that parsing, so it is refused here too, before anything is listed or removed.
     if older_than_days is not None and older_than_days < 1:
-        raise RuntimeError(f"--older-than-days must be at least 1 (got {older_than_days}); nothing was removed.")
+        raise PruneRefused(f"--older-than-days must be at least 1 (got {older_than_days}); nothing was removed.")
 
     all_dirs = [e.name for e in os.scandir(base) if e.is_dir()]
     has_selector = bool(plan_ids) or older_than_days is not None
@@ -2891,7 +2896,7 @@ def prune_quarantine(workspace_root, plan_ids=None, older_than_days=None, do_del
         selected = set(all_dirs)
 
     if do_delete and not has_selector and not prune_all:
-        raise RuntimeError("Refusing to delete all quarantine without a selector. "
+        raise PruneRefused("Refusing to delete all quarantine without a selector. "
                            "Pass --plan-id / --older-than-days, or --all to confirm.")
 
     # The workspace lock is held for the whole run by main() (RUL-lock_through_the_run).
@@ -3318,13 +3323,17 @@ def _run_locked(args, workspace_root, reporter):
                                      f"re-run `prep plan` + `prep execute`, then `geotag plan`.")
 
     elif args.command == "prune-quarantine":
-        prune_quarantine(
-            workspace_root,
-            plan_ids=getattr(args, "plan_ids", None),
-            older_than_days=getattr(args, "older_than_days", None),
-            do_delete=getattr(args, "yes", False),
-            prune_all=getattr(args, "prune_all", False),
-        )
+        try:
+            prune_quarantine(
+                workspace_root,
+                plan_ids=getattr(args, "plan_ids", None),
+                older_than_days=getattr(args, "older_than_days", None),
+                do_delete=getattr(args, "yes", False),
+                prune_all=getattr(args, "prune_all", False),
+            )
+        except PruneRefused as e:
+            reporter.error(f"Error: {e}")
+            sys.exit(2)                                     # a refusal (BLD-exit_statuses)
         if getattr(args, "yes", False):
             emit_next_step(reporter, "quarantine pruned — continue with the pipeline "
                                      "(`geotag plan` if prep is complete).")

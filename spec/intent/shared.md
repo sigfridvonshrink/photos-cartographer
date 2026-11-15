@@ -59,7 +59,7 @@ sorted by destination, into the library.
 :verify: required
 :uses: DEF-prep, DEF-geotag, DEF-merge
 
-Prep's plan, dry run and execute, and each of geotag's and merge's commands, SHALL end with an exit status of its own
+Prep's plan, dry run, execute and prune, and each of geotag's and merge's commands, SHALL end with an exit status of its own
 for each way a run can end: having done what it was asked; finding the workspace or the library locked; refusing,
 having changed nothing; executing with work left undone; and interrupted.
 :::

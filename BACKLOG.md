@@ -71,9 +71,8 @@ the day's automatic one — the automatic one asks, the choice stands, and the e
 accepted proposal counts as automatic (*"keep it automatic"*). The photo put by hand at a removed photo's path is
 item 50's.
 
-**Awaiting ruling:**
-- `prep prune-quarantine` refuses a bad selection (`--older-than-days` below 1, or a delete naming nothing without
-  `--all`) with exit 1, which now means only "locked".
+`prep prune-quarantine` refusing its selection ends 2 like every other refusal (*"refuses a bad selection w/ exit
+2, like every other refusal"*). Nothing of item 2 awaits a ruling.
 
 ---
 

@@ -19,11 +19,11 @@ records, `photos-1-prep`, `photos-2-geotag` and `photos-3-merge`.
 :status: ruled
 :realises: RUL-exit_status_says_how_it_ended, RUL-blocked_plan_ends_refused
 
-Prep's plan, dry run and execute, and geotag's and merge's commands, SHALL exit 0 for a run that did what it was
+Prep's plan, dry run, execute and `prune-quarantine`, and geotag's and merge's commands, SHALL exit 0 for a run that did what it was
 asked; 1 for a workspace or a library found locked; 2 for a refusal — no control directory, the seal, a precondition,
 a required tool absent, a plan missing, stale or failing its checks, a plan of prep's own it cannot read, a plan or
-journal of merge's own it cannot read, a workspace database of another schema, a required snapshot not taken, and a
-plan, or a dry run, that reports a blocker; 3 for an execution that ended partial or failed — an operation failed, or
+journal of merge's own it cannot read, a workspace database of another schema, a required snapshot not taken, a
+prune's selection refused, and a plan, or a dry run, that reports a blocker; 3 for an execution that ended partial or failed — an operation failed, or
 prep's log or handoff not written after its operations; and 130 for an interrupt. An error the build did not foresee
 ends a command with 1, as Python ends it. Prep's execute or dry run with nothing to do ends 0. `merge init-library`
 ends 0, 1 or 2 alike, and a phase named with no command prints what it does and ends 0.

@@ -19,6 +19,7 @@ in test_merge_execute.
 photos_utils / photos_1_prep / photos_2_geotag come from conftest.py.
 """
 import json
+from pathlib import Path
 import os
 import sys
 import types
@@ -164,3 +165,21 @@ def test_each_end_of_a_prep_plan_has_its_own_exit_status(tmp_path, monkeypatch, 
             raise KeyboardInterrupt
         monkeypatch.setattr(prep.WorkspacePrepWorkflow, "plan", plan)
     assert _prep(monkeypatch, ws, "plan", held=end == "locked") == status
+
+
+@pytest.mark.parametrize("argv", [["prune-quarantine", "--yes"], ["prune-quarantine", "--older-than-days", "0"]])
+@pytest.mark.spec("RUL-exit_status_says_how_it_ended", "BLD-exit_statuses",
+                  test="TST-exit_status-a_refused_prune_ends_as_a_refusal")
+def test_a_refused_prune_ends_as_a_refusal(tmp_path, monkeypatch, argv):
+    """`prune-quarantine` refusing its selection — a delete naming nothing without `--all`, an age below one day —
+    ends 2, a refusal, not 1, which says the workspace is locked; nothing in quarantine is removed."""
+    ws = _prep_ws(tmp_path)
+    run = Path(utils.quarantine_dir(str(ws))) / "20240101T000000Z-aaaa"
+    run.mkdir(parents=True)
+    (run / "x.jpg").write_text("x")
+    monkeypatch.chdir(str(ws))
+    monkeypatch.setattr(sys, "argv", ["photos-1-prep", *argv])
+    with pytest.raises(SystemExit) as e:
+        prep.main()
+    assert e.value.code == 2
+    assert (run / "x.jpg").exists()
