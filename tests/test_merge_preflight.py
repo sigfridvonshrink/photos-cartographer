@@ -516,6 +516,34 @@ def test_init_library_in_workspace_with_path_blesses_and_writes_config(tmp_path)
     assert written["merge"]["library_root"] == str(lib)   # the one narrow config write
 
 
+@pytest.mark.spec("RUL-library_setup_writes_one_setting", "BLD-init_library_writes_library_root",
+                  test="TST-merge_preflight-init_library_keeps_every_other_setting")
+def test_init_library_keeps_every_other_setting(tmp_path):
+    """`init-library <path>` in a workspace records the library and keeps every other setting as the user wrote it —
+    a folder named beyond ASCII, a tuned value, the keys in the user's order — while the file's layout becomes the
+    control records' own: keys sorted, characters beyond ASCII escaped."""
+    ws = tmp_path / "ws"
+    (ws / ".photos-ingest").mkdir(parents=True)
+    (ws / ".photos-ingest" / "photos-00-workspace-guard").touch()
+    cfg = {k: v for k, v in reversed(list(utils.CONFIG.items())) if k != "jobs"}      # not in sorted order
+    cfg["folders"] = dict(cfg["folders"], photos_by_dest="6-fotos-por-destinación")
+    cfg["gpx_interpolation_max_gap_seconds"] = 1234
+    cfg_p = ws / ".photos-ingest" / "photos-00-config.json"
+    cfg_p.write_text(json.dumps(cfg, ensure_ascii=False))
+    for name in cfg["folders"].values():
+        (ws / name).mkdir()
+    lib = tmp_path / "lib"
+    lib.mkdir()
+    assert merge.do_init_library(str(lib), str(ws)) == 0
+    text = cfg_p.read_text()
+    written = json.loads(text)
+    assert written["merge"].pop("library_root") == str(lib)
+    cfg["merge"] = dict(cfg["merge"])
+    cfg["merge"].pop("library_root")
+    assert written == cfg                                             # every other setting as it was
+    assert "destinaci\\u00f3n" in text and list(written) == sorted(written)   # the layout is the writer's
+
+
 @pytest.mark.spec("RUL-sealed_refuses", "RUL-sealed_no_library_recorded", test="TST-merge_preflight-init_library_refuses_to_record_a_library_in_a_sealed_workspace")
 def test_init_library_refuses_to_record_a_library_in_a_sealed_workspace(tmp_path):
     ws, lib = _fresh_ws_and_lib(tmp_path)

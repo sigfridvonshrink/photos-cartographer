@@ -152,7 +152,10 @@ so is the deployment's concern, not the specification's.
 :realises: RUL-library_setup_writes_one_setting
 
 The setup command `init-library` ({need}`BLD-init_library_cases`), run inside a workspace with an explicit library path,
-MAY write the `library_root` key into the configuration, and only that key. It is not part of merge's data path.
+MAY write the `library_root` key into the configuration, and only that key, writing the file again whole through
+`write_json_artifact`: every other setting keeps its value, while the file's layout — the order of its keys, its
+indentation, characters beyond ASCII written as escapes — becomes that of the control records. It is not part of
+merge's data path.
 :::
 
 :::{bld} Field-scoped fingerprints, and one whole-file SHA-256

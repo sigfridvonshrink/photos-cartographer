@@ -286,7 +286,8 @@ track, set by you, its folder's fallback) and refuses if the plan no longer hold
 since execute.
 
 `merge init-library` marks the folder as a library (an empty `.photos-library` file) and records it as
-`merge.library_root`; without a path it marks the configured one. `merge` moves your finalized
+`merge.library_root` — every other setting keeps its value, though the file is rewritten with its keys sorted and
+non-ASCII characters as `\u` escapes; without a path it marks the configured one and writes nothing. `merge` moves your finalized
 `6-photos-by-dest/` tree into the library at the same paths — digiKam, or anything that reads a plain
 folder tree — recording per file exactly where it landed and whether it was renamed. No library file is
 ever overwritten: a different photo under a taken name gets a numbered name; the same file already
