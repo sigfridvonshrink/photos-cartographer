@@ -4,7 +4,7 @@
 
 - **What this is:** [`README.md`](README.md). **The record:** [`HISTORY.md`](HISTORY.md).
 
-*Open items: **28** — 6 to 7, 11, 13 to 16, 18, 20 to 23, 25, 27, 28, 30 to 32, 35, 39, 40, 43, 45 to 50.* 🛑 Numbers are never reused; the next is **51**.
+*Open items: **27** — 6 to 7, 11, 14 to 16, 18, 20 to 23, 25, 27, 28, 30 to 32, 35, 39, 40, 43, 45 to 50.* 🛑 Numbers are never reused; the next is **51**.
 
 ---
 
@@ -88,41 +88,6 @@ duplicate decisions.
 **When:** any time — the conversion is done; geotag's pinned values are done (`BLD-original_values_pinned`).
 
 ---
-
-### 13. Keep the track points geotag used in the workspace, sealed with it
-
-**Why:** every `geotag plan` reads every track file under `gpx_root` whole, to hash it, and keeps the parsed points
-only in the scratch track memo, which is neither archived nor sealed. The sealed workspace records the GPX fingerprint
-and, per photo, the name of the track that placed it — not the points — so once `gpx_root` changes or is gone, the
-evidence behind a placement or a clock offset can no longer be seen. The owner: *"I will have always the gps data used
-during the process, in the form used during the decisioning, which would make the workspace truly self-contained."*
-
-**Ruled (2026-11-15)** (*"rest as recommended"*, and the window as below, *"ok"*):
-1. **Where:** a geotag region of `photos-00-ingest.db` — the one record database, snapshotted into the archive at
-   finalize and merge, so sealed with the workspace. It replaces the scratch track memo.
-2. **What:** a catalogue of every track file under `gpx_root` — path, its rank's folder, size, modification time,
-   inode, SHA-256, first and last point time — and the points that fall in the window, as decided on: UTC time,
-   latitude, longitude, file, point index, track, segment.
-3. **Reading:** a file whose size, modification time and inode are unchanged is not read again; a new or changed one
-   is read and parsed. This reverses the ruled "every track file is read whole on every run" (`BLD-idempotency`).
-4. **Fingerprint:** the GPX fingerprint becomes the hash of the points in the window with the ranking, so tracks
-   added for another time restale nothing. A drift confirmation still names each track by its file's SHA-256, from
-   the catalogue.
-5. **The window:** no setting of its own — the union of what each reader of tracks reaches, from the reader's own
-   setting: offset inference and the far-from-evidence check, `gpx_anchor_max_clock_error_seconds` each side of a
-   photo's camera time; the drift check, `drift_check_track_window_seconds` each side of its corrected time;
-   placement, the interpolation gap and extrapolation reach each side of its corrected time (once `photos-21` is
-   complete, around each photo's corrected time, since a true time given by hand may lie far from the camera's).
-   Sorting photos in, or a setting widened, grows it; a file whose first-to-last span meets the new part is read
-   again. Past the window the far-from-evidence check reports no track within reach — the same decision.
-6. **A track file gone:** warned of, naming it, and no longer used — the one reason to take a track out is that it
-   records someone else's trip at the same time. Its points stay in the record, marked withdrawn, where an executed
-   plan placed or timed photos by it, so the evidence of every value written into an original survives.
-7. **`gpx_root` unreadable** at plan or execute stops geotag: what cannot be checked counts as changed
-   (`RUL-unchecked_counts_as_changed`). Finalize and merge never need it: they seal what is kept.
-8. **The scratch memo** `photos-00-track-memo.db` is removed.
-
-**When:** any time — the conversion is done.
 
 ### 14. Propose a destination's timezone from its photos' positions
 

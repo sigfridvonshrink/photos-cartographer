@@ -2,6 +2,26 @@
 
 *What was decided and why, newest first. A record: never corrected forward. Per-commit detail is `git log`.*
 
+## 2026-11-15 — the tracks geotag used, kept and sealed with the workspace (BACKLOG 13)
+
+The owner: *"I will have always the gps data used during the process, in the form used during the decisioning, which
+would make the workspace truly self-contained."* A sealed workspace named the track behind each position but kept
+none of its points; once `gpx_root` changed, the evidence was gone. Ruled *"rest as recommended"*:
+
+- **kept in the record** — `photos-00-ingest.db` holds a catalogue of every track file (path, rank, size, modification
+  time, inode, SHA-256, first and last point) and the points of the window; archived at finalize and merge, sealed
+  with the workspace. The scratch track memo is gone.
+- **read where reached** — the window is what geotag's readers of tracks reach, each by its own setting (*"aren't you
+  reusing a config value for a different purpose?"* — so no setting of its own: one smaller than a reader's reach would
+  starve it unseen). Tracks of other times no longer restale a plan; a file unchanged in size, time and inode is not
+  read again.
+- **a track taken out** is named and no longer used — the one reason to take one out is someone else's trip — but its
+  points stay, withdrawn, where an executed plan placed or timed photos by it.
+- **tracks that cannot be checked stop geotag**, at plan and execute; finalize and merge need none.
+
+Written at plan time, outside the op model, as the memo it replaces was: a file can skip its re-read only if its
+points are already kept. Execute records which tracks it used.
+
 ## 2026-11-15 — the rest of the gap audit ruled (BACKLOG 2)
 
 The walk of the code against the corpus left forty-one behaviours no item stated. Ruled *"all as recommended"*, four
