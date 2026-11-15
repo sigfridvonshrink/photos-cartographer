@@ -276,16 +276,21 @@ Each day's offset is proposed, in this order:
    destination has a position, the offset the camera's GPS fixed that day in another destination. It
    applies itself here only where it did there. Two such offsets of one day that disagree by more than
    `clock_offset_same_day_max_difference_seconds` take effect nowhere until you say which is right.
-4. **From the offset the photos record** — a recent camera writes, with each time, the UTC offset its
+4. **From the camera's own GPS, the day before or after** — where the day has no position of its own here and none
+   was shared, the offset the camera's GPS fixed the day before (else after) in this destination. A camera left on
+   home time abroad, or a night shoot, has its midnight mid-outing: the half after it is a day of its own, and the
+   half before settled the clock. Only offered — the clock may have been set overnight: you accept it, and the drift
+   check then confirms it on the tracks. The day keeps its own decision.
+5. **From the offset the photos record** — a recent camera writes, with each time, the UTC offset its
    clock was set to (`OffsetTimeOriginal`). Where the day's photos here that record one all record the
    same, the clock offset is its negative: a camera left on home time (+01:00) in Japan is proposed
    −1h, not Japan's −9h. Where they record different offsets, none is proposed from them and the
    decision lists the offsets seen. A value in the tag that is no offset counts as none.
-5. **From the destination's timezone** — computed from the zone, daylight saving included, assuming the
+6. **From the destination's timezone** — computed from the zone, daylight saving included, assuming the
    camera kept local time.
-6. **By hand** — you type it, or, in the editor, give the true time of one of its photos.
+7. **By hand** — you type it, or, in the editor, give the true time of one of its photos.
 
-Proposals 4 and 5 are guesses, never applied on their own: each is confirmed against the tracks in the
+Proposals 5 and 6 are guesses, never applied on their own: each is confirmed against the tracks in the
 drift check, or, with no track by the photos, accepted in the Time view.
 
 A guess can be far out: a camera whose battery ran out wakes at its factory date, and the guess moves

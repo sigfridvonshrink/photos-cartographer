@@ -220,7 +220,25 @@ local hour. So a destination with no position of its own that day is offered the
 applied by itself only where it was sure enough to apply itself there. And where the camera's positions give two
 offsets for one day that cannot both be right, one of them rests on a wrong match; neither is written until the user
 says which. An offset the user wrote, or accepted on a guess, is not passed on: it is their word about one place, not
-evidence. Another day's offset is never passed on either — clocks are set again overnight.
+evidence. Another day's offset is never passed on by itself either — clocks are set again overnight; the day next to
+one with no evidence is only offered ({need}`RAT-neighbour_day_offered`).
+:::
+
+:::{rat} The day next door is the best evidence a day without its own can have
+:id: RAT-neighbour_day_offered
+:status: ruled
+:forced: no
+:follows_from: RAT-clock_is_the_cameras_for_the_day, RAT-assumptions_need_acceptance, RAT-drift_invisible
+:justifies: RUL-neighbour_day_offset_proposed, RUL-neighbour_day_offset_needs_acceptance, RUL-neighbour_day_offset_drift_checked, RUL-neighbour_day_no_gap_bound, RUL-neighbour_day_keeps_its_cell
+
+A day is a camera's day by its own clock, so a camera left on home time abroad, or a night shoot, has its midnight in
+the middle of an outing: the outing becomes two days, and the half with no anchor asks for its offset and then for a
+drift confirmation, though the other half settled the clock. The offset the camera's own GPS gave the day before or
+after, in the same place, is a far better guess than the zone's — but it is another day's, and a clock may have been
+set overnight. So it is offered, never applied: the user accepts it, and the drift check then sets it against the
+tracks by the day's own photos, as any offset the day's GPS does not support. Bounding the time between the two days
+would need a new setting and guess at a night's length; the user's acceptance and the check are the bound. The day
+stays the unit: its decision is its own, and taking the neighbour's offset joins nothing.
 :::
 
 :::{rat} A choice from the camera's positions is evidence, and the user's word

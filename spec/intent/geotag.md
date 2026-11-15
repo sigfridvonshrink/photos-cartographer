@@ -457,8 +457,9 @@ camera's own clock — a container destination, holding no photo, having none.
 
 Each offset SHALL be proposed only from that camera's own positions on that day — in that destination, else in
 another ({need}`RUL-offset_shared_within_day`) — or from the offset its photos there record with their times
-({need}`RUL-recorded_offset_proposed`), or from the destination's timezone; never from another day's offset, nor from
-one the user wrote or accepted on a guess in another destination.
+({need}`RUL-recorded_offset_proposed`), or from the destination's timezone; never from another day's offset — save the
+one its own GPS gave the day before or after, as {need}`RUL-neighbour_day_offset_proposed` proposes it — nor from one
+the user wrote or accepted on a guess in another destination.
 :::
 
 :::{rul} A day's offset is the camera's wherever its photos were sorted
@@ -495,6 +496,64 @@ of the timezone's.
 
 Geotag SHALL NOT propose a camera's clock offset of a day in a destination from the offsets its photos there record
 with their times where they record different ones.
+:::
+
+:::{rul} A day with no anchor is offered the day next to it
+:id: RUL-neighbour_day_offset_proposed
+:status: ruled
+:criticality: high
+:verify: required
+:refines: RUL-offset_per_camera_destination_day
+:uses: DEF-clock_offset
+
+A camera's day in a destination with no anchor of its own, and no offset from the same day elsewhere, SHALL be proposed
+the offset of the day before or after of the same camera in the same destination, where that day's offset was anchored
+by the camera's own GPS.
+:::
+
+:::{rul} A neighbouring day's offset waits for the user's acceptance
+:id: RUL-neighbour_day_offset_needs_acceptance
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+:refines: RUL-neighbour_day_offset_proposed
+:uses: DEF-decision
+
+An offset proposed from a neighbouring day SHALL NOT take effect until the user accepts it.
+:::
+
+:::{rul} A neighbouring day's offset is checked against the tracks
+:id: RUL-neighbour_day_offset_drift_checked
+:status: ruled
+:criticality: high
+:verify: required
+:refines: RUL-neighbour_day_offset_needs_acceptance
+:uses: RUL-unanchored_offset_confirmed
+
+An accepted offset from a neighbouring day SHALL be confirmed against the tracks, as any offset the day's own GPS does
+not support is.
+:::
+
+:::{rul} No bound is set on the time between the two days
+:id: RUL-neighbour_day_no_gap_bound
+:status: ruled
+:criticality: med
+:verify: required
+:refines: RUL-neighbour_day_offset_proposed
+
+A neighbouring day's offset SHALL be proposed however much time lies between its photos and the day's.
+:::
+
+:::{rul} The day stays the unit
+:id: RUL-neighbour_day_keeps_its_cell
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+:refines: RUL-neighbour_day_offset_proposed
+
+A day proposed its neighbour's offset SHALL NOT be joined to its neighbour: it keeps a decision of its own.
 :::
 
 :::{rul} A shared offset applies itself only where it did there

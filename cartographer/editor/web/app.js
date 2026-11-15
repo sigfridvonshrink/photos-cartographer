@@ -1548,6 +1548,14 @@ function offsetCellNotes(c) {
   }
   return out;
 }
+// A day with no anchor of its own offered the offset the camera's GPS gave the day before or after it here (photos-21
+// proposal_source "neighbour_day", BLD-neighbour_day_proposal): to accept, then checked in the Drift view. Pure.
+function neighbourDayNote(p) {
+  const n = (p && p.neighbour_day) || {};
+  return `No photo of this day has its own position, but the camera's GPS fixed its clock on ${fmtDate(n.day)} here: ` +
+    `${fmtOffset(p.proposed_offset_seconds)}. A camera's midnight in the middle of an outing splits it in two — accept it if ` +
+    "the clock was not set in between; the Drift view then checks it on the tracks.";
+}
 // Why the times the photos' own GPS fixes recorded say nothing of the clock here (gps_time_set_aside,
 // BLD-gps_time_proposal): a stale fix repeating its time, or readings that disagree.
 function gpsTimeAsideNote(a) {
@@ -1837,6 +1845,9 @@ function offsetProposalBlock(ref, p) {
         ? "one fix only: a stale one repeats an earlier time — accept it if the photo's corrected time is right."
         : "the fixes' times all differ and agree: applied by itself."));
   }
+  if (p.proposal_source === "neighbour_day") return el("div", { class: "pblock" },
+    el("h3", {}, "Proposal — the day next to it"), el("div", { class: "prop-head" }, fmtOffset(p.proposed_offset_seconds)),
+    el("div", { class: "hint" }, neighbourDayNote(p)));
   if (p.proposal_source !== "gpx_self_anchor") return jsonBlock("Proposal", p);
   const tz = previewTz(ref.dest)?.tz;
   const wrap = el("div", { class: "pblock" }, el("h3", {}, "Proposal — suggested clock correction"),
@@ -2049,7 +2060,7 @@ export {
   offsetGroups, dateRange, fmtDate, peerKeys, parseLatLon, coordText, contiguousRange,
   groupChoice, chosenOffset, inConflict, proposalTaken, proposalNotes, driftConfirmHolds, driftConfirmFields, driftCorrectionFields, driftTracksHold, driftStaleReason, acceptFields, acceptHolds, tracksNote,
   zoneContradiction, offsetCellNotes, zoneSpokenFor, zoneDespiteFields, effectiveCountry, clearCountriesInside,
-  clockChangeHolds, clockChangeAt, clockChangeFields, contradictedNote, takeTrackPosition,
+  clockChangeHolds, clockChangeAt, clockChangeFields, contradictedNote, takeTrackPosition, neighbourDayNote,
   scrubOffset, scrubSeedIndex, mapKeyFor, savePayload,
   ambiguousTimeNote, gpsTimeAsideNote, zoneOffer, validReading, keepHolds, keepFields, keepOffered, phoneNote,
   trueInstant, parseUtcOff, mismatchAccepted, recordAbsentText, DEVICE_CLASSES, changedHolds, changedFields, changedKeepLabel, keptTagNote, unidentifiedHolds, unidentifiedFields, loadRefusal, hasUnsavedEdits, utcOff,

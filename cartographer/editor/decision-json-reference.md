@@ -241,7 +241,7 @@ destinations or buckets.
 | **`user_decision.accepted_offset_seconds`** | number \| `""` | **yes** | The `proposed_offset_seconds` being accepted — written together with `accept_proposal: true`, cleared with it. The acceptance holds only while this is what is proposed (within `acceptance_tolerance_seconds` for a GPX or GPS-time proposal): a proposal that became another one was never accepted, and the cell goes `stale_user_decision` and asks. `accept_proposal: true` with this empty is a blocker. |
 | **`user_decision.manual_offset_seconds`** | number \| `""` | **yes** | A manual clock offset, seconds (camera_time + offset = real UTC). |
 | **`user_decision.keep_as_recorded`** | bool | **yes** | On a phone's cell only (§4.5): keep the phone's photos read as they record themselves — their own offset tag, else the zone — its GPS's finding set aside (the track was someone else's). |
-| `effective_time_anchor` | `""` \| object | no | `""` if unresolved; else `{ "offset_seconds": int, "source": … }` where source ∈ `manual` (a manual offset) \| `gpx_anchor_chosen` (a manual offset within `gpx_anchor_offset_spread_max_seconds` of one of a precise GPX proposal's `groups`) \| `gpx_anchor_accepted` \| `gpx_anchor_imprecise` (an accepted GPX proposal with `imprecise_seconds > 0`) \| `recorded_offset_accepted` \| `timezone_accepted` \| `same_day_accepted` (an accepted proposal of that kind) \| `gpx_anchor_auto` (a GPX proposal applied by itself, or kept from earlier) \| `as_recorded` (a phone's cell kept as its photos record themselves; no `offset_seconds`) \| `gps_time_auto` (two GPS fix times or more, applied by themselves) \| `gps_time_accepted` (an accepted GPS-time proposal) \| `same_day_auto` \| `recorded_offset_unconfirmed` \| `timezone_unconfirmed` (an offset from the photos' recorded offset, or from the timezone, sent to photos-22 to be confirmed). |
+| `effective_time_anchor` | `""` \| object | no | `""` if unresolved; else `{ "offset_seconds": int, "source": … }` where source ∈ `manual` (a manual offset) \| `gpx_anchor_chosen` (a manual offset within `gpx_anchor_offset_spread_max_seconds` of one of a precise GPX proposal's `groups`) \| `gpx_anchor_accepted` \| `gpx_anchor_imprecise` (an accepted GPX proposal with `imprecise_seconds > 0`) \| `recorded_offset_accepted` \| `timezone_accepted` \| `same_day_accepted` \| `neighbour_day_accepted` (an accepted proposal of that kind) \| `gpx_anchor_auto` (a GPX proposal applied by itself, or kept from earlier) \| `as_recorded` (a phone's cell kept as its photos record themselves; no `offset_seconds`) \| `gps_time_auto` (two GPS fix times or more, applied by themselves) \| `gps_time_accepted` (an accepted GPS-time proposal) \| `same_day_auto` \| `recorded_offset_unconfirmed` \| `timezone_unconfirmed` (an offset from the photos' recorded offset, or from the timezone, sent to photos-22 to be confirmed). |
 | `conflicts_with` | array | no | Present when the camera's own GPS gave another offset the same day in another destination, farther off than `clock_offset_same_day_max_difference_seconds`, or where one of the two is a group of the camera's GPS the user picked (`gpx_anchor_chosen`): `[{ "destination", "bucket", "offset_seconds", "chosen" }]` — `chosen` is `true` where that other offset is one the user picked (`gpx_anchor_chosen`). An offset the GPS gave by itself (`gpx_anchor_auto`, `gpx_anchor_accepted`) takes no effect and the cell asks; a `gpx_anchor_chosen` one keeps its effect. Write `manual_offset_seconds` in the cell that is wrong — to take a cell's own proposal there, write its `proposed_offset_seconds` as `manual_offset_seconds` (the editor does so): `accept_proposal` there counts as what the GPS gave by itself and is withheld again. Two `gpx_anchor_chosen` offsets are never held against each other. |
 | `several_bodies` | `true` | no | On a cell of a camera group the configuration names several bodies (`camera_time_and_timezone_policy.several_bodies_groups`, §5d) whose proposal is from its GPS, or shared: the group may be several bodies, and the offset never applies itself — it is accepted or written. |
 | `clock_change` | object | no | Present where the camera's clock changed during the day: the photos its own GPS anchors (on the tracks, else by their fixes' times), in camera-time order, fall into two consecutive runs, each agreeing on an offset of its own — §4.4a. |
@@ -257,8 +257,9 @@ destinations or buckets.
 
 **`proposal` shapes** (all read-only; this is the evidence the UI shows). Tried in order: the GPX
 self-anchor of the bucket's native-GPS frames; else the times their own GPS fixes recorded; else, when the
-camera's GPS fixed its clock that day in another destination, the same day elsewhere; else the offset the
-photos record; else the timezone-derived offset; else manual required.
+camera's GPS fixed its clock that day in another destination, the same day elsewhere; else, when it fixed it the day
+before or after in this destination, the day next to it; else the offset the photos record; else the
+timezone-derived offset; else manual required.
 
 - **GPX self-anchor** (`proposal_source: "gpx_self_anchor"`) — geotag matched the group's geotagged
   frames against GPX tracks:
@@ -341,6 +342,15 @@ photos record; else the timezone-derived offset; else manual required.
   be `recorded_offset`, `timezone_naive` or `manual_required`. Never another day's offset, never one written by hand
   unless it is a group of the camera's own GPS the user picked (the donor's source is `gpx_anchor_auto`,
   `gpx_anchor_accepted` or `gpx_anchor_chosen`, one that applied itself chosen first, then by path). Neither same-day source is drift-checked in photos-22.
+- **The day next to it** (`proposal_source: "neighbour_day"`) — no photo of a dated bucket (`<group>@<date>`) has its
+  own position, no same-day offset was shared, and the cell of the day before — else the day after — of the same
+  camera in this destination holds an offset its GPS gave (`gpx_anchor_auto`, `gpx_anchor_accepted`,
+  `gpx_anchor_chosen`, `gps_time_auto`, `gps_time_accepted`; of a day split at a clock change, the part next to this
+  day): `{ "proposal_source": "neighbour_day", "proposed_offset_seconds": int, "neighbour_day": { "day": "YYYY-MM-DD",
+  "bucket": "…" }, "confidence": "review_required" }`. It takes the place of a `recorded_offset`, `timezone_naive` or
+  `manual_required` proposal, whatever time lies between the two days' photos. Never applied by itself: accepted
+  (`accept_proposal` + `accepted_offset_seconds`, exactly the offset proposed), it takes effect as
+  `neighbour_day_accepted`, and the drift check (photos-22) asks it to be confirmed on the tracks.
 - **Manual required** (`proposal_source: "manual_required"`) — no signal: no anchor, no same-day offset,
   and no timezone-derived offset (no resolved timezone, no readable camera time, or a camera time the zone
   reads two ways); the human must enter a manual offset (or real UTC): `{ "proposal_source": "manual_required" }`.
@@ -607,6 +617,7 @@ photo's own GPS pins — its `effective_time_anchor.source` is one of:
   recorded offset;
 - `gpx_anchor_imprecise` — an accepted GPX proposal whose track stood still at the photos' place
   (`imprecise_seconds > 0`): the GPS says where, not when;
+- `neighbour_day_accepted` — an accepted offset of the day next to it (`neighbour_day`): another day's clock;
 
 — and whose not-yet-corrected photos lie within `drift_check_track_window_seconds` of track points, by
 their resolved times or, none lying there, by the times the camera recorded read as UTC — exactly the case
@@ -652,8 +663,8 @@ appear. The `<bucket_key>` matches the photos-21 offset cell it refines — bare
 ```
 
 - `proposal.proposal_source` is the photos-21 cell's effective source — `manual`, `timezone_accepted`,
-  `timezone_unconfirmed`, `recorded_offset_accepted`, `recorded_offset_unconfirmed` or `gpx_anchor_imprecise`
-  (above). `current_offset_seconds` is the offset photos-21
+  `timezone_unconfirmed`, `recorded_offset_accepted`, `recorded_offset_unconfirmed`, `gpx_anchor_imprecise` or
+  `neighbour_day_accepted` (above). `current_offset_seconds` is the offset photos-21
   resolved.
 - `proposal.track_segment` is read-only evidence — the GPX points within `drift_check_track_window_seconds`
   (a setting; default 172800 s, two days) either side of the bucket's photos' resolved times, or, none lying

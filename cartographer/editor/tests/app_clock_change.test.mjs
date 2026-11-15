@@ -77,6 +77,16 @@ test("an own position the agreed offset contradicts: kept unless the track's is 
   assert.equal(app.refInvalid(ref), false);
 });
 
+test("a day offered the day next to it: accepted as any proposal, by the offset it names, then checked on the tracks", () => {
+  const p = { proposal_source: "neighbour_day", proposed_offset_seconds: -3600,
+    neighbour_day: { day: "2024-07-03", bucket: "C@2024-07-03" }, confidence: "review_required" };
+  assert.match(app.neighbourDayNote(p), /3 Jul 2024/);
+  assert.match(app.neighbourDayNote(p), /Drift view/);
+  const cell = { proposal: p, user_decision: { ...app.acceptFields(p, true), manual_offset_seconds: "" } };
+  assert.equal(app.acceptHolds(cell), true);
+  assert.equal(app.acceptHolds({ ...cell, user_decision: { ...cell.user_decision, accepted_offset_seconds: -3601 } }), false);
+});
+
 test("the split resolves the day's offset cell, and its parts are shown on their day, never as rows of their own", () => {
   const cell = dayCell();
   Object.assign(cell.user_decision, app.clockChangeFields(cell, true, "2024:07:03 11:30:00"));

@@ -1083,6 +1083,7 @@ class GeotagWorkflow:
                         dest, nameless, tz, prior_d.get("unidentified_files") or {}, blockers)
             self.coordinator.increment_completed(1)
         self._share_offsets_within_a_day(destinations, recall, gpx, blockers)
+        self._offer_neighbour_days(destinations, recall, gpx, blockers)
         self._withhold_far_offsets(destinations, recall, by_dest, groups, gpx)
         self._ask_local_time_readings(destinations, by_dest, groups, prior_dests, blockers)
         self._ask_changed_times(destinations, by_dest, prior_dests, blockers)
@@ -1448,6 +1449,42 @@ class GeotagWorkflow:
                     dest, group, g, prior_cell, anchor_frames, gpx, blockers, tz=tz, rep_naive=rep_naive,
                     date=date, day=day, photos=sel, shared=shared)
 
+    # Offsets of a day the camera's own GPS anchored, which the day before or after it in the same destination is offered.
+    _ANCHORED_SOURCES = _OWN_GPS_SOURCES + ("gps_time_auto", "gps_time_accepted")
+
+    def _offer_neighbour_days(self, destinations, recall, gpx, blockers):
+        """A camera's day in a destination with no anchor of its own — its proposal would be `recorded_offset`,
+        `timezone_naive` or `manual_required`, none shared from the same day elsewhere — is proposed the offset of the day
+        before, else the day after, of the same camera in the same destination where that day's offset was anchored by
+        the camera's own GPS (BLD-neighbour_day_proposal): on its tracks, or by its fixes' times; of a day split at a
+        change of the clock, the part next to it. However far apart in time; to accept, then checked against the
+        tracks by the drift check (RUL-neighbour_day_offset_drift_checked). The day keeps its own cell."""
+        for (dest, bucket), (group, g, prior_cell, anchor_frames, rep_naive, date, day, sel, tz) in sorted(recall.items()):
+            cells = destinations[dest]["camera_group_time_decisions"]
+            cell = cells.get(bucket) or {}
+            if cell.get("camera_group_class") != "camera" or not day or (cell.get("proposal") or {}).get(
+                    "proposal_source") not in ("recorded_offset", "timezone_naive", "manual_required"):
+                continue
+            neighbour = None
+            for step, part in ((-1, 2), (1, 1)):
+                try:
+                    other = (datetime.strptime(day, "%Y-%m-%d") + timedelta(days=step)).strftime("%Y-%m-%d")
+                except ValueError:
+                    break
+                key = f"{group}@{other}"
+                split = ((cells.get(key) or {}).get("clock_change") or {}).get("effective_split")
+                if isinstance(split, dict):
+                    key = split["parts"][part - 1]          # the part of a split day next to this one
+                eff = (cells.get(key) or {}).get("effective_time_anchor")
+                if isinstance(eff, dict) and eff.get("source") in self._ANCHORED_SOURCES:
+                    neighbour = {"day": other, "bucket": key, "offset_seconds": eff["offset_seconds"]}
+                    break
+            if neighbour is None:
+                continue
+            cells[bucket] = self._offset_cell(dest, group, g, prior_cell, anchor_frames, gpx, blockers, tz=tz,
+                                              rep_naive=rep_naive, date=date, day=day, photos=sel,
+                                              neighbour=neighbour)
+
     # Offsets that say when a camera's photos were taken, for another camera's guessed offset to be set against: its own
     # GPS's, the same day's elsewhere, the user's. Never another guess (BLD-offset_far_from_evidence).
     _SETTLED_SOURCES = ("gpx_anchor_auto", "gpx_anchor_accepted", "gpx_anchor_chosen", "gpx_anchor_imprecise",
@@ -1610,7 +1647,7 @@ class GeotagWorkflow:
         return block
 
     def _offset_cell(self, dest, key, g, prior_cell, frames, gpx, blockers, tz=None, rep_naive=None, date=None,
-                     day=None, photos=(), shared=None, phone=False, recorded_from=None, settles=False):
+                     day=None, photos=(), shared=None, phone=False, recorded_from=None, settles=False, neighbour=None):
         # One (camera group, destination[, date]) clock-offset bucket — a phone's too, where one is asked
         # (`phone`, BLD-phone_offset_cell); `recorded_from` are the photos whose recorded offset is proposed, where
         # they are not the ones offset; `settles`: the phone's own GPS agrees with how its tagged photos are read, and
@@ -1632,6 +1669,12 @@ class GeotagWorkflow:
             proposal = {"proposal_source": "same_day_elsewhere", "proposed_offset_seconds": shared["offset_seconds"],
                         "shared_from": {"destination": shared["destination"], "bucket": shared["bucket"]},
                         "confidence": "high" if shared["applied_itself"] else "review_required"}
+        if proposal is None and neighbour is not None:
+            # no GPS evidence of its own that day, none shared from the same day: the offset the camera's own GPS
+            # gave the day before or after it here, to accept and then check on the tracks (BLD-neighbour_day_proposal)
+            proposal = {"proposal_source": "neighbour_day", "proposed_offset_seconds": neighbour["offset_seconds"],
+                        "neighbour_day": {"day": neighbour["day"], "bucket": neighbour["bucket"]},
+                        "confidence": "review_required"}
         differ = None
         if proposal is None and photos:
             # the zone the camera's clock was set to, as its photos record it: better than assuming local time
@@ -1652,6 +1695,7 @@ class GeotagWorkflow:
         is_shared = proposal.get("proposal_source") == "same_day_elsewhere"
         is_recorded = proposal.get("proposal_source") == "recorded_offset"
         is_gps_time = proposal.get("proposal_source") == "gps_time"
+        is_neighbour = proposal.get("proposal_source") == "neighbour_day"
         has_offset = "proposed_offset_seconds" in proposal
         conflicting = proposal.get("conflicting_count", 0) > 0 or bool(proposal.get("tied"))   # anchors disagree
         imprecise = bool(proposal.get("imprecise_seconds"))    # the tracks stood still: no photo says when
@@ -1711,6 +1755,7 @@ class GeotagWorkflow:
                 effective = {"offset_seconds": int(accepted_off),
                              "source": ("gpx_anchor_imprecise" if imprecise else "gpx_anchor_accepted") if is_gpx
                              else "same_day_accepted" if is_shared
+                             else "neighbour_day_accepted" if is_neighbour
                              else "gps_time_accepted" if is_gps_time
                              else "recorded_offset_accepted" if is_recorded else "timezone_accepted"}
         elif is_gps_time and not several and ((proposal["gps_time_count"] >= 2 and policy["multi_anchor_auto_apply"])
@@ -1794,7 +1839,7 @@ class GeotagWorkflow:
             cell["day"] = day                      # the day its photos are of, whatever its key
         if decision_mode:
             cell["decision_mode"] = decision_mode
-        if several and (is_gpx or is_gps_time or is_shared):
+        if several and (is_gpx or is_gps_time or is_shared or is_neighbour):
             cell["several_bodies"] = True          # the offset its GPS gives may be one body's (RUL-several_bodies_noted)
         if is_gpx and not imprecise and not phone and not several and isinstance(effective, dict) \
                 and effective.get("source") in self._OWN_GPS_SOURCES \
@@ -1844,7 +1889,8 @@ class GeotagWorkflow:
     # carries the corrected/validated offset that compute_resolved_utc then re-consumes (BLD-resolved_utc).
 
     _DRIFT_TRIGGER_SOURCES = ("timezone_accepted", "timezone_unconfirmed", "recorded_offset_accepted",
-                              "recorded_offset_unconfirmed", "manual", "gpx_anchor_imprecise")
+                              "recorded_offset_unconfirmed", "manual", "gpx_anchor_imprecise",
+                              "neighbour_day_accepted")   # another day's clock, checked on this day's tracks
     # A guess nobody has accepted: always given its drift cell, for the confirmation there is its acceptance.
     _UNCONFIRMED_SOURCES = ("timezone_unconfirmed", "recorded_offset_unconfirmed")
 
