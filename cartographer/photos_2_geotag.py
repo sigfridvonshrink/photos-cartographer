@@ -938,11 +938,12 @@ class GeotagWorkflow:
         """A clock offset is the camera's for the day, wherever its photos were sorted (RUL-offset_shared_within_day).
         So, over the cells of one camera on one day in different destinations: (1) two offsets its own GPS gave that lie
         farther apart than `clock_offset_same_day_max_difference_seconds` are one clock read two ways —
-        neither takes effect, both ask; a hand-written offset is the user's word, and is neither withheld nor
-        counted. (2) A cell with no GPS evidence of its own is proposed the offset the camera's GPS gave
-        that day elsewhere, in place of the timezone's guess: applied by itself where it applied itself
-        there, else for the user to accept. An offset the user picked from the camera's own GPS groups
-        (`gpx_anchor_chosen`) rests on the camera's own GPS, and is passed on like the others
+        neither takes effect, both ask. An offset the user picked from the camera's own GPS groups
+        (`gpx_anchor_chosen`) is held against them alike: one farther than the limit from it is withheld and
+        asks, both naming the other, while the user's choice — their word — keeps its effect. (2) A cell with
+        no GPS evidence of its own is proposed the offset the camera's GPS gave that day elsewhere, in place
+        of the timezone's guess: applied by itself where it applied itself there, else for the user to accept.
+        A `gpx_anchor_chosen` offset rests on the camera's own GPS, and is passed on like the others
         (BLD-offset_shared_within_day)."""
         limit = CONFIG["clock_offset_same_day_max_difference_seconds"]
         by_day = {}
@@ -957,13 +958,20 @@ class GeotagWorkflow:
             donors = [(dest, bucket, c) for dest, bucket, c in sorted(members, key=lambda m: (m[0], m[1]))
                       if isinstance(c.get("effective_time_anchor"), dict)
                       and c["effective_time_anchor"].get("source") in self._OWN_GPS_SOURCES]
-            found = [m for m in donors if not hand(m[2])]      # what the GPS alone gave: the user's word stands
-            offs = [c["effective_time_anchor"]["offset_seconds"] for _d, _b, c in found]
-            if offs and max(offs) - min(offs) > limit:
-                for dest, bucket, c in found:
-                    c["conflicts_with"] = [{"destination": d2, "bucket": b2,
-                                            "offset_seconds": c2["effective_time_anchor"]["offset_seconds"]}
-                                           for d2, b2, c2 in found if c2 is not c]
+            off = lambda c: c["effective_time_anchor"]["offset_seconds"]
+            found = [m for m in donors if not hand(m[2])]      # what the GPS alone gave
+            chosen = [m for m in donors if hand(m[2])]         # what the user picked from it
+            # An offset the user chose is held against what the GPS gave by itself, as two of those are against
+            # each other (RUL-chosen_offset_checked_same_day); two the user chose are both their word, and are not.
+            against = [m for m in chosen if any(abs(off(m[2]) - off(f[2])) > limit for f in found)]
+            offs = [off(c) for _d, _b, c in found]
+            if against or (offs and max(offs) - min(offs) > limit):
+                party = found + against
+                for dest, bucket, c in party:
+                    c["conflicts_with"] = [{"destination": d2, "bucket": b2, "offset_seconds": off(c2)}
+                                           for d2, b2, c2 in party if c2 is not c]
+                # What the GPS gave by itself is withheld and asks; the user's choice keeps its effect, never set
+                # aside by an offset it was not asked about (RUL-chosen_offset_not_withheld).
                 for _dest, _bucket, c in found:
                     c["effective_time_anchor"], c["requires_user_input"] = "", True
                     c.pop("decision_mode", None)
@@ -2980,6 +2988,17 @@ def run(args):
                 for b in blockers:
                     reporter.log(f"  - {b}")
                 emit_next_step(reporter, "resolve the blocker(s) above, then re-run `geotag execute`.")
+                sys.exit(2)
+            # Execution builds its file model from prep's log, carrying a photo's pinned values to a retaken
+            # fingerprint: a log the handoff does not vouch for says nothing trustworthy of that, so execute
+            # stops on it before any change — before the snapshot, before keeping decisions
+            # (RUL-geotag_executes_on_vouched_log).
+            log_blk = prep_log_blocker(workspace_root, wf.handoff)
+            if log_blk:
+                reporter.error("\nExecution cannot proceed:")
+                reporter.log(f"  - {log_blk[0].upper() + log_blk[1:]}.")
+                emit_next_step(reporter, "`prep plan` and `prep execute`, then `geotag plan`, then "
+                                         "`geotag execute`.")
                 sys.exit(2)
             if not os.path.exists(executable_plan_path(workspace_root)):
                 reporter.log(f"No {EXECUTABLE_PLAN_ARTIFACT} — run `plan` first.")

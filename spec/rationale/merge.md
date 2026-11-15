@@ -109,7 +109,7 @@ a resume.
 :::
 
 :::{rat} A record that cannot be read is not an empty one
-:id: RAT-unreadable_record_not_empty
+:id: RAT-merge_unreadable_record_not_empty
 :status: ruled
 :forced: yes
 :follows_from: RAT-library_is_evidence_of_move, RAT-durable_record

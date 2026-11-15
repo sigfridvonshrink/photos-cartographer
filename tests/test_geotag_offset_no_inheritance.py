@@ -176,6 +176,47 @@ def test_one_clock_read_two_ways_on_one_day_takes_no_effect(tmp_path):
     assert _cell(art, f"{BYDEST}/Trip")["effective_time_anchor"] and _cell(art, f"{BYDEST}/Other")["effective_time_anchor"]
 
 
+@pytest.mark.spec("RUL-chosen_offset_checked_same_day", "RUL-chosen_offset_not_withheld", "BLD-offset_shared_within_day",
+                  test="TST-geotag_offset_no_inheritance-a_chosen_offset_is_held_against_the_day_s_anchored_one")
+def test_a_chosen_offset_is_held_against_the_day_s_anchored_one(tmp_path):
+    """The camera's GPS fixes its clock at −2 h in the museum by itself; in the castle the user picked −1 h 50 min from
+    the camera's own GPS groups. One clock, two readings: the museum's, which nobody was asked about, waits for the
+    user; the user's pick keeps its effect. Both name the other, and neither is passed on to the third destination."""
+    wf = _wf(tmp_path)
+    castle = [_file(f"{BYDEST}/Castle/x.arw", f"{BYDEST}/Castle", gps=(50.0, 4.0), naive="2024:07:03 13:50:00"),
+              _file(f"{BYDEST}/Castle/y.arw", f"{BYDEST}/Castle", gps=(51.0, 5.0), naive="2024:07:03 14:50:00")]
+    nogps = [_file(f"{BYDEST}/Third/z.arw", f"{BYDEST}/Third", naive="2024:07:03 18:00:00")]
+    files = PARENT_FRAMES + castle + nogps
+
+    def decided(**offsets):
+        prior = {"destinations": {f"{BYDEST}/{d}": {"camera_group_time_decisions": {CAM: {"user_decision": {
+            "manual_offset_seconds": o}}}} for d, o in offsets.items()}}
+        art, _ = _build(wf, files, _gpx(TRACK), prior)
+        return art, _cell(art, f"{BYDEST}/Trip"), _cell(art, f"{BYDEST}/Castle"), _cell(art, f"{BYDEST}/Third")
+
+    art, trip, cas, third = decided(Castle=-6600)
+    assert cas["effective_time_anchor"] == {"offset_seconds": -6600, "source": "gpx_anchor_chosen"}
+    assert not cas["requires_user_input"]                                        # the user's word stands
+    assert trip["effective_time_anchor"] == "" and trip["requires_user_input"] and "decision_mode" not in trip
+    assert art["requires_user_input"]
+    assert trip["conflicts_with"] == [{"destination": f"{BYDEST}/Castle", "bucket": CAM, "offset_seconds": -6600}]
+    assert cas["conflicts_with"] == [{"destination": f"{BYDEST}/Trip", "bucket": CAM, "offset_seconds": -7200}]
+    assert third["proposal"] == {"proposal_source": "manual_required"}           # nothing passed on
+    # the user writes the museum's too: two choices of theirs are both their word, and are not held against each other
+    art, trip, cas, third = decided(Castle=-6600, Trip=-7200)
+    assert trip["effective_time_anchor"] == {"offset_seconds": -7200, "source": "gpx_anchor_chosen"}
+    assert cas["effective_time_anchor"] == {"offset_seconds": -6600, "source": "gpx_anchor_chosen"}
+    assert "conflicts_with" not in trip and "conflicts_with" not in cas
+    assert third["proposal"]["proposal_source"] == "same_day_elsewhere"
+    # within the setting's reach the pick and the anchored offset are one finding, and both stand
+    utils.CONFIG["clock_offset_same_day_max_difference_seconds"] = 900.0
+    art, trip, cas, third = decided(Castle=-6600)
+    assert trip["effective_time_anchor"] == {"offset_seconds": -7200, "source": "gpx_anchor_auto"}
+    assert cas["effective_time_anchor"]["source"] == "gpx_anchor_chosen"
+    assert "conflicts_with" not in trip and "conflicts_with" not in cas
+    assert third["effective_time_anchor"] == {"offset_seconds": -7200, "source": "same_day_auto"}
+
+
 def test_no_ancestor_is_manual_required(tmp_path):
     wf = _wf(tmp_path)
     files = [_file(f"{BYDEST}/Alone/x.arw", f"{BYDEST}/Alone")]              # no GPS, no ancestor, no tz

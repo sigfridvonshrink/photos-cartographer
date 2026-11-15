@@ -197,7 +197,9 @@ What the proposal panel shows depends on where the offset came from:
   you picked there. Where it applied itself there it applies here too; otherwise accept it here or set
   another. If the camera's GPS gives two different offsets on one day in
   two destinations, neither takes effect: both are shown, and you set the right offset by hand in the
-  one that is wrong.
+  one that is wrong. A group you picked from the camera's GPS is held against an offset its GPS fixed by
+  itself elsewhere that day the same way: if they differ, both are shown and the one fixed by itself
+  waits for you, while your pick keeps its effect.
 - **The offset the photos record** — no GPS evidence, but the camera wrote, with each photo's time, the
   UTC offset its clock was set to, and they all agree (e.g. "2 photos record +01:00 from UTC"): the clock
   offset is its negative. Accept it only if the camera's time was right in that zone — a clock set to the

@@ -223,6 +223,22 @@ says which. An offset the user wrote, or accepted on a guess, is not passed on: 
 evidence. Another day's offset is never passed on either — clocks are set again overnight.
 :::
 
+:::{rat} A choice from the camera's positions is evidence, and the user's word
+:id: RAT-chosen_offset_evidence_and_word
+:status: ruled
+:forced: no
+:follows_from: RAT-clock_is_the_cameras_for_the_day, RAT-decisions_are_the_users
+:justifies: RUL-chosen_offset_checked_same_day, RUL-chosen_offset_not_withheld
+
+An offset the user picked from the groups the camera's own positions give rests on those positions, and is passed on
+within the day as theirs is. So it can disagree with an offset the positions gave by themselves in another destination
+that day exactly as two of those can — one clock read two ways — and the one the positions gave unasked is not written
+until the user says which is right. The pick is not withheld in turn: it is the user's word, given with the camera's
+evidence in view, and setting it aside for a finding they were never shown would put the tool's reading in place of
+their knowledge. Both are shown, each naming the other; and while they disagree neither is passed on, since either
+would decide a third destination from one side of an open question.
+:::
+
 :::{rat} A camera that records its offset says which zone its clock was on
 :id: RAT-camera_records_its_clock_zone
 :status: ruled
@@ -672,7 +688,7 @@ of what they saw, for them to replace.
 :status: ruled
 :forced: yes
 :follows_from: RAT-decision_withdrawable, RAT-decoded_pixel_identity
-:justifies: RUL-own_values_follow_new_fingerprint, RUL-geotag_plans_on_vouched_log
+:justifies: RUL-own_values_follow_new_fingerprint, RUL-geotag_plans_on_vouched_log, RUL-geotag_executes_on_vouched_log
 
 A new ImageMagick may decode a photo to a new fingerprint; the photo is the same, and so are its own time and
 position. Lost with the old value, they would leave geotag taking the photo's corrected time for its own: a changed
@@ -680,7 +696,8 @@ offset would never reach it, a withdrawn one never undo. Prep's log says which o
 it does not say so one for one, no photo's values can be told apart, and geotag stops rather than guess. A log the
 handoff does not vouch for says nothing that can be trusted of which became which: planned past it, as though no
 fingerprint had changed, a photo would lose its pinned values without a word — so geotag stops on it as well, as
-finalize and merge do.
+finalize and merge do. Execution builds the same model again from the log and moves each pin to its new value; the
+log may have changed since the plan was made, so execution asks the same of it, before it changes anything.
 :::
 
 

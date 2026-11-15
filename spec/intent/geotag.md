@@ -519,6 +519,31 @@ Two offsets a camera's own positions gave on one day in different destinations, 
 allows, SHALL NOT take effect until the user writes which is right.
 :::
 
+:::{rul} An offset chosen from the camera's positions is held against what they gave by themselves
+:id: RUL-chosen_offset_checked_same_day
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+:refines: RUL-same_day_offsets_agree
+
+An offset a camera's own positions gave by themselves on one day, farther than the configuration allows from one the
+user chose from those positions that day in another destination, SHALL NOT take effect until the user writes which is
+right.
+:::
+
+:::{rul} The user's choice is not set aside by an offset it was not asked about
+:id: RUL-chosen_offset_not_withheld
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+:refines: RUL-chosen_offset_checked_same_day
+
+An offset the user chose from a camera's own positions SHALL NOT lose its effect for differing from one those positions
+gave by themselves that day in another destination.
+:::
+
 :::{rul} A container destination never waits for the user
 :id: RUL-container_never_waits
 :status: ruled
@@ -1129,6 +1154,18 @@ one, so long as the change maps one value to one.
 :uses: RUL-unchecked_counts_as_changed
 
 Geotag SHALL NOT plan while prep's log is not the one the handoff vouches for.
+:::
+
+:::{rul} Geotag executes only on the prep log the handoff vouches for
+:id: RUL-geotag_executes_on_vouched_log
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+:refines: RUL-geotag_plans_on_vouched_log
+
+Geotag SHALL NOT execute a plan, nor change anything toward it, while prep's log is not the one the handoff vouches
+for.
 :::
 
 

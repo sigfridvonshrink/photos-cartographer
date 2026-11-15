@@ -305,9 +305,9 @@ After the offsets shared within a day, `build_time_decisions` SHALL withdraw the
 :::{bld} A day's offset shared between destinations
 :id: BLD-offset_shared_within_day
 :status: ruled
-:realises: RUL-offset_shared_within_day, RUL-same_day_offsets_agree, RUL-offset_from_own_evidence
+:realises: RUL-offset_shared_within_day, RUL-same_day_offsets_agree, RUL-offset_from_own_evidence, RUL-chosen_offset_checked_same_day, RUL-chosen_offset_not_withheld
 
-Over the cells of one camera group naming the same `day` in different destinations, `build_time_decisions` SHALL take as donors those whose effective source is `gpx_anchor_auto`, `gpx_anchor_accepted` or `gpx_anchor_chosen` — the last an offset the user wrote that a group of the camera's own GPS anchors supports. Donors not written by hand whose offsets differ by more than `clock_offset_same_day_max_difference_seconds` each lose their effective offset, ask, and list the others in `conflicts_with` (`destination`, `bucket`, `offset_seconds`); nothing is shared, and a hand-written one is neither withheld nor counted. Otherwise a cell whose own proposal would be `recorded_offset`, `timezone_naive` or `manual_required` is proposed the donor's offset — a `gpx_anchor_auto` donor first, then by path — as `proposal_source: "same_day_elsewhere"` with `shared_from` (`destination`, `bucket`): taking effect as `same_day_auto` where the donor's source is `gpx_anchor_auto`, else once accepted, naming the offset, as `same_day_accepted`. An offset the cell keeps from its own earlier GPS comes first. Neither source is followed by a drift check.
+Over the cells of one camera group naming the same `day` in different destinations, `build_time_decisions` SHALL take as donors those whose effective source is `gpx_anchor_auto`, `gpx_anchor_accepted` or `gpx_anchor_chosen` — the last an offset the user wrote that a group of the camera's own GPS anchors supports. Donors not written by hand whose offsets differ by more than `clock_offset_same_day_max_difference_seconds`, or of which one differs by more than it from a `gpx_anchor_chosen` donor, are in conflict: those, with each `gpx_anchor_chosen` donor that differs by more than it from one of them, list the others in `conflicts_with` (`destination`, `bucket`, `offset_seconds`); each not written by hand loses its effective offset and asks, each `gpx_anchor_chosen` one keeps its own and does not ask; and nothing is shared. Two `gpx_anchor_chosen` donors are not held against each other. Otherwise a cell whose own proposal would be `recorded_offset`, `timezone_naive` or `manual_required` is proposed the donor's offset — a `gpx_anchor_auto` donor first, then by path — as `proposal_source: "same_day_elsewhere"` with `shared_from` (`destination`, `bucket`): taking effect as `same_day_auto` where the donor's source is `gpx_anchor_auto`, else once accepted, naming the offset, as `same_day_accepted`. An offset the cell keeps from its own earlier GPS comes first. Neither source is followed by a drift check.
 :::
 
 ## 12. The decision records
@@ -388,14 +388,16 @@ A drift cell's `proposal` SHALL hold `tracks`, each track file its `track_segmen
 :::{bld} The pinned values follow a retaken fingerprint
 :id: BLD-original_values_follow_fingerprint
 :status: ruled
-:realises: RUL-own_values_follow_new_fingerprint, RUL-geotag_plans_on_vouched_log
+:realises: RUL-own_values_follow_new_fingerprint, RUL-geotag_plans_on_vouched_log, RUL-geotag_executes_on_vouched_log
 
 `build_file_model` SHALL find a photo's pinned values under its fingerprint or, failing it, under the value it was
 taken again from, step by step back through the `fingerprint_retaken` steps of prep's log (`retaken_fingerprints`),
 when the handoff vouches for the log; execution then moves the pin to the current value, unless one is held there. A
 log holding two steps that give one value two predecessors, or one value two successors, is a blocker of geotag's
 preflight, and so, for `geotag plan`, is a log the handoff does not vouch for (`prep_log_blocker`: missing,
-unreadable, its SHA-256 other than `depends_on.prep_log`'s, or the handoff recording none).
+unreadable, its SHA-256 other than `depends_on.prep_log`'s, or the handoff recording none); `geotag execute` stops on
+such a log after its preflight, before the plan is read and before any snapshot, kept decision or write, with exit
+status 2.
 :::
 
 
