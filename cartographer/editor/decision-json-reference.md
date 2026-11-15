@@ -30,7 +30,7 @@ All live in the workspace control directory `.photos-ingest/`:
 | `photos-21-time-decisions.json` | `time_decisions` | Per-destination **country** and **civil timezone**, and per-(camera group, destination, day) **clock offset** for fixed-clock cameras. |
 | `photos-22-gps-drift-validation.json` | `gps_drift_validation` | Per at-risk bucket, **confirm or correct** a clock offset that no photo's own GPS pins (a manual, timezone-derived or imprecise-anchor offset) against the GPX track before it is used to place photos (§5a below). |
 | `photos-23-gps-decisions.json`  | `gps_decisions`  | Per-destination **GPS fallback** coordinate, and per-file **GPS** decisions for files an automatic source could not place. |
-| `photos-00-config.json` (`camera_time_and_timezone_policy.device_groups`) | — | Not a decision record but the workspace's configuration: the **class** of each new camera group — phone or fixed-clock camera — that geotag stops on before it writes any decision (§5c below). |
+| `photos-00-config.json` (`camera_time_and_timezone_policy.device_groups`) | — | Not a decision record but the workspace's configuration: the **class** of each new camera group — phone or fixed-clock camera — that geotag stops on before it writes any decision (§5c below), and which camera groups are several bodies (`several_bodies_groups`, §5d). |
 | `photos-25-execution-summary.json` | `execution_summary` | Not a decision record but `geotag execute`'s summary: per photo whose content changed when geotag wrote to it, whether that content **stands** (§5b below). |
 
 The editor opens one of these, presents the open decisions, lets the human resolve them, and writes the
@@ -241,8 +241,15 @@ destinations or buckets.
 | **`user_decision.accepted_offset_seconds`** | number \| `""` | **yes** | The `proposed_offset_seconds` being accepted — written together with `accept_proposal: true`, cleared with it. The acceptance holds only while this is what is proposed (within `acceptance_tolerance_seconds` for a GPX or GPS-time proposal): a proposal that became another one was never accepted, and the cell goes `stale_user_decision` and asks. `accept_proposal: true` with this empty is a blocker. |
 | **`user_decision.manual_offset_seconds`** | number \| `""` | **yes** | A manual clock offset, seconds (camera_time + offset = real UTC). |
 | **`user_decision.keep_as_recorded`** | bool | **yes** | On a phone's cell only (§4.5): keep the phone's photos read as they record themselves — their own offset tag, else the zone — its GPS's finding set aside (the track was someone else's). |
-| `effective_time_anchor` | `""` \| object | no | `""` if unresolved; else `{ "offset_seconds": int, "source": … }` where source ∈ `manual` (a manual offset) \| `gpx_anchor_chosen` (a manual offset within `gpx_anchor_offset_spread_max_seconds` of one of a precise GPX proposal's `groups`) \| `gpx_anchor_accepted` \| `gpx_anchor_imprecise` (an accepted GPX proposal with `imprecise_seconds > 0`) \| `recorded_offset_accepted` \| `timezone_accepted` \| `same_day_accepted` (an accepted proposal of that kind) \| `gpx_anchor_auto` (a GPX proposal applied by itself, or kept from earlier) \| `as_recorded` (a phone's cell kept as its photos record themselves; no `offset_seconds`) \| `gps_time_auto` (two GPS fix times or more, applied by themselves) \| `gps_time_accepted` (an accepted GPS-time proposal) \| `same_day_auto` \| `recorded_offset_unconfirmed` \| `timezone_unconfirmed` (an offset from the photos' recorded offset, or from the timezone, sent to photos-22 to be confirmed). |
+| `effective_time_anchor` | `""` \| object | no | `""` if unresolved; else `{ "offset_seconds": int, "source": … }` where source ∈ `manual` (a manual offset) \| `gpx_anchor_chosen` (a manual offset within `gpx_anchor_offset_spread_max_seconds` of one of a precise GPX proposal's `groups`) \| `gpx_anchor_accepted` \| `gpx_anchor_imprecise` (an accepted GPX proposal with `imprecise_seconds > 0`) \| `recorded_offset_accepted` \| `timezone_accepted` \| `same_day_accepted` \| `neighbour_day_accepted` (an accepted proposal of that kind) \| `gpx_anchor_auto` (a GPX proposal applied by itself, or kept from earlier) \| `as_recorded` (a phone's cell kept as its photos record themselves; no `offset_seconds`) \| `gps_time_auto` (two GPS fix times or more, applied by themselves) \| `gps_time_accepted` (an accepted GPS-time proposal) \| `same_day_auto` \| `recorded_offset_unconfirmed` \| `timezone_unconfirmed` (an offset from the photos' recorded offset, or from the timezone, sent to photos-22 to be confirmed). |
 | `conflicts_with` | array | no | Present when the camera's own GPS gave another offset the same day in another destination, farther off than `clock_offset_same_day_max_difference_seconds`, or where one of the two is a group of the camera's GPS the user picked (`gpx_anchor_chosen`): `[{ "destination", "bucket", "offset_seconds", "chosen" }]` — `chosen` is `true` where that other offset is one the user picked (`gpx_anchor_chosen`). An offset the GPS gave by itself (`gpx_anchor_auto`, `gpx_anchor_accepted`) takes no effect and the cell asks; a `gpx_anchor_chosen` one keeps its effect. Write `manual_offset_seconds` in the cell that is wrong — to take a cell's own proposal there, write its `proposed_offset_seconds` as `manual_offset_seconds` (the editor does so): `accept_proposal` there counts as what the GPS gave by itself and is withheld again. Two `gpx_anchor_chosen` offsets are never held against each other. |
+| `several_bodies` | `true` | no | On a cell of a camera group the configuration names several bodies (`camera_time_and_timezone_policy.several_bodies_groups`, §5d) whose proposal is from its GPS, or shared: the group may be several bodies, and the offset never applies itself — it is accepted or written. |
+| `clock_change` | object | no | Present where the camera's clock changed during the day: the photos its own GPS anchors (on the tracks, else by their fixes' times), in camera-time order, fall into two consecutive runs, each agreeing on an offset of its own — §4.4a. |
+| **`user_decision.accept_clock_change`** | bool | **yes** | On a cell with `clock_change` (or where it was answered): split the day where the clock changed — §4.4a. |
+| **`user_decision.accepted_change_offsets_seconds`** | `[int, int]` \| `""` | **yes** | The two runs' `offset_seconds` being accepted, in order — written with `accept_clock_change: true`. |
+| **`user_decision.first_after_change`** | string \| `""` | **yes** | Where `clock_change.between` lists photos: the camera time (`YYYY:MM:DD HH:MM:SS`) of the first photo after the change — one of theirs, or the second run's first. |
+| `clock_change_part` | object | no | On a part of a day split where its clock changed, keyed `<key>#1` or `<key>#2`: `{ "of": <the day's key>, "part": 1 \| 2, "from", "until" }` (camera times; `""` at an open end). Built by geotag from the day's acceptance — its offset `gpx_anchor_accepted` or `gps_time_accepted`; nothing of it is yours to write. |
+| `positions_contradicted` | list | no | On a camera's cell whose offset from its GPS self-anchor is in effect (`gpx_anchor_auto`, `gpx_anchor_accepted`, `gpx_anchor_chosen`) where the anchors conflict or tie or the offset is not the one proposed: the photos holding their own position that matched the tracks and that no pass agrees with the offset in effect. Each is set against the tracks in photos-23 (`own_position_contradicted`, §5.4). Never on a phone's cell or a group named several bodies. |
 | `anchored_by` | list | no | On a cell whose offset applied itself from GPS: the track files it was found from, each `{ "gpx_file", "sha256" }`. The offset is kept for later photos of the day (`decision_mode: "kept_from_earlier"`) only while each is under `gpx_root` unchanged and no newer GPS proposal says otherwise. |
 | `requires_user_input` | bool | no | `true` ⇔ `effective_time_anchor == ""`. (Containers carry no offset cells, so this is never softened here.) |
 | `stale_user_decision` | bool | no | `accept_proposal` is set but `accepted_offset_seconds` is no longer the offset proposed (another offset beyond the tolerance, or none proposed): kept as written, it takes no effect, nothing applies itself in its place, and the cell asks. |
@@ -250,8 +257,9 @@ destinations or buckets.
 
 **`proposal` shapes** (all read-only; this is the evidence the UI shows). Tried in order: the GPX
 self-anchor of the bucket's native-GPS frames; else the times their own GPS fixes recorded; else, when the
-camera's GPS fixed its clock that day in another destination, the same day elsewhere; else the offset the
-photos record; else the timezone-derived offset; else manual required.
+camera's GPS fixed its clock that day in another destination, the same day elsewhere; else, when it fixed it the day
+before or after in this destination, the day next to it; else the offset the photos record; else the
+timezone-derived offset; else manual required.
 
 - **GPX self-anchor** (`proposal_source: "gpx_self_anchor"`) — geotag matched the group's geotagged
   frames against GPX tracks:
@@ -334,6 +342,15 @@ photos record; else the timezone-derived offset; else manual required.
   be `recorded_offset`, `timezone_naive` or `manual_required`. Never another day's offset, never one written by hand
   unless it is a group of the camera's own GPS the user picked (the donor's source is `gpx_anchor_auto`,
   `gpx_anchor_accepted` or `gpx_anchor_chosen`, one that applied itself chosen first, then by path). Neither same-day source is drift-checked in photos-22.
+- **The day next to it** (`proposal_source: "neighbour_day"`) — no photo of a dated bucket (`<group>@<date>`) has its
+  own position, no same-day offset was shared, and the cell of the day before — else the day after — of the same
+  camera in this destination holds an offset its GPS gave (`gpx_anchor_auto`, `gpx_anchor_accepted`,
+  `gpx_anchor_chosen`, `gps_time_auto`, `gps_time_accepted`; of a day split at a clock change, the part next to this
+  day): `{ "proposal_source": "neighbour_day", "proposed_offset_seconds": int, "neighbour_day": { "day": "YYYY-MM-DD",
+  "bucket": "…" }, "confidence": "review_required" }`. It takes the place of a `recorded_offset`, `timezone_naive` or
+  `manual_required` proposal, whatever time lies between the two days' photos. Never applied by itself: accepted
+  (`accept_proposal` + `accepted_offset_seconds`, exactly the offset proposed), it takes effect as
+  `neighbour_day_accepted`, and the drift check (photos-22) asks it to be confirmed on the tracks.
 - **Manual required** (`proposal_source: "manual_required"`) — no signal: no anchor, no same-day offset,
   and no timezone-derived offset (no resolved timezone, no readable camera time, or a camera time the zone
   reads two ways); the human must enter a manual offset (or real UTC): `{ "proposal_source": "manual_required" }`.
@@ -345,6 +362,44 @@ photos record; else the timezone-derived offset; else manual required.
                             "case": "repeated",               // "repeated" | "skipped"
                             "offsets_seconds": [7200, 3600] } }  // the zone's UTC offset before the change, after it
   ```
+
+### 4.4a A day split where the camera's clock changed — `clock_change`
+
+A camera set to local time at lunch, or reset, has two offsets that day. Geotag sees it only from the camera's own
+GPS: where the day's photos with a position that anchor on the tracks — or, with no track, the readings of their
+fixes' times — do not agree, and, taken in camera-time order, cut in exactly one place into two runs, each agreeing on
+an offset of its own (a GPX consensus with no conflicting photo, no tie, no stay; fix-time readings within
+`gpx_anchor_offset_spread_max_seconds`), farther apart than that spread, the day's cell holds:
+
+```jsonc
+"clock_change": {
+  "evidence": "gpx_self_anchor",                   // or "gps_time"
+  "runs": [ { "offset_seconds": -3600, "photos": 3,
+              "first": { "source_file": "…", "camera_source_naive_time": "2024:07:03 09:00:00" },
+              "last":  { "source_file": "…", "camera_source_naive_time": "2024:07:03 10:00:00" } },
+            { "offset_seconds": -32400, "photos": 3, "first": { … }, "last": { … } } ],
+  "between": [ { "source_file": "…", "camera_source_naive_time": "2024:07:03 11:30:00" } ],   // no evidence of their own
+  "acceptance_tolerance_seconds": 120
+}
+```
+
+Offsets that go back and forth — three runs or more — are no change of the clock, and no `clock_change` is made; nor
+for a group named several bodies (§5d). The day's cell still asks for its offset as before; to split it, set
+`accept_clock_change: true` with `accepted_change_offsets_seconds` the two runs' offsets, and — only where `between`
+lists photos — `first_after_change`, the camera time of the first photo after the change (one of `between`, or the
+second run's first). The acceptance holds while each offset accepted is within `acceptance_tolerance_seconds` of its
+run's; `manual_offset_seconds` on the cell comes first. Holding, the day's cell holds
+`clock_change.effective_split` (`{ "first_after_change", "parts": ["<key>#1", "<key>#2"] }`), asks nothing, and its
+photos are read by the two parts beside it — `#1` the photos before that camera time, `#2` those from it — each an
+offset cell built from its own photos, its offset the one accepted for its run (`clock_change_part`). The key of the
+day's cell is the day's (bare or `@<date>`), so the answer follows its day as any other does, the parts keyed after
+it. An acceptance naming other offsets than the runs now give, or with no change proposed, is `stale_user_decision`
+and splits nothing; `first_after_change` outside the runs' gap asks again. A split day takes no part in the offsets
+shared within a day.
+
+**By hand:** in the day's cell, write the three fields as above, then re-run `geotag plan`. **In the editor:** the
+offset panel shows the two runs and **split the day where the clock changed**, then, where photos lie between, the
+choice of the first after the change.
 
 ### 4.5 A phone's day — a `smartphone` offset cell
 
@@ -496,7 +551,8 @@ One entry per file that needs the human (or that the human already locked/accept
 | `relative_path` | string | no | Workspace-relative path of the photo (e.g. `6-photos-by-dest/Japan/IMG_1.arw`). The editor's save names a review item by it. |
 | `content_fingerprint` | string \| null | no | The photo's identity. A decision is found again by it — through geotag's own rename of the photo — not by the path, within the photo's destination: moved to another folder (or its folder renamed), the photo is asked again. |
 | `tracks` | object | no | On a `no_reliable_gps_source` or `accepted_unlocated` photo that has a resolved time and that the tracks did not place: why. `reason` with its evidence: `no_tracks` (no track at all); `outside_track` + `seconds_from_track`; `track_gap` + `seconds_from_track` + `gap_seconds`, and `segment_break: true` when the gap is a break between two `<trkseg>` of the track (never bridged, however short); `track_jump` + `seconds_from_track` + `jump_meters`; `tracks_disagree` + `gpx_files` (the two tracks — each a file name, or `"<file> (track N)"` when both are tracks of one file) + `apart_meters`. Where several tracks miss, the one nearest in time speaks. |
-| `reason` | `"no_reliable_gps_source"` \| `"manual_locked"` \| `"accepted_unlocated"` | no | Why it's here (see below). |
+| `reason` | `"no_reliable_gps_source"` \| `"manual_locked"` \| `"accepted_unlocated"` \| `"own_position_contradicted"` | no | Why it's here (see below). |
+| `own_position`, `proposed_position`, `apart_meters` | object, object \| null, int \| null | no | On an `own_position_contradicted` item: the photo's own position `{lat, lon}`; where the tracks place it at its corrected time `{lat, lon, method, gpx_file}` (`null` only on an item kept for an answer while no track places it); and how far apart, in metres. |
 | **`user_decision.manual_lat`** | number \| `""` | **yes** | Human-entered latitude (set both). |
 | **`user_decision.manual_lon`** | number \| `""` | **yes** | Human-entered longitude. |
 | **`user_decision.accept_unlocated`** | bool | **yes** | Accept leaving this file with no GPS (taken only when neither the tracks nor the folder fallback place it). A file holding exactly latitude 0, longitude 0 — a device's no-fix value — has it removed, and the log records it. |
@@ -509,11 +565,21 @@ One entry per file that needs the human (or that the human already locked/accept
 - **`manual_locked`** — informational: a valid manual coordinate is already set. Editable (change/clear it).
 - **`accepted_unlocated`** — informational: `accept_unlocated` is set, so the file stays without GPS.
   Editable.
+- **`own_position_contradicted`** — a photo **with its own GPS position** that the camera's offset, agreed from its
+  other photos on the tracks, contradicts (listed in its photos-21 cell's `positions_contradicted`), and that lies more
+  than `gpx_anchor_max_point_distance_meters` from where the tracks place it at its corrected time — most likely a
+  wrong fix (jitter, a fix from minutes before). `requires_user_input: false`: the photo keeps its own position. To
+  replace it, set `manual_lat`/`manual_lon` — the editor's **take the track's position** writes `proposed_position`
+  — and it is written as `manual_locked`, the log keeping the position it replaced. Its `user_decision` holds only
+  those two (`accept_unlocated` there is a blocker: a photo with its own position is not left unlocated). An answered
+  item stays while its answer does. Never raised for a group named several bodies (§5d). A contradicted photo the
+  tracks place nowhere at its corrected time is not an item: it keeps its own position and is listed in its
+  destination's `gps_decisions.contradicted_without_track` (`[{ "relative_path", "content_fingerprint" }]`).
 
 (So resolving a `no_reliable_gps_source` item → after re-run it becomes `manual_locked` or
 `accepted_unlocated` with `requires_user_input: false` — or, with `accept_unlocated` and a folder fallback
 or track that now places it, it is placed and only counted. A photo with its own GPS is preserved and never
-listed. The editor's per-file to-do list is the `no_reliable_gps_source` items.)
+listed, but as `own_position_contradicted`. The editor's per-file to-do list is the `no_reliable_gps_source` items.)
 
 The record's top-level `track_disagreements` (read-only, present only when it happened) lists each pair of
 tracks that cover the same time in places farther apart than `gpx_tracks_agree_max_distance_meters`, and how
@@ -551,6 +617,7 @@ photo's own GPS pins — its `effective_time_anchor.source` is one of:
   recorded offset;
 - `gpx_anchor_imprecise` — an accepted GPX proposal whose track stood still at the photos' place
   (`imprecise_seconds > 0`): the GPS says where, not when;
+- `neighbour_day_accepted` — an accepted offset of the day next to it (`neighbour_day`): another day's clock;
 
 — and whose not-yet-corrected photos lie within `drift_check_track_window_seconds` of track points, by
 their resolved times or, none lying there, by the times the camera recorded read as UTC — exactly the case
@@ -596,8 +663,8 @@ appear. The `<bucket_key>` matches the photos-21 offset cell it refines — bare
 ```
 
 - `proposal.proposal_source` is the photos-21 cell's effective source — `manual`, `timezone_accepted`,
-  `timezone_unconfirmed`, `recorded_offset_accepted`, `recorded_offset_unconfirmed` or `gpx_anchor_imprecise`
-  (above). `current_offset_seconds` is the offset photos-21
+  `timezone_unconfirmed`, `recorded_offset_accepted`, `recorded_offset_unconfirmed`, `gpx_anchor_imprecise` or
+  `neighbour_day_accepted` (above). `current_offset_seconds` is the offset photos-21
   resolved.
 - `proposal.track_segment` is read-only evidence — the GPX points within `drift_check_track_window_seconds`
   (a setting; default 172800 s, two days) either side of the bucket's photos' resolved times, or, none lying
@@ -708,6 +775,37 @@ indent), every other setting keeping its value.
 
 ---
 
+## 5d. One camera or several bodies — `photos-00-config.json`
+
+Two bodies of one model that write no serial number are one camera group: nothing in their photos tells them apart.
+`camera_time_and_timezone_policy.several_bodies_groups`, beside `device_groups`, lists the fixed-clock camera groups
+that are several bodies — empty by default, every group one camera. Each key must be one `device_groups.fixed_clock_cameras`
+lists, and be named once; else every run refuses the configuration.
+
+```jsonc
+"camera_time_and_timezone_policy": {
+  "device_groups": { "fixed_clock_cameras": [ "Sony|ILCE-6400|" ], "phones": [] },
+  "several_bodies_groups": [ "Sony|ILCE-6400|" ],
+  …
+}
+```
+
+For a group so named, an offset from its GPS — its anchors on the tracks, its fixes' times, or the same day elsewhere —
+never applies itself: the cell carries `several_bodies: true` and waits for `accept_proposal` or
+`manual_offset_seconds`; it keeps no earlier offset by itself; its days in different destinations are decided apart (no
+`same_day_elsewhere` proposal, no `conflicts_with`). To tell the bodies apart, move one body's photos into a sub-folder
+and run prep again: each destination then has cells of its own.
+
+**By hand:** add the group's key to `several_bodies_groups`, or take it out, then re-run `geotag plan`.
+
+**In the editor:** the **Cameras** view lists each fixed-clock camera group of the photos under **Cameras with a
+hand-set clock**, each a cell `cameras.bodies[<key>]` with `user_decision.several_bodies` (`true` or `false`), never
+requiring input. Saving puts the key into `several_bodies_groups` or takes it out, under the workspace lock, only
+while `photos-00-config.json` is the file the editor loaded (by its SHA-256), and only if the configuration then
+passes every check `load_config` makes; the file is written again whole, every other setting keeping its value.
+
+---
+
 ## 6. Within-cell precedence (which `user_decision` field wins)
 
 A cell can carry more than one decision field; geotag applies them in a fixed order. The editor's
@@ -718,7 +816,9 @@ UI should make the *effective* choice obvious and ideally offer them as mutually
   takes effect only while the destination's photos do not contradict it unanswered (`contradicted_by`,
   `confirmed_despite_recorded_offsets`).
 - **Clock offset:** `manual_offset_seconds` (if set & valid; `gpx_anchor_chosen` when it is one of a precise
-  GPX proposal's groups, else `manual`) → `accept_proposal` (while `accepted_offset_seconds` is the offset
+  GPX proposal's groups, else `manual`) → `accept_clock_change` (while `accepted_change_offsets_seconds` are the
+  runs' offsets and, where `between` holds a photo, `first_after_change` places the change: the day split into its
+  parts; else the cell asks) → `accept_proposal` (while `accepted_offset_seconds` is the offset
   proposed; a stale acceptance stops here, the cell asking) → with no human input, in order: the GPX
   self-anchor applying itself under the policy flags (`gpx_anchor_auto`) → two GPS fix times or more applying
   themselves under `multi_anchor_auto_apply` (`gps_time_auto`) → the cell's earlier `gpx_anchor_auto`
@@ -788,7 +888,7 @@ A natural shape that satisfies the contract:
 
 **The save contract (this editor's server).** `GET /api/artifacts` returns `{ "workspace", "demo", "time",
 "drift", "gps", "execution", "cameras", "hashes" }` — the three decision records and photos-25 (`execution`) as
-loaded, the new camera groups (`cameras`, §5c), and in `hashes` (`{ "time", "drift", "gps", "execution", "cameras" }`)
+loaded, the new camera groups and the fixed-clock ones (`cameras.groups`, §5c; `cameras.bodies`, §5d), and in `hashes` (`{ "time", "drift", "gps", "execution", "cameras" }`)
 the SHA-256 of each record's bytes as read — `cameras` the configuration's — (`null` for a record that is absent).
 `POST /api/save` takes:
 
@@ -800,7 +900,8 @@ the SHA-256 of each record's bytes as read — `cameras` the configuration's —
   "gps":   [ { "dest": "…", "kind": "fallback" | "review", "path": "<relative_path, for review>",
                "user_decision": { … } } ],
   "execution": [ { "kind": "fingerprint", "path": "<relative_path of the mismatch>", "user_decision": { … } } ],
-  "cameras": [ { "kind": "camera", "key": "<camera group key>", "user_decision": { "device_class": "phones" } } ],
+  "cameras": [ { "kind": "camera", "key": "<camera group key>", "user_decision": { "device_class": "phones" } },
+               { "kind": "bodies", "key": "<camera group key>", "user_decision": { "several_bodies": true } } ],
   "hashes": { "time": "…", "drift": "…", "gps": "…", "execution": "…", "cameras": "…" }   // as the editor loaded them
 }
 ```

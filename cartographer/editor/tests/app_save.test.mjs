@@ -70,6 +70,25 @@ test("a new camera group: asked until classed as one of the two device_groups ar
   assert.deepEqual(p.cameras, [{ dest: undefined, kind: "camera", key, path: undefined, user_decision: { device_class: "fixed_clock_cameras" } }]);
 });
 
+test("a fixed-clock camera group: one camera or several bodies, a setting never waiting, saved under cameras by its key", () => {
+  const key = "Sony|ILCE-6400|", ref = { file: "cameras", kind: "bodies", key };
+  const work = { cameras: { groups: {}, bodies: { [key]: { files: 2, examples: ["6-photos-by-dest/A/1.arw"], identity: { Make: "Sony" },
+    user_decision: { several_bodies: false }, requires_user_input: false } } } };
+  app.state.work = work; app.state.base = JSON.parse(JSON.stringify(work));
+  assert.equal(app.cellAt(work, ref), work.cameras.bodies[key]);
+  assert.equal(app.cellAt(work, { ...ref, kind: "camera" }), null);   // not a question of class
+  assert.deepEqual(app.cellStatus(app.cellAt(work, ref)), ["ok", "resolved"]);
+  assert.equal(app.refInvalid(ref), false);
+  work.cameras.bodies[key].user_decision.several_bodies = true;
+  assert.equal(app.wouldResolve(ref), true);
+  assert.equal(app.isDirty(ref), true);
+  work.cameras.bodies[key].user_decision.several_bodies = "yes";
+  assert.equal(app.refInvalid(ref), true);                          // true or false, nothing else
+  work.cameras.bodies[key].user_decision.several_bodies = true;
+  const p = app.savePayload([ref], (r) => app.cellAt(app.state.work, r), { cameras: "c1" });
+  assert.deepEqual(p.cameras, [{ dest: undefined, kind: "bodies", key, path: undefined, user_decision: { several_bodies: true } }]);
+});
+
 test("a time changed since geotag wrote it: keep it or take back geotag's, the answer naming the time it is for", () => {
   const dest = "6-photos-by-dest/T", key = `${dest}/a.arw`, ref = { file: "time", dest, kind: "changed", key };
   const held = { DateTimeOriginal: "2024:07:03 14:45:00", OffsetTimeOriginal: "+02:00" };

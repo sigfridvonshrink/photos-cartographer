@@ -38,10 +38,28 @@ affordance.
 - **A GPS proposal's correction groups are choices**: each names its track file and the corrected date, and
   "use this" picks it in one click for every day bundled with it (the recommended group is "accept"). A tie
   between visits gets one line asking for the day the user was there, and photos agreeing with no group are
-  named — five at most — with how to read them: scattered, their own positions are off; the last of the
-  day, the camera's clock changed. Code site `offsetProposalBlock` / `groupChoice` / `proposalNotes` in
-  `web/app.js`, tested in `app_offset_buckets.test.mjs`.
+  named — five at most — with what geotag does with them: a clock change offered as a split of the day, else
+  their positions offered the track's in the GPS view, or for a group of several bodies the other body's. The
+  interim advice to move the photos after a clock change into a sub-folder went once geotag split the day and
+  reviewed contradicted positions itself (BACKLOG 15, 16). Code site `offsetProposalBlock` / `groupChoice` /
+  `proposalNotes` in `web/app.js`, tested in `app_offset_buckets.test.mjs` and `app_clock_change.test.mjs`.
 - **Per-date offset buckets**: grouped, collapsible, fan-out edit (#115).
+- **A contradicted own position is a review that waits on nothing**: the GPS worklist lists it beside the photos
+  nothing placed, both positions and the distance said, with **take the track's position** (writing it as
+  `manual_lat`/`manual_lon`) and **keep its own position** — no "leave unlocated", a photo with its own position not
+  being left without one. Code site `contradictedNote` / `takeTrackPosition` in `web/app.js`, tested in
+  `app_clock_change.test.mjs` (BACKLOG 16).
+- **A clock changed during the day is one tick on the day's row**: the offset panel names both runs and offers
+  "split the day where the clock changed"; where photos without GPS lie between the runs, a choice of which was the
+  first after the change (or none of them). The parts the split makes are never rows of their own — they are
+  geotag's, answered by the day's tick — and a day with a proposed change is never collapsed with other days. Code
+  site `clockChangeControls` / `clockChangeHolds` / `offsetGroups` in `web/app.js`, tested in
+  `app_clock_change.test.mjs` (BACKLOG 15).
+- **One camera or several bodies, in the Cameras view**: under the new groups, every fixed-clock camera group of the
+  photos is listed with two choices — one camera (the default), several bodies — saved into
+  `several_bodies_groups` like a new group's class, never a question that waits or opens the view. Why: the owner
+  ruled the setting answerable in the configuration and in the editor's camera view (BACKLOG 39). Code site
+  `renderBodies` / `bodiesControls` in `web/app.js`, tested in `app_save.test.mjs`.
 - **The true time of a photo sets the offset**: for a decision with no anchor frame, a fourth view of the
   self-set offset names the cell's representative photo (photos-21 `representative`, its earliest; with a
   thumbnail) and takes the time it was really taken, typed in the destination's zone (UTC with none); the

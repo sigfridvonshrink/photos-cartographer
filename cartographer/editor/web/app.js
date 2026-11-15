@@ -85,8 +85,9 @@ function cellAt(arts, ref) {
     const d = arts.drift?.destinations?.[ref.dest]; if (!d) return null;
     return d.drift_decisions?.[ref.key];
   }
-  if (ref.file === "cameras")                  // a camera group the configuration does not class, by its key
-    return arts.cameras?.groups?.[ref.key] || null;
+  if (ref.file === "cameras")                  // a camera group the configuration does not class, by its key; or a
+    // fixed-clock camera group, whether it is several bodies (BLD-editor_marks_several_bodies)
+    return (ref.kind === "bodies" ? arts.cameras?.bodies?.[ref.key] : arts.cameras?.groups?.[ref.key]) || null;
   if (ref.file === "execution")                // photos-25: a photo whose content changed after a write, by its path
     return (arts.execution?.fingerprint_mismatches || []).find((m) => m && m.relative_path === ref.path) || null;
   const d = arts.gps?.destinations?.[ref.dest]; if (!d) return null;
@@ -99,6 +100,7 @@ const baseCell = (ref) => cellAt(state.base, ref);
 function allRefs() {
   const out = [];
   for (const key of Object.keys(state.work.cameras?.groups || {})) out.push({ file: "cameras", kind: "camera", key });
+  for (const key of Object.keys(state.work.cameras?.bodies || {})) out.push({ file: "cameras", kind: "bodies", key });
   for (const [dest, d] of Object.entries(state.work.time?.destinations || {})) {
     out.push({ file: "time", dest, kind: "timezone" });
     for (const key of Object.keys(d.camera_group_time_decisions || {})) out.push({ file: "time", dest, kind: "offset", key });
@@ -132,6 +134,7 @@ function refInvalid(ref) {
   if (ref.kind === "drift") return !validOffset(u.corrected_offset_seconds);
   if (ref.kind === "fingerprint") return typeof u.accept_fingerprint_change !== "boolean";
   if (ref.kind === "camera") return !["", ...DEVICE_CLASSES].includes(u.device_class ?? "");
+  if (ref.kind === "bodies") return typeof u.several_bodies !== "boolean";
   if (ref.kind === "changed") return !["", ...CHANGED_ANSWERS].includes(u.keep ?? "");
   if (ref.kind === "fallback") return !validLat(u.fallback_lat) || !validLon(u.fallback_lon) || !bothOrNeither(u.fallback_lat, u.fallback_lon);
   return !validLat(u.manual_lat) || !validLon(u.manual_lon) || !bothOrNeither(u.manual_lat, u.manual_lon);
@@ -157,6 +160,7 @@ function offsetGroups(destCell) {
   const byGroup = new Map();
   for (const key of Object.keys(cells)) {
     const c = cells[key], g = c.camera_group || key;
+    if (c.clock_change_part) continue;                     // a part of a day split at a clock change: shown on its day
     if (!byGroup.has(g)) byGroup.set(g, []);
     byGroup.get(g).push({ key, cell: c, date: c.date || null });
   }
@@ -169,7 +173,8 @@ function offsetGroups(destCell) {
     const byProp = new Map();                              // cluster key → member buckets
     for (const b of buckets) {
       const u = b.cell.user_decision || {}, p = b.cell.proposal || {};
-      const udSig = `${u.accept_proposal === true ? 1 : 0}|${u.accepted_offset_seconds ?? ""}|${u.manual_offset_seconds ?? ""}`;
+      const udSig = `${u.accept_proposal === true ? 1 : 0}|${u.accepted_offset_seconds ?? ""}|${u.manual_offset_seconds ?? ""}` +
+        (b.cell.clock_change ? `|change:${b.key}` : "");      // a day whose clock changed is a row of its own
       const pk = `${udSig}@${"proposed_offset_seconds" in p ? p.proposed_offset_seconds : "none"}`;
       if (!byProp.has(pk)) byProp.set(pk, []);
       byProp.get(pk).push(b);
@@ -248,6 +253,7 @@ function wouldResolve(ref) {
   if (ref.kind === "offset")
     return (u.manual_offset_seconds !== "" && u.manual_offset_seconds != null && validOffset(u.manual_offset_seconds))
       || keepHolds(c)                                           // a phone kept as it records itself
+      || clockChangeHolds(c)                                    // the day split where its clock changed
       || (acceptHolds(c) && !p.far_from_evidence && !inConflict(c));   // far from all evidence, or one clock read two
                                                                 // ways the same day: an acceptance is withheld again
   if (ref.kind === "reading")
@@ -255,12 +261,14 @@ function wouldResolve(ref) {
   if (ref.kind === "unidentified") return unidentifiedHolds(ref.dest, c);
   if (ref.kind === "fingerprint") return mismatchAccepted(c);
   if (ref.kind === "camera") return DEVICE_CLASSES.includes(u.device_class);
+  if (ref.kind === "bodies") return typeof u.several_bodies === "boolean";   // a setting: either answer stands
   if (ref.kind === "changed") return changedHolds(c);
   if (ref.kind === "drift")                       // confirmed for this offset (zero-scrub or a valid correction)
     return driftConfirmHolds(c) && validOffset(u.corrected_offset_seconds);
   if (ref.kind === "fallback")
     return (u.fallback_lat !== "" && u.fallback_lat != null && u.fallback_lon !== "" && u.fallback_lon != null)
       || (!!u.accept_proposal && !!p.proposed_fallback);
+  if (c.reason === "own_position_contradicted") return true;      // its own position kept, or the one set for it
   return (u.manual_lat !== "" && u.manual_lat != null && u.manual_lon !== "" && u.manual_lon != null) || !!u.accept_unlocated;
 }
 function statusChip(ref) {
@@ -398,6 +406,11 @@ function previewEffective(ref) {
       return `${fmtOffset(u.manual_offset_seconds)} (${picked ? "GPS group, picked" : "manual"})`;
     }
     if (keepHolds(c)) return "as the phone records itself (its own GPS set aside)";
+    if (clockChangeHolds(c)) return `split where the clock changed: ${fmtOffset(c.clock_change.runs[0].offset_seconds)} before ` +
+      `${clockChangeAt(c)}, ${fmtOffset(c.clock_change.runs[1].offset_seconds)} from then`;
+    if (u.accept_clock_change && c.clock_change && !clockChangeHolds(c))
+      return (c.clock_change.between || []).length && !clockChangeAt(c) ? "— (say which photo was the first after the change)"
+        : "— (accepted another change — accept again)";
     if (acceptHolds(c) && p.far_from_evidence) return "— (accepting is not enough here — set the offset)";
     if (acceptHolds(c) && inConflict(c)) return "— (an acceptance is withheld here — take the offset as your own)";
     if (acceptHolds(c)) return `${fmtOffset(p.proposed_offset_seconds)} (accept proposal)`;
@@ -427,6 +440,9 @@ function previewEffective(ref) {
   if (ref.kind === "changed") return !changedHolds(c) ? (u.keep ? "— (answered for another time — answer again)" : "— (needs input)")
     : u.keep === "new" ? `keeps ${timePair(c.held_time)} — the true local time, no clock offset applied`
       : `geotag's time written back${c.geotag_wrote ? ` (${timePair(c.geotag_wrote)})` : ""}`;
+  if (ref.kind === "bodies") return u.several_bodies
+    ? "several bodies — written into several_bodies_groups: an offset from its GPS is always a proposal"
+    : "one camera — an offset its GPS agrees on applies itself as the configuration allows";
   if (ref.kind === "camera") return u.device_class === "phones" ? "a phone — written into device_groups.phones"
     : u.device_class === "fixed_clock_cameras" ? "a camera with a hand-set clock — written into device_groups.fixed_clock_cameras"
       : "— (needs input: geotag stops until it is classed)";
@@ -441,6 +457,7 @@ function previewEffective(ref) {
     return "— (optional)";
   }
   if (u.manual_lat !== "" && u.manual_lon !== "") return `${u.manual_lat}, ${u.manual_lon} (manual)`;
+  if (c.reason === "own_position_contradicted") return "its own position kept";
   if (u.accept_unlocated) return "left unlocated";
   return "— (needs a coordinate or accept-unlocated)";
 }
@@ -747,7 +764,10 @@ function renderCameras(list) {
   const cams = state.work.cameras;
   if (!cams || cams._error) return list.append(recordAbsent(cams, "photos-00-config.json"));
   const keys = Object.keys(cams.groups || {}).sort();
-  if (!keys.length) return list.append(el("div", { class: "empty" }, "Every camera group of the photos is classed in photos-00-config.json."));
+  if (!keys.length) {
+    list.append(el("div", { class: "empty" }, "Every camera group of the photos is classed in photos-00-config.json."));
+    return renderBodies(list);
+  }
   list.append(el("div", { class: "hint" }, "Geotag stops on a camera it has not met: say whether each is a phone (its clock set by the " +
     "network, its offset recorded with each photo) or a camera with a clock set by hand. Saving writes it into " +
     "photos-00-config.json (camera_time_and_timezone_policy.device_groups), as pasting geotag's lists would; then re-run `geotag plan`."));
@@ -759,6 +779,37 @@ function renderCameras(list) {
       el("span", { class: "label" }, who || key, el("span", { class: "sub" }, `  ${g.files} photo${g.files === 1 ? "" : "s"}`)),
       ...tags(ref), statusChip(ref)));
   }
+  renderBodies(list);
+}
+// Each fixed-clock camera group of the photos, one camera or several bodies of one model that write no serial
+// (camera_time_and_timezone_policy.several_bodies_groups, BLD-editor_marks_several_bodies): a setting, by default one
+// camera — never a question that waits. Saved like a new group's class, into photos-00-config.json.
+function renderBodies(list) {
+  const bodies = state.work.cameras?.bodies || {}, keys = Object.keys(bodies).sort();
+  if (!keys.length) return;
+  list.append(el("div", { class: "group-title" }, "Cameras with a hand-set clock"));
+  list.append(el("div", { class: "hint" }, "Two bodies of one model that write no serial are one group. Mark such a group as several " +
+    "bodies: an offset its GPS gives is then always a proposal, and its photos that disagree are not read as wrong positions. " +
+    "To tell the bodies apart, move one body's photos into a sub-folder and re-run prep."));
+  for (const key of keys) {
+    const g = bodies[key], ref = { file: "cameras", kind: "bodies", key };
+    const who = Object.values(g.identity || {}).join(" ");
+    list.append(el("div", { class: "row" + (isSel(ref) ? " sel" : ""), onclick: () => { state.selected = ref; render(); },
+        onmouseenter: (ev) => showHoverPreview((g.examples || [])[0], ev), onmousemove: moveHoverPreview, onmouseleave: hideHoverPreview },
+      el("span", { class: "label" }, who || key, el("span", { class: "sub" },
+        `  ${g.files} photo${g.files === 1 ? "" : "s"}${(g.user_decision || {}).several_bodies ? " · several bodies" : ""}`)),
+      ...tags(ref), statusChip(ref)));
+  }
+}
+function bodiesControls(ref) {
+  const c = workCell(ref), u = c.user_decision || {}, wrap = el("div", { class: "ctl-block" });
+  wrap.append(el("div", { class: "hint" }, `${c.files} photo${c.files === 1 ? "" : "s"} under photos by destination, e.g. ` +
+    `${(c.examples || []).map(leaf).join(", ")}.`));
+  const opt = (on, label) => el("div", { class: "off-opt" + (u.several_bodies === on ? " on" : ""), onclick: () => edit(ref, "several_bodies", on) },
+    el("span", { class: "off-dot" }, u.several_bodies === on ? "●" : "○"), el("span", {}, label));
+  wrap.append(opt(false, "one camera — the default"));
+  wrap.append(opt(true, "several bodies of one model — never apply an offset from its GPS by itself"));
+  return wrap;
 }
 function cameraControls(ref) {
   const c = workCell(ref), u = c.user_decision || {}, wrap = el("div", { class: "ctl-block" });
@@ -1027,6 +1078,7 @@ function controls(ref) {
     else if (refInvalid(ref)) wrap.append(el("div", { class: "err" }, `not a timezone of ${countryInfo(k.code)?.name || k.code}`));
   } else if (ref.kind === "offset") {
     for (const note of offsetCellNotes(c)) wrap.append(el("div", { class: "hint warn" }, note));
+    if (c.clock_change) wrap.append(clockChangeControls(ref));
     if (c.phone && keepOffered(c)) {
       // a phone's own reading kept, its GPS's finding set aside: the track was someone else's (BLD-phone_offset_cell)
       wrap.append(checkbox("keep this phone as its photos record themselves — its GPS here is wrong", !!u.keep_as_recorded,
@@ -1043,6 +1095,8 @@ function controls(ref) {
     wrap.append(mismatchControls(ref));
   } else if (ref.kind === "camera") {
     wrap.append(cameraControls(ref));
+  } else if (ref.kind === "bodies") {
+    wrap.append(bodiesControls(ref));
   } else if (ref.kind === "changed") {
     wrap.append(changedControls(ref));
   } else if (ref.kind === "fallback") {
@@ -1059,6 +1113,15 @@ function controls(ref) {
     if (authored) row.append(el("button", { class: "mini", title: "remove this folder fallback (back to none)",
       onclick: () => editMany(ref, { fallback_lat: "", fallback_lon: "", accept_proposal: false }) }, "clear"));
     wrap.append(row, coordField(ref));
+  } else if (c.reason === "own_position_contradicted") {
+    // a photo's own position its camera's agreed clock offset contradicts (BLD-contradicted_position): its own is
+    // kept unless the user takes the track's — or sets another — as manual_lat/lon (RUL-own_position_replaced_on_answer)
+    wrap.append(el("div", { class: "hint warn" }, contradictedNote(c)));
+    const pp = c.proposed_position;
+    if (pp) wrap.append(el("button", { class: "mini", onclick: () => editMany(ref, takeTrackPosition(c)) }, "take the track's position"));
+    wrap.append(coordField(ref));
+    if (u.manual_lat !== "" && u.manual_lat != null)
+      wrap.append(el("button", { class: "mini", onclick: () => editMany(ref, { manual_lat: "", manual_lon: "" }) }, "keep its own position"));
   } else {
     const note = tracksNote(c.tracks);
     if (note) wrap.append(el("div", { class: "hint" }, note));
@@ -1067,6 +1130,17 @@ function controls(ref) {
   }
   return wrap;
 }
+// What a review item of an own position its camera's agreed offset contradicts says (photos-23 own_position_contradicted):
+// the photo's own position, where the track puts it at its corrected time, and how far apart. Pure — unit-tested.
+function contradictedNote(c) {
+  const own = (c && c.own_position) || {}, pp = c && c.proposed_position;
+  const head = `This photo's own position (${own.lat}, ${own.lon}) agrees with none of its camera's other photos: the ` +
+    "offset they agree on puts it ";
+  if (!pp) return head + "where no track is now — its own position is kept, unless you set another.";
+  return head + `${c.apart_meters} m from where the track was then (${pp.lat}, ${pp.lon}, ${pp.method}, ${pp.gpx_file}). ` +
+    "Most likely its GPS was wrong — a stale fix, jitter — take the track's position; or keep its own.";
+}
+const takeTrackPosition = (c) => ({ manual_lat: c.proposed_position.lat, manual_lon: c.proposed_position.lon });
 // Why the tracks placed nothing for a photo (photos-23 review item `tracks`), in one line: the user's lead to
 // the cure — a track to add, a threshold, a track that is not theirs — before they reach for the map.
 function tracksNote(t) {
@@ -1324,8 +1398,8 @@ function driftMap(ref, frame, fi) {
 // decision" box for a GPS review item (the big map gets the rest of the panel). Null in demo mode or
 // for non-photo cells; for a multi-photo run, `ref.path` is the first photo.
 function decisionThumb(ref) {
-  const photo = ref.kind === "reading" || ref.kind === "changed" ? ref.key : ref.kind === "camera" ? (workCell(ref)?.examples || [])[0] : ref.path;
-  if (state.base.demo || !["review", "reading", "fingerprint", "camera", "changed"].includes(ref.kind) || !photo) return null;
+  const photo = ref.kind === "reading" || ref.kind === "changed" ? ref.key : ["camera", "bodies"].includes(ref.kind) ? (workCell(ref)?.examples || [])[0] : ref.path;
+  if (state.base.demo || !["review", "reading", "fingerprint", "camera", "bodies", "changed"].includes(ref.kind) || !photo) return null;
   const img = el("img", { class: "decision-thumb", alt: photo, title: photo.split("/").pop(),
     src: "/api/photo?path=" + encodeURIComponent(photo) });
   img.addEventListener("error", () => img.remove());
@@ -1474,6 +1548,14 @@ function offsetCellNotes(c) {
   }
   return out;
 }
+// A day with no anchor of its own offered the offset the camera's GPS gave the day before or after it here (photos-21
+// proposal_source "neighbour_day", BLD-neighbour_day_proposal): to accept, then checked in the Drift view. Pure.
+function neighbourDayNote(p) {
+  const n = (p && p.neighbour_day) || {};
+  return `No photo of this day has its own position, but the camera's GPS fixed its clock on ${fmtDate(n.day)} here: ` +
+    `${fmtOffset(p.proposed_offset_seconds)}. A camera's midnight in the middle of an outing splits it in two — accept it if ` +
+    "the clock was not set in between; the Drift view then checks it on the tracks.";
+}
 // Why the times the photos' own GPS fixes recorded say nothing of the clock here (gps_time_set_aside,
 // BLD-gps_time_proposal): a stale fix repeating its time, or readings that disagree.
 function gpsTimeAsideNote(a) {
@@ -1484,6 +1566,61 @@ function gpsTimeAsideNote(a) {
   const [lo, hi] = a.offsets_seconds || [];
   return `${n} here hold a GPS fix time, but they give offsets from ${fmtOffset(lo)} to ${fmtOffset(hi)} (e.g. ${leaf(a.example)}) — ` +
     "too far apart to be one clock — so the fixes' times are not read as the clock.";
+}
+// A camera's clock changed during the day (photos-21 clock_change, BLD-clock_change_split): its photos with their own
+// position fall into two runs, each agreeing on its own offset. The answer, on the day's cell: accept the split, naming
+// the two offsets accepted (accepted_change_offsets_seconds) — and, where photos with no GPS lie between the runs, which
+// of them was the first after the change (first_after_change, its camera time). Pure — unit-tested.
+const naiveMs = (s) => camNaiveMs(s);
+function clockChangeAt(c) {
+  const ch = (c && c.clock_change) || {}, u = (c && c.user_decision) || {}, runs = ch.runs || [];
+  if (runs.length !== 2) return "";
+  if (!(ch.between || []).length) return runs[1].first.camera_source_naive_time;
+  const at = naiveMs(u.first_after_change), lo = naiveMs(runs[0].last.camera_source_naive_time),
+    hi = naiveMs(runs[1].first.camera_source_naive_time);
+  return at != null && lo != null && hi != null && lo < at && at <= hi ? u.first_after_change : "";
+}
+function clockChangeHolds(c) {
+  const ch = c && c.clock_change, u = (c && c.user_decision) || {};
+  if (!ch || u.accept_clock_change !== true || (u.manual_offset_seconds !== "" && u.manual_offset_seconds != null)) return false;
+  const offs = u.accepted_change_offsets_seconds, tol = ch.acceptance_tolerance_seconds || 0;
+  return Array.isArray(offs) && offs.length === 2
+    && offs.every((o, i) => isNum(o) && Math.abs(o - ch.runs[i].offset_seconds) <= tol) && !!clockChangeAt(c);
+}
+// The decision fields of splitting the day (or not): accepting names the runs' offsets, and the first photo after the
+// change where one is asked; the day's own offset answers are cleared, a split replacing them.
+function clockChangeFields(c, on, first = "") {
+  const runs = ((c && c.clock_change) || {}).runs || [];
+  return on ? { accept_clock_change: true, accepted_change_offsets_seconds: runs.map((r) => r.offset_seconds),
+    first_after_change: first, accept_proposal: false, accepted_offset_seconds: "", manual_offset_seconds: "" }
+    : { accept_clock_change: false, accepted_change_offsets_seconds: "", first_after_change: "" };
+}
+function clockChangeControls(ref) {
+  const c = workCell(ref), u = c.user_decision || {}, ch = c.clock_change, wrap = el("div", { class: "pblock" });
+  const [a, b] = ch.runs, by = ch.evidence === "gps_time" ? "the times their GPS fixes recorded" : "their positions on the tracks";
+  wrap.append(el("h3", {}, "The camera's clock changed this day"));
+  wrap.append(el("div", { class: "hint warn" }, `By ${by}, ${a.photos} photo${a.photos === 1 ? "" : "s"} up to ${leaf(a.last.source_file)} ` +
+    `(${a.last.camera_source_naive_time}) give ${fmtOffset(a.offset_seconds)}, and ${b.photos} from ${leaf(b.first.source_file)} ` +
+    `(${b.first.camera_source_naive_time}) give ${fmtOffset(b.offset_seconds)}: the clock was set between them. Split the day there, ` +
+    "each part corrected by its own photos — or, if the clock did not change, answer the day's offset below."));
+  const on = u.accept_clock_change === true;
+  wrap.append(checkbox("split the day where the clock changed", on, (v) => { state.offsetEdit = null; editMany(ref, clockChangeFields(c, v, u.first_after_change || "")); }));
+  const between = ch.between || [];
+  if (on && between.length) {
+    wrap.append(el("div", { class: "hint" }, `${between.length} photo${between.length === 1 ? "" : "s"} without GPS lie between the two: ` +
+      "which was the first after the change?"));
+    const opts = [...between, { source_file: b.first.source_file, camera_source_naive_time: b.first.camera_source_naive_time, none: true }];
+    for (const o of opts) {
+      const sel = u.first_after_change === o.camera_source_naive_time;
+      wrap.append(el("div", { class: "off-opt" + (sel ? " on" : ""), onclick: () => edit(ref, "first_after_change", o.camera_source_naive_time) },
+        el("span", { class: "off-dot" }, sel ? "●" : "○"),
+        el("span", {}, o.none ? `none of them — ${leaf(o.source_file)} (${o.camera_source_naive_time}), the second run's first`
+          : `${leaf(o.source_file)} (${o.camera_source_naive_time})`)));
+    }
+  }
+  if (on && !clockChangeHolds(c)) wrap.append(el("div", { class: "hint warn" }, between.length && !clockChangeAt(c)
+    ? "Say which photo was the first after the change." : "Accepted for other offsets than the photos now give — accept again."));
+  return wrap;
 }
 // A phone's day kept as its photos record themselves (photos-21 user_decision.keep_as_recorded, BLD-phone_offset_cell):
 // offered, and holding, only where the cell's proposal is the phone's own GPS — its track anchor or its fixes' times.
@@ -1649,7 +1786,7 @@ function ambiguousTimeNote(a) {
   return `This camera's time ${t} falls at a daylight-saving change in ${a.timezone}: ${how}. Its offset is either ` +
     `${fmtOffset(-offs[0])} or ${fmtOffset(-offs[1])}, and no re-run of geotag plan will choose — set the offset yourself.`;
 }
-function proposalNotes(p) {
+function proposalNotes(p, cell) {
   const out = [], groups = p.groups || [];
   if (p.tied && groups.length) {
     const n = groups.filter((g) => g.count === groups[0].count).length;
@@ -1660,10 +1797,15 @@ function proposalNotes(p) {
     "check it on the track (Drift view), or set the offset you know.");
   const files = p.conflicting_files || [];
   if (files.length) {
+    // what geotag does with them: a clock change, proposed as a split of the day (BLD-clock_change_split); else, once
+    // the offset is in effect, their positions set against the tracks (BLD-contradicted_position)
     const shown = files.slice(0, 5).join(", ") + (files.length > 5 ? ` and ${files.length - 5} more` : "");
     out.push(`${files.length} photo${files.length === 1 ? "" : "s"} agree${files.length === 1 ? "s" : ""} with none of these: ${shown}. ` +
-      "Scattered, their own positions are off — accept; the last of the day, the camera's clock changed — move them " +
-      "into a sub-folder and re-run.");
+      (cell && cell.several_bodies ? "This group may be several bodies: they are likely another body's — set the offset of " +
+        "the one whose photos these are, and move the other body's photos into a sub-folder to give them offsets of their own."
+        : cell && cell.clock_change ? "The camera's clock changed during the day — see the split offered above."
+          : "Accept the offset most agree on: a photo whose own position it contradicts is then offered the track's " +
+            "position in the GPS view."));
   }
   return out;
 }
@@ -1703,12 +1845,15 @@ function offsetProposalBlock(ref, p) {
         ? "one fix only: a stale one repeats an earlier time — accept it if the photo's corrected time is right."
         : "the fixes' times all differ and agree: applied by itself."));
   }
+  if (p.proposal_source === "neighbour_day") return el("div", { class: "pblock" },
+    el("h3", {}, "Proposal — the day next to it"), el("div", { class: "prop-head" }, fmtOffset(p.proposed_offset_seconds)),
+    el("div", { class: "hint" }, neighbourDayNote(p)));
   if (p.proposal_source !== "gpx_self_anchor") return jsonBlock("Proposal", p);
   const tz = previewTz(ref.dest)?.tz;
   const wrap = el("div", { class: "pblock" }, el("h3", {}, "Proposal — suggested clock correction"),
     el("div", { class: "prop-head" }, fmtOffset(p.proposed_offset_seconds),
       el("span", { class: "muted" }, ` (${p.confidence}; ${p.anchor_count} geotagged photo${p.anchor_count === 1 ? "" : "s"})`)));
-  for (const note of proposalNotes(p)) wrap.append(el("div", { class: "hint warn" }, note));
+  for (const note of proposalNotes(p, workCell(ref))) wrap.append(el("div", { class: "hint warn" }, note));
   const groups = p.groups || [];
   const u = workCell(ref)?.user_decision || {}, picked = chosenOffset(p, u);
   for (const g of groups.slice(0, 3)) {
@@ -1757,9 +1902,10 @@ function renderPanel() {
     : ref.kind === "drift" ? `Drift · ${c.camera_group || ref.key}`
     : ref.kind === "fingerprint" ? "Content changed after a write"
     : ref.kind === "camera" ? "A new camera group"
+    : ref.kind === "bodies" ? "One camera, or several bodies"
     : ref.kind === "review" ? (multi ? `GPS review · ${ref.peers.length} photos` : "GPS review item")
       : ref.kind === "fallback" ? "Folder fallback" : "Timezone";
-  p.append(el("h2", {}, title), el("div", { class: "path" }, ref.path || (["reading", "camera", "changed"].includes(ref.kind) ? ref.key : ref.dest)));
+  p.append(el("h2", {}, title), el("div", { class: "path" }, ref.path || (["reading", "camera", "bodies", "changed"].includes(ref.kind) ? ref.key : ref.dest)));
   const head = el("div", { class: "pblock" }, ...(statusChip(ref) ? [statusChip(ref)] : []), ...tags(ref));
   // A multi-cell ref edits several siblings at once — say so. Offset cluster → which days; review run → how many.
   if (ref.kind === "offset" && multi) {
@@ -1777,7 +1923,7 @@ function renderPanel() {
   if (isDirty(ref)) head.append(el("button", { class: "mini", onclick: () => resetRef(ref) }, "reset"));
   // Fixed top: title + status + the decision controls + the effective preview — always visible, no scroll.
   const top = el("div", { class: "panel-top" },
-    el("h2", {}, title), el("div", { class: "path" }, ref.path || (["reading", "camera", "changed"].includes(ref.kind) ? ref.key : ref.dest)), head,
+    el("h2", {}, title), el("div", { class: "path" }, ref.path || (["reading", "camera", "bodies", "changed"].includes(ref.kind) ? ref.key : ref.dest)), head,
     el("div", { class: "pblock" }, el("h3", {}, "Your decision"), decisionThumb(ref), controls(ref)),
     el("div", { class: "pblock eff" }, el("h3", {}, "Effective (advisory — re-run to apply)"), el("div", { class: "eff-val" }, previewEffective(ref))));
   // Scroll area, the only thing that scrolls. For a GPS coord cell the MAP comes first — directly under
@@ -1788,7 +1934,7 @@ function renderPanel() {
   if (isGpsCoord) scroll.append(mapBlock(ref));   // the review photo is now a thumbnail in "Your decision" + a hover preview in the worklist
   // No raw "Proposal" JSON box for fallback — the inherited proposal is already shown in the
   // "accept inherited (lat, lon)" checkbox label, so the JSON dump was redundant clutter.
-  if (c.proposal && ref.kind !== "drift" && ref.kind !== "fallback" && ref.kind !== "reading" && ref.kind !== "fingerprint" && ref.kind !== "camera")
+  if (c.proposal && ref.kind !== "drift" && ref.kind !== "fallback" && ref.kind !== "reading" && ref.kind !== "fingerprint" && ref.kind !== "camera" && ref.kind !== "bodies")
     scroll.append(ref.kind === "offset" ? offsetProposalBlock(ref, c.proposal) : jsonBlock("Proposal", c.proposal));
   p.replaceChildren(top, scroll);
 }
@@ -1914,6 +2060,7 @@ export {
   offsetGroups, dateRange, fmtDate, peerKeys, parseLatLon, coordText, contiguousRange,
   groupChoice, chosenOffset, inConflict, proposalTaken, proposalNotes, driftConfirmHolds, driftConfirmFields, driftCorrectionFields, driftTracksHold, driftStaleReason, acceptFields, acceptHolds, tracksNote,
   zoneContradiction, offsetCellNotes, zoneSpokenFor, zoneDespiteFields, effectiveCountry, clearCountriesInside,
+  clockChangeHolds, clockChangeAt, clockChangeFields, contradictedNote, takeTrackPosition, neighbourDayNote,
   scrubOffset, scrubSeedIndex, mapKeyFor, savePayload,
   ambiguousTimeNote, gpsTimeAsideNote, zoneOffer, validReading, keepHolds, keepFields, keepOffered, phoneNote,
   trueInstant, parseUtcOff, mismatchAccepted, recordAbsentText, DEVICE_CLASSES, changedHolds, changedFields, changedKeepLabel, keptTagNote, unidentifiedHolds, unidentifiedFields, loadRefusal, hasUnsavedEdits, utcOff,

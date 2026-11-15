@@ -119,6 +119,15 @@ into `camera_time_and_timezone_policy.device_groups` in `photos-00-config.json` 
 the printed lists, every other setting left as it is — then re-run `geotag plan`. Pasting by hand still
 works as before.
 
+Below them, under **Cameras with a hand-set clock**, the view lists every camera with a hand-set clock among your
+photos, each **one camera** (the default) or **several bodies**. Two bodies of one model that write no serial number
+are one camera group: nothing in their photos tells them apart. Mark such a group as several bodies and an offset
+its GPS gives is always a proposal for you to accept, noted as perhaps one body's; its days in different
+destinations are decided apart; and its photos that disagree with the offset are never offered as wrong positions.
+To tell the bodies apart, move one body's photos into a sub-folder and re-run prep — each folder then has offsets
+of its own. Save writes the group into `camera_time_and_timezone_policy.several_bodies_groups` (or takes it out);
+by hand, edit that list.
+
 ---
 
 ## Time view
@@ -203,10 +212,19 @@ What the proposal panel shows depends on where the offset came from:
     the day you were there;
   - **the tracks stood still** — the GPS says where the photos were but not when; the offset shown is
     one that fits. Accepting it sends it through the Drift view to check;
-  - **photos that agree with no group** — named. Scattered, their own positions are off: accept. The last
-    of the day: the camera's clock changed — move them into a sub-folder and re-run.
+  - **photos that agree with no group** — named. Where they come one after the other at one end of the day,
+    the camera's clock changed: the split is offered (below). Otherwise accept the offset most agree on: a photo
+    whose own position it contradicts is then offered the track's position in the GPS view. For a group marked
+    several bodies, they are likely the other body's: move that body's photos into a sub-folder.
 
   Photos skipped for having a track only outside the plausible time window, or none nearby, are counted.
+- **The camera's clock changed this day** — the camera's GPS (on the tracks, or its fixes' times) shows two runs of
+  photos, one after the other, each agreeing on an offset of its own: the clock was set between them (to local time
+  at lunch, say). The panel names both runs and offers **split the day where the clock changed** — one tick settles
+  the day, each part corrected by its own photos. Where photos without GPS lie between the two runs, pick which was
+  the first after the change (or "none of them"). If the clock did not change, answer the day's offset as usual
+  instead. By hand: `accept_clock_change`, `accepted_change_offsets_seconds` and `first_after_change` in the day's
+  cell.
 - **From the GPS fixes' own times** — no track passes the photos' places, but their GPS fixes recorded
   the UTC they were taken at: each, less the camera time, is a reading of the offset. The panel lists a few
   ("camera 10:00:00 · fix 00:59:30Z → −9h 00m 30s"). Two or more that agree applied themselves (status
@@ -223,6 +241,10 @@ What the proposal panel shows depends on where the offset came from:
   by hand, write the same. A group you picked from the camera's GPS is held against an offset its GPS fixed by
   itself elsewhere that day the same way: if they differ, both are shown and the one fixed by itself
   waits for you, while your pick keeps its effect.
+- **The day next to it** — no photo of this day has its own position here, but the camera's GPS fixed its clock the
+  day before (or after) in this destination: its midnight fell mid-outing, say. **accept proposal** if the clock was
+  not set in between; the Drift view then asks you to confirm it on the tracks, as any offset this day's own GPS does
+  not support.
 - **The offset the photos record** — no GPS evidence, but the camera wrote, with each photo's time, the
   UTC offset its clock was set to, and they all agree (e.g. "2 photos record +01:00 from UTC"): the clock
   offset is its negative. Accept it only if the camera's time was right in that zone — a clock set to the
@@ -370,6 +392,14 @@ your lead to the fix before you reach for the map:
 - **tracks disagree** — two track files (or two tracks in one file) cover that time in places too far
   apart, and nothing says which one the camera was with. Take the track that isn't this trip's out of the
   tracks folder and re-run.
+
+**An own position the camera's offset contradicts.** A photo with its own GPS position that agrees with none of
+its camera's other photos, once their agreed offset is in effect, is set against the track at its corrected time:
+farther apart than an anchor may be, it is listed (`own_position_contradicted`), with both positions and how far
+apart. It **asks nothing** — the photo keeps its own position — but most likely its GPS was wrong (a stale fix,
+jitter): **take the track's position**, or set another; **keep its own position** takes it back. By hand: write
+`manual_lat`/`manual_lon`. Where no track covers its corrected time, nothing is proposed: it keeps its own, and
+photos-23 notes it (`contradicted_without_track`).
 
 **Placing individual photos** on the map beside the photo (a thumbnail sits in the decision box; hover a
 name in the worklist for a larger preview):

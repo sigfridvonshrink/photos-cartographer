@@ -420,6 +420,38 @@ def test_save_classes_a_new_camera_group_into_the_configuration(tmp_path):
     assert res3["ok"] is False and serve.CONFIG_NAME in res3["error"]
 
 
+@pytest.mark.spec("RUL-editor_marks_several_bodies", "BLD-editor_marks_several_bodies", "RUL-every_question_in_editor",
+                  "RUL-every_question_answerable_by_hand",
+                  test="TST-serve-names_a_camera_group_several_bodies_in_the_configuration")
+def test_save_names_a_camera_group_several_bodies_in_the_configuration(tmp_path):
+    """The editor lists each fixed-clock camera group of the photos with whether the configuration names it several
+    bodies — never a question that waits — and its save puts the group into `several_bodies_groups`, or takes it out,
+    under the lock, over the configuration it loaded, that setting and no other. A group that is no fixed-clock camera
+    of the photos, or an answer that is not true or false, is refused."""
+    ws, cfg = _camera_workspace(tmp_path)
+    loaded = serve._load_artifacts(ws)
+    bodies = loaded["cameras"]["bodies"]
+    assert list(bodies) == ["Canon|EOS"]                            # the new phone group is a question, not a body
+    assert bodies["Canon|EOS"]["user_decision"] == {"several_bodies": False}
+    assert bodies["Canon|EOS"]["requires_user_input"] is False and bodies["Canon|EOS"]["files"] == 1
+    edit = {"kind": "bodies", "key": "Canon|EOS", "user_decision": {"several_bodies": True}}
+    for bad in (dict(edit, key="Apple|iPhone 15"), dict(edit, user_decision={"several_bodies": "yes"})):
+        res = serve._save(ws, {"cameras": [bad], "hashes": loaded["hashes"]})
+        assert res["ok"] is False
+    res = serve._save(ws, {"cameras": [edit], "hashes": loaded["hashes"]})
+    assert res["ok"] is True and res["written"] == [serve.CONFIG_NAME]
+    path = os.path.join(ws, serve.CONTROL, serve.CONFIG_NAME)
+    after = json.load(open(path))
+    assert after["camera_time_and_timezone_policy"]["several_bodies_groups"] == ["Canon|EOS"]
+    after["camera_time_and_timezone_policy"]["several_bodies_groups"] = []
+    assert after == cfg                                                # that setting, and no other
+    again = serve._load_artifacts(ws)
+    assert again["cameras"]["bodies"]["Canon|EOS"]["user_decision"] == {"several_bodies": True}
+    res = serve._save(ws, {"cameras": [dict(edit, user_decision={"several_bodies": False})], "hashes": again["hashes"]})
+    assert res["ok"] is True
+    assert json.load(open(path))["camera_time_and_timezone_policy"]["several_bodies_groups"] == []
+
+
 @pytest.mark.spec("RUL-editor_classes_camera_group", "BLD-editor_writes_device_groups",
                   test="TST-serve-a_class_given_moves_a_group_listed_twice_and_is_checked")
 def test_a_class_given_moves_a_group_listed_in_both_arrays_and_the_result_is_checked(tmp_path):

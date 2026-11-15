@@ -457,8 +457,9 @@ camera's own clock — a container destination, holding no photo, having none.
 
 Each offset SHALL be proposed only from that camera's own positions on that day — in that destination, else in
 another ({need}`RUL-offset_shared_within_day`) — or from the offset its photos there record with their times
-({need}`RUL-recorded_offset_proposed`), or from the destination's timezone; never from another day's offset, nor from
-one the user wrote or accepted on a guess in another destination.
+({need}`RUL-recorded_offset_proposed`), or from the destination's timezone; never from another day's offset — save the
+one its own GPS gave the day before or after, as {need}`RUL-neighbour_day_offset_proposed` proposes it — nor from one
+the user wrote or accepted on a guess in another destination.
 :::
 
 :::{rul} A day's offset is the camera's wherever its photos were sorted
@@ -495,6 +496,64 @@ of the timezone's.
 
 Geotag SHALL NOT propose a camera's clock offset of a day in a destination from the offsets its photos there record
 with their times where they record different ones.
+:::
+
+:::{rul} A day with no anchor is offered the day next to it
+:id: RUL-neighbour_day_offset_proposed
+:status: ruled
+:criticality: high
+:verify: required
+:refines: RUL-offset_per_camera_destination_day
+:uses: DEF-clock_offset
+
+A camera's day in a destination with no anchor of its own, and no offset from the same day elsewhere, SHALL be proposed
+the offset of the day before or after of the same camera in the same destination, where that day's offset was anchored
+by the camera's own GPS.
+:::
+
+:::{rul} A neighbouring day's offset waits for the user's acceptance
+:id: RUL-neighbour_day_offset_needs_acceptance
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+:refines: RUL-neighbour_day_offset_proposed
+:uses: DEF-decision
+
+An offset proposed from a neighbouring day SHALL NOT take effect until the user accepts it.
+:::
+
+:::{rul} A neighbouring day's offset is checked against the tracks
+:id: RUL-neighbour_day_offset_drift_checked
+:status: ruled
+:criticality: high
+:verify: required
+:refines: RUL-neighbour_day_offset_needs_acceptance
+:uses: RUL-unanchored_offset_confirmed
+
+An accepted offset from a neighbouring day SHALL be confirmed against the tracks, as any offset the day's own GPS does
+not support is.
+:::
+
+:::{rul} No bound is set on the time between the two days
+:id: RUL-neighbour_day_no_gap_bound
+:status: ruled
+:criticality: med
+:verify: required
+:refines: RUL-neighbour_day_offset_proposed
+
+A neighbouring day's offset SHALL be proposed however much time lies between its photos and the day's.
+:::
+
+:::{rul} The day stays the unit
+:id: RUL-neighbour_day_keeps_its_cell
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+:refines: RUL-neighbour_day_offset_proposed
+
+A day proposed its neighbour's offset SHALL NOT be joined to its neighbour: it keeps a decision of its own.
 :::
 
 :::{rul} A shared offset applies itself only where it did there
@@ -588,6 +647,110 @@ A container destination's decisions SHALL never wait for the user.
 :uses: DEF-destination
 
 An answer given for a camera's day in a destination SHALL stay that day's answer when photos of another day arrive there or leave.
+:::
+
+:::{rul} A day split at a time is decided in parts
+:id: RUL-day_split_into_parts
+:status: ruled
+:criticality: high
+:verify: required
+:refines: RUL-offset_per_camera_destination_day
+:uses: DEF-clock_offset
+
+A camera's day in a destination, once split at a time, SHALL be decided as consecutive parts, each of its photos taking
+the offset of the part its camera time falls in.
+:::
+
+:::{rul} A clock changed during the day is proposed as a split
+:id: RUL-clock_change_split_proposed
+:status: ruled
+:criticality: high
+:verify: required
+:refines: RUL-day_split_into_parts
+:uses: DEF-camera_group, DEF-tracks
+
+Where the photos of a camera's day in a destination that its own GPS anchors form, in camera-time order, two
+consecutive runs, each agreeing within itself on an offset of its own, geotag SHALL propose splitting the day at the
+change between them.
+:::
+
+:::{rul} A change of the clock is seen only from the camera's GPS
+:id: RUL-clock_change_needs_gps
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+:refines: RUL-clock_change_split_proposed
+
+Geotag SHALL NOT find a change of a camera's clock within a day but from the camera's own GPS evidence of its photos'
+true time — their positions on the tracks, or the times their fixes recorded — never from the photos alone.
+:::
+
+:::{rul} Offsets that go back and forth are no change of the clock
+:id: RUL-alternating_runs_no_clock_change
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+:refines: RUL-clock_change_split_proposed
+
+A day whose anchored photos, in camera-time order, form three runs or more SHALL NOT be proposed a split.
+:::
+
+:::{rul} A split waits for the user's acceptance
+:id: RUL-clock_change_needs_acceptance
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+:refines: RUL-clock_change_split_proposed
+:uses: DEF-decision
+
+A proposed split of a camera's day SHALL NOT take effect until the user accepts it.
+:::
+
+:::{rul} A split is accepted once
+:id: RUL-clock_change_accepted_once
+:status: ruled
+:criticality: med
+:verify: required
+:refines: RUL-clock_change_needs_acceptance
+
+An accepted split of a camera's day SHALL put the offset of each of its parts into effect with no further answer.
+:::
+
+:::{rul} Each part is anchored by its own photos
+:id: RUL-clock_change_parts_own_evidence
+:status: ruled
+:criticality: high
+:verify: required
+:refines: RUL-clock_change_accepted_once
+
+Each part of a day split at a change of the clock SHALL take its offset from its own anchored photos.
+:::
+
+:::{rul} The photos between the runs are asked where the change fell
+:id: RUL-clock_change_first_after_asked
+:status: ruled
+:criticality: high
+:verify: required
+:refines: RUL-clock_change_accepted_once
+:uses: DEF-decision
+
+Where photos with no evidence of their own lie between the last photo of one run and the first of the other, a split
+SHALL NOT take effect until the user says which of them was the first after the change.
+:::
+
+:::{rul} With no photo between the runs, nothing is asked of the change
+:id: RUL-clock_change_first_after_not_asked
+:status: ruled
+:criticality: med
+:anti: yes
+:verify: required
+:refines: RUL-clock_change_first_after_asked
+
+Where no photo lies between the runs, an accepted split SHALL NOT ask where the change fell: the second part begins at
+the first photo of the second run.
 :::
 
 
@@ -963,6 +1126,80 @@ counted in one.
 :refines: RUL-unknown_group_stops_geotag
 
 Geotag SHALL NOT plan while the configuration classes a camera group as both a phone and a camera.
+:::
+
+:::{rul} The configuration says which camera groups are several bodies
+:id: RUL-several_bodies_named_by_configuration
+:status: ruled
+:criticality: high
+:verify: required
+:uses: DEF-camera_group, DEF-configuration
+
+The configuration SHALL name the camera groups that are several bodies of one camera, a group it does not name being
+one camera.
+:::
+
+:::{rul} An offset from the GPS of several bodies never applies itself
+:id: RUL-several_bodies_offset_never_auto
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+:refines: RUL-several_bodies_named_by_configuration
+:uses: DEF-clock_offset, DEF-decision
+
+A clock offset proposed from the GPS of a camera group the configuration names several bodies SHALL NOT take effect
+without the user's answer.
+:::
+
+:::{rul} The proposal says the group may be several bodies
+:id: RUL-several_bodies_noted
+:status: ruled
+:criticality: med
+:verify: required
+:refines: RUL-several_bodies_offset_never_auto
+
+A clock offset proposed from the GPS of a camera group the configuration names several bodies SHALL be recorded with
+the note that the group may be several bodies.
+:::
+
+:::{rul} The bodies' days in different destinations are decided apart
+:id: RUL-several_bodies_days_apart
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+:refines: RUL-several_bodies_named_by_configuration
+:uses: RUL-offset_shared_within_day
+
+A day of a camera group the configuration names several bodies SHALL NOT take, nor be held against, the offset the
+group's GPS gave that day in another destination: the bodies are told apart by the destinations their photos are
+sorted into.
+:::
+
+:::{rul} Several bodies are never split at a change of the clock
+:id: RUL-several_bodies_no_clock_change_split
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+:refines: RUL-several_bodies_named_by_configuration
+:uses: RUL-clock_change_split_proposed
+
+Geotag SHALL NOT propose splitting a day of a camera group the configuration names several bodies.
+:::
+
+:::{rul} The disagreeing photos of several bodies are not wrong positions
+:id: RUL-several_bodies_positions_not_doubted
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+:refines: RUL-several_bodies_named_by_configuration
+:uses: RUL-contradicted_position_reviewed
+
+Geotag SHALL NOT read the photos of a camera group the configuration names several bodies that disagree with its clock
+offset as holding wrong positions.
 :::
 
 
@@ -1545,7 +1782,68 @@ for.
 :anti: yes
 :verify: required
 
-Geotag SHALL never replace a photo's own GPS position.
+Geotag SHALL never replace a photo's own GPS position — save on the user's answer, where its camera's agreed clock
+offset contradicts it ({need}`RUL-own_position_replaced_on_answer`).
+:::
+
+:::{rul} An own position the agreed offset contradicts is replaced only on the user's answer
+:id: RUL-own_position_replaced_on_answer
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+:refines: RUL-own_position_kept
+:uses: DEF-clock_offset, DEF-decision
+
+A photo's own GPS position SHALL be replaced only by a position the user sets for it, and only where its camera's
+clock offset, agreed from its own GPS, contradicts that position.
+:::
+
+:::{rul} An own position the agreed offset contradicts is offered the track's
+:id: RUL-contradicted_position_reviewed
+:status: ruled
+:criticality: high
+:verify: required
+:refines: RUL-own_position_replaced_on_answer
+:uses: DEF-tracks
+
+A photo whose own position its camera's agreed clock offset contradicts, lying farther than the anchor distance from
+where the tracks place it at its corrected time, SHALL be a GPS review item proposing that place.
+:::
+
+:::{rul} The contradicted photo keeps its own position unless the user takes another
+:id: RUL-contradicted_position_kept_unless_taken
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+:refines: RUL-contradicted_position_reviewed
+
+A review of a photo's own position its camera's agreed clock offset contradicts SHALL NOT wait for the user: the photo
+keeps its own position until the user sets another.
+:::
+
+:::{rul} With no track, the contradicted photo keeps its own, noted
+:id: RUL-contradicted_position_without_track_noted
+:status: ruled
+:criticality: med
+:verify: required
+:refines: RUL-contradicted_position_reviewed
+
+A photo whose own position its camera's agreed clock offset contradicts, at a corrected time where no track places it,
+SHALL keep its own position, noted in the GPS decisions.
+:::
+
+:::{rul} A replaced own position is logged with what it replaced
+:id: RUL-replaced_own_position_logged
+:status: ruled
+:criticality: high
+:verify: required
+:refines: RUL-own_position_replaced_on_answer
+:uses: RUL-cause_locatable
+
+A photo's own position replaced on the user's answer SHALL be recorded in the workspace's record with the position it
+replaced.
 :::
 
 :::{rul} A position at latitude 0 and longitude 0 is none

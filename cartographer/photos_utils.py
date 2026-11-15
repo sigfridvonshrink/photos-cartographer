@@ -147,6 +147,10 @@ CONFIG = {
             "phones": [],
             "fixed_clock_cameras": []
         },
+        # Fixed-clock camera groups that are several bodies — two of one model writing no serial
+        # (BLD-several_bodies_groups). An offset its GPS gives never applies itself, and its photos that
+        # disagree with it are never read as wrong positions. Empty: every group is one camera.
+        "several_bodies_groups": [],
         "single_anchor_auto_apply": False,
         "multi_anchor_auto_apply": True
     },
@@ -2020,6 +2024,20 @@ def validate_config(cfg: dict, workspace_root: str = None):
                     if not isinstance(lst, list) or not all(isinstance(x, str) for x in lst):
                         raise ValueError(f"config: camera_time_and_timezone_policy.device_groups.{gk} "
                                          f"must be a list of strings.")
+        if "several_bodies_groups" in pol:
+            # the camera groups that are several bodies (BLD-several_bodies_groups): each a fixed-clock camera
+            # group, named once — a phone is solved photo by photo, and has no day's offset for bodies to share
+            sb = pol["several_bodies_groups"]
+            where = "config: camera_time_and_timezone_policy.several_bodies_groups"
+            if not isinstance(sb, list) or not all(isinstance(x, str) and x for x in sb):
+                raise ValueError(f"{where} must be a list of camera group keys.")
+            if len(set(sb)) < len(sb):
+                raise ValueError(f"{where} names a camera group twice.")
+            fixed = set((dg or {}).get("fixed_clock_cameras") or []) if isinstance(dg, dict) else set()
+            stray = [k for k in sb if k not in fixed]
+            if stray:
+                raise ValueError(f"{where} names {stray[0]!r}, which device_groups.fixed_clock_cameras does not "
+                                 "list: only a camera with a clock set by hand can be several bodies.")
 
 
 def _check_gpx_root_outside(cfg, workspace_root):

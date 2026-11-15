@@ -399,8 +399,8 @@ become — the defaults serving only to seed a new workspace.
 :verify: required
 
 The configuration SHALL be written only when prep seeds it, when the user edits it by hand, by the library setup and by
-the decision editor's classing of a camera group, below — never by geotag, and never by merge's planning, dry run or
-execution.
+the decision editor's classing of a camera group and its naming of one as several bodies, below — never by geotag, and
+never by merge's planning, dry run or execution.
 :::
 
 :::{rul} The library setup records one setting
@@ -426,6 +426,19 @@ library this workspace merges into — that setting, and no other.
 
 The decision editor, given by the user the class of a camera group the configuration does not class — a phone, or a
 camera with a fixed clock — MAY record that class in the configuration: that setting, and no other.
+:::
+
+:::{rul} The decision editor records whether a camera group is several bodies, and nothing else
+:id: RUL-editor_marks_several_bodies
+:status: ruled
+:criticality: med
+:anti: yes
+:verify: required
+:refines: RUL-config_writers
+:uses: DEF-camera_group, RUL-several_bodies_named_by_configuration
+
+The decision editor, told by the user whether a camera group the configuration classes as a camera with a fixed clock
+is several bodies, MAY record it in the configuration: that setting, and no other.
 :::
 
 :::{rul} The configuration is a dependency of what is made under it

@@ -186,11 +186,12 @@ archived, and from then on the copy governs, not the program.
 :status: ruled
 :forced: yes
 :follows_from: RAT-why_did_this_change, RAT-idempotent_reruns
-:justifies: RUL-config_writers, RUL-library_setup_writes_one_setting, RUL-editor_classes_camera_group
+:justifies: RUL-config_writers, RUL-library_setup_writes_one_setting, RUL-editor_classes_camera_group, RUL-editor_marks_several_bodies
 
 Prep's seeding happens once, before anything is made under the configuration; the user's own edits are the intended way
 to change it; the library setup records only the one answer it was asked for, and the decision editor only the class
-the user gave a camera group geotag stopped on — the answer the user would otherwise paste in by hand. A phase that rewrote the configuration on
+the user gave a camera group geotag stopped on, or whether a camera group is several bodies — the answer the user would
+otherwise write in by hand. A phase that rewrote the configuration on
 its own would change what governs the workspace with nobody having decided it, and restale every plan with no cause the
 user can find.
 :::

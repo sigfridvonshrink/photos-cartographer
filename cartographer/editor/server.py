@@ -274,13 +274,21 @@ def _camera_question(workspace, raw_config):
     if isinstance(handoff, dict) and "_error" in handoff:
         return handoff
     facts = {g.get("group_key"): g for g in ((handoff or {}).get("camera_groups") or []) if isinstance(g, dict)}
-    groups = {}
+    groups, bodies = {}, {}
     for key, paths in photos_2_geotag.unclassified_camera_groups(handoff, cfg).items():
         groups[key] = {"files": len(paths), "examples": paths[:3],
                        "identity": (facts.get(key) or {}).get("contributing_identity_fields") or {},
                        "user_decision": {"device_class": ""}, "requires_user_input": True,
                        "stale_user_decision": False}
-    return {"groups": groups}
+    # each fixed-clock camera group of the photos, and whether the configuration names it several bodies — a setting
+    # the user may change, never a question that waits (BLD-editor_marks_several_bodies)
+    several = set((cfg.get("camera_time_and_timezone_policy") or {}).get("several_bodies_groups") or [])
+    for key, paths in photos_2_geotag.camera_groups_of_class(handoff, cfg, "camera").items():
+        bodies[key] = {"files": len(paths), "examples": paths[:3],
+                       "identity": (facts.get(key) or {}).get("contributing_identity_fields") or {},
+                       "user_decision": {"several_bodies": key in several}, "requires_user_input": False,
+                       "stale_user_decision": False}
+    return {"groups": groups, "bodies": bodies}
 
 
 def _load_artifacts(workspace):
@@ -311,7 +319,7 @@ def _load_artifacts(workspace):
             "drift": _example_json("photos-22-gps-drift-validation.requires-input.json"),
             "gps": _example_json("photos-23-gps-decisions.requires-input.json"),
             "execution": None,                          # no execution in the demo: nothing has been written
-            "cameras": {"groups": {}}}
+            "cameras": {"groups": {}, "bodies": {}}}
 
 
 def _write_json(path, obj):
@@ -385,15 +393,30 @@ def _classed_config(workspace, raw, edits):
     """(the configuration with each named camera group put in the array its edit gives and out of the other, None) — or
     (None, why it is refused): a configuration that cannot be read, a group it classes already, a class that is not one
     of the two arrays, or a result `load_config` would refuse (BLD-editor_writes_device_groups). That setting alone
-    changes (RUL-editor_classes_camera_group)."""
+    changes (RUL-editor_classes_camera_group) — and, for an edit of kind `bodies`, whether a fixed-clock camera group of
+    the photos is named in `several_bodies_groups` (BLD-editor_marks_several_bodies, RUL-editor_marks_several_bodies)."""
     cfg = _parse_record(raw, CONFIG_NAME)
     if not isinstance(cfg, dict) or "_error" in cfg:
         return None, f"cannot read {CONFIG_NAME} to class the camera group(s); nothing was saved"
     dg = _device_groups(cfg)
     if not isinstance(dg, dict) or not all(isinstance(dg.get(a), list) for a in DEVICE_CLASSES):
         return None, f"{CONFIG_NAME} holds no device_groups with its two lists; nothing was saved"
-    unclassed = set(_camera_question(workspace, raw).get("groups") or {})
-    for e in edits:
+    question = _camera_question(workspace, raw)
+    unclassed, cameras = set(question.get("groups") or {}), set(question.get("bodies") or {})
+    pol = cfg.get("camera_time_and_timezone_policy")
+    for e in (e for e in edits if e.get("kind") == "bodies"):
+        # a fixed-clock camera group named, or no longer named, several bodies (BLD-editor_marks_several_bodies)
+        key, ud = e.get("key"), e.get("user_decision")
+        if key not in cameras:
+            return None, (f"{CONFIG_NAME} classes no camera group {key!r} of the photos as a camera with a hand-set "
+                          "clock — reload the editor; nothing was saved")
+        if not isinstance(ud, dict) or not isinstance(ud.get("several_bodies"), bool):
+            return None, f"whether camera group {key!r} is several bodies must be true or false; nothing was saved"
+        if not isinstance(pol, dict) or not isinstance(pol.get("several_bodies_groups"), list):
+            return None, f"{CONFIG_NAME} holds no several_bodies_groups list; nothing was saved"
+        named = [k for k in pol["several_bodies_groups"] if k != key]
+        pol["several_bodies_groups"] = named + [key] if ud["several_bodies"] else named
+    for e in (e for e in edits if e.get("kind") != "bodies"):
         key, cls = e.get("key"), (e.get("user_decision") or {}).get("device_class") \
             if isinstance(e.get("user_decision"), dict) else None
         if e.get("kind") != "camera" or key not in unclassed:

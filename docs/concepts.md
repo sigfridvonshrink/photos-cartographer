@@ -234,7 +234,12 @@ timezone-less clock needs a clock offset (next sections). A phone's photo record
 zone unasked only where the phone's tagged photos that day record the zone's offset; else its own GPS reads
 it; with neither, the zone's reading (or its tagged photos' offset) is a guess like a camera's — checked in
 the drift check where tracks lie by it, else accepted. A group not yet classed stops geotag, which
-prints both lists ready to paste — or class it in the editor's Cameras view, which writes them. A file whose metadata names no camera is never asked to be classed: it
+prints both lists ready to paste — or class it in the editor's Cameras view, which writes them. Two bodies
+of one model that write no serial number are one group, and nothing in their photos tells them apart: list such a
+group in `camera_time_and_timezone_policy.several_bodies_groups` (or mark it in the Cameras view) and an offset its
+GPS gives never applies itself — it is proposed, noted as perhaps one body's — and its days in different destinations
+are decided apart, so moving one body's photos into a sub-folder gives them offsets of their own. By default the list
+is empty: every group is one camera. A file whose metadata names no camera is never asked to be classed: it
 is solved on its own, by the offset recorded with its time; files recording none are one question for
 their destination — read them as local time in its zone? — answered once and kept. So is a photo
 whose only time is its `ModifyDate` — an export whose capture time is gone, timed by the editing
@@ -271,16 +276,21 @@ Each day's offset is proposed, in this order:
    destination has a position, the offset the camera's GPS fixed that day in another destination. It
    applies itself here only where it did there. Two such offsets of one day that disagree by more than
    `clock_offset_same_day_max_difference_seconds` take effect nowhere until you say which is right.
-4. **From the offset the photos record** — a recent camera writes, with each time, the UTC offset its
+4. **From the camera's own GPS, the day before or after** — where the day has no position of its own here and none
+   was shared, the offset the camera's GPS fixed the day before (else after) in this destination. A camera left on
+   home time abroad, or a night shoot, has its midnight mid-outing: the half after it is a day of its own, and the
+   half before settled the clock. Only offered — the clock may have been set overnight: you accept it, and the drift
+   check then confirms it on the tracks. The day keeps its own decision.
+5. **From the offset the photos record** — a recent camera writes, with each time, the UTC offset its
    clock was set to (`OffsetTimeOriginal`). Where the day's photos here that record one all record the
    same, the clock offset is its negative: a camera left on home time (+01:00) in Japan is proposed
    −1h, not Japan's −9h. Where they record different offsets, none is proposed from them and the
    decision lists the offsets seen. A value in the tag that is no offset counts as none.
-5. **From the destination's timezone** — computed from the zone, daylight saving included, assuming the
+6. **From the destination's timezone** — computed from the zone, daylight saving included, assuming the
    camera kept local time.
-6. **By hand** — you type it, or, in the editor, give the true time of one of its photos.
+7. **By hand** — you type it, or, in the editor, give the true time of one of its photos.
 
-Proposals 4 and 5 are guesses, never applied on their own: each is confirmed against the tracks in the
+Proposals 5 and 6 are guesses, never applied on their own: each is confirmed against the tracks in the
 drift check, or, with no track by the photos, accepted in the Time view.
 
 A guess can be far out: a camera whose battery ran out wakes at its factory date, and the guess moves
@@ -296,6 +306,15 @@ tracks, more photos), it is asked again, your earlier answer left as you wrote i
 
 There is deliberately **no inheritance** between days or places: an offset you type or accept on a
 guess for one day applies only to that day, never to a sibling day or a neighbouring place.
+
+**A clock changed during the day.** Set to local time at lunch, or reset, a camera has two offsets that day, and
+no single one fits. Only the camera's own GPS can show it — its positions on the tracks, or its fixes' times; the
+photos' own times run on whatever the clock said. Where the day's photos with a position, in camera-time order,
+fall into two runs each agreeing on an offset of its own, geotag proposes **splitting the day at the change**.
+Accept it once and the day is decided as two parts, each corrected by its own photos. Where photos without GPS lie
+between the two runs, nothing says on which side of the change they were taken: you say which was the first after
+the change. Offsets that go back and forth — three runs or more — are no clock change: they are positions gone
+wrong, or two bodies in one group.
 
 ---
 
@@ -366,7 +385,12 @@ time is itself one the zone skips or repeats, none is proposed: type it.
 
 ## Placing each photo
 
-GPS is placed only once every photo's true time is resolved. A photo keeps its own GPS position, always.
+GPS is placed only once every photo's true time is resolved. A photo keeps its own GPS position — unless you
+replace it: a photo whose own position agrees with none of its camera's other photos on the tracks, once their
+agreed offset is in effect, most likely holds a wrong fix, and where the track at its corrected time is farther
+from it than an anchor may be, the track's position is offered in the GPS view. Nothing waits on it, and nothing
+replaces its own position but your answer; the log keeps the position replaced. A group marked several bodies is
+never doubted so.
 A position of exactly latitude 0, longitude 0 is not one — it is what a device writes with no fix — so
 that photo is placed like one without, its camera's clock is never read from it, and the log records the
 (0, 0) a position written over it replaced. If you leave such a photo unlocated, geotag removes the (0, 0)

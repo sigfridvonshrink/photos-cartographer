@@ -76,11 +76,13 @@ the editor's display reads take none, each record being replaced whole. The edit
 Each question geotag asks SHALL be a `user_decision` of a cell of its record, its fields documented in
 `cartographer/editor/decision-json-reference.md`, which geotag reads whether the editor or a hand wrote it. The
 editor loads and saves each by its kind: in photos-21, `timezone` (`destination_timezone`), `offset` (a cell of
-`camera_group_time_decisions`, a phone's among them, by its key), `reading` (an entry of `local_time_readings`, by
+`camera_group_time_decisions`, a phone's among them, by its key — a day's split where its clock changed answered on the
+day's cell, its parts never), `reading` (an entry of `local_time_readings`, by
 its photo's path), `changed` (an entry of `changed_times`, by its photo's path) and `unidentified`
 (`unidentified_files`); in photos-22, `drift`; in photos-23, `fallback` and `review`;
 in `photos-25-execution-summary.json`, which `geotag execute` reads, `fingerprint` (an entry of `fingerprint_mismatches`,
-by its photo's path); and a camera group's class, `camera`, in the configuration ({need}`BLD-editor_lists_new_camera_groups`).
+by its photo's path); and in the configuration a camera group's class, `camera` ({need}`BLD-editor_lists_new_camera_groups`),
+and whether a camera group is several bodies, `bodies` ({need}`BLD-editor_marks_several_bodies`).
 The editor writes each answer as geotag takes it: where an offset cell lists `conflicts_with`, a proposal the user takes
 there is written as `manual_offset_seconds`, the user's own offset, which keeps its effect
 ({need}`RUL-chosen_offset_not_withheld`) — never as an acceptance, which geotag withholds there again.
@@ -215,6 +217,22 @@ group is still unclassed and the configuration then passes the checks `load_conf
 whole through `write_json_artifact`, every other setting keeping its value.
 :::
 
+:::{bld} The editor names a camera group several bodies in the configuration
+:id: BLD-editor_marks_several_bodies
+:status: ruled
+:realises: RUL-editor_marks_several_bodies, RUL-every_question_in_editor, RUL-every_question_answerable_by_hand
+:uses: BLD-several_bodies_groups, BLD-editor_save_locks
+
+The decision editor SHALL list, as `cameras.bodies`, each camera group of the handoff's photos under photos by
+destination that `device_groups` classes `fixed_clock_cameras` alone (`camera_groups_of_class`), with its photos' count,
+three of their paths and `user_decision.several_bodies` — whether `several_bodies_groups` names it — never requiring
+input; its save of one, `kind: "bodies"`, under the workspace lock and only while the configuration is the one it
+loaded, by its SHA-256, puts the key into `camera_time_and_timezone_policy.several_bodies_groups` or takes it out,
+refusing unless the group is still such a group of the photos, the answer a boolean, and the configuration then passes
+the checks `load_config` makes, and writes the file again whole through `write_json_artifact`, every other setting
+keeping its value.
+:::
+
 
 :::{bld} Field-scoped fingerprints, and one whole-file SHA-256
 :id: BLD-config_fingerprints
@@ -271,7 +289,8 @@ it.
 :realises: DEF-config_areas, RUL-folder_names_not_roles, RUL-camera_classes_not_derivation, RUL-extension_one_class, RUL-folder_found_by_role, RUL-config_lists_extensions, RUL-unlisted_extension_other, RUL-setting_bounds_one_thing
 
 The areas SHALL be, at least: the `zfs` block and `snapshots_required` ({need}`BLD-snapshot_is_zfs`);
-`camera_time_and_timezone_policy.device_groups`, with `phones` and `fixed_clock_cameras` ({need}`DEF-camera_group`);
+`camera_time_and_timezone_policy.device_groups`, with `phones` and `fixed_clock_cameras` ({need}`DEF-camera_group`), and
+`several_bodies_groups` beside it ({need}`BLD-several_bodies_groups`);
 `filename_timestamp_format` ({need}`BLD-filename_timestamp_format`); `gpx_root` and the GPX thresholds, such as `gpx_direct_match_max_seconds`,
 `gpx_interpolation_max_gap_seconds` and `gpx_anchor_max_point_distance_meters` ({need}`DEF-tracks`), each read for one judgement only; the camera-time policy
 flags, such as `single_anchor_auto_apply` and `multi_anchor_auto_apply` (geotag); `library_root`

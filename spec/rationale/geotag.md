@@ -220,7 +220,25 @@ local hour. So a destination with no position of its own that day is offered the
 applied by itself only where it was sure enough to apply itself there. And where the camera's positions give two
 offsets for one day that cannot both be right, one of them rests on a wrong match; neither is written until the user
 says which. An offset the user wrote, or accepted on a guess, is not passed on: it is their word about one place, not
-evidence. Another day's offset is never passed on either — clocks are set again overnight.
+evidence. Another day's offset is never passed on by itself either — clocks are set again overnight; the day next to
+one with no evidence is only offered ({need}`RAT-neighbour_day_offered`).
+:::
+
+:::{rat} The day next door is the best evidence a day without its own can have
+:id: RAT-neighbour_day_offered
+:status: ruled
+:forced: no
+:follows_from: RAT-clock_is_the_cameras_for_the_day, RAT-assumptions_need_acceptance, RAT-drift_invisible
+:justifies: RUL-neighbour_day_offset_proposed, RUL-neighbour_day_offset_needs_acceptance, RUL-neighbour_day_offset_drift_checked, RUL-neighbour_day_no_gap_bound, RUL-neighbour_day_keeps_its_cell
+
+A day is a camera's day by its own clock, so a camera left on home time abroad, or a night shoot, has its midnight in
+the middle of an outing: the outing becomes two days, and the half with no anchor asks for its offset and then for a
+drift confirmation, though the other half settled the clock. The offset the camera's own GPS gave the day before or
+after, in the same place, is a far better guess than the zone's — but it is another day's, and a clock may have been
+set overnight. So it is offered, never applied: the user accepts it, and the drift check then sets it against the
+tracks by the day's own photos, as any offset the day's GPS does not support. Bounding the time between the two days
+would need a new setting and guess at a night's length; the user's acceptance and the check are the bound. The day
+stays the unit: its decision is its own, and taking the neighbour's offset joins nothing.
 :::
 
 :::{rat} A choice from the camera's positions is evidence, and the user's word
@@ -341,6 +359,27 @@ A camera's clock drifts, and is set again — to local time, on a trip, often ea
 one day's shooting and another the next, and destinations are where the user went, not when; one offset per camera, or
 per destination over several days, would be wrong for every day but one. A day in one place is the unit within which
 the error stays put, so it is the unit decided.
+:::
+
+:::{rat} A clock changed during the day shows only on the GPS
+:id: RAT-clock_change_seen_by_gps
+:status: ruled
+:forced: no
+:follows_from: RAT-offset_per_day_and_place, RAT-anchor_agreement
+:justifies: RUL-day_split_into_parts, RUL-clock_change_split_proposed, RUL-clock_change_needs_gps, RUL-alternating_runs_no_clock_change, RUL-clock_change_needs_acceptance, RUL-clock_change_accepted_once, RUL-clock_change_parts_own_evidence, RUL-clock_change_first_after_asked, RUL-clock_change_first_after_not_asked
+
+A day is the unit because a clock is set again overnight; but it is also set at lunch, or reset, and then the day has
+two offsets and no one of them fits. Asked to move the photos after the change into a folder of their own, the user
+would change the library's folders to work round the tool. The change cannot be read from the photos themselves —
+the owner's question, answered yes: *"15 can only be detected using GPS, the photos themselves are not enough.
+Correct?"* — their times run on whatever the clock says; only a measurement of the true time, the camera's own
+positions on the tracks or its fixes' times, shows the clock jump. A clock set once runs on: in camera-time order its
+anchored photos fall into two runs, each agreeing on an offset of its own, and a split there is proposed. A clock does
+not go back and forth, so three runs or more are no change — they are positions gone wrong, or two bodies. The split
+is the user's to accept, as any proposal is, and accepting it once settles the day: each part's offset is what its own
+photos say, nothing borrowed across the change. Where photos with no evidence of their own lie between the runs,
+nothing says on which side of the change each was taken, and only the user, who knows when the clock was set, can
+say which was the first after it; where none lie between, there is nothing to ask.
 :::
 
 :::{rat} One place's clock evidence says nothing of another's
@@ -564,6 +603,26 @@ its own on the edit's date — a question about a day the camera never shot — 
 computer's clock. Read alone, as a file naming no camera is, it asks nothing and borrows nothing. `CreateDate` is the
 camera's clock still: a camera writes it as it writes the original. Treating such a photo as untimed instead would stop
 geotag on a time that is, at worst, a poor guess the user can see and correct.
+:::
+
+:::{rat} Only the user knows a group is two bodies
+:id: RAT-several_bodies_said_by_the_user
+:status: ruled
+:forced: no
+:follows_from: RAT-class_decides_time_model, RAT-anchor_agreement
+:justifies: RUL-several_bodies_named_by_configuration, RUL-several_bodies_offset_never_auto, RUL-several_bodies_noted, RUL-several_bodies_days_apart, RUL-several_bodies_no_clock_change_split, RUL-several_bodies_positions_not_doubted
+
+Two bodies of one model that write no serial are one camera group: nothing in their photos tells them apart. With GPS
+on both, their anchors disagree for good and no one offset is right; with GPS on one that day, its offset would apply
+itself to the other's photos; and a day's offset found in one destination would be passed to, or held against, the other
+body's in the next. Geotag cannot see this, and treating every group as perhaps two would cost every camera the offsets
+that apply themselves. So the configuration says it, a group being one camera unless named — the owner's ruling: *"no,
+this needs a workspace setting, default being that it's just one camera. If the setting says multiple cameras, then do
+the recommended"*. For a group so named, an offset from its GPS is a proposal, said to be perhaps one body's; its photos
+that disagree with it are another body's, their positions right, never offered for replacing; its days in
+different destinations are decided apart; and the user tells the bodies apart by sorting one's photos into a folder of
+their own — never by a split of the day, for two bodies shooting one after the other look like one clock set at the
+change.
 :::
 
 
@@ -898,6 +957,25 @@ log may have changed since the plan was made, so execution asks the same of it, 
 A position the camera wrote was measured where the photo was taken. Everything geotag can offer instead is derived —
 from a track and a corrected time, from a folder — and so weaker evidence: replacing the measurement with it would make
 the photo less right, not more.
+:::
+
+:::{rat} A position the camera's own clock contradicts is offered, never replaced unasked
+:id: RAT-contradicted_position_offered
+:status: ruled
+:forced: no
+:follows_from: RAT-own_position_best, RAT-anchor_agreement, RAT-decisions_are_the_users
+:justifies: RUL-own_position_replaced_on_answer, RUL-contradicted_position_reviewed, RUL-contradicted_position_kept_unless_taken, RUL-contradicted_position_without_track_noted, RUL-replaced_own_position_logged
+
+A camera's own position is the best evidence of where a photo was — unless it is wrong. Among photos that agree on the
+camera's offset, one whose own position agrees with none of them most likely carries a position that is not its
+photo's: GPS jitter, a fix from minutes before, a position another program wrote. Accepting the agreed offset corrects
+its time and would leave the wrong place in it, and the user could only read the pattern and mend it elsewhere. The
+tracks say where the user was at the photo's corrected time; where that lies farther from the photo's own position than
+an anchor may, the two are set side by side, the track's proposed. The photo's own stays unless the user takes
+another: it is still a measurement, and only the user can tell a stale fix from a detour the track missed — so nothing
+waits on it, and nothing replaces it but their answer. With no track at that time there is nothing to propose; the
+photo keeps its own, and the record says it was doubted. A position replaced is a position lost from the photo, so
+the record keeps it.
 :::
 
 :::{rat} Latitude 0, longitude 0 is a device without a fix
