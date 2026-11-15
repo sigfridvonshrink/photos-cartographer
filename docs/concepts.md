@@ -77,8 +77,16 @@ same code through the same command.
 
 Geotag and merge refuse a workspace no execution has recorded (run `prep plan` and `prep execute`);
 prep's very first run compares nothing. `prune-quarantine`, `merge init-library` and the editor do not
-compare. A run killed outright mid-execute (power loss, `kill -9`) leaves its own partial work
-unrecorded: the next run lists it, and one acceptance takes it.
+compare.
+
+A run killed outright mid-execute (power loss, `kill -9`) never gets to record the state it leaves. The
+next run recognises that run's own work from what it left in writing: a file prep moved, found where its
+plan sends it with the same size, time and inode (or, from the inbox, the size and time the plan found);
+a photo geotag wrote and renamed, found under its new name with the size and time its journal notes;
+a photo merge moved into the library, confirmed by its journal or found in the library with its size and
+time. Those pass without asking and are named in the output, and in the record of the next execution,
+as left by the interrupted execution. Anything else still stops, as above — including a photo geotag was
+writing at the very moment of the kill, before its journal noted it.
 
 ---
 

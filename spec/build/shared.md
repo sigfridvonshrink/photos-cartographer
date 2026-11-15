@@ -1356,6 +1356,31 @@ that deletes takes the run folders it removed out of the record (`forget_in_work
 sealed. No plan, dry run or finalize writes it.
 :::
 
+:::{bld} Recognising the work of an execution killed before its record
+:id: BLD-interrupted_run_recognised
+:status: ruled
+:realises: RUL-interrupted_work_passes, RUL-interrupted_work_exact
+
+Each execution SHALL note itself begun, before its first change, by adding `{phase, plan_id, record_id}` to the list
+`meta.executions_unrecorded` of `photos-00-ingest.db` (`note_execution_begun`) — prep's execute before its operations,
+geotag's `execute_plan` and merge's `execute_plan` before their photos — nothing noted where no record exists yet; and
+`write_workspace_record` deletes the list in the transaction that writes the record. A note left with the current
+record's id is therefore an execution begun since that record and never recorded — the interrupted run. The check
+(`recognise_interrupted_work`, before `compare_workspace`) finds each such run's plan by its id — `photos-10`, `photos-24`
+or `photos-30`, or the version a re-plan kept under `-NNN` — and its journal `journal-<plan id>.json`, and takes into
+the record it compares with, over a copy of it: for prep, each file its move, rename and quarantine operations take,
+followed through them in plan order, found at exactly one place they take it with the recorded file's size, time and
+inode — or, from the inbox, the plan's preconditioned size and time — gone from where it was and at a place no recorded
+file holds, and `<quarantine>/<plan id>/manifest.json` where it holds only entries of the plan's quarantine operations;
+for geotag, each photo whose rename target (or own path) the journal's `media_after` notes, found there with exactly
+that size and time, gone from its recorded path where renamed; for merge, each photo of the plan gone from photos by
+destination that the journal confirms, or whose `library_target` has its recorded size and time. Each is returned as
+`interrupted_run` with its `phase` and `plan_id`, printed by run and returned with the changes the run names
+(BLD-workspace_changes_logged); `write_workspace_record` takes the same copy for the earlier record, so each file keeps
+its fingerprint at the place it was taken to. A plan not found, or a plan or journal of another shape, recognises
+nothing; whatever is not recognised is compared as any other change.
+:::
+
 :::{bld} The check every checking command makes first
 :id: BLD-workspace_check
 :status: ruled
@@ -1401,7 +1426,8 @@ sends the same command with the code (`_accept_extra`), refusing a command that 
 :realises: RUL-allowed_changes_named, RUL-accepted_changes_logged
 
 The check SHALL print the changes it passes, `sorted` aside, and those accepted, and return them — `kind`, `path`,
-`from`, the `accepted` code and, where the record holds one, the `content_fingerprint` — for the execution's record:
+`from`, the `accepted` code, an interrupted run's `phase` and `plan_id` and, where the record holds one, the
+`content_fingerprint` — for the execution's record:
 prep's execute adds them, each with its `run`, to `workspace_changes` of `photos-15-prep-log.json`, after the earlier
 runs'; geotag's execute writes them as `workspace_changes` of `photos-25-execution-summary.json`, merge's as
 `workspace_changes` of `photos-31-merge-summary.json`. A plan, a dry run and finalize print them.
