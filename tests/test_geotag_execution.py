@@ -866,7 +866,12 @@ def test_reclassing_a_camera_group_changes_its_treatment_not_its_key(tmp_path, m
             assert not e.code, groups
         dest = json.load(open(ctl / "photos-21-time-decisions.json"))["destinations"]["6-photos-by-dest/T"]
         cells = dest.get("camera_group_time_decisions") or {}
-        seen.append((dest["camera_groups_present"], {k: c["camera_group_class"] for k, c in cells.items()}))
+        cache = cal.GeotagCache(str(ws))
+        try:
+            keys = sorted({r["camera_group"] for r in cache.get_rows()})   # the group each photo was resolved as
+        finally:
+            cache.close()
+        seen.append((keys, {k: c["camera_group_class"] for k, c in cells.items()}))
         assert json.load(open(ctl / "photos-24-executable-plan.json"))["status"] == "ready", groups
     assert seen == [([CAM], {CAM: "camera"}), ([CAM], {}), ([CAM], {CAM: "camera"})], seen
 

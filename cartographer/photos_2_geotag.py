@@ -857,13 +857,12 @@ class GeotagWorkflow:
                 eff_tz[(dest, "tz")] = _ZONE_WAITS
             tz = tz_block["effective_iana_timezone"] or None
             prior_cells = prior_d.get("camera_group_time_decisions") or {}
-            cells, present = {}, []
+            cells = {}
             # Containers hold no media → no offset cells. A real destination gets one offset cell per
             # camera group, SPLIT per naive calendar date when the group spans >1 day there (BLD-offset_buckets): the
             # camera is set to local time each morning, so the offset is constant only within a day. The
             # bucket key is the bare group for a single day, else `<group>@<YYYY-MM-DD>`.
             for group in (sorted({f["camera_group_key"] for f in by_dest[dest]}) if not is_container else []):
-                present.append(group)
                 g = groups.get(group) or {}
                 if g.get("camera_group_class") != "camera":
                     continue                       # smartphones are solved per-file; no offset cell
@@ -899,7 +898,6 @@ class GeotagWorkflow:
             destinations[dest] = {
                 "destination_path": dest,
                 "destination_timezone": tz_block,
-                "camera_groups_present": present,
                 "camera_group_time_decisions": cells,
             }
             if is_container:
@@ -1065,14 +1063,14 @@ class GeotagWorkflow:
         if country and default not in zones:
             default = None                          # the usual zone is no zone of the country chosen here
         if inherited is not None and country and len(zones) == 1 and inherited[1] == zones[0]:
-            proposed, source, confidence, inherited_from = zones[0], "country", "high", None
+            proposed, source, inherited_from = zones[0], "country", None
         elif inherited is not None:
             anc_path, anc_tz = inherited
-            proposed, source, confidence, inherited_from = anc_tz, "inherited", "review_required", anc_path
+            proposed, source, inherited_from = anc_tz, "inherited", anc_path
         elif default:
-            proposed, source, confidence, inherited_from = default, "config_default", "high", None
+            proposed, source, inherited_from = default, "config_default", None
         else:
-            proposed, source, confidence, inherited_from = None, "none", "none", None
+            proposed, source, inherited_from = None, "none", None
         ud = prior_tz.get("user_decision") or {}
         manual = ud.get("manual_iana_timezone", "") or ""
         # The photos here that record another offset than the zone has: the zone stands against them only
@@ -1113,7 +1111,6 @@ class GeotagWorkflow:
         block = {
             "proposed_iana_timezone": proposed,
             "proposal_source": source,
-            "proposal_confidence": confidence,
             "user_decision": {"manual_iana_timezone": manual, "country": own_country,
                               "confirmed_despite_recorded_offsets": [int(o) for o in despite]},
             "effective_iana_timezone": effective,
@@ -1149,8 +1146,7 @@ class GeotagWorkflow:
             # no GPS evidence here, and the camera's own GPS fixed its clock that day in another destination
             proposal = {"proposal_source": "same_day_elsewhere", "proposed_offset_seconds": shared["offset_seconds"],
                         "shared_from": {"destination": shared["destination"], "bucket": shared["bucket"]},
-                        "confidence": "high" if shared["applied_itself"] else "review_required",
-                        "rank": "same_day"}
+                        "confidence": "high" if shared["applied_itself"] else "review_required"}
         differ = None
         if proposal is None and photos:
             # the zone the camera's clock was set to, as its photos record it: better than assuming local time
@@ -1159,7 +1155,7 @@ class GeotagWorkflow:
             off_s, real_iso = tzr
             proposal = {"proposal_source": "timezone_naive", "proposed_offset_seconds": off_s,
                         "proposed_real_utc": real_iso, "proposed_from_timezone": tz,
-                        "confidence": "review_required", "rank": "timezone_derived"}
+                        "confidence": "review_required"}
         elif proposal is None:
             proposal = {"proposal_source": "manual_required"}
             # The bucket's earliest camera time is one its timezone repeats or skips: the zone gives two offsets

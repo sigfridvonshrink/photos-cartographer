@@ -230,6 +230,31 @@ def test_consensus_majority_beats_closer_minority():
     assert p["anchors"][0]["proposed_offset_seconds"] == 3600     # anchors[0] is the consensus rep
 
 
+@pytest.mark.spec("BLD-anchor_proposal_record", "RUL-anchor_proposal_carries_evidence",
+                  test="TST-geotag_offset_inference-proposal_records_its_anchors_and_their_count")
+def test_proposal_records_its_anchors_and_their_count():
+    """One anchor per photo that matched a pass — the representative first, a photo of another cluster by its own
+    best — each with its match; `anchor_count` counts them, a photo that matched nothing not among them."""
+    gpx = _gpx([_pt(50.0, 4.0, _utc(15, 0, 0)), _pt(51.0, 5.0, _utc(15, 0, 0)),
+                _pt(53.0, 7.0, _utc(14, 0, 0))])
+    frames = [_frame(51.0, 5.0, "2024:07:03 14:00:00", "6-photos-by-dest/B/b.arw"),
+              _frame(50.0, 4.0, "2024:07:03 14:00:00", "6-photos-by-dest/B/a.arw"),
+              _frame(53.0, 7.0, "2024:07:03 14:00:00", "6-photos-by-dest/B/d.arw"),     # another cluster
+              _frame(60.0, 10.0, "2024:07:03 14:00:00", "6-photos-by-dest/B/far.arw")]  # matches nothing
+    p = cal.infer_anchor_proposal(frames, gpx, WCFG)
+    assert p["anchor_count"] == 3 and p["proposed_offset_seconds"] == 3600
+    assert [a["source_file"] for a in p["anchors"]] == ["6-photos-by-dest/B/a.arw", "6-photos-by-dest/B/b.arw",
+                                                        "6-photos-by-dest/B/d.arw"]
+    assert [a["proposal_id"] for a in p["anchors"]] == ["anchor-001", "anchor-002", "anchor-003"]
+    assert [a["proposed_offset_seconds"] for a in p["anchors"]] == [3600, 3600, 0]
+    a = p["anchors"][0]
+    assert set(a) == {"proposal_id", "source_file", "camera_source_naive_time", "native_gps", "gpx_match",
+                      "proposed_offset_seconds"}
+    assert a["gpx_match"] == {"match_type": "gpx_point_match", "gpx_file": "trip.gpx", "distance_m": 0.0,
+                              "segment_duration_seconds": None}                      # a point, no segment
+    assert "rank" not in p                                          # a field nothing read, no longer written
+
+
 def test_groups_carry_full_path_and_local_inputs_plus_skipped():
     gpx = _gpx([_pt(50.0, 4.0, _utc(15, 0, 0))])
     frames = [_frame(50.0, 4.0, "2024:07:03 14:00:00", "6-photos-by-dest/Japan/Kyoto/keep.arw"),
@@ -373,6 +398,9 @@ def test_run_auto_resolves_offset_from_gpx(tmp_path, monkeypatch):
     assert cell["proposal"]["proposed_offset_seconds"] == -7187
     assert cell["decision_mode"] == "auto_resolved"                    # two consistent anchors
     assert cell["effective_time_anchor"]["offset_seconds"] == -7187
+    dest = art["destinations"]["6-photos-by-dest/B"]                 # fields nothing read are not written
+    assert "camera_groups_present" not in dest and "proposal_confidence" not in dest["destination_timezone"]
+    assert "rank" not in cell["proposal"]
 
 
 # --- timezone-derived offset proposal (no anchor, no inherited) — BLD-timezone_naive_offset -------

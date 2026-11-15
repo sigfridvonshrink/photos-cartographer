@@ -1670,11 +1670,9 @@
   "destinations": {
     "6-photos-by-dest": {
       "camera_group_time_decisions": {},
-      "camera_groups_present": [],
       "destination_path": "6-photos-by-dest",
       "destination_timezone": {
         "effective_iana_timezone": "",
-        "proposal_confidence": "none",
         "proposal_source": "none",
         "proposed_iana_timezone": null,
         "requires_user_input": false,
@@ -1697,6 +1695,10 @@
           "proposal": {
             "proposal_source": "manual_required"
           },
+          "representative": {
+            "camera_source_naive_time": "2024:07:03 13:00:00",
+            "source_file": "6-photos-by-dest/Stale/x.arw"
+          },
           "requires_user_input": true,
           "stale_user_decision": true,
           "user_decision": {
@@ -1706,13 +1708,9 @@
           }
         }
       },
-      "camera_groups_present": [
-        "NIKON|D750|B"
-      ],
       "destination_path": "6-photos-by-dest/Stale",
       "destination_timezone": {
         "effective_iana_timezone": "",
-        "proposal_confidence": "none",
         "proposal_source": "none",
         "proposed_iana_timezone": null,
         "requires_user_input": true,

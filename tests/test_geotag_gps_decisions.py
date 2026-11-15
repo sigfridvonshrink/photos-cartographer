@@ -114,6 +114,24 @@ def test_summary_counts_and_review_items(tmp_path):
     assert dep["gps_policy_fingerprint"] and dep["handoff"]["content_fingerprint"]
 
 
+@pytest.mark.spec("BLD-decision_record_envelope", test="TST-geotag_gps_decisions-what_photos_23_depends_on")
+def test_what_photos_23_depends_on(tmp_path):
+    """photos-23's `depends_on`: the resolved-UTC fingerprint, the tracks', the nine placement settings' and the
+    handoff's content fingerprint — and nothing else."""
+    wf = _wf(tmp_path)
+    art, _ = _build(wf, [_file(f"{BYDEST}/T/n.jpg", f"{BYDEST}/T", native=True)], [], _gpx())
+    dep = art["depends_on"]
+    assert set(dep) == {"resolved_utc_cache_fingerprint", "gpx_fingerprint", "gps_policy_fingerprint", "handoff"}
+    nine = ("gpx_direct_match_max_seconds", "gpx_interpolation_max_gap_seconds",
+            "gpx_interpolation_max_distance_meters", "gpx_interpolation_max_speed_kmh",
+            "gpx_extrapolation_max_seconds", "gpx_extrapolation_heading_seconds",
+            "gpx_extrapolation_max_distance_meters", "gpx_extrapolation_max_speed_kmh",
+            "gpx_tracks_agree_max_distance_meters")
+    assert dep["gps_policy_fingerprint"] == utils.sha256_text(
+        json.dumps({k: utils.CONFIG[k] for k in nine}, sort_keys=True))
+    assert dep["handoff"]["content_fingerprint"] == utils.handoff_content_fingerprint({})
+
+
 def test_extrapolation_counts_in_summary(tmp_path):
     wf = _wf(tmp_path)
     d = f"{BYDEST}/Trip"

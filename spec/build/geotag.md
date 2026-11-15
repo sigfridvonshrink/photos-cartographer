@@ -220,6 +220,21 @@ each takes the `effective_iana_timezone` of its nearest ancestor that has one; o
 For each native-GPS photo of a (camera group, destination, day) bucket, `frame_candidates` SHALL take, track by track, every point within `gpx_anchor_max_point_distance_meters` of it and every segment — two consecutive points of that track at most `gpx_anchor_max_segment_gap_seconds` apart — within `gpx_anchor_max_segment_distance_meters`, each at a time within `gpx_anchor_max_clock_error_seconds` of the photo's camera time read as UTC; a pass is an unbroken run of them along the track, passes of one track closer in time than `gpx_anchor_same_pass_max_seconds` being one; and keep each pass's best, a point before a segment, then the closest — dropped where a track of a better rank places a photo at its time by a point or between two (`BLD-track_placement`) — with `time_span_seconds` — the time from the first to the last match of the pass no farther than the best by `gpx_anchor_stay_distance_meters`. A candidate whose span exceeds `gpx_anchor_stay_max_seconds` agrees with any offset within that span, and the spread, of its own, and ranks after every other. `infer_anchor_proposal` clusters the candidates' offsets within the spread, `gpx_anchor_offset_spread_max_seconds`, and proposes the cluster the most photos support, a tie going to the smaller offset, its best-ranked candidate the representative; its confidence is `review_required` when a photo supports no pass of it, another cluster ties (`tied`), or its representative's span exceeds `gpx_anchor_stay_max_seconds` (`imprecise_seconds`), else `high` when another photo supports it or it is a point match, else `medium`. Only an agreed offset — no conflicting photo, no tie, not imprecise — applies itself, under `multi_anchor_auto_apply` or `single_anchor_auto_apply`; an imprecise one, accepted, takes effect as `gpx_anchor_imprecise`. The proposal names the photos no pass of which agrees (`conflicting_files`), and each cluster in `groups` with its photo count and a representative, its track file included; a `manual_offset_seconds` within the spread of a group's offset of a proposal that is not imprecise takes effect as `gpx_anchor_chosen`, which no drift check follows.
 :::
 
+:::{bld} The anchors a GPS proposal records
+:id: BLD-anchor_proposal_record
+:status: ruled
+:realises: RUL-anchor_proposal_carries_evidence, RUL-anchor_offset_auto_as_configured
+:uses: BLD-anchor_matching
+
+A proposal from the camera's own GPS SHALL hold `anchors` — one per photo that matched a pass, the representative
+first, then by rank: its candidate in the proposed cluster, else its own best — each with `proposal_id`
+(`anchor-NNN`), `source_file`, `camera_source_naive_time`, `native_gps`, `gpx_match` (`match_type`, `gpx_file`,
+`distance_m`, `segment_duration_seconds`) and `proposed_offset_seconds`; and `anchor_count`, how many photos matched a
+pass, the count `multi_anchor_auto_apply` and `single_anchor_auto_apply` are read by ({need}`BLD-auto_apply_settings`).
+A cell's `anchored_by` names the track files of the anchors within the spread of its offset
+({need}`BLD-day_offset_kept`).
+:::
+
 :::{bld} The country a destination is in
 :id: BLD-country_choice
 :status: ruled
@@ -279,7 +294,9 @@ when any of its cells needs the user, `executable: false`, `depends_on`, and, wh
 `no_op_or_auto_resolved` for photos-21 and photos-23, `no_op_or_confirmed` for photos-22. The `depends_on` of photos-21
 holds the handoff's content fingerprint, `camera_time_policy_fingerprint` — over the whole
 `camera_time_and_timezone_policy`, the camera groups' classes included — `gpx_fingerprint` and
-`camera_group_key_version`.
+`camera_group_key_version`. That of photos-23 holds `resolved_utc_cache_fingerprint`, `gpx_fingerprint`,
+`gps_policy_fingerprint` — the SHA-256 of the nine placement settings of {need}`BLD-track_placement` as sorted JSON —
+and `handoff`, the handoff's content fingerprint ({need}`BLD-handoff_content_fingerprint`).
 :::
 
 
