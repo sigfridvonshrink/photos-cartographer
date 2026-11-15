@@ -387,6 +387,20 @@ the handoff manifest and SQLite ({need}`BLD-metadata_extraction`); geotag consum
 ({need}`BLD-known_camera_group`).
 :::
 
+:::{bld} Blank identity values
+:id: BLD-camera_identity_values
+:status: ruled
+:realises: RUL-prep_derives_camera_group, RUL-unidentified_files_solved_alone
+:uses: BLD-camera_group_key
+
+Each identity field a file holds — `BodySerialNumber`, `CameraSerialNumber`, `InternalSerialNumber`, `SerialNumber`,
+`Make`, `Model`, `OwnerName`, in that order — SHALL enter `camera_group_key` as its value's text with the blanks
+around it stripped, the parts joined by `|`: a blank value is an empty part, so a file whose only identity fields are
+blank has a key of empty parts (`""`, `"|"`, …), a camera group like any other; only a file holding none of them has
+`NO_IDENTITY_KEY` (`unknown`) — and one whose only field reads `unknown`, which is then taken for a file naming no
+camera ({need}`BLD-unidentified_files`).
+:::
+
 :::{bld} `CAMERA_GROUP_KEY_VERSION`
 :id: BLD-camera_group_key_version
 :status: ruled

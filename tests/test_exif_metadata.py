@@ -293,6 +293,20 @@ def test_a_database_of_another_schema_stops_prep(workspace):
     cache.close()
 
 
+@pytest.mark.spec("BLD-camera_identity_values", "RUL-prep_derives_camera_group",
+                  test="TST-exif_metadata-blank_identity_values_are_empty_parts_of_the_key")
+def test_blank_identity_values_are_empty_parts_of_the_key():
+    """Each identity field held enters the key as its text, the blanks around it stripped, in the fields' order: a
+    blank one is an empty part, so a file holding only blank ones is a camera group of empty parts, never the key
+    of a file naming no camera — which only a file holding none of them has, or one whose only field reads it."""
+    key = lambda item: utils.MetadataReader._parse_exiftool_item(item)["camera_group_key"]
+    assert key({"EXIF:Model": " X ", "EXIF:Make": " Sony ", "EXIF:SerialNumber": 123}) == "123|Sony|X"
+    assert key({"EXIF:Make": "Sony", "EXIF:Model": "  "}) == "Sony|"
+    assert key({"EXIF:Make": ""}) == "" and key({"EXIF:Make": " ", "EXIF:Model": ""}) == "|"
+    assert key({}) == utils.NO_IDENTITY_KEY == "unknown"
+    assert key({"EXIF:Make": "unknown"}) == utils.NO_IDENTITY_KEY
+
+
 @pytest.mark.spec("RUL-recorded_time_order", test="TST-exif_metadata-parse_exiftool_item_timestamp_source_fallback")
 def test_parse_exiftool_item_timestamp_source_fallback():
     """selected_source_naive_timestamp prefers DateTimeOriginal, then CreateDate, then ModifyDate,
