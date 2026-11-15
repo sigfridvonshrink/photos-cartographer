@@ -49,44 +49,33 @@ guessed; geotag runs prep itself only where prep's plan touches no media; prunin
 library lies outside every workspace; an earlier place counts only inside the library now configured; the editor
 saves only over what it loaded; tracks none of which can be read stop geotag.
 
-**Awaiting ruling — the rest**, each a behaviour to state as it is, change, or drop:
-- *decisions:* a photo moved to another destination loses its own position decision; exiftool's absence stops
-  finalize, which never runs it; a handoff of another field-set version is refused; a development subfolder is
-  matched with case; an unvouched prep log is passed over at plan; the `+carto-time` mark is written to a photo
-  whose time was already right; a merge of no photos seals; ImageMagick's absence is a warning for merge;
-  `init-library <path>` rewrites the whole configuration file; a media file whose metadata read failed blocks, in
-  photos by destination too; the first run renames a dump file whose inbox path is taken; the console's editor tab
-  holds the editor lock until the console stops.
-- *records:* when geotag's summary and merge's are not written (a refusal, an interrupt); an unreadable journal or
-  earlier pass is taken as empty; photos-25 and the photos-26 package are replaced in place; prep takes an
-  unreadable log for none and writes over an unreadable quarantine manifest it could not set aside; a prune is
-  recorded nowhere; a log entry of a photo gone from the workspace is carried as it was; every quarantine move is
-  counted a duplicate; strays' paths are in the plan though `RUL-strays_leave_no_trace` says nowhere; merge's
-  journal is per plan, not per run; and fields no item names — the anchor proposal's `anchors` and `anchor_count`,
-  photos-23's `depends_on`, the merge log's step, the photos-35 manifest's, the handoff's `inode` (which enters its
-  fingerprint), fields nothing reads (`proposal_confidence`, `camera_groups_present`, `rank`,
-  `fingerprint_algorithm_version`).
-- *limits:* the tolerance in recognising geotag's own interrupted write; how anchor offsets are clustered and a tie
-  falls; a projection with no heading point lands on the track's end; coordinates rounded to six places; track
-  times parsed as the host's Python parses them; a decode killed after ten seconds; blank camera-identity values;
-  what counts as a photo's own position beyond (0, 0), which is none (`RUL-null_island_is_no_position`); one library file compared per photo; the suffix above the
-  highest of library and batch (`BLD-collision_suffix` says "next free"); case-only collisions refused on every
-  filesystem; a redundant JPEG paired with case; an uppercase extension left in photos by destination; and the
-  exit statuses (1 locked, 2 refused, 3 partial or failed, 130 interrupted; merge's plan and dry run exit 0 with
-  blockers).
+**Ruled and built (2026-11-15) — the rest** (*"all as recommended"*, with 1, 4, 5 and 34 changed on a second look):
+the other forty-one findings, each now an item with its test, and where ruled, a change. Changed: a moved photo's
+position is asked again, like its zone and offset; finalize needs no exiftool; a development subfolder is found in any
+case; `geotag plan` stops on a prep log the handoff does not vouch for; merge stops without ImageMagick (neither
+`magick` nor `identify`); an unreadable journal, earlier pass or prep log stops the command, named, and a quarantine
+manifest that can be neither read nor set aside stops the move; photos-25 and the photos-26 package keep the earlier
+one under `-NNN`; a prune is recorded (`photos-16-prune-record.json`); quarantine is counted by reason; geotag
+lowercases a photo's extension in its rename; merge's plan and dry run exit 2 with blockers; the editor checks a zone
+by the host's list; a drift cell's offsets are checked whether confirmed or not; `null` is no answer for
+`confirmed_despite_recorded_offsets`; prep's own "Next:" lines are held back when geotag runs it; an offset chosen
+from the camera's own GPS groups is shared within the day; three fields nothing read and the four settings kept for
+item 6 are gone. The rest stated as they are. A gone photo's log entry was found given to a new photo taking its
+name; fixed. The `+carto-time` mark is item 46's.
 
-**Found while the user guides were redone (2026-11-15), to be ruled or fixed:**
-- the editor checks a timezone with the browser's zone list and geotag with the host's: a name one knows and the
-  other does not (`US/Eastern` on a host without the legacy names) is saved by the editor and refused by the plan;
-- a drift cell's `corrected_offset_seconds` that is not a number is named only once the cell is confirmed, and a
-  `confirmed_offset_seconds` beside `confirmed: false` is never checked;
-- `confirmed_despite_recorded_offsets: null` is a blocker, where `null` reads as "no answer" in every other field;
-- when `geotag plan` runs prep itself, prep's own closing "Next:" lines print as well as geotag's — three of them,
-  disagreeing, where geotag then stops;
-- `BLD-offset_shared_within_day` names an offset the user chose from a group among those shared within a day, and
-  also requires that no offset was written by hand — the code never shares such a one;
-- `phone_gpx_agreement_tolerance_seconds`, `phone_gpx_conflict_threshold_seconds`, `phone_gpx_max_distance_meters`
-  and `dst_conflict_tolerance_seconds` are still settings nothing reads, kept for item 6.
+**Awaiting ruling:**
+- *prep's exit statuses* do not follow the scheme `BLD-exit_statuses` records for geotag and merge: exiftool missing
+  exits 3 (refused: 2), a dry run or execute of a plan that fails validation exits 1, as does a plan holding
+  blockers (refused: 2), and a failed operation exits 1 (failed: 3) — so 1 means both "locked" and "refused";
+- *prep fields nothing reads*: the handoff's `hash_algorithm`; the journal's `depends_on.tool`,
+  `depends_on.execution_id` and its `snapshots` block; the plan's `workspace_root`; `absolute_path` in plan effects
+  and database rows;
+- *a photo placed by hand at the path a removed photo freed*, in a run where prep gives it no step, still takes the
+  removed photo's log entry — the log holds nothing to tell the two apart;
+- *item 5 at execute*: `geotag execute` builds its model, carrying pinned values to a retaken fingerprint, without
+  the vouched-log check `geotag plan` now makes (finalize and merge make it too);
+- *item 40*: a chosen offset now shared within a day is still not checked against an anchored one of the same day
+  (`conflicts_with`).
 
 ---
 
@@ -97,11 +86,11 @@ its own offset tag, or failing that from the destination's timezone, with nothin
 zone, a photo whose offset tag is missing while the phone sat in another zone, or a phone's clock that did drift, would
 pass unseen and misplace every such photo on the track. The owner wants the check built.
 
-**What exists:** four settings in the default configuration that nothing reads: `phone_gpx_agreement_tolerance_seconds`
-(60), `phone_gpx_conflict_threshold_seconds` (300), `phone_gpx_max_distance_meters` (250) and
-`dst_conflict_tolerance_seconds` (120). Configuration loading checks they are numbers; no spec names them. Their names
-suggest the shape: where a phone photo carries its own position and a track covers it, compare the photo's time with
-the track's time at that position.
+**What existed:** four settings nothing read, removed with BACKLOG 2 (2026-11-15) until this is built:
+`phone_gpx_agreement_tolerance_seconds` (60), `phone_gpx_conflict_threshold_seconds` (300),
+`phone_gpx_max_distance_meters` (250) and `dst_conflict_tolerance_seconds` (120). Their names suggest the shape:
+where a phone photo carries its own position and a track covers it, compare the photo's time with the track's time at
+that position.
 
 **Open:** what the check does on disagreement — inside the agreement tolerance pass silently, beyond the conflict
 threshold block or ask, between them warn? — and what the daylight-saving setting guards. To be settled with the owner

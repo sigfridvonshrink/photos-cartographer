@@ -51,7 +51,10 @@ browser; its map tiles and place search use OpenStreetMap at runtime and degrade
 
 Replace both files. A workspace begun under 3.0.0 needs one setting added to its
 `.photos-ingest/photos-00-config.json`: `"gpx_track_precedence": []` keeps every track ranked alike, as
-before; see [ranking your devices](concepts.md#placing-each-photo) for what to put in it.
+before; see [ranking your devices](concepts.md#placing-each-photo) for what to put in it. Four settings under
+`camera_time_and_timezone_policy` are gone and must be taken out: `phone_gpx_agreement_tolerance_seconds`,
+`phone_gpx_conflict_threshold_seconds`, `phone_gpx_max_distance_meters` and `dst_conflict_tolerance_seconds` —
+nothing read them, and every run now refuses a setting it does not know.
 
 Then run `prep plan` and `prep execute` again: prep now reads more of each photo's time fields, and geotag refuses
 a workspace prepped without them. A drift check you confirmed under 3.0.0 is asked again, since a confirmation now

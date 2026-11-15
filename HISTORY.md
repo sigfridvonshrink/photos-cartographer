@@ -2,6 +2,32 @@
 
 *What was decided and why, newest first. A record: never corrected forward. Per-commit detail is `git log`.*
 
+## 2026-11-15 — the rest of the gap audit ruled (BACKLOG 2)
+
+The walk of the code against the corpus left forty-one behaviours no item stated. Ruled *"all as recommended"*, four
+of them on a second look:
+
+- **a moved photo's position is asked again** (1) — an accepted "unlocated", or a typed position, may have been
+  decided because of the destination: its fallback, its tracks (*"it may have been decided partially because of the
+  destination"*). So like its zone and offset, nothing of the old destination goes with it; a renamed folder is a move.
+- **a development subfolder in any case** (4) — the names mark development begun; matched with case, a `JPG` folder
+  was not seen and its copies were geotagged as photos.
+- **`geotag plan` stops on a prep log the handoff does not vouch for** (5) — it went on without the mapping that keeps
+  a photo's original values across a new fingerprint, and could take geotag's own writes for originals.
+- **geotag lowercases the extension in its rename** (34) — prep leaves photos by destination as found, so a `.JPG`
+  put there by hand reached the library; geotag renames every photo anyway.
+- **records are not taken for empty** — an unreadable journal, earlier pass, prep log or quarantine manifest stops the
+  command, named; photos-25 and the photos-26 package keep their earlier copy under `-NNN`; a prune is recorded
+  (photos-16); quarantine is counted by reason.
+- **merge** stops without ImageMagick, and its plan and dry run exit 2 on blockers like the other phases; the exit
+  statuses are stated.
+- **the editor** checks a zone by the host's list, as geotag does; a drift cell's offsets are checked confirmed or not;
+  `null` is no answer everywhere.
+- **dropped** — three fields nothing read, and the four settings kept for BACKLOG 6, which adds what it needs.
+
+The rest is stated as it is. One stated behaviour was wrong when tested: a new photo taking a removed photo's name
+was given its log entry; fixed. Prep's exit statuses and the prep fields nothing reads are left for a ruling.
+
 ## 2026-11-15 — seven ways a wrong value reached the originals (BACKLOG 24, 26, 36, 37, 38, 42, 44)
 
 Each was a value the tool could write into a photo while looking settled. Ruled *"42 a; 38 a; 24 a; 37 ok; 36 a;
