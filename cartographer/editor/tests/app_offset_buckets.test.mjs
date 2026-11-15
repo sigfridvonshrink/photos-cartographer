@@ -169,6 +169,14 @@ test("offsetCellNotes: a shared offset, a guess checked on the tracks, one clock
     effective_time_anchor: { offset_seconds: -7200, source: "timezone_unconfirmed" } })[0], /Drift view/);
   assert.match(app.offsetCellNotes({ conflicts_with: [{ destination: "6-photos-by-dest/Other", bucket: "K", offset_seconds: -6600 }] })[0],
     /6-photos-by-dest\/Other — one clock, two readings/);
+  // the other side is the user's choice: named as theirs, not as what the GPS gives
+  const theirs = app.offsetCellNotes({ conflicts_with: [{ destination: "6-photos-by-dest/Castle", bucket: "K", offset_seconds: -6600, chosen: true }] });
+  assert.match(theirs[0], /^You chose .* in 6-photos-by-dest\/Castle .*change your choice there/);
+  assert.doesNotMatch(theirs[0], /camera's GPS gives/);
+  // this cell is the user's choice: it stands, the GPS's own reading waits
+  const mine = app.offsetCellNotes({ effective_time_anchor: { offset_seconds: -6600, source: "gpx_anchor_chosen" },
+    conflicts_with: [{ destination: "6-photos-by-dest/Trip", bucket: "K", offset_seconds: -7200, chosen: false }] });
+  assert.match(mine[0], /by itself the same day in 6-photos-by-dest\/Trip, against the offset you chose here.*Your choice stands/);
 });
 
 test("offsetCellNotes: a recorded offset checked on the tracks, and photos recording different offsets", () => {

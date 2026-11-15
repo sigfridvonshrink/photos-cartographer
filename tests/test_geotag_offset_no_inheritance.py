@@ -160,8 +160,8 @@ def test_one_clock_read_two_ways_on_one_day_takes_no_effect(tmp_path):
     a, b = _cell(art, f"{BYDEST}/Trip"), _cell(art, f"{BYDEST}/Other")
     assert a["effective_time_anchor"] == "" and b["effective_time_anchor"] == ""
     assert a["requires_user_input"] and b["requires_user_input"] and art["requires_user_input"]
-    assert a["conflicts_with"] == [{"destination": f"{BYDEST}/Other", "bucket": CAM, "offset_seconds": -6600}]
-    assert b["conflicts_with"] == [{"destination": f"{BYDEST}/Trip", "bucket": CAM, "offset_seconds": -7200}]
+    assert a["conflicts_with"] == [{"destination": f"{BYDEST}/Other", "bucket": CAM, "offset_seconds": -6600, "chosen": False}]
+    assert b["conflicts_with"] == [{"destination": f"{BYDEST}/Trip", "bucket": CAM, "offset_seconds": -7200, "chosen": False}]
     assert _cell(art, f"{BYDEST}/Third")["proposal"] == {"proposal_source": "manual_required"}   # nothing passed on
     # the user writes which it is, in the one that was wrong: the other stands, and is passed on
     said = {"destinations": {f"{BYDEST}/Other": {"camera_group_time_decisions": {CAM: {"user_decision": {
@@ -199,8 +199,8 @@ def test_a_chosen_offset_is_held_against_the_day_s_anchored_one(tmp_path):
     assert not cas["requires_user_input"]                                        # the user's word stands
     assert trip["effective_time_anchor"] == "" and trip["requires_user_input"] and "decision_mode" not in trip
     assert art["requires_user_input"]
-    assert trip["conflicts_with"] == [{"destination": f"{BYDEST}/Castle", "bucket": CAM, "offset_seconds": -6600}]
-    assert cas["conflicts_with"] == [{"destination": f"{BYDEST}/Trip", "bucket": CAM, "offset_seconds": -7200}]
+    assert trip["conflicts_with"] == [{"destination": f"{BYDEST}/Castle", "bucket": CAM, "offset_seconds": -6600, "chosen": True}]
+    assert cas["conflicts_with"] == [{"destination": f"{BYDEST}/Trip", "bucket": CAM, "offset_seconds": -7200, "chosen": False}]
     assert third["proposal"] == {"proposal_source": "manual_required"}           # nothing passed on
     # the user writes the museum's too: two choices of theirs are both their word, and are not held against each other
     art, trip, cas, third = decided(Castle=-6600, Trip=-7200)

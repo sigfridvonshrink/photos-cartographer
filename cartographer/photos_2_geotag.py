@@ -968,7 +968,7 @@ class GeotagWorkflow:
             if against or (offs and max(offs) - min(offs) > limit):
                 party = found + against
                 for dest, bucket, c in party:
-                    c["conflicts_with"] = [{"destination": d2, "bucket": b2, "offset_seconds": off(c2)}
+                    c["conflicts_with"] = [{"destination": d2, "bucket": b2, "offset_seconds": off(c2), "chosen": hand(c2)}
                                            for d2, b2, c2 in party if c2 is not c]
                 # What the GPS gave by itself is withheld and asks; the user's choice keeps its effect, never set
                 # aside by an offset it was not asked about (RUL-chosen_offset_not_withheld).

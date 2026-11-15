@@ -1241,9 +1241,19 @@ function offsetCellNotes(c) {
     (far.nearest_track_seconds === "" || far.nearest_track_seconds == null ? "" : ` and ${fmtSpan(far.nearest_track_seconds)} from the nearest track point`) +
     ` — farther than a clock may be wrong (${fmtSpan(far.max_clock_error_seconds)}); the camera's clock was likely reset. ` +
     "Accepting it is not enough: give the true time of one of its photos, or set the offset.");
-  for (const k of (c && c.conflicts_with) || [])
-    out.push(`The camera's GPS gives ${fmtOffset(k.offset_seconds)} the same day in ${k.destination} — one clock, two readings. ` +
-      "Set the right offset by hand in the one that is wrong.");
+  // Who said what: the other side may be an offset the user chose, and this cell may be the user's choice itself.
+  const mine = eff.source === "gpx_anchor_chosen";
+  for (const k of (c && c.conflicts_with) || []) {
+    if (k.chosen)
+      out.push(`You chose ${fmtOffset(k.offset_seconds)} for this camera the same day in ${k.destination} — one clock, two readings. ` +
+        "Set this cell's offset by hand, or change your choice there.");
+    else if (mine)
+      out.push(`The camera's GPS gives ${fmtOffset(k.offset_seconds)} by itself the same day in ${k.destination}, against the offset ` +
+        "you chose here — one clock, two readings. Your choice stands; that cell waits for you: set its offset by hand, or change yours.");
+    else
+      out.push(`The camera's GPS gives ${fmtOffset(k.offset_seconds)} the same day in ${k.destination} — one clock, two readings. ` +
+        "Set the right offset by hand in the one that is wrong.");
+  }
   return out;
 }
 // A span of seconds in the unit a reader takes in at once: years, days, hours or minutes.

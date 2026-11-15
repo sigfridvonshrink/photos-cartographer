@@ -63,19 +63,17 @@ from the camera's own GPS groups is shared within the day; three fields nothing 
 item 6 are gone. The rest stated as they are. A gone photo's log entry was found given to a new photo taking its
 name; fixed. The `+carto-time` mark is item 46's.
 
+**Ruled and built (2026-11-15) — what the rest left open** (*"rest as recommended"*): prep ends with the exit
+statuses geotag and merge use (1 locked only, 2 refused, 3 failed once changing, 130 interrupted); the prep fields
+nothing read are gone (the cache's and plan's schema versions go to 4); `geotag execute` stops on a prep log the
+handoff does not vouch for, as plan does; an offset the user chose from the camera's own GPS groups is held against
+the day's automatic one — the automatic one asks, the choice stands, and the editor says which side is whose. An
+accepted proposal counts as automatic (*"keep it automatic"*). The photo put by hand at a removed photo's path is
+item 50's.
+
 **Awaiting ruling:**
-- *prep's exit statuses* do not follow the scheme `BLD-exit_statuses` records for geotag and merge: exiftool missing
-  exits 3 (refused: 2), a dry run or execute of a plan that fails validation exits 1, as does a plan holding
-  blockers (refused: 2), and a failed operation exits 1 (failed: 3) — so 1 means both "locked" and "refused";
-- *prep fields nothing reads*: the handoff's `hash_algorithm`; the journal's `depends_on.tool`,
-  `depends_on.execution_id` and its `snapshots` block; the plan's `workspace_root`; `absolute_path` in plan effects
-  and database rows;
-- *a photo placed by hand at the path a removed photo freed* still takes the removed photo's log entry — ruled
-  under item 50 (a retake needs the file unchanged);
-- *item 5 at execute*: `geotag execute` builds its model, carrying pinned values to a retaken fingerprint, without
-  the vouched-log check `geotag plan` now makes (finalize and merge make it too);
-- *item 40*: a chosen offset now shared within a day is still not checked against an anchored one of the same day
-  (`conflicts_with`).
+- `prep prune-quarantine` refuses a bad selection (`--older-than-days` below 1, or a delete naming nothing without
+  `--all`) with exit 1, which now means only "locked".
 
 ---
 
