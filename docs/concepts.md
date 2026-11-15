@@ -421,8 +421,10 @@ geotag decides from the photo's own time from before its first write, and neithe
 over yours nor takes yours instead. The stop names the time the photo holds, the one geotag wrote and the
 photo's own; put one of those back, then run prep and geotag again.
 
-**Geotag execute and finalize** — a plan no longer current (plan again). Execute leaves a photo edited
-since the plan untouched; finalize refuses while a photo has changed since execute.
+**Geotag execute and finalize** — a plan no longer current (plan again); a journal, execution summary or
+earlier plan in `.photos-ingest/` that cannot be read (the stop names it; repair it — it is never taken for
+empty). Execute leaves a photo edited since the plan untouched; finalize refuses while a photo has changed
+since execute.
 
 **Merge** — geotag not finalized, or `6-photos-by-dest/` changed since; a hidden file or folder among
 the photos; a photo with no fingerprint; a library folder without its mark (run `merge init-library`), or

@@ -673,15 +673,16 @@ def test_a_plan_made_by_other_code_is_stale(tmp_path, monkeypatch):
         assert any("code_fingerprint" in s for s in wf.revalidate_plan(pk, gpx)), recorded
 
 
-def test_corrupt_journal_is_ignored(tmp_path, monkeypatch):
+def test_corrupt_journal_stops_execution(tmp_path, monkeypatch):
     ws, ctl = _ready_ws(tmp_path, monkeypatch)
     _mock_tools(monkeypatch, ws)
-    # a corrupt journal must not crash execution (treated as empty -> a fresh apply)
+    # a corrupt journal is never taken for an empty one (RUL-unreadable_execution_record_stops)
     plan = json.load(open(ctl / "photos-24-executable-plan.json"))
     with open(utils.journal_path(str(ws), plan["plan_id"]), "w") as f:
         f.write("{corrupt")
-    assert _execute(monkeypatch, ws) == 0
-    assert _summary(ctl)["status"] == "success"
+    assert _execute(monkeypatch, ws) == 2
+    assert not (ctl / "photos-25-execution-summary.json").exists()
+    assert open(utils.journal_path(str(ws), plan["plan_id"])).read() == "{corrupt"
 
 
 @pytest.mark.spec("BLD-rename_planning", "BLD-geotag_execution",
@@ -725,12 +726,12 @@ def test_apply_file_already_renamed_resumes_without_journal(tmp_path, monkeypatc
     assert "is not this photo as planned" in r["blocker"]
 
 
-def test_corrupt_prior_summary_ignored(tmp_path, monkeypatch):
+def test_corrupt_prior_summary_stops_execution(tmp_path, monkeypatch):
     ws, ctl = _ready_ws(tmp_path, monkeypatch)
     _mock_tools(monkeypatch, ws)
-    (ctl / "photos-25-execution-summary.json").write_text("{corrupt")   # unreadable prior reconciliation
-    assert _execute(monkeypatch, ws) == 0                              # ignored -> a clean apply
-    assert _summary(ctl)["status"] == "success"
+    (ctl / "photos-25-execution-summary.json").write_text("{corrupt")   # unreadable: its acceptances unknown
+    assert _execute(monkeypatch, ws) == 2                              # never taken for none
+    assert (ctl / "photos-25-execution-summary.json").read_text() == "{corrupt"
 
 
 def test_execute_on_sealed_workspace_warns_and_blocks(tmp_path, monkeypatch):

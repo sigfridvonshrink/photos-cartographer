@@ -1578,6 +1578,19 @@ A photo's changed content SHALL stay open to accept until the photo's changes ar
 Geotag SHALL NOT write to a photo while the image engine is not the one the photos' fingerprints were taken with.
 :::
 
+:::{rul} A record of an earlier execution that cannot be read stops geotag
+:id: RUL-unreadable_execution_record_stops
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+:refines: RUL-every_change_journaled
+:uses: DEF-geotag
+
+Geotag's execution and finalize SHALL NOT take a record of an earlier execution that they cannot read for none: they
+stop before they change or write anything, naming it.
+:::
+
 
 ## 21. Finalize
 

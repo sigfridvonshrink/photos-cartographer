@@ -345,6 +345,30 @@ def _holds_writes(held, writes):
     return True
 
 
+class UnreadableRecord(Exception):
+    """A record of an earlier execution — a journal, the execution summary, a kept plan — that is there and cannot
+    be read: geotag stops, naming it, rather than take it for none (RUL-unreadable_execution_record_stops)."""
+
+    def __init__(self, path, why):
+        super().__init__(f"{path} cannot be read ({why})")
+        self.path = path
+
+
+def _read_record(path):
+    """The JSON object at `path`, or None when there is no file (BLD-unreadable_execution_records). One there that
+    cannot be opened or parsed, or is not an object, raises UnreadableRecord naming it."""
+    try:
+        with open(path) as f:
+            obj = json.load(f)
+    except FileNotFoundError:
+        return None
+    except (OSError, ValueError) as e:
+        raise UnreadableRecord(path, e)
+    if not isinstance(obj, dict):
+        raise UnreadableRecord(path, "not a JSON object")
+    return obj
+
+
 class GeotagWorkflow:
     """Stages 1–11: validate the workspace, build the model, produce photos-21/22/23 decision artifacts,
     compute resolved UTC, assemble photos-24-executable-plan.json (when decisions are complete),
@@ -2047,6 +2071,13 @@ class GeotagWorkflow:
         stale = self.revalidate_plan(plan, gpx)
         if stale:
             return {"status": "rejected", "plan_id": plan.get("plan_id"), "stale": stale}
+        # The records of this plan's earlier runs are read before anything is kept, snapshotted or written: one
+        # that cannot be read stops the run (UnreadableRecord), never taken for none — the journal's confirmations
+        # and the summary's acceptances would be written over (RUL-unreadable_execution_record_stops).
+        jpath = journal_path(ws, plan["plan_id"])
+        _j = _read_record(jpath) or {}
+        journal, media_after = _j.get("operations") or {}, _j.get("media_after") or {}
+        accepted = self._accepted_mismatches(ws, plan["plan_id"])
         self._keep_executed_decisions(plan)
 
         # Optional pre-mutation ZFS snapshot (BLD-geotag_execution), labelled "geotag" so it never collides
@@ -2066,16 +2097,6 @@ class GeotagWorkflow:
             })
             return {"status": "rejected", "plan_id": plan.get("plan_id"),
                     "stale": [reason], "snapshot": snapshot}
-
-        jpath = journal_path(ws, plan["plan_id"])
-        journal, media_after = {}, {}
-        if os.path.exists(jpath):
-            try:
-                _j = json.load(open(jpath)) or {}
-                journal, media_after = _j.get("operations", {}) or {}, _j.get("media_after", {}) or {}
-            except Exception:
-                journal, media_after = {}, {}
-        accepted = self._accepted_mismatches(ws, plan["plan_id"])
 
         by_file = {}
         for dd in plan["destinations"].values():
@@ -2148,13 +2169,10 @@ class GeotagWorkflow:
     @staticmethod
     def _prior_mismatches(ws, plan_id):
         """The fingerprint mismatches the last execution of THIS plan reported, as written — the user's
-        acceptances among them. Another plan's are not this plan's to act on."""
-        try:
-            with open(execution_summary_path(ws)) as f:
-                prior = json.load(f)
-        except (OSError, ValueError):
-            return []
-        if not isinstance(prior, dict) or prior.get("plan_id") != plan_id:
+        acceptances among them. Another plan's are not this plan's to act on. None there is none; one that cannot
+        be read raises UnreadableRecord (RUL-unreadable_execution_record_stops)."""
+        prior = _read_record(execution_summary_path(ws))
+        if prior is None or prior.get("plan_id") != plan_id:
             return []
         return [m for m in (prior.get("fingerprint_mismatches") or []) if isinstance(m, dict)]
 
@@ -2234,14 +2252,22 @@ class GeotagWorkflow:
     def finalize_package(self, now_iso):
         """Stage 11 (BLD-archive_manifest): assemble the durable archival package — the photos-26 transformation log,
         an end-of-geotag DB snapshot, and a manifest. Non-destructive (only NEW files; never
-        mutates an artifact, photo, or the live DB). Returns blockers (empty = package written)."""
+        mutates an artifact, photo, or the live DB). Returns blockers (empty = package written). A record of an
+        earlier execution that cannot be read is one, naming it (RUL-unreadable_execution_record_stops)."""
+        try:
+            return self._finalize_package(now_iso)
+        except UnreadableRecord as e:
+            return [f"{e} — repair it, or move it out of {CONTROL_DIR}/ if it cannot be repaired; nothing was "
+                    "written."]
+
+    def _finalize_package(self, now_iso):
         ws = self.workspace_root
         if not os.path.exists(executable_plan_path(ws)):
             return [f"No {EXECUTABLE_PLAN_ARTIFACT} — run `plan` then `execute` first."]
         if not os.path.exists(execution_summary_path(ws)):
             return [f"No {EXECUTION_SUMMARY_ARTIFACT} — `execute` the plan first."]
         plan = json.load(open(executable_plan_path(ws)))
-        summary = json.load(open(execution_summary_path(ws)))
+        summary = _read_record(execution_summary_path(ws))
         blk = []
         if plan.get("status") != "ready":
             blk.append(f"{EXECUTABLE_PLAN_ARTIFACT} status is {plan.get('status')!r}, not 'ready'.")
@@ -2317,11 +2343,7 @@ class GeotagWorkflow:
         and one the plan never knew. What finalize packages is what merge trusts as geotag's work, so it is checked, not
         taken from whatever is on disk."""
         ws = self.workspace_root
-        try:
-            with open(journal_path(ws, plan["plan_id"])) as f:
-                after = (json.load(f) or {}).get("media_after") or {}
-        except (OSError, ValueError):
-            after = {}
+        after = (_read_record(journal_path(ws, plan["plan_id"])) or {}).get("media_after") or {}
         final = {}
         for dd in (plan.get("destinations") or {}).values():
             for op in dd.get("operations") or []:
@@ -2374,26 +2396,21 @@ class GeotagWorkflow:
     def _earlier_passes(self, current_plan_id):
         """[(plan, confirmed operation ids)] of every geotag pass executed before the current plan,
         oldest first: each superseded plan (kept as photos-24-...-NNN.json, numbered in the order they
-        were set aside) whose journal shows it ran (BLD-geotag_log_steps)."""
+        were set aside) whose journal shows it ran (BLD-geotag_log_steps). A kept plan or journal that cannot be read
+        raises UnreadableRecord: a pass is never left out of the log unsaid (RUL-unreadable_execution_record_stops)."""
         ws = self.workspace_root
         stem = os.path.splitext(EXECUTABLE_PLAN_ARTIFACT)[0]
         backups = sorted(glob.glob(os.path.join(ws, CONTROL_DIR, f"{stem}-[0-9][0-9][0-9]*.json")),
                          key=lambda p: int(os.path.basename(p)[len(stem) + 1:-len(".json")] or 0))
         out, seen = [], {current_plan_id}
         for p in backups:
-            try:
-                plan = json.load(open(p))
-            except (OSError, ValueError):
-                continue
+            plan = _read_record(p) or {}
             pid = plan.get("plan_id")
             jp = journal_path(ws, pid) if pid else None
             if pid in seen or not jp or not os.path.exists(jp):
                 continue
             seen.add(pid)
-            try:
-                ops = (json.load(open(jp)) or {}).get("operations") or {}
-            except (OSError, ValueError):
-                continue
+            ops = (_read_record(jp) or {}).get("operations") or {}
             out.append((plan, {oid for oid, st in ops.items() if st == "confirmed"}))
         return out
 
@@ -2405,16 +2422,10 @@ class GeotagWorkflow:
         stem = os.path.splitext(EXECUTABLE_PLAN_ARTIFACT)[0]
         known = {current_plan_id}
         for p in glob.glob(os.path.join(ws, CONTROL_DIR, f"{stem}-[0-9][0-9][0-9]*.json")):
-            try:
-                known.add(json.load(open(p)).get("plan_id"))
-            except (OSError, ValueError):
-                continue
+            known.add((_read_record(p) or {}).get("plan_id"))
         missing = []
         for jp in sorted(glob.glob(os.path.join(ws, CONTROL_DIR, "journal-*.json"))):
-            try:
-                j = json.load(open(jp)) or {}
-            except (OSError, ValueError):
-                continue
+            j = _read_record(jp) or {}
             ops = j.get("operations")
             if isinstance(ops, dict) and any(st == "confirmed" for st in ops.values()) and j.get("plan_id") not in known:
                 missing.append(j.get("plan_id"))
@@ -2921,7 +2932,13 @@ def run(args):
             now_iso = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
             execution_id = sha256_text(f"{now_iso}|{os.getpid()}")[:12]
             jobs = args.jobs or CONFIG.get("jobs") or 4
-            summary = wf.execute_plan(jobs, now_iso, execution_id)
+            try:
+                summary = wf.execute_plan(jobs, now_iso, execution_id)
+            except UnreadableRecord as e:
+                reporter.error(f"\nExecution cannot proceed: {e}. Nothing was changed.")
+                emit_next_step(reporter, f"repair it (or move it out of {CONTROL_DIR}/ if it cannot be "
+                                         "repaired), then re-run `geotag execute`.")
+                sys.exit(2)
             if summary.get("status") == "rejected":
                 reporter.error("\nExecution rejected — the plan is stale; re-run `geotag plan` to replan:")
                 for s in summary["stale"]:

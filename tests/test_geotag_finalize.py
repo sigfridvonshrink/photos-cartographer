@@ -755,3 +755,52 @@ def test_finalize_runs_without_exiftool_plan_and_execute_do_not(tmp_path, monkey
     out = capsys.readouterr()
     assert "exiftool not found" not in out.out + out.err
     assert (ctl / "photos-26-archive-manifest.json").exists()
+
+
+def _planned(monkeypatch, ws, ctl):
+    _run(monkeypatch, ws, "plan")
+    _run(monkeypatch, ws, "plan")
+    return json.load(open(ctl / "photos-24-executable-plan.json"))["plan_id"]
+
+
+@pytest.mark.spec("RUL-unreadable_execution_record_stops", "BLD-unreadable_execution_records",
+                  test="TST-geotag_finalize-execute_stops_on_an_unreadable_journal_or_summary")
+@pytest.mark.parametrize("record", ["journal", "summary"])
+def test_execute_stops_on_an_unreadable_journal_or_summary(tmp_path, monkeypatch, capsys, record):
+    """A journal or an execution summary of the plan that cannot be read is never taken for none: execute stops
+    before it keeps, snapshots or writes anything, naming the file, and leaves the file as it is."""
+    ws, ctl = _ready_ws(tmp_path, monkeypatch)
+    plan_id = _planned(monkeypatch, ws, ctl)
+    journal, summary = ctl / f"journal-{plan_id}.json", ctl / "photos-25-execution-summary.json"
+    bad = journal if record == "journal" else summary
+    bad.write_text('{"operations": {"x": "confirm')                      # torn: not JSON
+    written = []
+    monkeypatch.setattr(cal.GeotagWorkflow, "_exiftool_write", lambda self, p, t: written.append(p) or True)
+    capsys.readouterr()
+    assert _run(monkeypatch, ws, "execute") == 2
+    out = capsys.readouterr()
+    assert str(bad) in out.out + out.err and "cannot be read" in out.out + out.err
+    assert written == [] and not (ctl / "executed").exists()
+    assert bad.read_text() == '{"operations": {"x": "confirm'
+    assert (journal if record == "summary" else summary).exists() is False
+
+
+@pytest.mark.spec("RUL-unreadable_execution_record_stops", "BLD-unreadable_execution_records",
+                  test="TST-geotag_finalize-finalize_stops_on_an_unreadable_record_of_a_pass")
+@pytest.mark.parametrize("record", ["own_journal", "kept_plan", "other_journal", "list_not_object"])
+def test_finalize_stops_on_an_unreadable_record_of_a_pass(tmp_path, monkeypatch, capsys, record):
+    """The plan's journal, a kept plan or any journal finalize reads to find the earlier passes, unreadable, stops
+    finalize writing nothing: no pass is left out of the log unsaid, no photo judged by a baseline it lacks."""
+    ws, ctl = _ready_ws(tmp_path, monkeypatch)
+    _to_executed(monkeypatch, ws, ctl)
+    plan_id = json.load(open(ctl / "photos-24-executable-plan.json"))["plan_id"]
+    bad = {"own_journal": ctl / f"journal-{plan_id}.json",
+           "kept_plan": ctl / "photos-24-executable-plan-007.json",
+           "other_journal": ctl / "journal-0123456789abcdef.json",
+           "list_not_object": ctl / "journal-0123456789abcdef.json"}[record]
+    bad.write_text("[]" if record == "list_not_object" else "{not json")
+    capsys.readouterr()
+    assert _run(monkeypatch, ws, "finalize") == 2
+    out = capsys.readouterr()
+    assert str(bad) in out.out + out.err and "cannot be read" in out.out + out.err
+    assert not list(ctl.glob("photos-26-*"))

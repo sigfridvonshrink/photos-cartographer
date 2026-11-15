@@ -868,6 +868,20 @@ The journal is what later says which run changed which photo. A run that falls o
 :::
 
 
+:::{rat} A record that cannot be read is not an empty one
+:id: RAT-unreadable_record_not_empty
+:status: ruled
+:forced: yes
+:follows_from: RAT-record_covers_broken_runs
+:justifies: RUL-unreadable_execution_record_stops
+
+A journal says which of a plan's changes were made and how each photo was left; the execution summary holds the
+user's acceptance of a changed picture; a kept plan and its journal are a pass the log must tell. Taken as empty, the
+first is written over by the next confirmation, the second loses its acceptances, the third drops a pass from the
+log without a word — each loss silent, and none recoverable from the photos. A damaged record is the user's to look
+at; stopping and naming it keeps it as it is until they have.
+:::
+
 ## 21. Finalize
 
 :::{rat} The package records what was done
