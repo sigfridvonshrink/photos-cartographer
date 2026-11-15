@@ -139,7 +139,8 @@ class GeotagCache:
             "resolved_utc TEXT, resolved_utc_status TEXT, resolved_utc_provenance TEXT)")
         self.conn.execute(
             "CREATE TABLE IF NOT EXISTS original_values ("
-            "content_fingerprint TEXT PRIMARY KEY, relative_path TEXT, original TEXT, captured_at TEXT)")
+            "content_fingerprint TEXT PRIMARY KEY, relative_path TEXT, original TEXT, captured_at TEXT, "
+            "times_written TEXT)")
         self.conn.commit()
 
     def replace_all(self, rows):
@@ -173,6 +174,24 @@ class GeotagCache:
     def originals_all(self):
         cur = self.conn.execute("SELECT content_fingerprint, original FROM original_values")
         return {r[0]: json.loads(r[1]) for r in cur.fetchall()}
+
+    def time_written_record(self, fp, pair):
+        """Record, beside a pinned file's own values, a time and offset geotag is about to write to it
+        (BLD-time_written_recorded): every one is kept, so a re-plan knows each time the photo can hold from geotag.
+        A file with no pin is not recorded."""
+        with self.conn:
+            row = self.conn.execute("SELECT times_written FROM original_values WHERE content_fingerprint = ?",
+                                    (fp,)).fetchone()
+            if row is None:
+                return
+            times = json.loads(row[0] or "[]")
+            if pair not in times:
+                self.conn.execute("UPDATE original_values SET times_written = ? WHERE content_fingerprint = ?",
+                                  (json.dumps(times + [pair], sort_keys=True), fp))
+
+    def times_written_all(self):
+        cur = self.conn.execute("SELECT content_fingerprint, times_written FROM original_values")
+        return {r[0]: json.loads(r[1] or "[]") for r in cur.fetchall()}
 
     def close(self):
         self.conn.close()
@@ -623,7 +642,7 @@ class GeotagWorkflow:
         files = []
         cache = GeotagCache(self.workspace_root)
         try:
-            originals = cache.originals_all()
+            originals, written = cache.originals_all(), cache.times_written_all()
         finally:
             cache.close()
         earlier = self._retaken()
@@ -663,6 +682,7 @@ class GeotagWorkflow:
                                   and geotag_marker(parsed.get("GPSProcessingMethod")) not in POSITION_MARKERS,
                 "geotag_marker": geotag_marker(parsed.get("GPSProcessingMethod")),
                 "processing_method": parsed.get("GPSProcessingMethod"),   # the value a time mark extends
+                "other_times": held_other_times(parsed),     # what a time write rewrites (BLD-other_time_fields_written)
                 "own_values": own_values(dict(parsed, has_native_gps=bool(md.get("has_native_gps")
                                                                            or parsed.get("has_native_gps")))),
                 "metadata_field_set_version": md.get("field_set_version", FIELD_SET_VERSION),
@@ -678,7 +698,8 @@ class GeotagWorkflow:
             if key in walked:
                 key = None
             if key is not None:                        # decide from the file's own values (BLD-decided_from_own_values)
-                files[-1] = dict(from_originals(files[-1], originals[key]), original_key=key)
+                files[-1] = dict(from_originals(files[-1], originals[key]), original_key=key,
+                                 times_written=written.get(key) or [])   # the times geotag wrote (BLD-time_written_recorded)
         files.sort(key=lambda f: f["relative_path"])
         return files
 
@@ -1536,6 +1557,9 @@ class GeotagWorkflow:
             row = utc_by_path.get(f["relative_path"])
             if not row or row.get("resolved_utc_status") != "valid":
                 blockers.append(f"{f['relative_path']}: no valid resolved UTC.")
+            changed = changed_time_blocker(f)     # a time put in the photo since geotag wrote it (BLD-changed_time_blocks)
+            if changed:
+                blockers.append(changed)
 
         by_dest = {}
         for f in files:
@@ -1587,7 +1611,7 @@ class GeotagWorkflow:
                             "timezone_because": f"photos-21 destinations.{dest}.destination_timezone",
                             "because": offset_decision_pointer(
                                 dict(row, camera_group=row.get("camera_group") or f.get("camera_group_key")), dest, cells)}
-                        o["pre_state"] = held_time_pre_state(f)   # the time and offset it replaces, for the log
+                        o["pre_state"] = held_time_pre_state(f, o["writes"])   # every value it replaces, for the log
                     elif o["type"] == "metadata_gps_write" and o.get("gps_origin") == "recompute_automated":
                         # the track that placed it, and the instant it was placed at: what the position rests on
                         o["provenance"] = {"gpx_file": track_of.get(rel), "resolved_utc": ru}
@@ -1699,10 +1723,19 @@ class GeotagWorkflow:
     def _exiftool_read(self, abs_path, keys):
         """The file's current values of `keys`, numeric (-n), as exiftool reports them; {} if it cannot be read.
         The seam the tests mock, beside `_exiftool_write`."""
+        # A key naming its group (`IPTC:DateCreated`) is read by group, every group apart (-a -G0), so it is reported
+        # under that name; a plain one as exiftool's own choice among the groups holding it.
+        held = {}
         try:
-            out = subprocess.run(["exiftool", "-j", "-n"] + [f"-{k}" for k in keys] + [abs_path],
-                                 capture_output=True, text=True, stdin=subprocess.DEVNULL)
-            return (json.loads(out.stdout) or [{}])[0] if out.returncode == 0 else {}
+            for ks, opts in (([k for k in keys if ":" not in k], []), ([k for k in keys if ":" in k], ["-a", "-G0"])):
+                if not ks:
+                    continue
+                out = subprocess.run(["exiftool", "-j", "-n"] + opts + [f"-{k}" for k in ks] + [abs_path],
+                                     capture_output=True, text=True, stdin=subprocess.DEVNULL)
+                if out.returncode != 0:
+                    return {}
+                held.update((json.loads(out.stdout) or [{}])[0])
+            return held
         except Exception:
             return {}
 
@@ -1930,6 +1963,11 @@ class GeotagWorkflow:
                 if (fp and f["relative_path"] in by_file and not f.get("from_originals")
                         and geotag_marker(held_values(f).get("method")) is None):
                     cache.originals_pin(fp, f["relative_path"], f["own_values"], now_iso)
+                # and, before it is written, the time geotag writes to it (BLD-time_written_recorded): whether the write
+                # lands or is interrupted, a re-plan knows the time as geotag's own
+                for o in by_file.get(f["relative_path"]) or []:
+                    if fp and o["type"] == "metadata_time_write" and journal.get(o["operation_id"]) != "confirmed":
+                        cache.time_written_record(fp, {k: o["writes"].get(k) for k in TIME_PAIR})
 
             results = []
             self.coordinator.start_phase("applying calibration", len(by_file))

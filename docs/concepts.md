@@ -245,7 +245,10 @@ and is labelled `timezone_unconfirmed`.*
 
 Each destination's **timezone** is what turns a local time into UTC and back: geotag writes every
 photo's corrected time as its destination's local time, with its offset beside it, and names the file by
-it. A destination gets its zone from:
+it. The time goes into `DateTimeOriginal` and into each other field of the making the photo already holds —
+`CreateDate` (with its offset), XMP's `DateCreated`, IPTC's `DateCreated` and `TimeCreated` — never adding
+one. `ModifyDate`, the time of the last edit, keeps its value, and so do the fractions of a second: an
+offset is whole seconds, so they still hold. A destination gets its zone from:
 
 - **a zone you write** — on it, or on a folder above it, the nearest one applying automatically;
 - **its country**: you say which country a folder is in — once, at the top of its tree, whatever the
@@ -380,7 +383,11 @@ development subfolder; a camera group not yet classed; a photo there with no rec
 in `2-missing-metadata/`) or with no fingerprint (move it out, or repair it so ImageMagick can read it,
 then run prep); a `gpx_root` that is not there, or tracks of which not one can be read; a local time at a
 daylight-saving change; a decision file that doesn't parse or holds an invalid value (it is kept as
-written for you to fix); prep's record made by another fingerprint method (run prep again).
+written for you to fix); prep's record made by another fingerprint method (run prep again). And a photo
+whose time (`DateTimeOriginal` or its offset) was changed — in another tool — since geotag wrote to it:
+geotag decides from the photo's own time from before its first write, and neither writes its time back
+over yours nor takes yours instead. The stop names the time the photo holds, the one geotag wrote and the
+photo's own; put one of those back, then run prep and geotag again.
 
 **Geotag execute and finalize** — a plan no longer current (plan again). Execute leaves a photo edited
 since the plan untouched; finalize refuses while a photo has changed since execute.

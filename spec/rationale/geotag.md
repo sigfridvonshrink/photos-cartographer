@@ -659,6 +659,20 @@ Completeness is bought with precision that varies: one photo sits on a track poi
 Once a photo's true instant is known it could be written as UTC, as the camera's home time, or as the time where it was taken. A library is browsed by people: the morning market should read as morning. Written as the destination's local time with its offset beside it, the photo both reads as it was lived and still states its exact instant.
 :::
 
+:::{rat} One making, one time, in every field that records it
+:id: RAT-every_field_one_time
+:status: ruled
+:forced: no
+:follows_from: RAT-time_written_as_lived, RAT-shutter_time_first
+:justifies: RUL-other_capture_times_corrected
+
+A photo can record when it was made in more than one field — EXIF's `CreateDate` beside `DateTimeOriginal`, the
+`DateCreated` of XMP and of IPTC — and a program reading any of them should find the corrected time, not the camera's
+wrong one beside the right one. Only a field the photo already holds is rewritten: one it never held would be a record
+nobody made. `ModifyDate` is not the making but the last edit, and keeps its time. The fractions of a second recorded
+beside a time stay as they are: a clock offset is a whole number of seconds, so the fraction is still the right one.
+:::
+
 
 ## 19. The executable plan
 

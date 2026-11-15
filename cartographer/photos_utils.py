@@ -1572,7 +1572,8 @@ def _zfs_snapshot_exists(snap: str) -> bool:
 
 # 2: every field taken from an explicit group order (METADATA_GROUP_ORDER), the group-qualified
 #    XMP:/QuickTime: date fields gone (they were never filled), no raw payload kept.
-FIELD_SET_VERSION = 2
+# 3: the other time fields geotag rewrites kept as well, each from its own group (OTHER_TIME_FIELDS).
+FIELD_SET_VERSION = 3
 # 2: a file's recorded time is the first field holding a valid time, not the first present.
 METADATA_SCHEMA_VERSION = 2
 CAMERA_GROUP_KEY_VERSION = 1
@@ -2197,6 +2198,13 @@ METADATA_FIELDS = (
     "ImageWidth", "ImageHeight", "Orientation", "Rotation", "Duration",
 )
 
+# The other fields a photo records its making in, each kept from its own group as exiftool -G0 names it — not by
+# the group order — so geotag knows which of them a photo holds, and rewrites to the corrected time exactly those
+# (BLD-other_time_fields_read, BLD-other_time_fields_written). `-n` gives each as written: EXIF `YYYY:MM:DD HH:MM:SS`,
+# XMP `YYYY:MM:DD HH:MM:SS[.ff]+HH:MM` (ISO in the file), IPTC's date `YYYY:MM:DD` and time `HH:MM:SS+HH:MM`.
+OTHER_TIME_FIELDS = ("EXIF:CreateDate", "EXIF:OffsetTimeDigitized", "XMP:DateCreated", "IPTC:DateCreated",
+                     "IPTC:TimeCreated")
+
 
 def metadata_field(item, field, valid=None):
     """`(group, value)` of `field` in a group-qualified exiftool record: from the first group of its order
@@ -2248,6 +2256,8 @@ class MetadataReader:
         for field in METADATA_FIELDS:
             valid = (lambda v: parse_naive_time(v) is not None) if field in RECORDED_TIME_TAGS else None
             groups[field], parsed[field] = metadata_field(item, field, valid)
+        for field in OTHER_TIME_FIELDS:
+            parsed[field] = item.get(field)
 
         # Build group_key for camera identity grouping based on standard elements
         ident_parts = []

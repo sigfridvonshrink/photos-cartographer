@@ -128,9 +128,9 @@ def _ops(ws):
     return out
 
 
-def _executed_and_reprepped(ws, renamed_on_disk=False):
+def _executed_and_reprepped(ws, renamed_on_disk=False, renamed=True):
     """Fold photos-24's writes and renames into the handoff, as a re-prep reads the files back.
-    `renamed_on_disk`: a real execute already renamed the files."""
+    `renamed_on_disk`: a real execute already renamed the files; not `renamed`: the writes landed, the renames not."""
     ops = _ops(ws)
     ho = json.loads((ws / ".photos-ingest" / "photos-11-handoff.json").read_text())
     for f in ho["files"]:
@@ -150,7 +150,7 @@ def _executed_and_reprepped(ws, renamed_on_disk=False):
         has = parsed.get("GPSLatitude") is not None
         parsed["has_native_gps"] = ms["has_native_gps"] = has
         ms["parsed_json"] = json.dumps(parsed)
-        if e["to"]:
+        if e["to"] and renamed:
             old = ws / f["relative_path"]
             f["relative_path"] = os.path.join(os.path.dirname(f["relative_path"]), e["to"])
             if not renamed_on_disk:
@@ -439,7 +439,7 @@ def test_originals_are_pinned_once_and_complete(tmp_path, monkeypatch):
     ws = _executed_round(tmp_path, monkeypatch)
     pinned = _originals(ws)
     assert pinned == {"fp-a.arw": {"DateTimeOriginal": "2024:07:03 14:20:00", "OffsetTimeOriginal": None,
-                                   "GPSLatitude": None, "GPSLongitude": None, "GPSProcessingMethod": None,
+                                   "CreateDate": None, "OffsetTimeDigitized": None, "GPSLatitude": None, "GPSLongitude": None, "GPSProcessingMethod": None,
                                    "has_native_gps": False,
                                    "selected_source_naive_timestamp": "2024:07:03 14:20:00",
                                    "selected_source_timestamp_tag": "DateTimeOriginal"}}
@@ -721,3 +721,122 @@ def test_a_fingerprint_taken_back_to_an_earlier_value_ends_the_walk(tmp_path, mo
     monkeypatch.setattr(cal.GeotagWorkflow, "_retaken", lambda self: {"fp-a.arw": "fp-old", "fp-old": "fp-a.arw"})
     files = wf.build_file_model()
     assert files and not any(f.get("original_key") for f in files)
+
+
+@pytest.mark.spec("BLD-original_values_pinned", "BLD-decided_from_own_values", "BLD-other_time_fields_written",
+                  test="TST-geotag_rerun_markers-a_time_read_from_createdate_is_decided_from_its_pinned_offset")
+def test_a_time_read_from_createdate_is_decided_from_its_pinned_offset():
+    """Geotag rewrites a photo's CreateDate and its offset with the corrected time, so both are pinned: a phone
+    photo whose time was read from CreateDate is resolved again by the offset its phone recorded, never by the
+    destination's offset geotag wrote — and the comparison side keeps what the photo holds now."""
+    parsed = {"selected_source_naive_timestamp": "2024:07:03 21:00:00", "selected_source_timestamp_tag": "EXIF:CreateDate",
+              "CreateDate": "2024:07:03 21:00:00", "OffsetTimeDigitized": "+09:00", "has_native_gps": False}
+    original = cal.own_values(parsed)
+    assert (original["CreateDate"], original["OffsetTimeDigitized"]) == ("2024:07:03 21:00:00", "+09:00")
+    now = {"relative_path": f"{T}/p.jpg", "raw_times": {"DateTimeOriginal": "2024:07:03 14:00:00",
+                                                        "OffsetTimeOriginal": "+02:00",
+                                                        "CreateDate": "2024:07:03 14:00:00", "OffsetTimeDigitized": "+02:00"},
+           "other_times": {"EXIF:CreateDate": "2024:07:03 14:00:00", "EXIF:OffsetTimeDigitized": "+02:00"}}
+    f = cal.from_originals(now, original)
+    assert f["raw_times"] == {"CreateDate": "2024:07:03 21:00:00", "OffsetTimeDigitized": "+09:00"}
+    assert cal._own_offset(f) == 9 * 3600
+    assert cal.held_values(f)["EXIF:OffsetTimeDigitized"] == "+02:00"                    # what it holds now
+
+
+# --- a time changed in the photo since geotag wrote it (BLD-changed_time_blocks) ----------------
+
+def _times_written(ws):
+    db = cal.GeotagCache(str(ws))
+    try:
+        return db.times_written_all()
+    finally:
+        db.close()
+
+
+def _hand_set_time(ws, dto, off):
+    """The photo's time set in another tool after geotag wrote it, as the next re-prep reads it back."""
+    ho = json.loads((ws / ".photos-ingest" / "photos-11-handoff.json").read_text())
+    (f,) = ho["files"]
+    parsed = json.loads(f["metadata_status"]["parsed_json"])
+    parsed.update(DateTimeOriginal=dto, OffsetTimeOriginal=off, selected_source_naive_timestamp=dto)
+    f["metadata_status"]["parsed_json"] = json.dumps(parsed)
+    _write_handoff(ws, ho["files"])
+
+
+def _plan_record(ws):
+    return json.loads((ws / ".photos-ingest" / "photos-24-executable-plan.json").read_text())
+
+
+@pytest.mark.parametrize("dto, off", [("2024:07:03 14:45:00", "+02:00"),      # the time put right by hand
+                                      ("2024:07:03 14:30:00", "+01:00")])     # or only its offset
+@pytest.mark.spec("RUL-changed_time_stops_plan", "BLD-changed_time_blocks",
+                  test="TST-geotag_rerun_markers-a_time_changed_since_geotag_wrote_it_stops_the_plan")
+def test_a_time_changed_since_geotag_wrote_it_stops_the_plan(tmp_path, monkeypatch, dto, off):
+    """A photo geotag corrected to 14:30 +02:00 from its own 14:20, then changed in another tool: the plan is
+    blocked on it, naming the photo, the time it holds, the time geotag wrote and its own — neither writing geotag's
+    time back nor deciding from the new one."""
+    ws = _executed_round(tmp_path, monkeypatch)
+    _hand_set_time(ws, dto, off)
+    _plan(monkeypatch, ws)
+    plan = _plan_record(ws)
+    assert plan["status"] == "blocked" and not plan["executable"]
+    (b,) = [b for b in plan["blockers"] if "2024-07-03--14-30-00.arw" in b]
+    assert f"{dto} {off}" in b and "2024:07:03 14:30:00 +02:00" in b and "2024:07:03 14:20:00 with no offset" in b
+    rows = cal.GeotagCache(str(ws))
+    try:
+        (row,) = rows.get_rows()
+    finally:
+        rows.close()
+    assert row["source_naive_time"] == "2024:07:03 14:20:00"          # still decided from its own time
+
+
+@pytest.mark.spec("RUL-changed_time_stops_plan", "BLD-time_written_recorded", "BLD-changed_time_blocks",
+                  test="TST-geotag_rerun_markers-a_photo_holding_what_geotag_wrote_plans_on")
+def test_a_photo_holding_what_geotag_wrote_plans_on(tmp_path, monkeypatch):
+    """The time geotag writes is recorded beside the pin before it is written; a re-plan of a photo holding it,
+    or holding its own time put back, is not blocked — and a changed decision after execute still reaches it."""
+    ws = _executed_round(tmp_path, monkeypatch)
+    assert _times_written(ws) == {"fp-a.arw": [{"DateTimeOriginal": "2024:07:03 14:30:00",
+                                                "OffsetTimeOriginal": "+02:00"}]}
+    _plan(monkeypatch, ws)
+    assert _ops(ws) == {}                                    # ready, and nothing to write
+    _hand_set_time(ws, "2024:07:03 14:20:00", None)          # its own time, put back
+    _plan(monkeypatch, ws)
+    assert _ops(ws)[f"{T}/2024-07-03--14-30-00.arw"]["writes"]["DateTimeOriginal"] == "2024:07:03 14:30:00"
+    _hand_set_time(ws, "2024:07:03 14:30:00", "+02:00")
+    _confirm_drift(ws, SLOW - 300)                           # a new decision: fifteen minutes slow
+    _plan(monkeypatch, ws)
+    _execute(monkeypatch, ws)
+    assert _times_written(ws)["fp-a.arw"] == [{"DateTimeOriginal": "2024:07:03 14:30:00", "OffsetTimeOriginal": "+02:00"},
+                                              {"DateTimeOriginal": "2024:07:03 14:25:00", "OffsetTimeOriginal": "+02:00"}]
+    _plan(monkeypatch, ws)
+    assert _ops(ws) == {}
+
+
+@pytest.mark.spec("RUL-changed_time_stops_plan", "BLD-time_written_recorded",
+                  test="TST-geotag_rerun_markers-an_interrupted_time_write_is_geotags_own")
+def test_an_interrupted_time_write_is_geotags_own(tmp_path, monkeypatch):
+    """A write that landed but was never confirmed — the photo's fingerprint could not be taken after it — leaves
+    the photo holding geotag's time with no record in the journal. The time was recorded before the write, so the
+    re-plan takes it as geotag's: not blocked, the time not written again, the rename still to do."""
+    ws = _ws(tmp_path, [lambda ws: _rec(ws, f"{T}/a.arw", "2024:07:03 14:20:00")])
+    _plan(monkeypatch, ws)
+    _set_offset(ws, SLOW)
+    _plan(monkeypatch, ws)
+    _confirm_drift(ws, SLOW)
+    _plan(monkeypatch, ws)
+    monkeypatch.setattr(cal.GeotagWorkflow, "_exiftool_write", lambda self, p, tags: True)
+    monkeypatch.setattr(cal.ContentHasher, "fingerprint_image",
+                        staticmethod(lambda p: {"status": "error", "value": None}))
+    monkeypatch.chdir(str(ws))
+    monkeypatch.setattr(sys, "argv", ["photos-2-geotag", "execute"])
+    try:
+        cal.main()
+    except SystemExit:
+        pass
+    summary = json.loads((ws / ".photos-ingest" / "photos-25-execution-summary.json").read_text())
+    assert summary["status"] == "partial" and summary["fingerprint_mismatches"]
+    _executed_and_reprepped(ws, renamed=False)               # the photo holds the planned time, under its old name
+    _plan(monkeypatch, ws)
+    e = _ops(ws)[f"{T}/a.arw"]
+    assert "metadata_time_write" not in e["types"] and e["to"] == "2024-07-03--14-30-00.arw"

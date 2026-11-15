@@ -329,6 +329,16 @@ recorded time's field and group, stamped with `exiftool`, its version, the field
 options, the metadata-schema version and the camera-group-key version.
 :::
 
+:::{bld} The other time fields are kept by their group
+:id: BLD-other_time_fields_read
+:status: ruled
+:realises: RUL-metadata_kept_for_geotag, RUL-other_capture_times_corrected
+
+Prep SHALL keep in `parsed_json`, each under its group-qualified name and from that group alone, `EXIF:CreateDate`,
+`EXIF:OffsetTimeDigitized`, `XMP:DateCreated`, `IPTC:DateCreated` and `IPTC:TimeCreated`, so geotag knows which of the
+time fields it rewrites a photo holds.
+:::
+
 :::{bld} The handoff's camera groups and destination folders
 :id: BLD-handoff_grouping_facts
 :status: ruled

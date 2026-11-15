@@ -610,10 +610,33 @@ own, and the GPS beside it native.
 :status: ruled
 :realises: RUL-geotag_rerun_keeps_settled
 
-Before geotag's first write to a file, execution SHALL pin its own time, offset tag, position and `GPSProcessingMethod`
-in an original-values ledger keyed by fingerprint, once, unless it already carries geotag's mark; a later plan decides
-about a pinned file from those values and plans only the writes that differ from what it holds
-({need}`BLD-decided_from_own_values`).
+Before geotag's first write to a file, execution SHALL pin its own recorded time, its `DateTimeOriginal` and
+`CreateDate` with their offset tags, its position and `GPSProcessingMethod` in an original-values ledger keyed by
+fingerprint, once, unless it already carries geotag's mark; a later plan decides about a pinned file from those values
+and plans only the writes that differ from what it holds ({need}`BLD-decided_from_own_values`).
+:::
+
+:::{bld} The times geotag writes are recorded beside the pin
+:id: BLD-time_written_recorded
+:status: ruled
+:realises: RUL-changed_time_stops_plan
+:uses: BLD-original_values_pinned
+
+Before it writes a time to a file whose own values are pinned, execution SHALL record the `DateTimeOriginal` and
+`OffsetTimeOriginal` it writes beside the pin in the original-values ledger, keeping every one it has recorded there,
+so a write interrupted after it landed is known as geotag's own.
+:::
+
+:::{bld} A plan stops on a time changed since geotag wrote it
+:id: BLD-changed_time_blocks
+:status: ruled
+:realises: RUL-changed_time_stops_plan
+:uses: BLD-time_written_recorded
+
+The executable plan SHALL be `blocked` by a file with pinned values whose `DateTimeOriginal` and `OffsetTimeOriginal`
+are neither the pinned pair nor one the ledger records geotag writing, its blocker naming the file, the pair it holds,
+the last pair geotag wrote to it — or that geotag wrote it no time — and its pinned pair; a file with no pin is not
+checked, and only those two fields are compared.
 :::
 
 :::{bld} A re-run treats a marked file as geotag's work
@@ -839,7 +862,7 @@ the destination's folder fallback, with the destination it was accepted from.
 
 Geotag's steps SHALL be `clock_offset_applied` (its `offset_seconds` with an `offset_description` in words, such as
 "camera clock 1 h 55 min ahead of UTC"), `resolved_utc`, `timezone_resolved`, `time_written` (with its `writes`, the
-`pre_state` it replaced, the field `read_from` and the `rule`, from the plan), `gps_written` (with its
+`pre_state` it replaced — the value each field it writes held — the field `read_from` and the `rule`, from the plan), `gps_written` (with its
 origin, method and, for a manual position, the position it replaced, from the plan), `gps_cleared` (a position geotag
 wrote and no longer places, with that position, from the plan, and the method left), `gps_preserved` and `final_rename`,
 each naming its `run`; finalize takes them from every executed pass — each superseded `photos-24` whose journal shows it
@@ -876,7 +899,8 @@ the log's `warnings`, the log then `partial`, any pass whose journal is kept but
 The workspace database SHALL be SQLite, `photos-00-ingest.db` in `.photos-ingest/`, written by: prep, of the file and
 metadata caches (`file_cache`, `metadata_cache`) and their version row (`meta`), through its single-writer path (execute's main
 thread); geotag, of the resolved-UTC cache (`resolved_utc_cache`), the values each photo held before geotag first wrote
-to it (`original_values`, {need}`BLD-original_values_pinned`); merge, of the library-file fingerprint cache
+to it and the times geotag wrote to it (`original_values`, {need}`BLD-original_values_pinned`,
+{need}`BLD-time_written_recorded`); merge, of the library-file fingerprint cache
 (`library_fingerprint_cache`, keyed by the library file's absolute path with its size and modification time). Where each
 photo landed is in merge's
 JSON records, not the database. The other databases are scratch, re-derivable and deletable at any time: prep's

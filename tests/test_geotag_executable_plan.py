@@ -48,6 +48,40 @@ def test_time_write_carries_its_offset():
     assert w == {"DateTimeOriginal": "2024:07:03 14:12:21", "OffsetTimeOriginal": "+02:00"}
 
 
+@pytest.mark.spec("RUL-other_capture_times_corrected", "BLD-other_time_fields_written", "BLD-geotag_log_steps",
+                  test="TST-geotag_executable_plan-the_other_time_fields_it_holds_are_written_with_the_time")
+def test_the_other_time_fields_it_holds_are_written_with_the_time():
+    """Each other field recording the making that the photo holds is written to the corrected local time, in its
+    own format — XMP keeping the fraction of a second its value held — and the write records what each held. A
+    field the photo does not hold is never added; ModifyDate, its offset and the sub-second fields are not written."""
+    held = {"EXIF:CreateDate": "2024:07:03 13:12:21", "EXIF:OffsetTimeDigitized": "+01:00",
+            "XMP:DateCreated": "2024:07:03 13:12:21.58+01:00", "IPTC:DateCreated": "2024:07:03",
+            "IPTC:TimeCreated": "13:12:21+01:00"}
+    f = dict(_file(), other_times=held,
+             raw_times={"DateTimeOriginal": "2024:07:03 13:12:21", "ModifyDate": "2024:07:09 10:00:00",
+                        "OffsetTime": "+01:00"})
+    (op,) = [o for o in cal.plan_file_ops(f, UTC, "Europe/Brussels", "preserve_native", None, None)
+             if o["type"] == "metadata_time_write"]
+    assert op["writes"] == {"DateTimeOriginal": "2024:07:03 14:12:21", "OffsetTimeOriginal": "+02:00",
+                            "EXIF:CreateDate": "2024:07:03 14:12:21", "EXIF:OffsetTimeDigitized": "+02:00",
+                            "XMP:DateCreated": "2024:07:03 14:12:21.58+02:00", "IPTC:DateCreated": "2024:07:03",
+                            "IPTC:TimeCreated": "14:12:21+02:00"}
+    assert cal.held_time_pre_state(f, op["writes"]) == {"DateTimeOriginal": "2024:07:03 13:12:21",
+                                                         "OffsetTimeOriginal": None, **held}
+    # only what it holds: a CreateDate without its offset field, an XMP date with no time in it
+    f = dict(_file(), other_times={"EXIF:CreateDate": "2024:07:03 13:12:21", "XMP:DateCreated": "2024:07:03"})
+    w = cal.plan_file_ops(f, UTC, "Europe/Brussels", "preserve_native", None, None)[0]["writes"]
+    assert w == {"DateTimeOriginal": "2024:07:03 14:12:21", "OffsetTimeOriginal": "+02:00",
+                 "EXIF:CreateDate": "2024:07:03 14:12:21", "XMP:DateCreated": "2024:07:03 14:12:21+02:00"}
+    # held already, every one of them: nothing to write; one left behind is written with the rest
+    done = {k: v for k, v in op["writes"].items() if ":" in k}
+    f = dict(_file(), other_times=done,
+             raw_times={"DateTimeOriginal": "2024:07:03 14:12:21", "OffsetTimeOriginal": "+02:00"})
+    assert "metadata_time_write" not in _types(cal.plan_file_ops(f, UTC, "Europe/Brussels", "preserve_native", None, None))
+    f["other_times"] = dict(done, **{"IPTC:TimeCreated": "13:12:21+01:00"})
+    assert cal.plan_file_ops(f, UTC, "Europe/Brussels", "preserve_native", None, None)[0]["writes"] == op["writes"]
+
+
 @pytest.mark.spec("RUL-mutate_on_difference", test="TST-geotag_executable_plan-a_time_the_file_holds_is_not_written_again")
 def test_a_time_the_file_holds_is_not_written_again():
     f = dict(_file(), raw_times={"DateTimeOriginal": "2024:07:03 14:12:21", "OffsetTimeOriginal": "+02:00"})

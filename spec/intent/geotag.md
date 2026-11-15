@@ -1129,6 +1129,18 @@ Geotag SHALL write each photo's true time into it as its destination's local tim
 Geotag SHALL write beside each time it writes that time's offset from UTC.
 :::
 
+:::{rul} Every field recording the making holds the corrected time
+:id: RUL-other_capture_times_corrected
+:status: ruled
+:criticality: med
+:verify: required
+:refines: RUL-corrected_time_written_local
+:uses: DEF-geotag, DEF-destination
+
+Geotag SHALL write each photo's true time, as its destination's local time, also into every other field in which the
+photo already records when it was made, adding none it does not hold.
+:::
+
 
 ## 19. The executable plan
 

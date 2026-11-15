@@ -40,7 +40,7 @@ from .photos_utils import (
     validate_config, sha256_file, sha256_text, media_class_for_ext, folder_name,
     folders_fingerprint, media_extensions_fingerprint,
     selected_gpx_root, is_gpx_file, FIELD_SET_VERSION, CAMERA_GROUP_KEY_VERSION, FOLDER_ROLES,
-    parse_naive_time,
+    parse_naive_time, OTHER_TIME_FIELDS,
     missing_managed_folders, by_dest_reprep_pending,
     json_dependency, verify_json_dependency, handoff_content_fingerprint, write_json_artifact, write_versioned_json, db_path, ensure_control_dir,
     journal_path, ContentHasher, _move_no_clobber, allocate_suffix, carries_stem, track_memo_db_path,
@@ -59,6 +59,9 @@ __all__ = [
     'from_originals',
     'device_method',
     'held_values',
+    'TIME_PAIR',
+    'held_other_times',
+    'changed_time_blocker',
     'POSITION_MARKERS',
     'TIME_FIXED_SUFFIX',
     'geotag_marker',
@@ -1242,9 +1245,14 @@ def device_method(processing_method):
     return v[:-len(TIME_FIXED_SUFFIX)] if v.endswith(TIME_FIXED_SUFFIX) else v
 
 
-# What the original-values ledger pins of a file before geotag first writes to it (BLD-original_values_pinned).
+# What the original-values ledger pins of a file before geotag first writes to it (BLD-original_values_pinned): its
+# recorded time, and each time field geotag writes that a phone's time is resolved by, with its offset.
 ORIGINAL_KEYS = ("selected_source_naive_timestamp", "selected_source_timestamp_tag", "DateTimeOriginal",
-                 "OffsetTimeOriginal", "GPSLatitude", "GPSLongitude", "GPSProcessingMethod", "has_native_gps")
+                 "OffsetTimeOriginal", "CreateDate", "OffsetTimeDigitized", "GPSLatitude", "GPSLongitude",
+                 "GPSProcessingMethod", "has_native_gps")
+_PINNED_TIMES = ("DateTimeOriginal", "OffsetTimeOriginal", "CreateDate", "OffsetTimeDigitized")
+# The time a photo holds, as a re-plan compares it with its own and with what geotag wrote (BLD-changed_time_blocks).
+TIME_PAIR = ("DateTimeOriginal", "OffsetTimeOriginal")
 
 
 def own_values(parsed):
@@ -1256,9 +1264,9 @@ def own_values(parsed):
 def from_originals(file, original):
     """`file` decided from its pinned `original` values — as the device left it, before geotag's first
     write — while `held` keeps what it holds now, for the comparison. Pure; returns a new dict."""
-    f = dict(file, held=held_values(file), from_originals=True)
-    rt = {k: v for k, v in (file.get("raw_times") or {}).items() if k not in ("DateTimeOriginal", "OffsetTimeOriginal")}
-    for k in ("DateTimeOriginal", "OffsetTimeOriginal"):
+    f = dict(file, held=held_values(file), from_originals=True, own_time={k: original.get(k) for k in TIME_PAIR})
+    rt = {k: v for k, v in (file.get("raw_times") or {}).items() if k not in _PINNED_TIMES}
+    for k in _PINNED_TIMES:
         if original.get(k) is not None:
             rt[k] = original[k]
     method = original.get("GPSProcessingMethod")
@@ -1281,7 +1289,41 @@ def held_values(file):
         return file["held"]
     rt, ng = file.get("raw_times") or {}, file.get("native_gps") or {}
     return {"DateTimeOriginal": rt.get("DateTimeOriginal"), "OffsetTimeOriginal": rt.get("OffsetTimeOriginal"),
-            "lat": ng.get("lat"), "lon": ng.get("lon"), "method": file.get("processing_method")}
+            "lat": ng.get("lat"), "lon": ng.get("lon"), "method": file.get("processing_method"),
+            **(file.get("other_times") or {})}
+
+
+def held_other_times(parsed):
+    """The other time fields a photo holds, by their group (BLD-other_time_fields_read): those geotag rewrites
+    to the corrected time when it writes one."""
+    return {k: parsed[k] for k in OTHER_TIME_FIELDS if parsed.get(k) is not None}
+
+
+def _time_text(pair):
+    """A time and its offset as a person reads them."""
+    if not pair or pair.get("DateTimeOriginal") is None:
+        return "no time"
+    off = pair.get("OffsetTimeOriginal")
+    return f"{pair['DateTimeOriginal']} {off}" if off else f"{pair['DateTimeOriginal']} with no offset"
+
+
+def changed_time_blocker(file):
+    """Why the plan stops on `file`, or None (BLD-changed_time_blocks): a photo geotag wrote to — its own values
+    pinned — that holds a time and offset which are neither its own from before geotag's first write nor one geotag
+    wrote: put there since by something else. Geotag neither writes its own time back over it nor takes it as the
+    photo's recorded time. A photo with no pin was never written by geotag here, and is not concerned."""
+    if not file.get("from_originals"):
+        return None
+    h = held_values(file)
+    held = {k: h.get(k) for k in TIME_PAIR}
+    written = file.get("times_written") or []
+    if held == {k: (file.get("own_time") or {}).get(k) for k in TIME_PAIR} or held in written:
+        return None
+    wrote = _time_text(written[-1]) if written else "no time"
+    return (f"{file['relative_path']}: holds the time {_time_text(held)}, but geotag wrote {wrote} to it, and its "
+            f"own time before geotag was {_time_text(file.get('own_time'))}. Its time was changed since geotag "
+            "wrote to it: geotag neither writes its time back nor takes this one as the photo's. Put one of those "
+            "back into the photo, then run `prep plan`, `prep execute` and `geotag plan` again.")
 
 
 def _local_time_and_offset(resolved_utc, tz):
@@ -1319,6 +1361,27 @@ def time_fixed_marker_op(file, method, clear_position=False):
     return _make_op("gps_marker_write", file["relative_path"], "time provenance", {"writes": writes}, pre)
 
 
+def _other_time_writes(held, dto, off):
+    """The corrected local time `dto` with its offset `off`, for each other field recording the photo's making
+    that the photo already holds (BLD-other_time_fields_written), each in its own format — never a field it does
+    not hold. ModifyDate and OffsetTime are the last edit's, and stay. A sub-second field stays too: a clock offset
+    is whole seconds, so the fraction beside the time is still right — and one within XMP's value is kept in it."""
+    w = {}
+    if held.get("EXIF:CreateDate") is not None:
+        w["EXIF:CreateDate"] = dto
+        if held.get("EXIF:OffsetTimeDigitized") is not None:
+            w["EXIF:OffsetTimeDigitized"] = off
+    xmp = held.get("XMP:DateCreated")
+    if xmp is not None:
+        frac = re.match(r"\.\d+", str(xmp)[19:]) if parse_naive_time(xmp) else None
+        w["XMP:DateCreated"] = dto + (frac.group(0) if frac else "") + off
+    if held.get("IPTC:DateCreated") is not None:
+        w["IPTC:DateCreated"] = dto[:10]
+    if held.get("IPTC:TimeCreated") is not None:
+        w["IPTC:TimeCreated"] = dto[11:] + off
+    return w
+
+
 def plan_file_ops(file, resolved_utc, tz, gps_category, gps_coord, rename):
     """The ordered executable operations for one file (BLD-executable_plan): corrected-time metadata write, GPS
     write + provenance marker, and no-clobber rename — each only where the file does not already
@@ -1334,6 +1397,7 @@ def plan_file_ops(file, resolved_utc, tz, gps_category, gps_coord, rename):
     dto, off = _local_time_and_offset(resolved_utc, tz)
     if dto is not None:
         writes = {"DateTimeOriginal": dto, "OffsetTimeOriginal": off}   # a local time always comes with its offset
+        writes.update(_other_time_writes(held, dto, off))
         time_corrected = True
         if any(held.get(k) != v for k, v in writes.items()):         # already held -> nothing to write
             ops.append(_make_op("metadata_time_write", rel, "corrected capture time", {"writes": writes}, pre))
@@ -1421,11 +1485,11 @@ def _with_record_hashes(steps, plan):
     return steps
 
 
-def held_time_pre_state(file):
-    """The time `file` holds now and the offset beside it, in the shape the log records beside the write
-    that replaces them (BLD-geotag_log_steps)."""
+def held_time_pre_state(file, writes):
+    """What `file` holds now in each field of a time write, `writes` — its time, the offset beside it and every
+    other time field the write replaces — in the shape the log records beside it (BLD-geotag_log_steps)."""
     h = held_values(file)
-    return {"DateTimeOriginal": h.get("DateTimeOriginal"), "OffsetTimeOriginal": h.get("OffsetTimeOriginal")}
+    return {k: h.get(k) for k in writes}
 
 
 def _time_written_step(time_op):

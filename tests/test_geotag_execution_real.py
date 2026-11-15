@@ -166,3 +166,58 @@ def test_a_written_photo_reads_back_as_its_planned_values(tmp_path, lat, lon):
     assert cal._holds_writes(wf._exiftool_read(str(img), sorted(writes)), writes)
     assert wf._exiftool_write(str(img), {"DateTimeOriginal": "2024:07:03 09:00:00"})        # edited elsewhere
     assert not cal._holds_writes(wf._exiftool_read(str(img), sorted(writes)), writes)
+
+
+def _prep_read(path):
+    """The photo's metadata as prep reads and keeps it (BLD-metadata_extraction, BLD-other_time_fields_read)."""
+    out = subprocess.run(["exiftool"] + utils.EXIFTOOL_METADATA_OPTIONS + [str(path)], capture_output=True, text=True)
+    return utils.MetadataReader._parse_exiftool_item(json.loads(out.stdout)[0])
+
+
+def _model_file(path, parsed):
+    """The photo as geotag's file model holds it, from prep's record."""
+    return {"relative_path": path.name, "content_fingerprint": "fp", "size": 1, "mtime_ns": 1,
+            "raw_times": {k: parsed[k] for k in ("DateTimeOriginal", "OffsetTimeOriginal") if parsed.get(k)},
+            "other_times": cal.held_other_times(parsed)}
+
+
+@pytest.mark.spec("RUL-other_capture_times_corrected", "BLD-other_time_fields_written", "BLD-other_time_fields_read",
+                  test="TST-geotag_execution_real-the_other_time_fields_are_rewritten_in_a_real_photo")
+def test_the_other_time_fields_are_rewritten_in_a_real_photo(tmp_path):
+    """Against the real binary, on a camera JPEG holding CreateDate, ModifyDate, their offsets and sub-seconds:
+    one copy given an XMP and an IPTC date too. Prep's read tells which fields each holds; geotag's time write puts
+    the corrected local time into exactly those, each in its own format, read back by prep as written — so a
+    re-plan finds nothing to write, and execute recognises its own write. ModifyDate, its offset and the sub-second
+    fields keep their values; the copy without XMP or IPTC is given neither."""
+    tagged = tmp_path / "tagged.jpg"; shutil.copy(FIXTURE, tagged)
+    bare = tmp_path / "bare.jpg"; shutil.copy(FIXTURE, bare)
+    subprocess.run(["exiftool", "-q", "-q", "-overwrite_original", "-XMP:DateCreated=2026:05:15 11:32:29.58+02:00",
+                    "-IPTC:DateCreated=2026:05:15", "-IPTC:TimeCreated=11:32:29+02:00", str(tagged)], check=True)
+    wf = cal.GeotagWorkflow(str(tmp_path))
+    for img in (tagged, bare):
+        before = _prep_read(img)
+        assert (before["DateTimeOriginal"], before["OffsetTimeOriginal"]) == ("2026:05:15 11:32:29", "+02:00")
+        assert before["EXIF:CreateDate"] == "2026:05:15 11:32:29"
+        f = _model_file(img, before)
+        (op,) = [o for o in cal.plan_file_ops(f, "2026-05-15T09:32:29Z", "Asia/Tokyo", "preserve_native", None, None)
+                 if o["type"] == "metadata_time_write"]
+        assert wf._exiftool_write(str(img), op["writes"])
+        assert cal._holds_writes(wf._exiftool_read(str(img), sorted(op["writes"])), op["writes"])
+        after = _prep_read(img)
+        assert (after["DateTimeOriginal"], after["OffsetTimeOriginal"]) == ("2026:05:15 18:32:29", "+09:00")
+        assert (after["EXIF:CreateDate"], after["EXIF:OffsetTimeDigitized"]) == ("2026:05:15 18:32:29", "+09:00")
+        for k in ("ModifyDate", "OffsetTime", "SubSecTimeOriginal"):
+            assert before[k] is not None and after[k] == before[k], k          # the edit's time, the fraction
+        subsec = subprocess.run(["exiftool", "-n", "-s3", "-SubSecTimeDigitized", "-SubSecTime", str(img)],
+                                capture_output=True, text=True).stdout.split()
+        assert subsec == ["581", "581"]
+        assert not [o for o in cal.plan_file_ops(_model_file(img, after), "2026-05-15T09:32:29Z", "Asia/Tokyo",
+                                                 "preserve_native", None, None)
+                    if o["type"] == "metadata_time_write"]                       # held as written: nothing again
+    t = _prep_read(tagged)
+    assert (t["XMP:DateCreated"], t["IPTC:DateCreated"], t["IPTC:TimeCreated"]) == \
+        ("2026:05:15 18:32:29.58+09:00", "2026:05:15", "18:32:29+09:00")
+    raw = subprocess.run(["exiftool", "-b", "-XMP", str(tagged)], capture_output=True, text=True).stdout
+    assert "2026-05-15T18:32:29.58+09:00" in raw                                  # ISO in the file itself
+    b = _prep_read(bare)
+    assert (b["XMP:DateCreated"], b["IPTC:DateCreated"], b["IPTC:TimeCreated"]) == (None, None, None)
