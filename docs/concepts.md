@@ -388,8 +388,10 @@ catalogue of every track file under `gpx_root`, and each file's points around yo
 as the settings that read them reach: `gpx_anchor_max_clock_error_seconds` around each photo's camera time,
 `drift_check_track_window_seconds` and the placement limits around its corrected time. A track file unchanged since
 geotag read it (same size, modification time and inode) is not read again, and tracks of other times change
-nothing: last week's walk added to `gpx_root` makes no decision about a trip three years ago stale. The points are
-archived and sealed with the workspace, so `geotag finalize` and `merge` never need `gpx_root`.
+nothing: last week's walk added to `gpx_root` makes no decision about a trip three years ago stale. Points your
+photos no longer reach — a photo moved out, a setting tightened — leave the database when `geotag plan` stops, except
+those an executed plan placed or timed photos by. The points are archived and sealed with the workspace, so
+`geotag finalize` and `merge` never need `gpx_root`.
 
 A track file you take out of `gpx_root` is named at the next `geotag plan` and no longer used — the one reason to
 take one out is that it is someone else's trip. If an executed plan placed or timed photos by it, its points stay in

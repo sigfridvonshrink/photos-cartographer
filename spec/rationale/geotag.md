@@ -451,6 +451,22 @@ sealing then needs nothing outside the workspace. A track taken out after its pl
 evidence of what was written into the photos: the points stay, withdrawn.
 :::
 
+:::{rat} The record holds what the decisions rest on
+:id: RAT-kept_points_are_the_windows
+:status: ruled
+:forced: no
+:follows_from: RAT-tracks_kept_with_workspace, RAT-tracks_read_where_reached
+:justifies: BLD-track_catalogue
+
+The points are kept because decisions rest on them; a point no decision of the latest planning reaches is evidence of
+nothing, and kept it would grow the record by every window a trip's planning ever passed through — a photo sorted
+out, a setting tightened. So what lies outside the window the planning reached goes, and is read again from the track
+file should a window reach it later. What an executed plan used is the exception: it is evidence of a value written
+into an original, and stays, as a withdrawn track's points do. The owner's ruling: *"track points outside window - as
+per recommended"*. The planning prunes only once it has stopped, at the window it last reached: mid-run the window
+is still to widen, and pruning there would read the same files again on every run.
+:::
+
 :::{rat} The tracks are read where the photos reach them
 :id: RAT-tracks_read_where_reached
 :status: ruled

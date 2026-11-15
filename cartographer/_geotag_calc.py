@@ -191,6 +191,17 @@ def window_minus(window, kept):
     return out
 
 
+def window_intersect(a, b):
+    """The instants in both `a` and `b` (both unions), as a union."""
+    out = []
+    for x, y in a:
+        for c, d in b:
+            lo, hi = max(x, c), min(y, d)
+            if lo <= hi:
+                out.append((lo, hi))
+    return window_union(out)
+
+
 def around(t, reach):
     """The span `reach` seconds each side of the instant `t` (an aware datetime), widened to whole seconds."""
     x = t.timestamp()
@@ -229,9 +240,10 @@ _TRACK_TABLES = (
     "CREATE TABLE IF NOT EXISTS gpx_track_points (track_id INTEGER NOT NULL, point_index INTEGER NOT NULL, "
     "time_utc TEXT NOT NULL, lat REAL NOT NULL, lon REAL NOT NULL, track INTEGER NOT NULL, "
     "segment INTEGER NOT NULL, PRIMARY KEY (track_id, point_index))",
-    # the entries each executed plan placed or timed photos by (BLD-withdrawn_track_points)
+    # the entries each executed plan placed or timed photos by, with the window it was made in
+    # (BLD-withdrawn_track_points): their points in it stay whatever later windows reach (BLD-track_catalogue)
     "CREATE TABLE IF NOT EXISTS gpx_track_use (plan_id TEXT NOT NULL, track_id INTEGER NOT NULL, "
-    "PRIMARY KEY (plan_id, track_id))",
+    "window TEXT NOT NULL, PRIMARY KEY (plan_id, track_id))",
 )
 
 
@@ -274,6 +286,7 @@ class GPXIndex:
         self.warnings = []
         self.window = []
         self.read = 0                      # track files read this build
+        self.catalogued = False            # whether this build kept the catalogue over its window
         self._tracks = None
         self._any_points = False
         self.file_sha = {}                 # each track file's SHA-256, by its path under gpx_root
@@ -312,7 +325,7 @@ class GPXIndex:
         under gpx_root — the points are those the record keeps (finalize, RUL-sealing_needs_no_tracks)."""
         self.window = window_union(window) if window is not None else list(ALL_TIME)
         self.points, self.warnings, self.file_sha, self.unreadable, self.unlisted = [], [], {}, [], []
-        self.read, self._any_points = 0, False
+        self.read, self._any_points, self.catalogued = 0, False, False
         if not self.gpx_root:
             self.status = "disabled"
             self.fingerprint = hashlib.sha256(b"gpx-disabled-v1").hexdigest()
@@ -385,6 +398,7 @@ class GPXIndex:
                     self._retire(conn, row, gone=rel not in listed)
             if keep:
                 conn.commit()
+                self.catalogued = True        # the record is the tracks' as they are, over this window
             else:
                 conn.rollback()
         finally:
@@ -503,10 +517,39 @@ class GPXIndex:
                                  + (" — its points stay in the record, withdrawn: an executed plan placed or "
                                     "timed photos by it" if used else ""))
 
+    def prune(self):
+        """Take out of the record the kept points outside this build's window, the planning's last: the record holds
+        the points the decisions rest on (BLD-track_catalogue). An entry's points an executed plan used, in the
+        window that plan was made in, stay — evidence of what was written into the photos — and a withdrawn entry's
+        all stay (RUL-withdrawn_track_points_kept). Only after a build that kept the catalogue; the window's own
+        points, and so the fingerprint, are untouched."""
+        if not (self.record and self.catalogued):
+            return
+        conn = open_track_record(self.record)
+        try:
+            with conn:
+                for row in conn.execute("SELECT track_id, covered FROM gpx_track_files WHERE withdrawn = 0").fetchall():
+                    tid = row["track_id"]
+                    used = [valid_window(json.loads(w)) or [] for (w,) in
+                            conn.execute("SELECT window FROM gpx_track_use WHERE track_id = ?", (tid,)).fetchall()]
+                    keep = window_union(self.window, *used)
+                    covered = valid_window(json.loads(row["covered"])) or []
+                    narrowed = window_intersect(covered, keep)
+                    if narrowed == covered:
+                        continue
+                    drop = [(tid, idx) for idx, t in conn.execute(
+                        "SELECT point_index, time_utc FROM gpx_track_points WHERE track_id = ?", (tid,)).fetchall()
+                        if not _within(keep, _epoch(t))]
+                    conn.executemany("DELETE FROM gpx_track_points WHERE track_id = ? AND point_index = ?", drop)
+                    conn.execute("UPDATE gpx_track_files SET covered = ? WHERE track_id = ?",
+                                 (json.dumps(narrowed), tid))
+        finally:
+            conn.close()
+
     @staticmethod
-    def mark_used(record, plan_id, paths):
+    def mark_used(record, plan_id, paths, window):
         """Record that the plan `plan_id`, executed, placed or timed photos by the track files at `paths` — by
-        their current entries (BLD-withdrawn_track_points)."""
+        their current entries — with the window it was made in (BLD-withdrawn_track_points)."""
         conn = open_track_record(record)
         try:
             with conn:
@@ -514,7 +557,8 @@ class GPXIndex:
                     row = conn.execute("SELECT track_id FROM gpx_track_files WHERE path = ? AND withdrawn = 0",
                                        (rel,)).fetchone()
                     if row is not None:
-                        conn.execute("INSERT OR IGNORE INTO gpx_track_use VALUES (?, ?)", (plan_id, row["track_id"]))
+                        conn.execute("INSERT OR IGNORE INTO gpx_track_use VALUES (?, ?, ?)",
+                                     (plan_id, row["track_id"], json.dumps(window_union(window))))
         finally:
             conn.close()
 

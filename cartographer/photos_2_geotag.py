@@ -419,6 +419,7 @@ class GeotagWorkflow:
         self.workspace_root = workspace_root
         self.handoff = None
         self._gpx_fingerprint = None
+        self.planned_tracks = None        # the tracks `geotag plan` indexed (load_gpx)
         # Live progress for the long phases (TTY: in-place bar; piped: a line every ~10 s; tests: quiet).
         self.coordinator = ProgressCoordinator()
 
@@ -790,6 +791,7 @@ class GeotagWorkflow:
         idx = GPXIndex(selected_gpx_root(), db_path(self.workspace_root), CONFIG["gpx_track_precedence"])
         idx.build(self.coordinator, window=self.camera_window(files))
         self._gpx_fingerprint = idx.fingerprint
+        self.planned_tracks = idx         # pruned to its window once the planning has stopped (BLD-track_catalogue)
         return idx
 
     def widen_tracks(self, gpx, spans):
@@ -2245,8 +2247,9 @@ class GeotagWorkflow:
         accepted = self._accepted_mismatches(ws, plan["plan_id"])
         self._keep_executed_decisions(plan)
         # the tracks this plan places and times photos by stay in the record if they leave gpx_root
-        # (RUL-withdrawn_track_points_kept)
-        GPXIndex.mark_used(db_path(ws), plan["plan_id"], self._tracks_used(plan))
+        # (RUL-withdrawn_track_points_kept), their points in its window whatever a later plan's reaches
+        GPXIndex.mark_used(db_path(ws), plan["plan_id"], self._tracks_used(plan),
+                           valid_window((plan.get("depends_on") or {}).get("gpx_window")) or [])
 
         # Optional pre-mutation ZFS snapshot (BLD-geotag_execution), labelled "geotag" so it never collides
         # with prep's "prep-" snapshot. A REQUIRED snapshot that cannot be taken aborts before any
@@ -2905,6 +2908,7 @@ def run(args):
         reporter.log(f"Workspace is locked by an in-progress run{detail}; try again when it finishes.")
         sys.exit(1)
     reporter.log(f"Lock acquired: {run_lock.lock_path}")
+    wf = None
     try:
         # The seal is checked before anything else is read (BLD-phases_check_seal), the walk over every folder
         # for its device included: a sealed workspace goes straight to the preflight, whose first check refuses it.
@@ -3262,8 +3266,20 @@ def run(args):
         # the conventional 130 instead of a traceback; the `finally` still releases the lock.
         reporter.log("\nInterrupted; aborting. Applied files are journalled — safe to rerun.")
         sys.exit(130)
+    except SystemExit:
+        _prune_planned_tracks(args, wf)       # a plan stopped where it must: its window is the last it reached
+        raise
+    else:
+        _prune_planned_tracks(args, wf)
     finally:
         run_lock.release()
+
+
+def _prune_planned_tracks(args, wf):
+    """Once `geotag plan` has stopped — done, or at a decision or a blocker, never interrupted — the record keeps
+    only the points of the window it reached, and those an executed plan used (BLD-track_catalogue)."""
+    if args.command == "plan" and wf is not None and wf.planned_tracks is not None:
+        wf.planned_tracks.prune()
 
 
 def main(argv=None):
