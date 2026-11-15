@@ -51,6 +51,21 @@ test("wouldResolve: each of the two offset modes is independently sufficient", (
   mk({});                                                                       assert.equal(app.wouldResolve(ref), false);
 });
 
+test("wouldResolve: in a same-day conflict an acceptance resolves nothing, the offset written as the user's own does", () => {
+  // geotag withholds what the camera's GPS gave by itself, an acceptance among it; the user's own offset keeps its effect
+  // (RUL-chosen_offset_not_withheld) — the editor's status agrees with geotag's
+  const dest = "6-photos-by-dest/B", key = "CAM", ref = { file: "time", dest, kind: "offset", key };
+  const proposal = { proposal_source: "gpx_self_anchor", proposed_offset_seconds: -3600, acceptance_tolerance_seconds: 120,
+    groups: [{ offset_seconds: -3600, count: 2 }] };
+  const conflicts_with = [{ destination: "6-photos-by-dest/Other", bucket: "CAM", offset_seconds: -7200, chosen: false }];
+  const mk = (ud) => setWork(
+    { time: { destinations: { [dest]: { camera_group_time_decisions: { [key]: { user_decision: ud, proposal, conflicts_with } } } } } });
+  mk({ accept_proposal: true, accepted_offset_seconds: -3600, manual_offset_seconds: "" });
+  assert.equal(app.wouldResolve(ref), false);
+  mk({ accept_proposal: false, accepted_offset_seconds: "", manual_offset_seconds: -3600 });
+  assert.equal(app.wouldResolve(ref), true);
+});
+
 test("wouldResolve: a guess far from all evidence is not resolved by its acceptance, only by an offset written", () => {
   const dest = "6-photos-by-dest/B", key = "CAM", ref = { file: "time", dest, kind: "offset", key };
   const far = { proposal_source: "timezone_naive", proposed_offset_seconds: -3600,

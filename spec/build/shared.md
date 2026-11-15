@@ -78,6 +78,9 @@ Each question geotag asks SHALL be a `user_decision` of a cell of its decision r
 editor loads and saves each by its kind: in photos-21, `timezone` (`destination_timezone`), `offset` (a cell of
 `camera_group_time_decisions`, a phone's among them, by its key), `reading` (an entry of `local_time_readings`, by
 its photo's path) and `unidentified` (`unidentified_files`); in photos-22, `drift`; in photos-23, `fallback` and `review`.
+The editor writes each answer as geotag takes it: where an offset cell lists `conflicts_with`, a proposal the user takes
+there is written as `manual_offset_seconds`, the user's own offset, which keeps its effect
+({need}`RUL-chosen_offset_not_withheld`) — never as an acceptance, which geotag withholds there again.
 :::
 
 :::{bld} The editor's own lock, held for its session

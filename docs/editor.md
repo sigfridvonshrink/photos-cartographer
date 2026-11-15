@@ -203,7 +203,9 @@ What the proposal panel shows depends on where the offset came from:
   you picked there. Where it applied itself there it applies here too; otherwise accept it here or set
   another. If the camera's GPS gives two different offsets on one day in
   two destinations, neither takes effect: both are shown, and you set the right offset by hand in the
-  one that is wrong. A group you picked from the camera's GPS is held against an offset its GPS fixed by
+  one that is wrong. There, **accept** reads **use the proposal as your own offset**: an acceptance would
+  be withheld again, so the editor writes the proposal as your own offset (`manual_offset_seconds`) —
+  by hand, write the same. A group you picked from the camera's GPS is held against an offset its GPS fixed by
   itself elsewhere that day the same way: if they differ, both are shown and the one fixed by itself
   waits for you, while your pick keeps its effect.
 - **The offset the photos record** — no GPS evidence, but the camera wrote, with each photo's time, the

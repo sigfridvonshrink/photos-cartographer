@@ -234,7 +234,8 @@ function wouldResolve(ref) {
   if (ref.kind === "offset")
     return (u.manual_offset_seconds !== "" && u.manual_offset_seconds != null && validOffset(u.manual_offset_seconds))
       || keepHolds(c)                                           // a phone kept as it records itself
-      || (acceptHolds(c) && !p.far_from_evidence);              // far from all evidence: acceptance is not enough
+      || (acceptHolds(c) && !p.far_from_evidence && !inConflict(c));   // far from all evidence, or one clock read two
+                                                                // ways the same day: an acceptance is withheld again
   if (ref.kind === "reading")
     return u.utc_offset_seconds !== "" && u.utc_offset_seconds != null && validReading(c, u.utc_offset_seconds);
   if (ref.kind === "unidentified") return unidentifiedHolds(ref.dest, c);
@@ -381,6 +382,7 @@ function previewEffective(ref) {
     }
     if (keepHolds(c)) return "as the phone records itself (its own GPS set aside)";
     if (acceptHolds(c) && p.far_from_evidence) return "— (accepting is not enough here — set the offset)";
+    if (acceptHolds(c) && inConflict(c)) return "— (an acceptance is withheld here — take the offset as your own)";
     if (acceptHolds(c)) return `${fmtOffset(p.proposed_offset_seconds)} (accept proposal)`;
     if (u.accept_proposal) return "— (accepted another proposal — accept again)";
     return "— (GPX auto-resolves on re-run, else needs input)";
@@ -740,7 +742,8 @@ function offsetEditor(ref) {
   const repCamMs = camMs != null ? camMs
     : (hasProp && p.proposed_real_utc != null && utcStrToMs(p.proposed_real_utc) != null
       ? utcStrToMs(p.proposed_real_utc) - p.proposed_offset_seconds * 1000 : null);
-  const accepted = acceptHolds(c);
+  const conflict = inConflict(c);                     // one clock read two ways: the proposal is taken as the user's own
+  const accepted = acceptHolds(c) && !conflict;
   const manualOff = u.manual_offset_seconds;          // the one stored value of a self-set offset
   const manualSet = manualOff !== "" && manualOff != null;
   const selKey = `${ref.dest}|${ref.key}`;
@@ -752,7 +755,9 @@ function offsetEditor(ref) {
   const view = mine ? mine.view : "offset";
   // A proposal accepting which is not enough (far from all evidence) is never the value shown, nor seeded into an
   // offset of the user's own: a click on a view opens it empty, and only a value typed there is written.
-  const active = accepted && !far ? "accept" : manualSet ? view : far && mine && mine.open ? view : "";
+  // In a same-day conflict the proposal taken is the user's own offset: shown as the proposal taken until a view is opened.
+  const ownTaken = conflict && manualSet && Number(manualOff) === p.proposed_offset_seconds && !mine;
+  const active = (accepted && !far) || ownTaken ? "accept" : manualSet ? view : far && mine && mine.open ? view : "";
   const eff = accepted && !far ? p.proposed_offset_seconds : manualSet ? Number(manualOff)
     : (hasProp && !far ? p.proposed_offset_seconds : null);
   const cur = Number(eff) || 0, abs = Math.abs(cur);
@@ -762,7 +767,7 @@ function offsetEditor(ref) {
     state._focusOffset = v;
     if (manualSet || far) { state.offsetEdit = { key: selKey, view: v, open: true }; render(); } else setManual(eff ?? 0, v);
   };
-  const accept = () => { state.offsetEdit = null; editMany(ref, { ...acceptFields(p, true), manual_offset_seconds: "", ...unkept(c) }); };
+  const accept = () => { state.offsetEdit = null; editMany(ref, { ...proposalTaken(c), ...unkept(c) }); };
   const opt = (on, body, onclick, cls = "") => el("div", { class: "off-opt" + (on ? " on" : "") + cls, onclick },
     el("span", { class: "off-dot" }, on ? "●" : "○"), body);
 
@@ -777,7 +782,8 @@ function offsetEditor(ref) {
   wrap.append(opt(active === "accept",
     el("span", {}, !hasProp ? "accept proposal — none to accept"
       : far ? `accept proposal (${fmtOffset(p.proposed_offset_seconds)}) — not enough here: set the offset`
-        : `accept proposal (${fmtOffset(p.proposed_offset_seconds)})${src}`),
+        : conflict ? `use the proposal (${fmtOffset(p.proposed_offset_seconds)}) as your own offset${src}`
+          : `accept proposal (${fmtOffset(p.proposed_offset_seconds)})${src}`),
     canAccept ? accept : undefined, canAccept ? "" : " disabled"));
 
   if (u.accept_proposal && !accepted && hasProp) wrap.append(el("div", { class: "hint warn" },
@@ -1213,10 +1219,23 @@ function jsonBlock(title, obj) { return obj === undefined ? null : el("div", { c
 // Picking a correction group of a GPX self-anchor proposal (BLD-anchor_matching): the recommended one is
 // accepting the proposal; any other sets its offset — which geotag counts as anchored by the GPS
 // (gpx_anchor_chosen), so no drift check follows. One click, for every day bundled with this proposal.
-function groupChoice(p, g) {
-  return g.offset_seconds === p.proposed_offset_seconds
+// In a same-day conflict (`conflict`) the recommended one is taken as the user's own offset too: an acceptance there is
+// withheld again.
+function groupChoice(p, g, conflict = false) {
+  return g.offset_seconds === p.proposed_offset_seconds && !conflict
     ? { ...acceptFields(p, true), manual_offset_seconds: "" }
     : { ...acceptFields(p, false), manual_offset_seconds: g.offset_seconds };
+}
+// A cell geotag found in a same-day conflict (`conflicts_with`, BLD-offset_shared_within_day): one clock read two ways in
+// two destinations. An acceptance there counts as what the camera's GPS gave by itself, and is withheld again; the user's
+// own offset keeps its effect (RUL-chosen_offset_not_withheld). So the proposal is taken there as manual_offset_seconds.
+const inConflict = (c) => ((c && c.conflicts_with) || []).length > 0;
+// What taking a cell's proposal writes: an acceptance naming its offset, or — in a same-day conflict — the offset as the
+// user's own (BLD-editor_answers_every_question).
+function proposalTaken(c) {
+  const p = (c && c.proposal) || {};
+  return inConflict(c) ? { ...acceptFields(p, false), manual_offset_seconds: p.proposed_offset_seconds }
+    : { ...acceptFields(p, true), manual_offset_seconds: "" };
 }
 // An acceptance names the offset it accepts (accepted_offset_seconds) and holds only while that is what is
 // proposed — within the proposal's own agreement spread for one found from GPS. Mirrors BLD-offset_acceptance: a
@@ -1305,7 +1324,7 @@ function offsetCellNotes(c) {
         "you chose here — one clock, two readings. Your choice stands; that cell waits for you: set its offset by hand, or change yours.");
     else
       out.push(`The camera's GPS gives ${fmtOffset(k.offset_seconds)} the same day in ${k.destination} — one clock, two readings. ` +
-        "Set the right offset by hand in the one that is wrong.");
+        "Set the right offset by hand in the one that is wrong — taking a proposal here takes it as your own offset.");
   }
   return out;
 }
@@ -1520,8 +1539,8 @@ function offsetProposalBlock(ref, p) {
     wrap.append(el("div", { class: "prop-group" + (on ? " on" : "") },
       el("div", { class: "prop-group-h" }, `${g.count} photo${g.count === 1 ? "" : "s"} → ${fmtOffset(g.offset_seconds)}`,
         on ? el("span", { class: "muted" }, " ✓ chosen")
-          : el("button", { class: "mini", onclick: () => { state.offsetEdit = null; editMany(ref, groupChoice(p, g)); } },
-            g.offset_seconds === p.proposed_offset_seconds ? "accept" : "use this")),
+          : el("button", { class: "mini", onclick: () => { state.offsetEdit = null; editMany(ref, groupChoice(p, g, inConflict(workCell(ref)))); } },
+            g.offset_seconds === p.proposed_offset_seconds && !inConflict(workCell(ref)) ? "accept" : "use this")),
       el("div", { class: "hint" }, `e.g. ${g.representative.source_file}` +
         (g.representative.gpx_file ? ` · track ${g.representative.gpx_file}` : "")),
       el("div", { class: "hint" }, line)));
@@ -1697,7 +1716,7 @@ export {
   fmtOffset, camNaiveMs, dtLocalToMs, msToDtLocal, utcStrToMs, fmtLocal, fmtDT, offsetImpact,
   cellAt, cellStatus, wouldResolve, previewTz, previewFallback, refInvalid, isDirty, state,
   offsetGroups, dateRange, fmtDate, peerKeys, parseLatLon, coordText, contiguousRange,
-  groupChoice, chosenOffset, proposalNotes, driftConfirmHolds, driftConfirmFields, driftTracksHold, driftStaleReason, acceptFields, acceptHolds, tracksNote,
+  groupChoice, chosenOffset, inConflict, proposalTaken, proposalNotes, driftConfirmHolds, driftConfirmFields, driftTracksHold, driftStaleReason, acceptFields, acceptHolds, tracksNote,
   zoneContradiction, offsetCellNotes, zoneSpokenFor, zoneDespiteFields, effectiveCountry, clearCountriesInside,
   scrubOffset, scrubSeedIndex, mapKeyFor, savePayload,
   ambiguousTimeNote, gpsTimeAsideNote, zoneOffer, validReading, keepHolds, keepFields, keepOffered, phoneNote,

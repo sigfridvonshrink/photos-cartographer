@@ -246,6 +246,33 @@ def test_an_accepted_offset_is_withheld_against_a_chosen_one(tmp_path):
     assert _cell(art, f"{BYDEST}/Trip")["effective_time_anchor"] == {"offset_seconds": -7200, "source": "gpx_anchor_accepted"}
 
 
+@pytest.mark.spec("RUL-every_question_in_editor", "BLD-editor_answers_every_question", "RUL-chosen_offset_not_withheld",
+                  test="TST-geotag_offset_no_inheritance-a_conflict_s_proposal_taken_as_the_user_s_own_settles_it")
+def test_a_conflict_s_proposal_taken_as_the_user_s_own_settles_it(tmp_path):
+    """One clock read two ways the same day: both cells ask. Taking a cell's own proposal as an acceptance settles
+    nothing — it counts as what the GPS gave by itself, and is withheld again; the same offset written as the user's own
+    (`manual_offset_seconds`, what the editor writes there) keeps its effect, and the conflict is settled."""
+    wf = _wf(tmp_path)
+    other = [_file(f"{BYDEST}/Other/x.arw", f"{BYDEST}/Other", gps=(50.0, 4.0), naive="2024:07:03 13:50:00"),
+             _file(f"{BYDEST}/Other/y.arw", f"{BYDEST}/Other", gps=(51.0, 5.0), naive="2024:07:03 14:50:00")]
+    art, _ = _build(wf, PARENT_FRAMES + other, _gpx(TRACK))
+    trip = _cell(art, f"{BYDEST}/Trip")
+    assert trip["conflicts_with"] and trip["requires_user_input"]
+    proposed = trip["proposal"]["proposed_offset_seconds"]
+
+    def answered(ud):
+        prior = {"destinations": {f"{BYDEST}/Trip": {"camera_group_time_decisions": {CAM: {"user_decision": ud}}}}}
+        art, blockers = _build(wf, PARENT_FRAMES + other, _gpx(TRACK), prior)
+        assert blockers == []
+        return _cell(art, f"{BYDEST}/Trip")
+
+    accepted = answered({"accept_proposal": True, "accepted_offset_seconds": proposed, "manual_offset_seconds": ""})
+    assert accepted["effective_time_anchor"] == "" and accepted["requires_user_input"]       # withheld again
+    own = answered({"accept_proposal": False, "accepted_offset_seconds": "", "manual_offset_seconds": proposed})
+    assert own["effective_time_anchor"] == {"offset_seconds": proposed, "source": "gpx_anchor_chosen"}
+    assert not own["requires_user_input"]
+
+
 def test_no_ancestor_is_manual_required(tmp_path):
     wf = _wf(tmp_path)
     files = [_file(f"{BYDEST}/Alone/x.arw", f"{BYDEST}/Alone")]              # no GPS, no ancestor, no tz
