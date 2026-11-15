@@ -507,6 +507,18 @@ with their times where they record different ones.
 An offset proposed from another destination of the same day SHALL take effect by itself only where it did there.
 :::
 
+:::{rul} A camera's offset from the zone holds for its whole day
+:id: RUL-camera_zone_offset_for_the_day
+:status: ruled
+:criticality: high
+:verify: required
+:refines: RUL-offset_per_camera_destination_day
+:uses: DEF-clock_offset
+
+A camera's clock offset derived from its destination's timezone SHALL be the zone's at the earliest camera time of its
+day there, for every photo of that day.
+:::
+
 :::{rul} One clock is not read two ways in one day
 :id: RUL-same_day_offsets_agree
 :status: ruled
@@ -854,7 +866,31 @@ The classification geotag offers SHALL keep every group already classed as it is
 :uses: DEF-camera_group
 
 A file whose metadata names no camera SHALL be solved on its own — by the offset recorded with its time, else its
-destination's timezone.
+destination's timezone once accepted ({need}`RUL-camera_less_files_asked_per_destination`).
+:::
+
+:::{rul} Files naming no camera are one question for their destination
+:id: RUL-camera_less_files_asked_per_destination
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+:refines: RUL-unidentified_files_solved_alone
+:uses: DEF-destination, DEF-decision
+
+Files naming no camera and recording no offset with their time SHALL be read by their destination's timezone only once
+the user, asked once for the destination, accepts it.
+:::
+
+:::{rul} The answer for camera-less files is kept
+:id: RUL-camera_less_answer_kept
+:status: ruled
+:criticality: med
+:verify: required
+:refines: RUL-camera_less_files_asked_per_destination
+
+The user's answer for a destination's files naming no camera SHALL hold for such files arriving later, while the
+timezone it was given for is the destination's.
 :::
 
 :::{rul} A file naming no camera is never asked to be classed
@@ -1076,6 +1112,184 @@ An offset fixed only to within a stay of the tracks SHALL NOT count as anchored 
 A clock offset proposed from a camera's own GPS SHALL be recorded with the photos that support it, the photos that do not, and the track each was matched to.
 :::
 
+:::{rul} The time a photo's GPS fix recorded is evidence of its clock
+:id: RUL-gps_time_is_clock_evidence
+:status: ruled
+:criticality: high
+:verify: required
+:refines: RUL-offset_from_own_evidence
+:uses: DEF-clock_offset
+
+The time a photo's own GPS fix recorded, less the photo's camera time, SHALL be evidence of its clock's offset: below
+the offset its positions on the tracks give, and above the offset its photos record with their times and the
+destination's timezone.
+:::
+
+:::{rul} A GPS time that repeats, or that disagrees, is not counted
+:id: RUL-repeated_gps_time_not_counted
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+:refines: RUL-gps_time_is_clock_evidence
+
+The GPS times of a camera's photos of a day in a destination SHALL NOT be counted as evidence of its clock where two of
+them record the same GPS time at different camera times, or where their differences from the camera times lie farther
+apart than the configuration lets anchors agree.
+:::
+
+:::{rul} GPS times that agree apply themselves as several anchors do
+:id: RUL-gps_times_agreeing_apply
+:status: ruled
+:criticality: high
+:verify: required
+:refines: RUL-gps_time_is_clock_evidence
+:uses: DEF-decision
+
+An offset the GPS times of two or more photos agree on SHALL take effect without the user's answer as the
+configuration's setting for several anchors allows.
+:::
+
+:::{rul} One GPS time is a proposal
+:id: RUL-single_gps_time_proposed
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+:refines: RUL-gps_time_is_clock_evidence
+:uses: DEF-decision
+
+An offset the GPS time of one photo gives SHALL NOT take effect until the user accepts it.
+:::
+
+:::{rul} An offset from GPS times far from all evidence is not applied
+:id: RUL-gps_time_far_from_evidence_withheld
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+:refines: RUL-gps_time_is_clock_evidence
+:uses: DEF-clock_offset, DEF-tracks
+
+A clock offset from the GPS times of a camera's photos SHALL NOT take effect without an offset the user writes where it
+would put every photo of its day farther than the largest clock error the configuration allows from every track point
+and from the true time of every photo of the destination taken by another device whose true time is known, at least
+one such photo being there.
+:::
+
+
+## 12. A phone's clock, checked against its own GPS
+
+:::{rul} A phone's photos are anchored as a camera's are
+:id: RUL-phone_anchored_like_camera
+:status: ruled
+:criticality: high
+:verify: required
+:uses: DEF-camera_group, DEF-tracks
+
+A phone's photos holding their own position SHALL anchor the phone's clock for each destination and day on the tracks
+as a camera's photos do, by the same settings.
+:::
+
+:::{rul} A phone's GPS times check its clock where no track does
+:id: RUL-gps_time_checks_phone
+:status: ruled
+:criticality: high
+:verify: required
+:refines: RUL-phone_anchored_like_camera
+:uses: RUL-gps_time_is_clock_evidence
+
+Where no track anchors a phone's day in a destination, the GPS times of its photos SHALL check its clock as a camera's
+GPS times do.
+:::
+
+:::{rul} A phone whose own GPS agrees is read as before
+:id: RUL-phone_agreeing_anchor_changes_nothing
+:status: ruled
+:criticality: med
+:verify: required
+:refines: RUL-phone_anchored_like_camera
+
+A phone's photos SHALL be read as they are without their own GPS, nothing asked, where the offset that GPS gives agrees,
+within the tolerance the configuration allows an accepted offset, with the one each of the photos giving it is read by.
+:::
+
+:::{rul} Several of a phone's photos disagreeing apply what they agree on
+:id: RUL-phone_disagreeing_anchors_apply
+:status: ruled
+:criticality: high
+:verify: required
+:refines: RUL-phone_anchored_like_camera
+:uses: DEF-decision
+
+An offset two or more of a phone's photos of a destination and day give from their own GPS, agreeing among themselves
+and disagreeing with the one they are read by, SHALL take effect for every photo of the phone's day there as a camera's
+several anchors do.
+:::
+
+:::{rul} One phone photo disagreeing is a proposal
+:id: RUL-phone_single_anchor_proposed
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+:refines: RUL-phone_anchored_like_camera
+:uses: DEF-decision
+
+An offset one of a phone's photos gives from its own GPS, disagreeing with the one it is read by, SHALL NOT take effect
+until the user accepts it.
+:::
+
+:::{rul} A phone's photo with no offset is read by the zone only as its tagged ones show
+:id: RUL-untagged_phone_photo_read_as_siblings
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+:refines: RUL-phone_time_from_own_offset
+:uses: DEF-camera_group
+
+A phone's photo recording no offset with its time SHALL be read by its destination's timezone without the user's answer
+only where the same phone's photos of that day there that record one all record the zone's.
+:::
+
+:::{rul} Else the phone's own GPS reads it
+:id: RUL-untagged_phone_photo_settled_by_evidence
+:status: ruled
+:criticality: high
+:verify: required
+:refines: RUL-untagged_phone_photo_read_as_siblings
+:uses: RUL-phone_anchored_like_camera
+
+Where its tagged photos do not, a phone's photos of a day in a destination recording no offset SHALL be read, without
+the user's answer, by the offset the phone's own GPS gives that day there, where it agrees with how its photos giving it
+are read.
+:::
+
+:::{rul} With neither, the phone's photo is asked about once
+:id: RUL-untagged_phone_photo_asked
+:status: ruled
+:criticality: high
+:verify: required
+:refines: RUL-untagged_phone_photo_read_as_siblings
+:uses: RUL-timezone_offset_asked_once
+
+A phone's photos recording no offset that neither its tagged photos nor its own GPS settle SHALL be asked about once,
+as a camera's guessed offset is: at the check against the tracks where tracks lie by them, by acceptance where none do.
+:::
+
+:::{rul} A phone kept as it records itself
+:id: RUL-phone_kept_as_recorded
+:status: ruled
+:criticality: med
+:verify: required
+:refines: RUL-phone_anchored_like_camera
+:uses: DEF-decision
+
+A phone's day the user keeps as its photos record themselves SHALL be read as it is without its own GPS, while that GPS
+gives another offset.
+:::
+
 
 ## 13. Resolved UTC
 
@@ -1088,7 +1302,8 @@ A clock offset proposed from a camera's own GPS SHALL be recorded with the photo
 :uses: DEF-camera_group
 
 A phone's photo SHALL take its true time from the offset recorded with the time it was read from, else from its
-destination's timezone.
+destination's timezone as {need}`RUL-untagged_phone_photo_read_as_siblings` allows — save where its own GPS reads the
+phone's clock otherwise ({need}`RUL-phone_disagreeing_anchors_apply`).
 :::
 
 :::{rul} An offset inside the time's own value is recorded with it
@@ -1120,6 +1335,61 @@ An offset written within a time's value SHALL be taken before one in a field bes
 :verify: required
 
 Geotag SHALL NOT resolve by a timezone a local time which that timezone skips or repeats at a daylight-saving change.
+:::
+
+:::{rul} A time a daylight-saving change skips or repeats is asked about, photo by photo
+:id: RUL-ambiguous_local_time_answered
+:status: ruled
+:criticality: high
+:verify: required
+:refines: RUL-ambiguous_local_time_never_guessed
+:uses: DEF-decision
+
+A photo whose local time its destination's timezone skips or repeats, and which that timezone would read, SHALL be
+asked about on its own in the time decisions: for a time repeated, which of its two readings; for a time skipped, its
+offset.
+:::
+
+:::{rul} A time shown twice is answered by one of its readings
+:id: RUL-repeated_time_answered_by_a_reading
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+:refines: RUL-ambiguous_local_time_answered
+
+An answer for a local time its timezone repeats SHALL take effect only as one of the time's two readings.
+:::
+
+:::{rul} An offset tag that is no offset is read as none
+:id: RUL-unreadable_offset_tag_is_none
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+:refines: RUL-phone_time_from_own_offset
+
+A photo's offset tag holding something that is no offset SHALL be read as no tag, never loosely.
+:::
+
+:::{rul} An offset tag that is no offset is told
+:id: RUL-unreadable_offset_tag_told
+:status: ruled
+:criticality: med
+:verify: required
+:refines: RUL-unreadable_offset_tag_is_none
+
+Geotag SHALL tell the user of each photo whose offset tag holds no offset, naming the photo.
+:::
+
+:::{rul} An offset tag that is no offset is recorded
+:id: RUL-unreadable_offset_tag_recorded
+:status: ruled
+:criticality: med
+:verify: required
+:refines: RUL-unreadable_offset_tag_is_none
+
+Each photo whose offset tag holds no offset SHALL be recorded in the time decisions as such, with what the tag holds.
 :::
 
 :::{def} A clock offset

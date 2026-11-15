@@ -34,10 +34,12 @@ CAM = "SONY|ILCE-6400|123"
 PHONE = "APPLE|iPhone|p1"
 
 
-def _hfile(rel, *, key=CAM, dto="2024:07:03 14:12:08"):
+def _hfile(rel, *, key=CAM, dto="2024:07:03 14:12:08", offset=None):
     parsed = {"DateTimeOriginal": dto, "selected_source_naive_timestamp": dto,
               "selected_source_timestamp_tag": "DateTimeOriginal", "camera_group_key": key,
               "has_timestamp": True, "Make": "SONY", "Model": "ILCE-6400"}
+    if offset is not None:
+        parsed["OffsetTimeOriginal"] = offset
     return {"relative_path": rel, "media_class": "image", "folder_class": "6-photos-by-dest",
             "size": 100, "mtime_ns": 1,
             "content_hash": json.dumps({"value": "fp-" + rel, "status": "valid"}),
@@ -105,7 +107,8 @@ def test_first_run_writes_artifact_requiring_input(tmp_path, monkeypatch):
 
 
 def test_smartphone_group_gets_no_offset_cell(tmp_path, monkeypatch):
-    ws = _ws(tmp_path, files=[_hfile("6-photos-by-dest/Kyoto/p.jpg", key=PHONE)],
+    # a phone's photo recording its offset, with no GPS of its own to check it by, is solved per file: no cell
+    ws = _ws(tmp_path, files=[_hfile("6-photos-by-dest/Kyoto/p.jpg", key=PHONE, offset="+09:00")],
              device_groups={"fixed_clock_cameras": [], "phones": [PHONE]})
     assert _run(monkeypatch, ws) == 0
     d = _artifact(ws)["destinations"]["6-photos-by-dest/Kyoto"]
@@ -336,7 +339,7 @@ def test_build_drift_validation_leaves_photos21_byte_unmutated(tmp_path):
 def test_classifying_a_camera_again_restales_the_time_decisions(tmp_path, monkeypatch):
     # The record says what it is and what it was made from; classing the camera a phone changes that, and the
     # record follows: no offset cell, complete, nothing asked.
-    ws = _ws(tmp_path, files=[_hfile("6-photos-by-dest/Brussels/a.jpg")],
+    ws = _ws(tmp_path, files=[_hfile("6-photos-by-dest/Brussels/a.jpg", offset="+02:00")],
              device_groups={"fixed_clock_cameras": [CAM], "phones": []}, default_tz="Europe/Brussels")
     assert _run(monkeypatch, ws) == 0
     before = _artifact(ws)
@@ -359,13 +362,15 @@ def test_classifying_a_camera_again_restales_the_time_decisions(tmp_path, monkey
                   test="TST-geotag_time_decisions-a_file_naming_no_camera_is_solved_alone_never_asked")
 def test_a_file_naming_no_camera_is_solved_alone_never_asked(tmp_path, monkeypatch):
     # A screenshot or a stripped photo names no camera: geotag never asks to class it, gives it no clock offset,
-    # and resolves it by the offset recorded with its time, else by its destination's timezone.
-    ws = _ws(tmp_path, files=[_hfile("6-photos-by-dest/Brussels/shot.png", key=utils.NO_IDENTITY_KEY)],
+    # and resolves it by the offset recorded with its time, else by its destination's timezone once that is
+    # accepted for the destination's camera-less files (BLD-unidentified_files_question).
+    ws = _ws(tmp_path, files=[_hfile("6-photos-by-dest/Brussels/shot.png", key=utils.NO_IDENTITY_KEY, offset="+02:00")],
              device_groups={"fixed_clock_cameras": [], "phones": []}, default_tz="Europe/Brussels")
     assert _run(monkeypatch, ws) == 0                                         # not stopped as an unknown group
     art = _artifact(ws)
     assert art["destinations"]["6-photos-by-dest/Brussels"]["camera_group_time_decisions"] == {}
     assert art["status"] == "complete"
+    art["destinations"]["6-photos-by-dest/Brussels"]["unidentified_files"] = {"effective_iana_timezone": "Europe/Brussels"}
     wf = cal.GeotagWorkflow(str(ws))
     groups, unknown = wf.recognize_camera_groups([{"camera_group_key": utils.NO_IDENTITY_KEY}])
     assert groups[utils.NO_IDENTITY_KEY]["camera_group_class"] == "unidentified" and unknown == []
@@ -436,6 +441,7 @@ def test_a_photo_timed_by_its_modification_takes_no_camera_offset(tmp_path):
     assert groups[utils.NO_IDENTITY_KEY]["camera_group_class"] == "unidentified" and unknown == [CAM]
     groups[CAM]["camera_group_class"] = "camera"                     # the camera, as the configuration classes it
     art = {"destinations": {dest: {"destination_timezone": {"effective_iana_timezone": "Europe/Brussels"},
+                                   "unidentified_files": {"effective_iana_timezone": "Europe/Brussels"},
                                    "camera_group_time_decisions": {CAM: {"camera_group": CAM, "effective_time_anchor": {
                                        "offset_seconds": -3600, "source": "manual"}}}}}}
     rows = {r["relative_path"]: r for r in cal.compute_resolved_utc(files, groups, art)}

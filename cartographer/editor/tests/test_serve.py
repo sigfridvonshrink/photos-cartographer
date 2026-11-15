@@ -283,6 +283,41 @@ def test_apply_edits_fallback_and_review():
     assert item["user_decision"]["manual_lat"] == 35.6
 
 
+@pytest.mark.spec("RUL-every_question_in_editor", "BLD-editor_answers_every_question",
+                  test="TST-serve-saves_a_phone_s_and_a_clock_change_s_answers")
+def test_apply_edits_saves_the_questions_of_a_phone_and_of_a_time_at_a_clock_change():
+    """A phone's day kept as it records itself, and a photo's reading at a daylight-saving change: each saved into its
+    own decision field of photos-21, nothing else of the record touched."""
+    dest, rel = "6-photos-by-dest/B", "6-photos-by-dest/B/twice.jpg"
+    art = {"destinations": {dest: {
+        "camera_group_time_decisions": {"PHONE": {"camera_group_class": "smartphone", "phone": {"applies_to": "every_photo"},
+                                                  "user_decision": {"keep_as_recorded": False}}},
+        "local_time_readings": {rel: {"case": "repeated", "offsets_seconds": [7200, 3600],
+                                      "user_decision": {"utc_offset_seconds": ""}}}}}}
+    before = copy.deepcopy(art)
+    edits = [{"dest": dest, "kind": "offset", "key": "PHONE", "user_decision": {"keep_as_recorded": True}},
+             {"dest": dest, "kind": "reading", "key": rel, "user_decision": {"utc_offset_seconds": 3600}}]
+    assert serve._unapplicable_edits(art, edits) == []
+    assert serve._apply_edits(art, edits) == 2
+    d = art["destinations"][dest]
+    assert d["camera_group_time_decisions"]["PHONE"]["user_decision"] == {"keep_as_recorded": True}
+    assert d["local_time_readings"][rel]["user_decision"] == {"utc_offset_seconds": 3600}
+    assert d["local_time_readings"][rel]["offsets_seconds"] == before["destinations"][dest]["local_time_readings"][rel]["offsets_seconds"]
+
+
+@pytest.mark.spec("RUL-every_question_in_editor", "BLD-editor_answers_every_question",
+                  test="TST-serve-saves_the_camera_less_files_answer")
+def test_apply_edits_saves_the_answer_for_a_destination_s_files_naming_no_camera():
+    dest = "6-photos-by-dest/B"
+    art = {"destinations": {dest: {"unidentified_files": {"files": 2, "proposed_iana_timezone": "Europe/Brussels",
+                                                          "user_decision": {"accept_proposal": False, "accepted_timezone": ""}}}}}
+    edits = [{"dest": dest, "kind": "unidentified",
+              "user_decision": {"accept_proposal": True, "accepted_timezone": "Europe/Brussels"}}]
+    assert serve._unapplicable_edits(art, edits) == [] and serve._apply_edits(art, edits) == 1
+    q = art["destinations"][dest]["unidentified_files"]
+    assert q["user_decision"] == {"accept_proposal": True, "accepted_timezone": "Europe/Brussels"} and q["files"] == 2
+
+
 def test_apply_edits_ignores_unknown_targets():
     art = _time_art()
     n = serve._apply_edits(art, [

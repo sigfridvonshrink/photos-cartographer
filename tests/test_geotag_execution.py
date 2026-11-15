@@ -939,7 +939,8 @@ def test_reclassing_a_camera_group_changes_its_treatment_not_its_key(tmp_path, m
             cache.close()
         seen.append((keys, {k: c["camera_group_class"] for k, c in cells.items()}))
         assert json.load(open(ctl / "photos-24-executable-plan.json"))["status"] == "ready", groups
-    assert seen == [([CAM], {CAM: "camera"}), ([CAM], {}), ([CAM], {CAM: "camera"})], seen
+    # as a phone it has a cell only because its own GPS reads its clock otherwise than the zone (BLD-phone_offset_cell)
+    assert seen == [([CAM], {CAM: "camera"}), ([CAM], {CAM: "smartphone"}), ([CAM], {CAM: "camera"})], seen
 
 
 _SNAPSHOTS_ON = {"enabled": True, "snapshots_required": False, "snapshot_prefix": "px-",

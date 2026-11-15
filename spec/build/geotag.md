@@ -75,7 +75,7 @@ and whose `media_class` is `image` or `raw`; every operation of `photos-24-execu
 
 A GPX self-anchor offset SHALL be set as `effective_time_anchor` with `decision_mode: "auto_resolved"` when its
 anchors do not conflict and `camera_time_and_timezone_policy.multi_anchor_auto_apply` holds for two or more anchors,
-or `single_anchor_auto_apply` for one; a destination's `inherited` timezone proposal is set as its
+or `single_anchor_auto_apply` for one — a phone's one anchor never ({need}`BLD-phone_offset_cell`); a destination's `inherited` timezone proposal is set as its
 `effective_iana_timezone` likewise, a `config_default` one never; a `recorded_offset` or `timezone_naive` offset proposal
 and an `inherited` folder fallback become effective only with `accept_proposal: true`.
 :::
@@ -85,7 +85,7 @@ and an `inherited` folder fallback become effective only with `accept_proposal: 
 :status: ruled
 :realises: RUL-acceptance_holds_for_its_proposal, RUL-written_value_over_acceptance, RUL-proposals_need_acceptance
 
-An offset cell's `user_decision` SHALL hold `accept_proposal`, `accepted_offset_seconds` — the `proposed_offset_seconds` that was accepted — and `manual_offset_seconds`. A `manual_offset_seconds` takes effect first. Else an acceptance takes effect while `accepted_offset_seconds` equals the offset now proposed, or lies within `gpx_anchor_decision_tolerance_seconds` of one proposed from GPS (the proposal carries that tolerance as `acceptance_tolerance_seconds`); and what takes effect is the offset accepted, not the one now proposed; naming another offset, or with nothing proposed, the cell is `stale_user_decision` and asks; naming none, or not a whole number, a blocker.
+An offset cell's `user_decision` SHALL hold `accept_proposal`, `accepted_offset_seconds` — the `proposed_offset_seconds` that was accepted — and `manual_offset_seconds`. A `manual_offset_seconds` takes effect first. Else an acceptance takes effect while `accepted_offset_seconds` equals the offset now proposed, or lies within `gpx_anchor_decision_tolerance_seconds` of one proposed from GPS — its positions on the tracks or its fixes' times (the proposal carries that tolerance as `acceptance_tolerance_seconds`); and what takes effect is the offset accepted, not the one now proposed; naming another offset, or with nothing proposed, the cell is `stale_user_decision` and asks; naming none, or not a whole number, a blocker.
 :::
 
 
@@ -107,7 +107,7 @@ destinations are processed parents first.
 :status: ruled
 :realises: RUL-offset_per_camera_destination_day, RUL-offset_from_own_evidence, RUL-answer_follows_its_day
 
-Each destination's `camera_group_time_decisions` SHALL hold one cell per camera group present, keyed by its `camera_group_key`, or — when the group's photos there span more than one naive date — one per date, keyed `<camera_group_key>@<YYYY-MM-DD>` with a `date` field, the date taken from `source_naive_time`; every cell names the day its photos are of in `day`, whatever its key. A cell's earlier answer is the cell under its key when that names the same `day`, else the one under the key's other form whose `day` is the same; a drift cell's likewise. A cell's proposal is the GPX self-anchor of that group's native-GPS frames of that date there; else the offset shared from the same day elsewhere ({need}`BLD-offset_shared_within_day`); else `recorded_offset` ({need}`BLD-recorded_offset_proposal`); else, with the destination's timezone resolved, `timezone_naive` at the cell's earliest naive time, DST-aware; else `manual_required`. A cell with photos not yet corrected names the earliest of them in `representative` (`source_file`, `camera_source_naive_time`). No cell reads the destination above it for an offset; the one case of a cell taking another destination's is {need}`BLD-offset_shared_within_day`.
+Each destination's `camera_group_time_decisions` SHALL hold one cell per camera group present, keyed by its `camera_group_key`, or — when the group's photos there span more than one naive date — one per date, keyed `<camera_group_key>@<YYYY-MM-DD>` with a `date` field, the date taken from `source_naive_time`; every cell names the day its photos are of in `day`, whatever its key. A cell's earlier answer is the cell under its key when that names the same `day`, else the one under the key's other form whose `day` is the same; a drift cell's likewise. A cell's proposal is the GPX self-anchor of that group's native-GPS frames of that date there; else the offset their fixes' times give ({need}`BLD-gps_time_proposal`); else the offset shared from the same day elsewhere ({need}`BLD-offset_shared_within_day`); else `recorded_offset` ({need}`BLD-recorded_offset_proposal`); else, with the destination's timezone resolved, `timezone_naive` at the cell's earliest naive time, DST-aware; else `manual_required`. A cell with photos not yet corrected names the earliest of them in `representative` (`source_file`, `camera_source_naive_time`). No cell reads the destination above it for an offset; the one case of a cell taking another destination's is {need}`BLD-offset_shared_within_day`.
 :::
 
 :::{bld} Geotag's records are grouped by destination
@@ -211,8 +211,8 @@ the configuration's, and exit with status 2 having written no record and read no
 
 A file whose `camera_group_key` is `NO_IDENTITY_KEY` (`unknown`), the key prep gives a file with no serial, make, model
 or owner, SHALL be classed `unidentified` by `recognize_camera_groups` whatever the configuration lists, never among the
-unknown groups, given no offset cell, and resolved as a phone's photo is, its own offset's rule being
-`unidentified_native_offset`.
+unknown groups, given no offset cell, and resolved by its own offset (`unidentified_native_offset`), else as
+{need}`BLD-unidentified_files_question` says.
 :::
 
 :::{bld} A group in both lists
@@ -302,10 +302,10 @@ A destination's `destination_timezone.user_decision.country` — the country it 
 :::{bld} The offset derived from the timezone
 :id: BLD-timezone_naive_offset
 :status: ruled
-:realises: RUL-offset_from_own_evidence, RUL-proposals_need_acceptance, RUL-timezone_offset_asked_once, RUL-ambiguous_local_time_never_guessed
+:realises: RUL-offset_from_own_evidence, RUL-proposals_need_acceptance, RUL-timezone_offset_asked_once, RUL-ambiguous_local_time_never_guessed, RUL-camera_zone_offset_for_the_day
 
 A bucket with no anchor and a destination timezone SHALL be proposed the offset −(the timezone's UTC offset at the
-bucket's earliest camera time), daylight saving included, as `proposal_source: "timezone_naive"` with
+bucket's earliest camera time), daylight saving included, one offset for every photo of the bucket, as `proposal_source: "timezone_naive"` with
 `proposed_offset_seconds`, `proposed_real_utc` and `proposed_from_timezone`. Where track points lie within
 `drift_check_track_window_seconds` of the bucket's photos — by the times the offset gives, else by the times the camera
 recorded — and no decision is given, it takes effect as `timezone_unconfirmed`, `decision_mode:
@@ -321,12 +321,20 @@ only once accepted, as `timezone_accepted`. A camera time the zone skips or repe
 A camera group's bucket with no anchor and no offset shared from the same day elsewhere, whose photos not yet corrected record at least one offset with their times — each read as `_own_offset` reads it, the offset recorded with the field its time was read from, a value that is no offset being none — and all the same one, SHALL be proposed −(that offset) as `proposal_source: "recorded_offset"`, ahead of `timezone_naive`, with `proposed_offset_seconds`, `recorded_offset_seconds`, `recorded_by` (how many photos record it), an `example` of them and `proposed_real_utc` at the bucket's earliest camera time. It takes effect as a `timezone_naive` proposal does ({need}`BLD-timezone_naive_offset`): as `recorded_offset_unconfirmed`, `decision_mode: "to_be_confirmed_against_tracks"`, where track points lie by its photos and no decision is given, else only once accepted, as `recorded_offset_accepted`. Photos recording more than one offset give no such proposal; the cell holds `recorded_offsets_differ`, each offset recorded with how many photos record it and an `example`.
 :::
 
+:::{bld} The offset the fixes' own times give
+:id: BLD-gps_time_proposal
+:status: ruled
+:realises: RUL-gps_time_is_clock_evidence, RUL-repeated_gps_time_not_counted, RUL-gps_times_agreeing_apply, RUL-single_gps_time_proposed
+
+`build_file_model` SHALL give each photo holding its own position its fix's UTC as `gps_utc` — `GPSDateTime`, as exiftool's composite or XMP holds it, its zone `Z` or an offset, else `GPSDateStamp` with `GPSTimeStamp`; a fraction of a second dropped; a value that is no time, none — and `gps_time_proposal` reads, of a bucket's photos not yet corrected holding their own position, each `gps_utc` less the camera time, two photos with the same `gps_utc` and the same camera time being one reading. Where no track anchors the bucket, the readings, their `gps_utc` all different and their offsets within `gpx_anchor_offset_spread_max_seconds` of each other, propose the earliest one's offset as `proposal_source: "gps_time"` with `proposed_offset_seconds`, `proposed_real_utc`, `gps_time_count`, `acceptance_tolerance_seconds` and `gps_times` (the first `GPS_TIMES_SHOWN`: `source_file`, `camera_source_naive_time`, `gps_utc`, `offset_seconds`), ahead of the offset shared from the same day, `recorded_offset` and `timezone_naive`; otherwise the cell holds `gps_time_set_aside` — `reason` (`repeated_gps_time` or `offsets_disagree`), `gps_time_count`, an `example`, and for the second the lowest and highest offset. Two readings or more take effect as `gps_time_auto`, `decision_mode: "auto_resolved"`, under `multi_anchor_auto_apply`; one only once accepted, as `gps_time_accepted`, an acceptance holding within `gpx_anchor_decision_tolerance_seconds` as one of a GPX proposal does. No drift check follows either, and neither is passed to another destination.
+:::
+
 :::{bld} A guessed offset far from all evidence
 :id: BLD-offset_far_from_evidence
 :status: ruled
-:realises: RUL-offset_far_from_evidence_asks
+:realises: RUL-offset_far_from_evidence_asks, RUL-gps_time_far_from_evidence_withheld
 
-After the offsets shared within a day, `build_time_decisions` SHALL withdraw the effective offset of a cell whose proposal is `recorded_offset` or `timezone_naive` and whose effective source is that proposal's (`recorded_offset_unconfirmed`, `recorded_offset_accepted`, `timezone_unconfirmed` or `timezone_accepted`), the cell asking, where the destination holds a photo of another camera group whose resolved UTC is known — a smartphone's, resolved as `compute_resolved_utc` resolves it, or a camera's not yet corrected whose cell's effective source is `gpx_anchor_auto`, `gpx_anchor_accepted`, `gpx_anchor_chosen`, `gpx_anchor_imprecise`, `same_day_auto`, `same_day_accepted` or `manual` — and every photo of the cell not yet corrected, at the time the proposal gives, lies farther than `gpx_anchor_max_clock_error_seconds` from each such photo's resolved UTC and from every track point. Such a proposal, whatever the cell's decision, holds `far_from_evidence`: `max_clock_error_seconds`, `other_photos` (how many), `nearest_other_photo`, `nearest_other_photo_seconds` and `nearest_track_seconds` (empty with no track).
+After the offsets shared within a day, `build_time_decisions` SHALL withdraw the effective offset of a cell whose proposal is `recorded_offset`, `timezone_naive` or `gps_time` and whose effective source is that proposal's (`recorded_offset_unconfirmed`, `recorded_offset_accepted`, `timezone_unconfirmed`, `timezone_accepted`, `gps_time_auto` or `gps_time_accepted`), the cell asking, where the destination holds a photo of another camera group whose resolved UTC is known — a smartphone's, resolved as `compute_resolved_utc` resolves it, or a camera's not yet corrected whose cell's effective source is `gpx_anchor_auto`, `gpx_anchor_accepted`, `gpx_anchor_chosen`, `gpx_anchor_imprecise`, `same_day_auto`, `same_day_accepted` or `manual` — and every photo of the cell not yet corrected, at the time the proposal gives, lies farther than `gpx_anchor_max_clock_error_seconds` from each such photo's resolved UTC and from every track point. Such a proposal, whatever the cell's decision, holds `far_from_evidence`: `max_clock_error_seconds`, `other_photos` (how many), `nearest_other_photo`, `nearest_other_photo_seconds` and `nearest_track_seconds` (empty with no track).
 :::
 
 :::{bld} A day's offset shared between destinations
@@ -361,11 +369,13 @@ and `handoff`, the handoff's content fingerprint ({need}`BLD-handoff_content_fin
 :::{bld} How each photo's true time is resolved
 :id: BLD-resolved_utc
 :status: ruled
-:realises: RUL-phone_time_from_own_offset, RUL-offset_within_time_value, RUL-offset_per_camera_destination_day, RUL-time_before_gps, RUL-ambiguous_local_time_never_guessed
+:realises: RUL-phone_time_from_own_offset, RUL-offset_within_time_value, RUL-offset_per_camera_destination_day, RUL-time_before_gps, RUL-ambiguous_local_time_never_guessed, RUL-unreadable_offset_tag_is_none
 
 `compute_resolved_utc` SHALL resolve each photo of photos by destination to UTC: a camera's photo by the offset of its
 cell — `<group>@<date>` where the destination has one for its date, else `<group>` — a corrected offset from
-`photos-22-gps-drift-validation.json` taking its place (`camera_group_offset`); a phone's by the offset recorded with
+`photos-22-gps-drift-validation.json` taking its place (`camera_group_offset`); a phone's, where its day there has a
+cell whose `phone.applies_to` is `every_photo` and whose effective source is not `as_recorded`, likewise by that cell's
+offset ({need}`BLD-phone_offset_cell`); else a phone's by the offset recorded with
 its time — one written within the time's own value, after the seconds and any fraction of them, else its field's:
 `OffsetTimeOriginal` for `DateTimeOriginal`, `OffsetTimeDigitized` for `CreateDate`, `OffsetTime`
 for `ModifyDate` (`smartphone_native_offset`) — else its destination's timezone (`destination_timezone`); and a time
@@ -375,7 +385,39 @@ sign, two digits of hours up to 14 and two of minutes up to 59, with or without 
 `geotag plan` writes the rows — `relative_path`, `destination_path`, `destination_timezone`, `camera_group`,
 `time_decision_scope` (the cell, `<group>[@<date>]|<destination>`), `source_naive_time`, `source_time_provenance`,
 `time_rule_used`, `utc_offset_used`, `resolved_utc`, `resolved_utc_status`, `resolved_utc_provenance` — into the
-`resolved_utc_cache` table once photos-22 is complete, replacing the table whole. A time that must be read by the zone and which the zone skips or repeats is left unresolved — rule `local_time_skipped` or `local_time_repeated` — and `geotag plan` stops on it, naming the photo, the time, the zone and both readings.
+`resolved_utc_cache` table once photos-22 is complete, replacing the table whole. A time that must be read by the zone and which the zone skips or repeats is resolved by the UTC offset photos-21 holds in effect for the photo (`local_time_answered`, {need}`BLD-local_time_readings`), else left unresolved — rule `local_time_skipped` or `local_time_repeated`.
+:::
+
+:::{bld} A phone's day checked against its own GPS
+:id: BLD-phone_offset_cell
+:status: ruled
+:realises: RUL-phone_anchored_like_camera, RUL-gps_time_checks_phone, RUL-phone_agreeing_anchor_changes_nothing, RUL-phone_disagreeing_anchors_apply, RUL-phone_single_anchor_proposed, RUL-phone_kept_as_recorded, RUL-phone_time_from_own_offset, RUL-untagged_phone_photo_read_as_siblings, RUL-untagged_phone_photo_settled_by_evidence, RUL-untagged_phone_photo_asked
+
+For each `smartphone` group's photos not yet corrected of a destination and day, keyed as a camera's bucket is ({need}`BLD-offset_buckets`), `_phone_cell` SHALL take the GPX self-anchor of those holding their own position ({need}`BLD-anchor_matching`), else the offset their fixes' times give ({need}`BLD-gps_time_proposal`), and set it against `_read_offset` of each photo that gave it — of an anchor, those within `gpx_anchor_offset_spread_max_seconds` of the offset; of fix times, every reading — −(the offset recorded with its time), else −(the zone's at its time). One of them farther than `gpx_anchor_decision_tolerance_seconds` from it, or none read at all, the day has an offset cell in `camera_group_time_decisions`, `camera_group_class: "smartphone"`, holding `phone` — `applies_to: "every_photo"`, `photos` (how many), `read_by_offsets` (each distinct offset the photos giving it are read by) — built as a camera's is, but that one anchor never applies itself. Otherwise — the offset agreeing, or none found — the photos recording an offset are read by their own, and the day has no cell where none records none, or where those recording one all record the zone's at their time (as `_offsets_against_zone` reads them); else a cell with `applies_to: "untagged_photos"` over the photos recording none: an offset found applies itself to them, its count whatever; with none found its proposal is the `recorded_offset` of the photos recording one ({need}`BLD-recorded_offset_proposal`), else `timezone_naive` at the earliest of them, taking effect as a camera's guess does — `*_unconfirmed` to the drift check where track points lie by them, else once accepted — and checked as one against the destination's other devices ({need}`BLD-offset_far_from_evidence`). A `timezone_accepted` or `timezone_unconfirmed` offset, or a drift confirmation of it as it stood, reads each photo by the zone at its own time; any other, every photo by the one offset. In every cell `user_decision` holds `keep_as_recorded` too: `true` takes effect as `{"source": "as_recorded"}`, after `manual_offset_seconds` and before `accept_proposal`, while the proposal is `gpx_self_anchor` or `gps_time`, else is `stale_user_decision`; not a boolean, a blocker. A phone's cell gives no offset to, and takes none from, another destination's ({need}`BLD-offset_shared_within_day`).
+:::
+
+:::{bld} The question of a destination's files naming no camera
+:id: BLD-unidentified_files_question
+:status: ruled
+:realises: RUL-camera_less_files_asked_per_destination, RUL-camera_less_answer_kept, RUL-unidentified_files_solved_alone
+
+Each destination holding photos with files classed `unidentified`, not yet corrected, with a readable time and no offset recorded with it (`_own_offset`) SHALL hold `unidentified_files`: `files` (how many), `examples` (the first three paths), `proposed_iana_timezone` (the zone in effect, or `""`), `user_decision.accept_proposal` and `user_decision.accepted_timezone`, `effective_iana_timezone`, `requires_user_input` and `stale_user_decision`. An acceptance holds while `accepted_timezone` is the zone in effect — then `effective_iana_timezone` is that zone, whatever files have come since — else it is `stale_user_decision`, kept as written; `accept_proposal` not a boolean, or true with no `accepted_timezone`, or an `accepted_timezone` that is not text, is a blocker. Such a file resolves by the zone (`destination_timezone`) only while `effective_iana_timezone` is the destination's zone, else stays unresolved, `local_time_unconfirmed`; photos-21 is not complete while the question asks.
+:::
+
+:::{bld} A time the zone skips or repeats, answered per photo
+:id: BLD-local_time_readings
+:status: ruled
+:realises: RUL-ambiguous_local_time_answered, RUL-repeated_time_answered_by_a_reading, RUL-ambiguous_local_time_never_guessed, RUL-photo_decision_follows_the_photo, RUL-photo_decision_never_passes_by_name
+
+Once its cells are built, `build_time_decisions` SHALL resolve each destination holding photos as `compute_resolved_utc` would, and give each photo left `local_time_skipped` or `local_time_repeated` an entry in the destination's `local_time_readings`, keyed by its path: `content_fingerprint`, `camera_time`, `timezone`, `case` (`repeated` or `skipped`), `offsets_seconds` (the zone's UTC offset before the change and after), `readings_utc` (the instant each gives), `user_decision.utc_offset_seconds` (`""` until answered), `effective_utc_offset_seconds`, `requires_user_input` and `stale_user_decision`. A photo's earlier answer is the entry of its destination's earlier record with its `content_fingerprint`, or with the fingerprint its own values are pinned under — never one by its path alone. An answer is a whole number of seconds within ±14 hours, else a blocker; for a `repeated` time one of `offsets_seconds`, else `stale_user_decision`, kept as written; for a `skipped` time any such. The record is not complete while an entry requires input; `compute_resolved_utc` reads the photo as its time less the answer.
+:::
+
+:::{bld} Offset tags that hold no offset
+:id: BLD-unreadable_offset_tags
+:status: ruled
+:realises: RUL-unreadable_offset_tag_is_none, RUL-unreadable_offset_tag_told, RUL-unreadable_offset_tag_recorded
+
+For each photo not yet corrected whose offset field paired with the one its time was read from ({need}`BLD-resolved_utc`) holds a value that is not blank and is no offset, `build_time_decisions` SHALL list `{relative_path, field, value}` — the value as text — in its destination's `unreadable_offset_tags`, and `geotag plan` warns of each after writing photos-21, the first `UNREADABLE_TAGS_SHOWN` by name and the number of the rest; `_own_offset` reads it as none.
 :::
 
 :::{bld} The resolved-UTC fingerprint
@@ -398,7 +440,7 @@ track decided anything.
 :status: ruled
 :realises: RUL-unanchored_offset_confirmed, RUL-confirmation_holds_for_its_offset, RUL-stay_fixes_no_clock, RUL-checked_clock_offsets
 
-Once photos-21 is complete, `geotag plan` SHALL write `photos-22-gps-drift-validation.json` with a cell for each offset cell whose effective source is `timezone_accepted`, `timezone_unconfirmed`, `recorded_offset_accepted`, `recorded_offset_unconfirmed`, `manual` or `gpx_anchor_imprecise` and whose photos' resolved times lie within `drift_check_track_window_seconds` of track points, or, none lying there, whose photos' recorded times read as UTC do — whether or not a photo of the cell anchors on the tracks: its `proposal` holding `current_offset_seconds`, its source, the photos and that track segment; its `user_decision` `confirmed`, `corrected_offset_seconds` and `confirmed_offset_seconds`. A cell confirmed with `confirmed_offset_seconds` equal to its current offset takes effect as `gps_drift_validated` — the current offset when no correction is given, else the correction; confirmed against another offset it is `stale_user_decision` and takes no effect; confirmed naming none, a blocker. A `corrected_offset_seconds` or `confirmed_offset_seconds` that is written, the cell confirmed or not, is a whole number of seconds, else a blocker. Until every cell has taken effect, photos-23 and photos-24 are not written; then resolved UTC is computed again with the validated offsets, photos-21 left as it is. photos-22's `depends_on` holds photos-21's SHA-256, `gpx_fingerprint`, `camera_time_policy_fingerprint` and `camera_group_key_version`. A `timezone_unconfirmed` or `recorded_offset_unconfirmed` cell is always given its drift cell, whatever track lies by it.
+Once photos-21 is complete, `geotag plan` SHALL write `photos-22-gps-drift-validation.json` with a cell for each offset cell whose effective source is `timezone_accepted`, `timezone_unconfirmed`, `recorded_offset_accepted`, `recorded_offset_unconfirmed`, `manual` or `gpx_anchor_imprecise` and whose photos' resolved times lie within `drift_check_track_window_seconds` of track points, or, none lying there, whose photos' recorded times read as UTC do — whether or not a photo of the cell anchors on the tracks: its `proposal` holding `current_offset_seconds`, its source, the photos and that track segment; its `user_decision` `confirmed`, `corrected_offset_seconds` and `confirmed_offset_seconds`. A cell confirmed with `confirmed_offset_seconds` equal to its current offset takes effect as `gps_drift_validated` — the current offset when no correction is given, else the correction; confirmed against another offset it is `stale_user_decision` and takes no effect; confirmed naming none, a blocker. A `corrected_offset_seconds` or `confirmed_offset_seconds` that is written, the cell confirmed or not, is a whole number of seconds, else a blocker. Until every cell has taken effect, photos-23 and photos-24 are not written; then resolved UTC is computed again with the validated offsets, photos-21 left as it is. photos-22's `depends_on` holds photos-21's SHA-256, `gpx_fingerprint`, `camera_time_policy_fingerprint` and `camera_group_key_version`. A `timezone_unconfirmed` or `recorded_offset_unconfirmed` cell is always given its drift cell, whatever track lies by it. A phone's cell for its photos recording no offset is checked on those photos alone.
 :::
 
 :::{bld} A drift confirmation names its tracks

@@ -284,6 +284,10 @@ def _edit_cell(art, e):
         cell = d.get("destination_timezone")
     elif kind == "offset":
         cell = (d.get("camera_group_time_decisions") or {}).get(e.get("key"))
+    elif kind == "reading":                     # a photo's time at a daylight-saving change, keyed by its path
+        cell = (d.get("local_time_readings") or {}).get(e.get("key"))
+    elif kind == "unidentified":                # the destination's files naming no camera
+        cell = d.get("unidentified_files")
     elif kind == "drift":
         cell = (d.get("drift_decisions") or {}).get(e.get("key"))
     elif kind == "fallback":

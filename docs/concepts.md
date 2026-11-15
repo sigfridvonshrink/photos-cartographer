@@ -223,10 +223,20 @@ So the grouping has to be right:
 
 Each group is **classed** in the configuration, under `camera_time_and_timezone_policy.device_groups`:
 `phones` or `fixed_clock_cameras`. A phone records the offset from UTC with its time, and its photos take
-their true time from that offset (else from their destination's timezone). A camera with a hand-set,
-timezone-less clock needs a clock offset (next sections). A group not yet classed stops geotag, which
-prints both lists ready to paste. A file whose metadata names no camera is never asked about: it is
-solved on its own, by the offset recorded with its time, else its destination's timezone. So is a photo
+their true time from that offset (else from their destination's timezone) — checked, where its photos hold
+their own position, against the tracks or their GPS fixes' own times exactly as a camera's are: agreeing
+within `gpx_anchor_decision_tolerance_seconds`, nothing is asked; several photos agreeing on another offset
+apply it to the phone's photos of that day there (a phone set to the wrong zone, or an hour wrong by hand);
+one photo's is a proposal to accept, or you keep the phone as its photos record themselves. An offset tag
+holding something that is no offset (`local`, `+25:00`) is read as none: geotag names the photo and lists
+it in `photos-21` under `unreadable_offset_tags`. A camera with a hand-set,
+timezone-less clock needs a clock offset (next sections). A phone's photo recording no offset is read by the
+zone unasked only where the phone's tagged photos that day record the zone's offset; else its own GPS reads
+it; with neither, the zone's reading (or its tagged photos' offset) is a guess like a camera's — checked in
+the drift check where tracks lie by it, else accepted. A group not yet classed stops geotag, which
+prints both lists ready to paste. A file whose metadata names no camera is never asked to be classed: it
+is solved on its own, by the offset recorded with its time; files recording none are one question for
+their destination — read them as local time in its zone? — answered once and kept. So is a photo
 whose only time is its `ModifyDate` — an export whose capture time is gone, timed by the editing
 computer's clock, not the camera's: it takes no clock offset of its camera's and opens none of its days.
 
@@ -250,24 +260,31 @@ Each day's offset is proposed, in this order:
    by default for two or more photos (`multi_anchor_auto_apply`); a single photo's offset waits for you
    (`single_anchor_auto_apply` is off). A place the tracks passed on several visits is matched to the
    visit the photos agree on; if two visits fit equally, you choose.
-2. **From the camera's own GPS, elsewhere that day** — where none of the day's photos in this
+2. **From the time the camera's GPS fixes recorded** — where no track passes the day's photos with a
+   position, each such photo's fix still records the UTC it was taken at (`GPSDateTime`): less the
+   camera's time, that is the clock offset, measured. The readings count only while their fix times all
+   differ (a stale fix repeats its time while the camera's moves on) and agree within
+   `gpx_anchor_offset_spread_max_seconds`; two or more then apply themselves, as several photos on a track
+   do; a single one waits for you. A camera that writes its local time into the GPS field reads hours out,
+   and is held back where the destination's other photos show it (below).
+3. **From the camera's own GPS, elsewhere that day** — where none of the day's photos in this
    destination has a position, the offset the camera's GPS fixed that day in another destination. It
    applies itself here only where it did there. Two such offsets of one day that disagree by more than
    `clock_offset_same_day_max_difference_seconds` take effect nowhere until you say which is right.
-3. **From the offset the photos record** — a recent camera writes, with each time, the UTC offset its
+4. **From the offset the photos record** — a recent camera writes, with each time, the UTC offset its
    clock was set to (`OffsetTimeOriginal`). Where the day's photos here that record one all record the
    same, the clock offset is its negative: a camera left on home time (+01:00) in Japan is proposed
    −1h, not Japan's −9h. Where they record different offsets, none is proposed from them and the
    decision lists the offsets seen. A value in the tag that is no offset counts as none.
-4. **From the destination's timezone** — computed from the zone, daylight saving included, assuming the
+5. **From the destination's timezone** — computed from the zone, daylight saving included, assuming the
    camera kept local time.
-5. **By hand** — you type it, or, in the editor, give the true time of one of its photos.
+6. **By hand** — you type it, or, in the editor, give the true time of one of its photos.
 
-Proposals 3 and 4 are guesses, never applied on their own: each is confirmed against the tracks in the
+Proposals 4 and 5 are guesses, never applied on their own: each is confirmed against the tracks in the
 drift check, or, with no track by the photos, accepted in the Time view.
 
 A guess can be far out: a camera whose battery ran out wakes at its factory date, and the guess moves
-it only a few hours. So a guess that would put every photo of the day farther than
+it only a few hours. So a guess — or an offset from the GPS fixes' times — that would put every photo of the day farther than
 `gpx_anchor_max_clock_error_seconds` (two days by default) from every track point **and** from every
 photo another device took in that destination — a phone's, or another camera's whose offset its GPS
 fixed or you wrote — is **not** taken on acceptance: the decision asks for the offset itself, the
@@ -339,9 +356,11 @@ on home time, a photo from the stopover), the zone does not take effect there, n
 inside, until you move the photo out, choose another zone, or keep this one for those photos.
 
 A local time that a daylight-saving change skips or repeats (02:30 on the night clocks change) reads as
-two instants. Geotag never guesses: it stops, naming the photo and both readings. Write the photo's
-offset into it (the message gives the `exiftool` command) or move it out, then run prep and geotag again.
-For a camera's clock offset, no timezone-derived offset is proposed at such a time: type it.
+two instants. Geotag never guesses: a photo read by the zone at such a time is asked about in the time
+decisions, alone — which of its two readings, or, for a time that never happened, its offset — in the
+editor or by hand (`local_time_readings`). A camera is not: its clock does not change at the switch, so
+the zone's offset at its day's earliest photo is proposed for the whole day — and where that earliest
+time is itself one the zone skips or repeats, none is proposed: type it.
 
 ---
 
@@ -489,8 +508,7 @@ outside the inbox not named as prep named it (prep gives the name it should carr
 recorded (run prep, or let geotag run it); anything but photos in `6-photos-by-dest/`, or a `jpg` / `tif`
 development subfolder (`JPG` or `Tif` as well — the case does not matter); a camera group not yet
 classed; a photo there with no recorded time (it belongs in `2-missing-metadata/`) or with no fingerprint (move it out, or repair it so ImageMagick can read it,
-then run prep); a `gpx_root` that is not there, or tracks of which not one can be read; a local time at a
-daylight-saving change; a decision file that doesn't parse or holds an invalid value (it is kept as
+then run prep); a `gpx_root` that is not there, or tracks of which not one can be read; a decision file that doesn't parse or holds an invalid value (it is kept as
 written for you to fix); prep's record made by another fingerprint method (run prep again). And a photo
 whose time (`DateTimeOriginal` or its offset) was changed — in another tool — since geotag wrote to it:
 geotag decides from the photo's own time from before its first write, and neither writes its time back

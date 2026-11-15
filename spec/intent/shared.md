@@ -3076,6 +3076,26 @@ it up between one save or display and the next.
 The decision editor SHALL NOT save while a decision record is not the one it loaded, or while an edit names a decision the record does not hold.
 :::
 
+:::{rul} Every question can be answered in the decision editor
+:id: RUL-every_question_in_editor
+:status: ruled
+:criticality: med
+:verify: required
+:uses: DEF-decision
+
+Every question geotag asks of the user SHALL be answerable in the decision editor.
+:::
+
+:::{rul} Every question can be answered by hand
+:id: RUL-every_question_answerable_by_hand
+:status: ruled
+:criticality: med
+:verify: required
+:uses: DEF-decision
+
+Every question geotag asks of the user SHALL be answerable by hand, in a field of its decision record.
+:::
+
 :::{rul} The decision editor saves nothing into a sealed workspace
 :id: RUL-editor_refuses_sealed_save
 :status: ruled

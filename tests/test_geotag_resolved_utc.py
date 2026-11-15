@@ -40,6 +40,8 @@ def _art(*, tz="Europe/Brussels", offset=-7187):
     cell = {} if offset is None else {"effective_time_anchor": {"offset_seconds": offset, "source": "gpx_anchor_auto"}}
     return {"destinations": {"6-photos-by-dest/B": {
         "destination_timezone": {"effective_iana_timezone": tz},
+        # its files naming no camera read as local time there, as the user answered (BLD-unidentified_files_question)
+        "unidentified_files": {"effective_iana_timezone": tz},
         "camera_group_time_decisions": {CAM: cell}}}}
 
 
@@ -509,79 +511,3 @@ def test_a_time_with_its_offset_or_a_camera_s_needs_no_zone():
     assert (r["resolved_utc"], r["time_rule_used"]) == ("2026-03-29T01:30:00Z", "smartphone_native_offset")
     r = _one(_file("6-photos-by-dest/B/a.arw", CAM, "2026:03:29 02:30:00"), art)
     assert (r["resolved_utc"], r["time_rule_used"]) == ("2026-03-29T01:30:00Z", "camera_group_offset")
-
-
-@pytest.mark.spec("RUL-ambiguous_local_time_never_guessed",
-                  test="TST-geotag_resolved_utc-the_block_names_photo_time_zone_and_both_readings")
-def test_the_block_names_photo_time_zone_and_both_readings():
-    rows = cal.compute_resolved_utc(
-        [_file("6-photos-by-dest/B/skip.jpg", PHONE, "2026:03:29 02:30:00"),
-         _file("6-photos-by-dest/B/twice.jpg", PHONE, "2026:10:25 02:30:00"),
-         _file("6-photos-by-dest/B/fine.jpg", PHONE, "2026:10:25 04:30:00")], GROUPS, _art(tz="Europe/Berlin"))
-    skip, twice = cal.ambiguous_time_blockers(rows)
-    assert "skip.jpg" in skip and "2026:03:29 02:30:00" in skip and "Europe/Berlin" in skip and "never happened" in skip
-    assert "+01:00 (2026-03-29T01:30:00Z)" in skip and "+02:00 (2026-03-29T00:30:00Z)" in skip
-    assert "twice.jpg" in twice and "happened twice" in twice
-    assert "+02:00 (2026-10-25T00:30:00Z)" in twice and "+01:00 (2026-10-25T01:30:00Z)" in twice
-    for b in (skip, twice):
-        assert "exiftool" in b and "move it out of 6-photos-by-dest/" in b
-
-
-@pytest.mark.spec("RUL-ambiguous_local_time_never_guessed",
-                  test="TST-geotag_resolved_utc-geotag_plan_stops_on_a_time_its_zone_skips")
-def test_geotag_plan_stops_on_a_time_its_zone_skips(tmp_path, monkeypatch, capsys):
-    """Through `geotag plan`: a phone's photo taken at 02:30 on the night Berlin's clocks went forward, with no offset
-    recorded, stops geotag once the zone is known, naming the photo — nothing is resolved, checked, placed or planned
-    for it; the photo an hour later alone plans."""
-    ws = tmp_path / "ws"; ws.mkdir()
-    for d in ["0-sources", "1-strays", "2-missing-metadata", "3-redundant-jpgs",
-              "4-videos-by-date", "5-photos-by-date", "6-photos-by-dest"]:
-        (ws / d).mkdir()
-    ctl = ws / ".photos-ingest"; ctl.mkdir()
-    (ctl / "photos-00-workspace-guard").touch()
-    cfg = {k: v for k, v in utils.CONFIG.items() if k != "jobs"}
-    cfg["gpx_root"] = ""
-    cfg["camera_time_and_timezone_policy"] = dict(
-        cfg["camera_time_and_timezone_policy"], device_groups={"fixed_clock_cameras": [], "phones": [PHONE]})
-    (ctl / "photos-00-config.json").write_text(json.dumps(cfg))
-    answer_root_zone(ctl, "Europe/Berlin")
-
-    def rec(rel, dto):
-        parsed = {"DateTimeOriginal": dto, "selected_source_naive_timestamp": dto,
-                  "selected_source_timestamp_tag": "DateTimeOriginal", "camera_group_key": PHONE, "has_timestamp": True}
-        return {"relative_path": rel, "media_class": "image", "folder_class": "6-photos-by-dest",
-                "size": 1, "mtime_ns": 1, "content_hash": json.dumps({"value": "fp" + rel, "status": "valid"}),
-                "metadata_status": {"camera_group_key_version": utils.CAMERA_GROUP_KEY_VERSION,
-                                    "camera_group_key": PHONE, "has_timestamp": True,
-                                    "field_set_version": utils.FIELD_SET_VERSION, "parsed_json": json.dumps(parsed)}}
-
-    def plan(files):
-        for f in files:
-            p = ws / f["relative_path"]; p.parent.mkdir(parents=True, exist_ok=True); p.write_bytes(b"x")
-        (ctl / "photos-11-handoff.json").write_text(json.dumps(vouched(ctl.parent, {
-            "filename_timestamp_format": utils.CONFIG["filename_timestamp_format"], "files": match_disk(ws, files),
-            "cache_fingerprint": "pcf",
-            "depends_on": {"cache": {"fingerprint_algorithm_version": utils.FINGERPRINT_ALGORITHM_VERSION}}})))
-        monkeypatch.chdir(str(ws))
-        monkeypatch.setattr(sys, "argv", ["photos-2-geotag", "plan"])
-        try:
-            cal.main()
-            return 0
-        except SystemExit as e:
-            return e.code
-
-    assert plan([rec("6-photos-by-dest/B/later.jpg", "2026:03:29 03:30:00")]) in (0, None)      # the safe case
-    assert (ctl / "photos-22-gps-drift-validation.json").exists()
-    for n in ("photos-22-gps-drift-validation.json", "photos-23-gps-decisions.json", "photos-24-executable-plan.json"):
-        if (ctl / n).exists():
-            (ctl / n).unlink()
-    capsys.readouterr()
-    both = [rec("6-photos-by-dest/B/later.jpg", "2026:03:29 03:30:00"),
-                rec("6-photos-by-dest/B/skipped.jpg", "2026:03:29 02:30:00")]
-    assert plan(both) == 2
-    out = capsys.readouterr()
-    said = out.out + out.err
-    assert "skipped.jpg" in said and "Europe/Berlin" in said and "2026:03:29 02:30:00" in said, said
-    assert "later.jpg:" not in said
-    assert not any((ctl / n).exists() for n in ("photos-22-gps-drift-validation.json", "photos-23-gps-decisions.json",
-                                                 "photos-24-executable-plan.json"))

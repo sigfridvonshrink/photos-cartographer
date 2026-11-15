@@ -242,7 +242,7 @@ photos-cartographer edit          # open the browser editor on this workspace
   in `fixed_clock_cameras` if it is a camera with a hand-set clock — and delete it from the other.
   Files that name no camera at all are not asked about.
 - A photo with no recorded time, or one prep could not fingerprint, in `6-photos-by-dest/`; a link
-  among the photos; a time that falls at a daylight-saving change. Each is named, with what to do;
+  among the photos. Each is named, with what to do;
   [What stops a run](concepts.md#what-stops-a-run) lists them all.
 
 ### Then the editor

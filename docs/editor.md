@@ -151,8 +151,8 @@ arriving later with yet another offset asks again.
 ### Clock offset
 
 One offset decision per camera group per destination — per **day** when the group spans more than one
-day there, since a camera reset each morning has a per-day offset. Phones get none: their time is
-resolved per file. Offsets **never inherit** — each day stands alone, so no inherited badge appears on
+day there, since a camera reset each morning has a per-day offset. A phone gets one (its row says
+**phone**) only for a day whose own GPS reads its clock otherwise than its photos are read — see below. Offsets **never inherit** — each day stands alone, so no inherited badge appears on
 them. See [why grouping is per-day](concepts.md#why-grouping-is-per-day-within-a-destination).
 
 Days of one group with the same proposal are collapsed into one row (e.g. "3 Jul 2024 … 9 Jul 2024
@@ -192,6 +192,12 @@ What the proposal panel shows depends on where the offset came from:
     of the day: the camera's clock changed — move them into a sub-folder and re-run.
 
   Photos skipped for having a track only outside the plausible time window, or none nearby, are counted.
+- **From the GPS fixes' own times** — no track passes the photos' places, but their GPS fixes recorded
+  the UTC they were taken at: each, less the camera time, is a reading of the offset. The panel lists a few
+  ("camera 10:00:00 · fix 00:59:30Z → −9h 00m 30s"). Two or more that agree applied themselves (status
+  **auto**); a single one waits for **accept proposal** — a stale fix repeats an old time. Where two fixes
+  recorded the same time at different camera times (a stale fix), or their offsets lie too far apart, the
+  fixes are not read, and a note says so.
 - **Shared from the same day elsewhere** — no photo here has its own position, but the camera's GPS fixed
   its clock that day in another destination — by itself, by your acceptance, or as the group of its GPS
   you picked there. Where it applied itself there it applies here too; otherwise accept it here or set
@@ -212,7 +218,7 @@ What the proposal panel shows depends on where the offset came from:
   the camera really tracked local time — a camera left on home time would be wrong. Where GPX tracks
   cover these photos, there is **nothing to accept here**: the decision says to confirm it in the Drift
   view, against the tracks, once.
-- **Too far from everything** — a local-time or recorded-offset proposal that would put every photo of the
+- **Too far from everything** — a local-time, recorded-offset or GPS-fix-time proposal that would put every photo of the
   day farther than a clock may be wrong (`gpx_anchor_max_clock_error_seconds`, two days by default) from
   every track point and from every photo another device took in this destination. The note says how far
   (e.g. "26.3 years from the nearest photo another device took here"): most likely the camera's clock
@@ -223,8 +229,34 @@ What the proposal panel shows depends on where the offset came from:
   change** in that zone (a time that happened twice, or never): the zone gives two offsets there, and the
   proposal shows `timezone_ambiguous` with both. Set the offset yourself.
 
-(A phone photo or other file whose own time falls at a daylight-saving change stops `geotag plan`
-outright, naming the photo — that is fixed outside the editor; the terminal message says how.)
+- **A phone's day** — the phone's photos with their own position put its clock elsewhere than their
+  offset tags (or the zone) read it: say a phone set by hand an hour wrong. The note names both offsets
+  and how many photos the day holds. Several photos agreeing applied it themselves (**auto**); one
+  photo's waits for **accept proposal**. If the track is someone else's, tick **keep this phone as its
+  photos record themselves** — its GPS here is set aside.
+
+- **A phone's photos with no offset tag** — where the phone's tagged photos that day record the zone's
+  offset, they are read by the zone and nothing asks. Else the phone's own GPS reads them (applied by
+  itself), or — with none — the decision proposes the offset its tagged photos record, or the zone's:
+  confirm it in the Drift view where tracks lie by them, or accept it here. The note says which photos.
+
+### Files naming no camera
+
+A destination holding screenshots, scans or stripped photos that record no offset gets one row, **Files
+naming no camera** ("2 files"). Tick **read them as local time in `<zone>`** — the answer names the zone
+and holds for such files arriving later, until the destination's zone changes. Or move them out, or give
+them their offset, and run prep again. By hand: `unidentified_files.user_decision` in photos-21 (see the
+[decision-JSON reference](../cartographer/editor/decision-json-reference.md)).
+
+### A time at a clock change
+
+A photo read by its destination's zone whose time falls at a **daylight-saving change** — 02:30 on the
+night the clocks went back (it happened twice) or forward (it never happened) — gets a row of its own,
+**Time at a clock change**, under its destination, with its thumbnail. Pick which of the two readings it
+was (each shown with its UTC instant); for a time that never happened you may type another offset
+(`+01:00`). Until each is answered, the time decisions are not complete. By hand, the same answer is
+`utc_offset_seconds` in the photo's entry of `local_time_readings` (see the
+[decision-JSON reference](../cartographer/editor/decision-json-reference.md)).
 
 ---
 
