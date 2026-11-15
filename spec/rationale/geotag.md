@@ -395,6 +395,22 @@ offset no camera of theirs had. Each carries what time it has; read alone, as a 
 the place's zone, it asks nothing and borrows nothing.
 :::
 
+:::{rat} A modification time is another clock's
+:id: RAT-modified_time_is_another_clock
+:status: ruled
+:forced: no
+:follows_from: RAT-no_identity_no_group, RAT-offset_per_camera_destination_day
+:justifies: RUL-modified_time_solved_alone, RUL-modified_time_no_camera_offset, RUL-modified_time_opens_no_day
+
+A photo's `ModifyDate` is where its time is read from only when neither `DateTimeOriginal` nor `CreateDate` holds one —
+an export whose capture time is gone. It is then the time the photo was last saved, by the editing computer's clock,
+not the camera's; but the export keeps the camera's make and model, so it would join the camera's group, open a day of
+its own on the edit's date — a question about a day the camera never shot — and have the camera's offset applied to a
+computer's clock. Read alone, as a file naming no camera is, it asks nothing and borrows nothing. `CreateDate` is the
+camera's clock still: a camera writes it as it writes the original. Treating such a photo as untimed instead would stop
+geotag on a time that is, at worst, a poor guess the user can see and correct.
+:::
+
 
 ## 10. Destination civil timezone
 
@@ -613,6 +629,21 @@ it does not say so one for one, no photo's values can be told apart, and geotag 
 A position the camera wrote was measured where the photo was taken. Everything geotag can offer instead is derived —
 from a track and a corrected time, from a folder — and so weaker evidence: replacing the measurement with it would make
 the photo less right, not more.
+:::
+
+:::{rat} Latitude 0, longitude 0 is a device without a fix
+:id: RAT-null_island_no_fix
+:status: ruled
+:forced: no
+:follows_from: RAT-own_position_best, CHC-total_placement, CHC-ask_only_what_data_cannot_settle
+:justifies: RUL-null_island_is_no_position, RUL-log_records_null_island_replaced
+
+A device that has no fix and writes a position anyway writes latitude 0 and longitude 0: a point in the Gulf of Guinea
+no photo of a trip is taken at. Kept as the photo's own, it would never be placed, be counted as placed, and be matched
+against the tracks as evidence of the camera's clock. It was measured nowhere, so it is no measurement to keep: the
+photo is placed as one without a position, and asking about each would ask what the data settles. Only the exact
+point counts — a position merely near it, or far from the others, may be real. The value the device wrote is replaced,
+so the log keeps it, and the photo's history still shows what it carried.
 :::
 
 :::{rat} Most specific first

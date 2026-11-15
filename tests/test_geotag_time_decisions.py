@@ -376,3 +376,77 @@ def test_a_file_naming_no_camera_is_solved_alone_never_asked(tmp_path, monkeypat
                                     groups, art)
     assert [(r["time_rule_used"], r["resolved_utc"]) for r in rows] == [
         ("destination_timezone", "2024-07-03T12:00:00Z"), ("unidentified_native_offset", "2024-07-03T11:00:00Z")]
+
+
+def _timed(rel, tag, value, *, key=CAM, offset=None):
+    """A by-dest photo whose recorded time is read from `tag` (`ModifyDate` only when neither field before it
+    holds one), with `offset` the offset recorded beside it."""
+    parsed = {tag: value, "selected_source_naive_timestamp": value, "selected_source_timestamp_tag": f"EXIF:{tag}",
+              "camera_group_key": key, "has_timestamp": True, "Make": "SONY", "Model": "ILCE-6400"}
+    if offset is not None:
+        parsed[cal.OFFSET_TAG_FOR[tag]] = offset
+    rec = _hfile(rel, key=key)
+    rec["metadata_status"]["parsed_json"] = json.dumps(parsed)
+    return rec
+
+
+@pytest.mark.spec("RUL-modified_time_solved_alone", "RUL-modified_time_opens_no_day", "BLD-modified_time_files",
+                  test="TST-geotag_time_decisions-a_photo_timed_by_its_modification_opens_no_day")
+def test_a_photo_timed_by_its_modification_opens_no_day(tmp_path, monkeypatch):
+    # An export of the camera's photo keeps the camera's make and model, but its time is the editing computer's: it
+    # opens no day of the camera's offsets, and a camera whose only photo here is such an export is never asked about.
+    other = "CANON|R5|9"
+    ws = _ws(tmp_path, files=[_hfile("6-photos-by-dest/Brussels/a.jpg"),                     # 2024:07:03
+                              _timed("6-photos-by-dest/Brussels/b.jpg", "ModifyDate", "2025:01:10 09:00:00"),
+                              _timed("6-photos-by-dest/Brussels/c.jpg", "ModifyDate", "2025:01:11 09:00:00",
+                                     key=other)],
+             device_groups={"fixed_clock_cameras": [CAM], "phones": []}, default_tz="Europe/Brussels")
+    assert _run(monkeypatch, ws) == 0                                # `other` is not stopped as an unknown group
+    d = _artifact(ws)["destinations"]["6-photos-by-dest/Brussels"]
+    assert sorted(d["camera_group_time_decisions"]) == [CAM]         # one day: the edit's date opens none
+    assert other not in d["camera_groups_present"]
+
+
+@pytest.mark.spec("RUL-modified_time_opens_no_day", "BLD-modified_time_files", "RUL-recorded_time_order",
+                  test="TST-geotag_time_decisions-a_photo_timed_by_its_creation_is_the_camera_s")
+def test_a_photo_timed_by_its_creation_is_the_camera_s(tmp_path, monkeypatch):
+    # CreateDate is the camera's own clock still: a photo timed by it opens its day, as one timed by
+    # DateTimeOriginal does.
+    ws = _ws(tmp_path, files=[_hfile("6-photos-by-dest/Brussels/a.jpg"),
+                              _timed("6-photos-by-dest/Brussels/b.jpg", "CreateDate", "2025:01:10 09:00:00")],
+             device_groups={"fixed_clock_cameras": [CAM], "phones": []}, default_tz="Europe/Brussels")
+    assert _run(monkeypatch, ws) == 0
+    d = _artifact(ws)["destinations"]["6-photos-by-dest/Brussels"]
+    assert sorted(d["camera_group_time_decisions"]) == [f"{CAM}@2024-07-03", f"{CAM}@2025-01-10"]
+
+
+@pytest.mark.spec("RUL-modified_time_solved_alone", "RUL-modified_time_no_camera_offset", "BLD-modified_time_files",
+                  test="TST-geotag_time_decisions-a_photo_timed_by_its_modification_takes_no_camera_offset")
+def test_a_photo_timed_by_its_modification_takes_no_camera_offset(tmp_path):
+    # Its camera's offset is decided and in effect; the export is resolved by the offset recorded with its time,
+    # else its destination's timezone — never by the camera's offset.
+    dest = "6-photos-by-dest/Brussels"
+    wf = cal.GeotagWorkflow(str(tmp_path))
+    wf.handoff = {"filename_timestamp_format": utils.CONFIG["filename_timestamp_format"], "files": [
+        _hfile(f"{dest}/a.jpg"),
+        _timed(f"{dest}/b.jpg", "ModifyDate", "2024:07:03 18:00:00", offset="+01:00"),
+        _timed(f"{dest}/c.jpg", "ModifyDate", "2024:07:03 18:00:00")]}
+    files = wf.build_file_model()
+    assert [f["camera_group_key"] for f in files] == [CAM, utils.NO_IDENTITY_KEY, utils.NO_IDENTITY_KEY]
+    groups, unknown = wf.recognize_camera_groups(files)
+    assert groups[utils.NO_IDENTITY_KEY]["camera_group_class"] == "unidentified" and unknown == [CAM]
+    groups[CAM]["camera_group_class"] = "camera"                     # the camera, as the configuration classes it
+    art = {"destinations": {dest: {"destination_timezone": {"effective_iana_timezone": "Europe/Brussels"},
+                                   "camera_group_time_decisions": {CAM: {"camera_group": CAM, "effective_time_anchor": {
+                                       "offset_seconds": -3600, "source": "manual"}}}}}}
+    rows = {r["relative_path"]: r for r in cal.compute_resolved_utc(files, groups, art)}
+    assert (rows[f"{dest}/a.jpg"]["time_rule_used"], rows[f"{dest}/a.jpg"]["utc_offset_used"]) == \
+        ("camera_group_offset", -3600)
+    assert (rows[f"{dest}/b.jpg"]["time_rule_used"], rows[f"{dest}/b.jpg"]["resolved_utc"]) == \
+        ("unidentified_native_offset", "2024-07-03T17:00:00Z")
+    assert (rows[f"{dest}/c.jpg"]["time_rule_used"], rows[f"{dest}/c.jpg"]["resolved_utc"]) == \
+        ("destination_timezone", "2024-07-03T16:00:00Z")
+    # decided from pinned values, the pinned field decides: a pin read from ModifyDate is solved on its own too
+    pinned = cal.from_originals(files[0], {"selected_source_naive_timestamp": "2024:07:03 18:00:00",
+                                           "selected_source_timestamp_tag": "XMP:ModifyDate"})
+    assert cal.clock_group_key(pinned) == utils.NO_IDENTITY_KEY and cal.clock_group_key(files[0]) == CAM

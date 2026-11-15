@@ -164,7 +164,9 @@ with its English `name` and its `zones` (sorted).
 
 Note: smartphones are resolved per-file and get **no** offset cell — `camera_group_time_decisions` only
 holds `camera`-class groups (those listed under `fixed_clock_cameras`); smartphone, unidentified and
-unknown groups appear in `camera_groups_present` only. A bucket whose photos are all already corrected by
+unknown groups appear in `camera_groups_present` only. A photo whose time was read from `ModifyDate` (no valid
+`DateTimeOriginal` or `CreateDate`: an export, timed by the editing computer) counts under `unknown`, as a file
+naming no camera does — it opens no cell of its camera's and takes no offset from one. A bucket whose photos are all already corrected by
 geotag gets a cell only when it still resolves (its earlier answer, derived again), so that photos of the
 same camera and day arriving later take the same offset; such a cell never asks.
 
@@ -396,7 +398,9 @@ them; nothing here asks. It measures the worse device's error.
 
 `files_total`, `preserve_native_gps`, `automatic_gpx_interpolation`, `automatic_gpx_extrapolation`,
 `automatic_folder_fallback`, `manual_locked`, `manual_review_required`, `blocked`,
-`no_gps_change_needed`. Useful for a per-destination progress display; the editor never writes these.
+`no_gps_change_needed`. Useful for a per-destination progress display; the editor never writes these. A photo
+whose position is exactly latitude 0, longitude 0 — what a device writes with no fix — counts as having none: it is
+never in `preserve_native_gps`, and is placed like any photo without a position.
 
 ---
 

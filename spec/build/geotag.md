@@ -172,6 +172,17 @@ unknown groups, given no offset cell, and resolved as a phone's photo is, its ow
 A `camera_group_key` listed in both `phones` and `fixed_clock_cameras` SHALL be classed `unknown`.
 :::
 
+:::{bld} Photos timed by their modification
+:id: BLD-modified_time_files
+:status: ruled
+:realises: RUL-modified_time_solved_alone, RUL-modified_time_no_camera_offset, RUL-modified_time_opens_no_day
+
+`build_file_model` SHALL give a photo whose `source_time_tag` names `ModifyDate` — the pinned one, for a photo with
+pinned values — the `camera_group_key` `NO_IDENTITY_KEY` in place of prep's, so that, as {need}`BLD-unidentified_files`
+has it, it is classed `unidentified`, is in no group's offset cell or drift check, and is resolved by `OffsetTime`
+(`unidentified_native_offset`), else its destination's timezone; prep's camera group and its report are left as derived.
+:::
+
 
 ## 10. Destination civil timezone
 
@@ -327,6 +338,18 @@ review item's `manual_lat`/`manual_lon` as `manual_locked`; the tracks at its re
 `gpx_extrapolation`; its destination's effective fallback as `manual_fallback`; `no_change` for a photo marked
 `accept_unlocated`; else `blocked`. A position from `manual_locked` or `manual_fallback` is written with that marker,
 and undone like any manual position.
+:::
+
+:::{bld} One test of a photo's own position
+:id: BLD-own_position_test
+:status: ruled
+:realises: RUL-null_island_is_no_position
+
+A photo SHALL have a position of its own exactly when `photos_utils.has_own_position` holds of its `GPSLatitude` and
+`GPSLongitude` as `exiftool -n` reads them: both present, and not both equal to 0 as numbers — `0`, `0.0` and `-0.0`,
+never a value merely near it. Prep's `has_native_gps`, and geotag's file model — from the handoff's values and from the
+pinned ones — take it from that test alone, so a photo at latitude 0 and longitude 0 is placed again, never
+`preserve_native`, never an anchor frame and never counted in `preserve_native_gps`.
 :::
 
 :::{bld} The GPS decisions record

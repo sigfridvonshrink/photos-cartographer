@@ -2269,6 +2269,18 @@ A manual position applied, changed or withdrawn SHALL appear in the log with the
 that there was none.
 :::
 
+:::{rul} A position written over latitude 0 and longitude 0 is logged with it
+:id: RUL-log_records_null_island_replaced
+:status: ruled
+:criticality: med
+:verify: required
+:refines: RUL-null_island_is_no_position
+:uses: DEF-transformation_log
+
+A position geotag writes over a photo's position of latitude 0 and longitude 0 SHALL appear in the log with the
+position it replaced.
+:::
+
 :::{rul} A time written is logged with what it replaced and how it was found
 :id: RUL-log_records_time_replaced
 :status: ruled
