@@ -216,7 +216,7 @@ function wouldResolve(ref) {
       && zoneSpokenFor(c);                                                     // ...unless the photos here say otherwise
   if (ref.kind === "offset")
     return (u.manual_offset_seconds !== "" && u.manual_offset_seconds != null && validOffset(u.manual_offset_seconds))
-      || acceptHolds(c);
+      || (acceptHolds(c) && !p.far_from_evidence);              // far from all evidence: acceptance is not enough
   if (ref.kind === "drift")                       // confirmed for this offset (zero-scrub or a valid correction)
     return driftConfirmHolds(c) && validOffset(u.corrected_offset_seconds);
   if (ref.kind === "fallback")
@@ -280,6 +280,45 @@ function offsetImpact(camMs, offsetSec, tz) {
   const right = cor.date === cam.date ? cor.time : `${cor.date} ${cor.time}`;
   return `${cam.date} · ${cam.time} → ${right} (${tz}, UTC ${utcStr})`;
 }
+// A true time typed for a photo, in its destination's zone: the wall-clock reading of an instant in `tz`, and back.
+// Wall times are epoch ms read as UTC (as camNaiveMs gives them). With no zone the wall time is UTC. Pure — unit-tested.
+function utcToZonedWallMs(ms, tz) {
+  if (ms == null || !isFinite(ms)) return null;
+  if (!tz) return ms;
+  try {
+    const parts = Object.fromEntries(new Intl.DateTimeFormat("en-US", { timeZone: tz, hourCycle: "h23", year: "numeric",
+      month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit" })
+      .formatToParts(new Date(ms)).map((x) => [x.type, x.value]));
+    return Date.UTC(+parts.year, +parts.month - 1, +parts.day, +parts.hour, +parts.minute, +parts.second);
+  } catch { return null; }
+}
+// The one instant a wall time names in `tz`, or null: a time the zone's clocks skipped, or showed twice at a
+// daylight-saving change, names none or two — never one of them guessed.
+function zonedWallToUtcMs(wallMs, tz) {
+  if (wallMs == null) return null;
+  if (!tz) return wallMs;
+  const offs = new Set();
+  for (const probe of [wallMs - 86400000, wallMs, wallMs + 86400000]) {
+    const w = utcToZonedWallMs(probe, tz);
+    if (w == null) return null;
+    offs.add(w - probe);
+  }
+  const hits = new Set([...offs].map((o) => wallMs - o).filter((u) => utcToZonedWallMs(u, tz) === wallMs));
+  return hits.size === 1 ? [...hits][0] : null;
+}
+// The clock offset a photo's true time gives: that time (a datetime-local value, in `tz`) − the photo's camera time,
+// in seconds — what is written as manual_offset_seconds. Null for a time that is none, or names no one instant.
+function offsetFromTrueTime(camNaive, trueValue, tz) {
+  const cam = camNaiveMs(camNaive), utc = zonedWallToUtcMs(dtLocalToMs(trueValue), tz);
+  return cam == null || utc == null ? null : Math.round((utc - cam) / 1000);
+}
+// The true time an offset gives a photo, as a datetime-local value in `tz` — what the field shows. Null if none.
+function trueTimeOf(camNaive, offsetSec, tz) {
+  const cam = camNaiveMs(camNaive);
+  if (cam == null || offsetSec == null || !isFinite(offsetSec)) return null;
+  const w = utcToZonedWallMs(cam + offsetSec * 1000, tz);
+  return w == null ? null : msToDtLocal(w);
+}
 // --- GPS-drift scrub math (BLD-drift_validation) -----------------------------
 // Placing a photo at a GPX track point fixes the camera→UTC offset: offset = (that point's UTC time)
 // − (the photo's camera-naive time), in seconds. Both are naive wall-times read as UTC epoch ms, the
@@ -319,6 +358,7 @@ function previewEffective(ref) {
       const picked = (p.groups || []).some((g) => g.offset_seconds === Number(u.manual_offset_seconds));
       return `${fmtOffset(u.manual_offset_seconds)} (${picked ? "GPS group, picked" : "manual"})`;
     }
+    if (acceptHolds(c) && p.far_from_evidence) return "— (accepting is not enough here — set the offset)";
     if (acceptHolds(c)) return `${fmtOffset(p.proposed_offset_seconds)} (accept proposal)`;
     if (u.accept_proposal) return "— (accepted another proposal — accept again)";
     return "— (GPX auto-resolves on re-run, else needs input)";
@@ -495,7 +535,8 @@ function offsetRow(dest, keys, sub, cell, pr, indent) {
   const e = cell.effective_time_anchor;
   const eff = e && typeof e === "object" ? fmtOffset(e.offset_seconds)
     : "proposed_offset_seconds" in (cell.proposal || {}) ? `${fmtOffset(cell.proposal.proposed_offset_seconds)} proposed` : "—";
-  const s = pr && pr.source === "timezone_naive" && pr.tz ? `${sub} · from ${leaf(pr.tz)}` : sub;
+  const s = pr && pr.source === "timezone_naive" && pr.tz ? `${sub} · from ${leaf(pr.tz)}`
+    : pr && pr.source === "recorded_offset" ? `${sub} · as recorded` : sub;
   const r = row(ref, "Offset", s, eff);
   if (indent) r.classList.add("off-sub");
   return r;
@@ -655,6 +696,7 @@ function offsetEditor(ref) {
   const isGpx = p.proposal_source === "gpx_self_anchor";
   const camMs = isGpx && p.anchors && p.anchors[0] ? camNaiveMs(p.anchors[0].camera_source_naive_time) : null;
   const hasProp = "proposed_offset_seconds" in p;
+  const far = !!p.far_from_evidence;                  // accepting it would not take effect (offsetCellNotes says why)
   // Representative camera-naive instant for the Impact line — the anchor frame's time for a GPX proposal,
   // else recovered from a timezone-derived proposal (camera_naive = proposed_real_utc − proposed_offset),
   // so the per-date / timezone buckets also show "camera local → corrected local" with the common date.
@@ -665,29 +707,40 @@ function offsetEditor(ref) {
   const manualOff = u.manual_offset_seconds;          // the one stored value of a self-set offset
   const manualSet = manualOff !== "" && manualOff != null;
   const selKey = `${ref.dest}|${ref.key}`;
-  // Exactly one of three choices is active. For a self-set value the active VIEW (offset spinner vs
-  // anchor-UTC picker) is a per-cell UI state; default to the spinner. The automatic (accept) value is
+  // Exactly one choice is active. For a self-set value the active VIEW (offset spinner, anchor-UTC picker or
+  // a photo's true time) is a per-cell UI state; default to the spinner. The automatic (accept) value is
   // never edited — it's always the proposal. Clicking a choice activates it; the other manual view
   // updates to show the active value (synced), the automatic stays the proposal.
-  const view = state.offsetEdit && state.offsetEdit.key === selKey ? state.offsetEdit.view : "offset";
-  const active = accepted ? "accept" : manualSet ? view : "";
-  const eff = accepted ? p.proposed_offset_seconds : manualSet ? Number(manualOff) : (hasProp ? p.proposed_offset_seconds : null);
+  const mine = state.offsetEdit && state.offsetEdit.key === selKey ? state.offsetEdit : null;
+  const view = mine ? mine.view : "offset";
+  // A proposal accepting which is not enough (far from all evidence) is never the value shown, nor seeded into an
+  // offset of the user's own: a click on a view opens it empty, and only a value typed there is written.
+  const active = accepted && !far ? "accept" : manualSet ? view : far && mine && mine.open ? view : "";
+  const eff = accepted && !far ? p.proposed_offset_seconds : manualSet ? Number(manualOff)
+    : (hasProp && !far ? p.proposed_offset_seconds : null);
   const cur = Number(eff) || 0, abs = Math.abs(cur);
 
   const setManual = (off, v) => { state.offsetEdit = { key: selKey, view: v }; editMany(ref, { ...acceptFields(p, false), manual_offset_seconds: off }); };
-  const choose = (v) => { state._focusOffset = v; if (manualSet) { state.offsetEdit = { key: selKey, view: v }; render(); } else setManual(eff ?? 0, v); };
+  const choose = (v) => {
+    state._focusOffset = v;
+    if (manualSet || far) { state.offsetEdit = { key: selKey, view: v, open: true }; render(); } else setManual(eff ?? 0, v);
+  };
   const accept = () => { state.offsetEdit = null; editMany(ref, { ...acceptFields(p, true), manual_offset_seconds: "" }); };
   const opt = (on, body, onclick, cls = "") => el("div", { class: "off-opt" + (on ? " on" : "") + cls, onclick },
     el("span", { class: "off-dot" }, on ? "●" : "○"), body);
 
   const wrap = el("div", { class: "ctl-block" });
-  let numI, pickI;
+  let numI, pickI, trueI;
 
   // choice 1 — accept the proposal (automatic; its value is never edited)
-  const src = p.proposal_source === "timezone_naive" ? ` from timezone ${p.proposed_from_timezone}` : "";
+  const src = p.proposal_source === "timezone_naive" ? ` from timezone ${p.proposed_from_timezone}`
+    : p.proposal_source === "recorded_offset" ? " as the photos record it" : "";
+  const canAccept = hasProp && !far;
   wrap.append(opt(active === "accept",
-    el("span", {}, hasProp ? `accept proposal (${fmtOffset(p.proposed_offset_seconds)})${src}` : "accept proposal — none to accept"),
-    hasProp ? accept : undefined, hasProp ? "" : " disabled"));
+    el("span", {}, !hasProp ? "accept proposal — none to accept"
+      : far ? `accept proposal (${fmtOffset(p.proposed_offset_seconds)}) — not enough here: set the offset`
+        : `accept proposal (${fmtOffset(p.proposed_offset_seconds)})${src}`),
+    canAccept ? accept : undefined, canAccept ? "" : " disabled"));
 
   if (u.accept_proposal && !accepted && hasProp) wrap.append(el("div", { class: "hint warn" },
     `Accepted when the proposal was ${u.accepted_offset_seconds === "" || u.accepted_offset_seconds == null ? "another one" : fmtOffset(u.accepted_offset_seconds)}; it is now ${fmtOffset(p.proposed_offset_seconds)} — accept it again, or set the offset.`));
@@ -728,6 +781,33 @@ function offsetEditor(ref) {
     if (p.proposed_real_utc) wrap.append(el("div", { class: "hint" }, `GPX estimate: ${p.proposed_real_utc}`));
   }
 
+  // choice 4 — the true time of one photo, for a cell with no anchor frame: its representative, the earliest photo
+  // (photos-21 `representative`). Typed in the destination's zone (UTC with none), it gives the offset — stored as
+  // manual_offset_seconds, like any offset of the user's own: an editor affordance, no decision field of its own.
+  const rp = c.representative;
+  if (camMs == null && rp && camNaiveMs(rp.camera_source_naive_time) != null) {
+    const editT = active === "true", zone = previewTz(ref.dest)?.tz || "";
+    const bad = mine ? mine.bad : undefined;          // a time typed that names no one instant, kept to show
+    trueI = el("input", { type: "datetime-local", step: "1", class: "spin-num utc-pick", readonly: editT ? null : "",
+      title: `the true time of ${leaf(rp.source_file)}, in ${zone || "UTC"}; offset = that − its camera time` });
+    trueI.value = typeof bad === "string" ? bad : (eff == null ? "" : trueTimeOf(rp.camera_source_naive_time, cur, zone) || "");
+    if (editT) trueI.addEventListener("change", () => {
+      const o = offsetFromTrueTime(rp.camera_source_naive_time, trueI.value, zone);
+      if (o == null) { state.offsetEdit = { key: selKey, view: "true", open: true, bad: trueI.value || "" }; render(); return; }
+      setManual(o, "true");
+    });
+    wrap.append(opt(editT, el("label", { class: "ctl-field off-field" }, el("span", {}, "true time of a photo"), trueI),
+      editT ? undefined : () => choose("true")));
+    const thumb = state.base.demo ? null : el("img", { class: "decision-thumb", alt: rp.source_file, title: leaf(rp.source_file),
+      src: "/api/photo?path=" + encodeURIComponent(rp.source_file) });
+    if (thumb) thumb.addEventListener("error", () => thumb.remove());
+    wrap.append(el("div", { class: "hint" }, thumb, `${leaf(rp.source_file)} — its camera says ${rp.camera_source_naive_time}; ` +
+      `type when it was really taken${zone ? `, ${zone} time` : ", in UTC (set the destination's timezone to type local time)"}.`));
+    if (editT && typeof bad === "string")
+      wrap.append(el("div", { class: "err" }, bad ? `${bad.replace("T", " ")} names no one instant in ${zone || "UTC"} — ` +
+        "its clocks skipped it or showed it twice at a daylight-saving change; give another photo's time or the offset" : "type a time"));
+  }
+
   // common Impact line — what the effective offset does to the anchor photo (or the offset + formula)
   const tz = previewTz(ref.dest)?.tz;
   if (eff == null) wrap.append(el("div", { class: "off-impact hint" }, "no offset set — a GPX self-anchor auto-resolves on re-run; otherwise this day needs input"));
@@ -750,7 +830,7 @@ function offsetEditor(ref) {
 
   // restore focus to the view just activated (click-to-activate), so it's ready to edit
   if (state._focusOffset) {
-    const tgt = state._focusOffset === "utc" ? pickI : numI; state._focusOffset = null;
+    const tgt = state._focusOffset === "utc" ? pickI : state._focusOffset === "true" ? trueI : numI; state._focusOffset = null;
     if (tgt) queueMicrotask(() => tgt.focus());
   }
   return wrap;
@@ -1142,18 +1222,43 @@ function zoneContradiction(c) {
     `these photos were taken in, move those taken elsewhere to a folder of their own, or keep ${k.timezone} for them below.`;
 }
 // What an offset cell has to say beyond its proposal: where a shared offset came from, that a timezone's
-// guess is checked on the tracks, that the camera's GPS gave another offset elsewhere that day.
+// guess is checked on the tracks, that the camera's GPS gave another offset elsewhere that day, that its photos
+// record different offsets.
 function offsetCellNotes(c) {
   const out = [], p = (c && c.proposal) || {}, eff = (c && c.effective_time_anchor) || {};
   if (p.proposal_source === "same_day_elsewhere" && p.shared_from)
     out.push(`No photo here has its own position. The camera's GPS fixed its clock that day in ${p.shared_from.destination}: ` +
       `${fmtOffset(p.proposed_offset_seconds)}` + (p.confidence === "high" ? ", applied here too." : " — accept it here, or set another."));
-  if (eff.source === "timezone_unconfirmed")
+  if (eff.source === "timezone_unconfirmed" || eff.source === "recorded_offset_unconfirmed")
     out.push("Tracks lie by these photos, so this is checked against them — confirm it in the Drift view; nothing to accept here.");
+  const differ = (c && c.recorded_offsets_differ) || [];
+  if (differ.length)
+    out.push(`These photos record different offsets with their times — ${differ.map((d) => `${utcOff(d.recorded_offset_seconds)} ` +
+      `(${d.photos} photo${d.photos === 1 ? "" : "s"}, e.g. ${leaf(d.example)})`).join(", ")} — so none is proposed from them. ` +
+      "The camera's zone setting changed that day, or the tag is wrong: set the offset, or move the photos of each setting into a sub-folder and re-run.");
+  const far = p.far_from_evidence;
+  if (far) out.push(`This offset puts these photos ${fmtSpan(far.nearest_other_photo_seconds)} from the nearest photo another ` +
+    `device took here (${leaf(far.nearest_other_photo)})` +
+    (far.nearest_track_seconds === "" || far.nearest_track_seconds == null ? "" : ` and ${fmtSpan(far.nearest_track_seconds)} from the nearest track point`) +
+    ` — farther than a clock may be wrong (${fmtSpan(far.max_clock_error_seconds)}); the camera's clock was likely reset. ` +
+    "Accepting it is not enough: give the true time of one of its photos, or set the offset.");
   for (const k of (c && c.conflicts_with) || [])
     out.push(`The camera's GPS gives ${fmtOffset(k.offset_seconds)} the same day in ${k.destination} — one clock, two readings. ` +
       "Set the right offset by hand in the one that is wrong.");
   return out;
+}
+// A span of seconds in the unit a reader takes in at once: years, days, hours or minutes.
+function fmtSpan(s) {
+  const n = Math.abs(Number(s) || 0);
+  if (n >= 365.25 * 86400) return `${Math.round(n / (365.25 * 86400) * 10) / 10} years`;
+  if (n >= 2 * 86400) return `${Math.round(n / 86400)} days`;
+  if (n >= 2 * 3600) return `${Math.round(n / 3600)} hours`;
+  return `${Math.round(n / 60)} minutes`;
+}
+// A UTC offset as it is recorded with a time ("+01:00"): the zone a clock is set to, not the clock offset.
+function utcOff(s) {
+  const m = Math.round(Math.abs(s) / 60);
+  return `${s < 0 ? "−" : "+"}${_pad(Math.floor(m / 60))}:${_pad(m % 60)}`;
 }
 // Why an offset cell has no proposal and never will (proposal.timezone_ambiguous): the camera's time is one its
 // zone skipped or repeated at a daylight-saving change, so the zone gives it two offsets and no run picks one
@@ -1191,6 +1296,16 @@ function proposalNotes(p) {
 // "N photos → ±Xh Ym" groups (each with one named photo at its FULL by-dest path and that photo's
 // corrected local time), plus a note for frames skipped (no track / track from another trip).
 function offsetProposalBlock(ref, p) {
+  if (p.proposal_source === "recorded_offset") {
+    // No GPX anchor, but the camera's photos record the UTC offset its clock was set to, all the same one
+    // (BLD-recorded_offset_proposal): the clock offset is its negative.
+    return el("div", { class: "pblock" }, el("h3", {}, "Proposal — the offset the photos record"),
+      el("div", { class: "prop-head" }, fmtOffset(p.proposed_offset_seconds),
+        el("span", { class: "muted" }, ` (${p.recorded_by} photo${p.recorded_by === 1 ? "" : "s"} record${p.recorded_by === 1 ? "s" : ""} ` +
+          `${utcOff(p.recorded_offset_seconds)} from UTC, e.g. ${leaf(p.example)})`)),
+      el("div", { class: "hint" }, (p.proposed_real_utc ? `real UTC ${p.proposed_real_utc} — ` : "") +
+        "the camera says its clock was set to that zone; confirm only if its time was right in it (a clock set to the wrong hour keeps its zone)."));
+  }
   if (p.proposal_source === "timezone_naive") {
     // No GPX anchor: the offset is derived from the destination's local time for this day, assuming the
     // camera clock tracked it (DST-aware, so summer/winter days get different offsets — BLD-timezone_naive_offset).
@@ -1399,5 +1514,6 @@ export {
   groupChoice, chosenOffset, proposalNotes, driftConfirmHolds, driftConfirmFields, driftTracksHold, driftStaleReason, acceptFields, acceptHolds, tracksNote,
   zoneContradiction, offsetCellNotes, zoneSpokenFor, zoneDespiteFields, effectiveCountry, clearCountriesInside,
   scrubOffset, scrubSeedIndex, mapKeyFor, savePayload,
-  ambiguousTimeNote, zoneOffer, loadRefusal, hasUnsavedEdits,
+  ambiguousTimeNote, zoneOffer, loadRefusal, hasUnsavedEdits, utcOff,
+  fmtSpan, utcToZonedWallMs, zonedWallToUtcMs, offsetFromTrueTime, trueTimeOf,
 };

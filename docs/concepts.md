@@ -199,10 +199,25 @@ Each day's offset is proposed, in this order:
    destination has a position, the offset the camera's GPS fixed that day in another destination. It
    applies itself here only where it did there. Two such offsets of one day that disagree by more than
    `clock_offset_same_day_max_difference_seconds` take effect nowhere until you say which is right.
-3. **From the destination's timezone** — computed from the zone, daylight saving included, assuming the
-   camera kept local time. Never applied on its own: it is confirmed against the tracks in the drift
-   check, or, with no track by the photos, accepted in the Time view.
-4. **By hand** — you type it.
+3. **From the offset the photos record** — a recent camera writes, with each time, the UTC offset its
+   clock was set to (`OffsetTimeOriginal`). Where the day's photos here that record one all record the
+   same, the clock offset is its negative: a camera left on home time (+01:00) in Japan is proposed
+   −1h, not Japan's −9h. Where they record different offsets, none is proposed from them and the
+   decision lists the offsets seen. A value in the tag that is no offset counts as none.
+4. **From the destination's timezone** — computed from the zone, daylight saving included, assuming the
+   camera kept local time.
+5. **By hand** — you type it, or, in the editor, give the true time of one of its photos.
+
+Proposals 3 and 4 are guesses, never applied on their own: each is confirmed against the tracks in the
+drift check, or, with no track by the photos, accepted in the Time view.
+
+A guess can be far out: a camera whose battery ran out wakes at its factory date, and the guess moves
+it only a few hours. So a guess that would put every photo of the day farther than
+`gpx_anchor_max_clock_error_seconds` (two days by default) from every track point **and** from every
+photo another device took in that destination — a phone's, or another camera's whose offset its GPS
+fixed or you wrote — is **not** taken on acceptance: the decision asks for the offset itself, the
+proposal still shown with how far it lands. Where no other device's photo is there, nothing can tell a
+reset clock from a trip without tracks, and the guess is offered as usual.
 
 An accepted proposal records the offset you accepted. If a later run proposes a different one (new
 tracks, more photos), it is asked again, your earlier answer left as you wrote it.
@@ -221,7 +236,7 @@ Two distinct ideas the pipeline keeps carefully separated:
   an offset of −7200, not 0. One per (camera group, destination, day).
 
 - **GPS drift** — the *residual danger* that an offset the camera's own GPS did **not** fix (derived
-  from the timezone, typed by hand, or found where the track stood still at the photo's place, so the
+  from the timezone or from the offset the photos record, typed by hand, or found where the track stood still at the photo's place, so the
   place says nothing of the moment) is silently wrong. Because GPS placement positions a photo purely
   from its corrected UTC, a wrong offset slides the **whole day's photos** to the wrong point on the
   track — drift you'd never see.

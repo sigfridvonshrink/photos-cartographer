@@ -317,8 +317,9 @@ user's answer.
 :uses: DEF-geotag, DEF-decision
 
 A proposal geotag makes SHALL take effect only once the user accepts it, save one a rule says takes effect without the
-user's answer. A clock offset derived from the destination's timezone is such a proposal, and so is a folder fallback
-position inherited from the destination the folder lies in.
+user's answer. A clock offset derived from the destination's timezone, or from the offset a camera's photos record with
+their times, is such a proposal, and so is a folder fallback position inherited from the destination the folder lies
+in.
 :::
 
 :::{rul} A confirmation against the tracks is an acceptance
@@ -329,19 +330,19 @@ position inherited from the destination the folder lies in.
 :refines: RUL-proposals_need_acceptance
 :uses: DEF-geotag, DEF-decision
 
-A timezone's offset the user confirms against the tracks SHALL count as accepted by that confirmation
-({need}`RUL-timezone_offset_asked_once`).
+A timezone's offset, or one a camera's photos record, that the user confirms against the tracks SHALL count as
+accepted by that confirmation ({need}`RUL-timezone_offset_asked_once`).
 :::
 
-:::{rul} A timezone's offset is asked about once
+:::{rul} A guessed offset is asked about once
 :id: RUL-timezone_offset_asked_once
 :status: ruled
 :criticality: med
 :verify: required
 :uses: DEF-geotag, DEF-decision
 
-A clock offset derived from the destination's timezone SHALL be asked about once: at the check against the tracks
-where tracks lie by its photos, and by acceptance where none do.
+A clock offset derived from the destination's timezone, or from the offset the camera's photos record, SHALL be asked
+about once: at the check against the tracks where tracks lie by its photos, and by acceptance where none do.
 :::
 
 :::{rul} An acceptance holds for the proposal it accepted
@@ -387,6 +388,21 @@ decision exactly as the user wrote it, for the user to replace.
 A value the user writes for a decision SHALL take effect over a proposal accepted for the same decision.
 :::
 
+:::{rul} A guessed offset that puts the photos where nothing else was is not taken on acceptance
+:id: RUL-offset_far_from_evidence_asks
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+:refines: RUL-proposals_need_acceptance
+:uses: DEF-clock_offset, DEF-tracks
+
+A clock offset proposed from the destination's timezone, or from the offset a camera's photos record, SHALL NOT take
+effect without an offset the user writes where it would put every photo of its day farther than the largest clock
+error the configuration allows from every track point and from the true time of every photo of the destination taken
+by another device whose true time is known, at least one such photo being there.
+:::
+
 
 ## 7. Per-destination structure
 
@@ -428,8 +444,9 @@ camera's own clock — a container destination, holding no photo, having none.
 :refines: RUL-offset_per_camera_destination_day
 
 Each offset SHALL be proposed only from that camera's own positions on that day — in that destination, else in
-another ({need}`RUL-offset_shared_within_day`) — or from the destination's timezone; never from another day's offset,
-nor from one the user wrote or accepted on a guess in another destination.
+another ({need}`RUL-offset_shared_within_day`) — or from the offset its photos there record with their times
+({need}`RUL-recorded_offset_proposed`), or from the destination's timezone; never from another day's offset, nor from
+one the user wrote or accepted on a guess in another destination.
 :::
 
 :::{rul} A day's offset is the camera's wherever its photos were sorted
@@ -440,7 +457,32 @@ nor from one the user wrote or accepted on a guess in another destination.
 :refines: RUL-offset_per_camera_destination_day
 
 A camera's photos of a day in a destination where none has its own position SHALL be proposed the offset the camera's
-own positions gave that day in another destination, in place of the timezone's.
+own positions gave that day in another destination, in place of the one their times record and the timezone's.
+:::
+
+:::{rul} A camera's offset is proposed from the offset its photos record
+:id: RUL-recorded_offset_proposed
+:status: ruled
+:criticality: high
+:verify: required
+:refines: RUL-offset_per_camera_destination_day
+:uses: DEF-clock_offset
+
+A camera's photos of a day in a destination where none has its own position, and where every one of them recording an
+offset with its time records the same one, SHALL be proposed the clock offset of a clock set to that offset, in place
+of the timezone's.
+:::
+
+:::{rul} Photos recording different offsets propose none
+:id: RUL-differing_recorded_offsets_propose_none
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+:refines: RUL-recorded_offset_proposed
+
+Geotag SHALL NOT propose a camera's clock offset of a day in a destination from the offsets its photos there record
+with their times where they record different ones.
 :::
 
 :::{rul} A shared offset applies itself only where it did there

@@ -54,3 +54,45 @@ test("offsetImpact: photo-local → corrected-local (UTC in parens after), date 
   assert.equal(app.offsetImpact(cam, -3600, null), "22 Mar 2026 · 14:25:21 → 13:25:21 UTC");
   assert.equal(app.offsetImpact(null, 0, "UTC"), null);
 });
+
+// --- the true time of a photo, typed in its destination's zone, gives the clock offset ------------------------------
+
+test("utcToZonedWallMs / zonedWallToUtcMs: an instant's wall time in a zone, and back", () => {
+  const summer = Date.UTC(2026, 6, 3, 12, 0, 0);
+  assert.equal(app.utcToZonedWallMs(summer, "Europe/Brussels"), Date.UTC(2026, 6, 3, 14, 0, 0));   // CEST, +2
+  assert.equal(app.zonedWallToUtcMs(Date.UTC(2026, 6, 3, 14, 0, 0), "Europe/Brussels"), summer);
+  assert.equal(app.zonedWallToUtcMs(Date.UTC(2026, 0, 3, 14, 0, 0), "Europe/Brussels"), Date.UTC(2026, 0, 3, 13, 0, 0));
+  assert.equal(app.zonedWallToUtcMs(Date.UTC(2026, 6, 3, 14, 0, 0), ""), Date.UTC(2026, 6, 3, 14, 0, 0));   // no zone: UTC
+  assert.equal(app.utcToZonedWallMs(summer, "Bogus/Zone"), null);
+  assert.equal(app.zonedWallToUtcMs(Date.UTC(2026, 6, 3, 14, 0, 0), "Bogus/Zone"), null);
+});
+
+test("zonedWallToUtcMs: a time the clocks skipped or showed twice names no one instant — never guessed", () => {
+  // Brussels 2026-03-29: 02:00 → 03:00 (02:30 never happened); 2026-10-25: 03:00 → 02:00 (02:30 happened twice)
+  assert.equal(app.zonedWallToUtcMs(Date.UTC(2026, 2, 29, 2, 30, 0), "Europe/Brussels"), null);
+  assert.equal(app.zonedWallToUtcMs(Date.UTC(2026, 9, 25, 2, 30, 0), "Europe/Brussels"), null);
+  assert.equal(app.zonedWallToUtcMs(Date.UTC(2026, 2, 29, 3, 30, 0), "Europe/Brussels"), Date.UTC(2026, 2, 29, 1, 30, 0));
+});
+
+test("offsetFromTrueTime: a reset clock's photo, given its true local time, yields manual_offset_seconds", () => {
+  // the camera reads its factory date; the photo was really taken 2026-05-01 14:00 in Bruges (CEST, UTC+2)
+  const off = app.offsetFromTrueTime("2000:01:01 10:00:00", "2026-05-01T14:00:00", "Europe/Brussels");
+  assert.equal(off, Math.round((Date.UTC(2026, 4, 1, 12, 0, 0) - Date.UTC(2000, 0, 1, 10, 0, 0)) / 1000));
+  // camera time + offset = the true UTC, as geotag computes it
+  assert.equal(app.camNaiveMs("2000:01:01 10:00:00") + off * 1000, Date.UTC(2026, 4, 1, 12, 0, 0));
+  // with no zone the time typed is UTC; seconds optional
+  assert.equal(app.offsetFromTrueTime("2026:05:01 15:00:00", "2026-05-01T14:00", ""), -3600);
+  // nothing to compute from
+  assert.equal(app.offsetFromTrueTime("2026:05:01 15:00:00", "", "Europe/Brussels"), null);
+  assert.equal(app.offsetFromTrueTime("garbage", "2026-05-01T14:00:00", "Europe/Brussels"), null);
+  assert.equal(app.offsetFromTrueTime("2026:03:29 09:00:00", "2026-03-29T02:30:00", "Europe/Brussels"), null);  // skipped
+});
+
+test("trueTimeOf: the field shows the true time an offset gives the photo, round-tripping offsetFromTrueTime", () => {
+  assert.equal(app.trueTimeOf("2026:05:01 15:00:00", -3600, "Europe/Brussels"), "2026-05-01T16:00:00");
+  assert.equal(app.trueTimeOf("2026:05:01 15:00:00", -3600, ""), "2026-05-01T14:00:00");
+  const off = app.offsetFromTrueTime("2000:01:01 10:00:00", "2026-05-01T14:00:00", "Europe/Brussels");
+  assert.equal(app.trueTimeOf("2000:01:01 10:00:00", off, "Europe/Brussels"), "2026-05-01T14:00:00");
+  assert.equal(app.trueTimeOf("garbage", 0, "UTC"), null);
+  assert.equal(app.trueTimeOf("2026:05:01 15:00:00", null, "UTC"), null);
+});

@@ -209,6 +209,42 @@ says which. An offset the user wrote, or accepted on a guess, is not passed on: 
 evidence. Another day's offset is never passed on either — clocks are set again overnight.
 :::
 
+:::{rat} A camera that records its offset says which zone its clock was on
+:id: RAT-camera_records_its_clock_zone
+:status: ruled
+:forced: no
+:follows_from: RAT-assumptions_need_acceptance, RAT-no_borrowed_offsets
+:justifies: RUL-recorded_offset_proposed, RUL-differing_recorded_offsets_propose_none
+
+A recent camera writes, with each time, the UTC offset its clock was set to. That is the clock offset but for the
+clock's own error; the destination's zone is only an assumption that the camera was set to local time. A body left on
+home time in Japan records +01:00 and is eight hours from the zone's guess, offered as the answer to accept. So the
+recorded offset is proposed before the zone. It states a setting, not a measurement — a clock set to the wrong hour
+in its right zone records the zone and is still wrong — so it is a proposal like the zone's, accepted or checked
+against the tracks the same way, and the camera's own positions, which measure the clock, come before it. Photos of
+one day recording two offsets say the setting was changed that day, or that the tag is not to be trusted; which is the
+day's is a guess, so neither is proposed, and the offsets are shown for the user to answer.
+:::
+
+:::{rat} A guess that leaves the photos where nothing else was is no reading of the clock
+:id: RAT-reset_clock_not_accepted
+:status: ruled
+:forced: no
+:follows_from: RAT-assumptions_need_acceptance, CHC-photos_matter
+:justifies: RUL-offset_far_from_evidence_asks
+
+A camera whose battery ran out wakes at its factory date, years from the trip. Nothing of its own can anchor it, and
+the zone's guess, or the offset it records, moves it a few hours: one acceptance — a click meant to say "the camera
+kept local time" — would write that year into the originals as corrected. What the guess cannot see, the
+destination's other photos can: a phone, or another camera whose offset is settled, says when the destination was
+visited, and the tracks say when the user was out. An offset leaving every photo of a day farther from all of them
+than any clock is allowed to be wrong is not a reading of that clock, and accepting it is not an answer; the user is
+asked for the offset itself, which the true time of one photo gives. Where no other device's photo is there, nothing
+tells a reset clock from a trip with no tracks, and asking every such day would cost an answer the user cannot
+improve on; the guess is offered as before. The tracks alone are not that evidence: under a library's worth of them,
+a trip with none of its own would be far from all of them too.
+:::
+
 :::{rat} One number, one question
 :id: RAT-one_number_one_question
 :status: ruled
@@ -216,7 +252,7 @@ evidence. Another day's offset is never passed on either — clocks are set agai
 :follows_from: RAT-assumptions_need_acceptance
 :justifies: RUL-timezone_offset_asked_once
 
-A timezone's offset is a guess that needs the user's word before it is written. Where tracks lie by the photos the
+A timezone's offset, like the one a camera's photos record, is a guess that needs the user's word before it is written. Where tracks lie by the photos the
 user gives that word at the check against the tracks, looking at where the offset puts a photo; asking them to accept
 the same number first, in another file and another run, adds a question and no safety — the check is the stronger
 act and names the offset itself. Where no track covers the photos there is no check, and acceptance is the word.
