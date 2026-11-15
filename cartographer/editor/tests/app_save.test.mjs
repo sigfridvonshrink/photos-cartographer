@@ -70,6 +70,27 @@ test("a new camera group: asked until classed as one of the two device_groups ar
   assert.deepEqual(p.cameras, [{ dest: undefined, kind: "camera", key, path: undefined, user_decision: { device_class: "fixed_clock_cameras" } }]);
 });
 
+test("a time changed since geotag wrote it: keep it or take back geotag's, the answer naming the time it is for", () => {
+  const dest = "6-photos-by-dest/T", key = `${dest}/a.arw`, ref = { file: "time", dest, kind: "changed", key };
+  const held = { DateTimeOriginal: "2024:07:03 14:45:00", OffsetTimeOriginal: "+02:00" };
+  const cell = (ud, h = held) => ({ held_time: h, geotag_wrote: { DateTimeOriginal: "2024:07:03 14:30:00", OffsetTimeOriginal: "+02:00" },
+    own_time: { DateTimeOriginal: "2024:07:03 14:20:00", OffsetTimeOriginal: null }, user_decision: ud, requires_user_input: true });
+  const mk = (c) => { app.state.work = { time: { destinations: { [dest]: { changed_times: { [key]: c } } } } }; app.state.base = app.state.work; };
+  mk(cell({ keep: "", answered_for: "" }));
+  assert.equal(app.wouldResolve(ref), false);
+  assert.deepEqual(app.changedFields(cell({}), "new"), { keep: "new", answered_for: held });
+  mk(cell(app.changedFields(cell({}), "new")));                 assert.equal(app.wouldResolve(ref), true);
+  mk(cell(app.changedFields(cell({}), "geotag")));              assert.equal(app.wouldResolve(ref), true);
+  mk(cell({ keep: "new", answered_for: { ...held, DateTimeOriginal: "2024:07:03 14:40:00" } }));
+  assert.equal(app.wouldResolve(ref), false);                                       // answered for another time
+  mk(cell({ keep: "new", answered_for: { DateTimeOriginal: null, OffsetTimeOriginal: null } }, { DateTimeOriginal: null, OffsetTimeOriginal: null }));
+  assert.equal(app.wouldResolve(ref), false);                                       // no time to keep
+  mk(cell({ keep: "both", answered_for: held }));               assert.equal(app.refInvalid(ref), true);
+  const p = app.savePayload([ref], (r) => app.cellAt(app.state.work, r), { time: "h" });
+  assert.equal(p.time[0].kind, "changed");
+  assert.equal(p.time[0].key, key);
+});
+
 test("recordAbsentText: a record that does not parse is shown as that error, never as no file", () => {
   const err = { _error: "could not read photos-21-time-decisions.json: Expecting value: line 3 column 1 (char 7)" };
   const said = app.recordAbsentText(err, "photos-21-time-decisions.json");

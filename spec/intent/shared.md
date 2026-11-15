@@ -1783,8 +1783,43 @@ A geotag re-run SHALL derive again and replace a position geotag wrote, never ke
 :uses: DEF-geotag, DEF-recorded_time
 
 Geotag SHALL NOT plan while a photo it has written to holds a time that is neither the photo's own from before
-geotag's first write nor one geotag wrote, neither writing its own time back over it nor taking it as the photo's
-recorded time.
+geotag's first write nor one geotag wrote, and the user has not said which the photo keeps — neither writing its own
+time back over it nor taking it as the photo's recorded time unasked.
+:::
+
+:::{rul} Geotag asks which time a changed photo keeps
+:id: RUL-changed_time_asked
+:status: ruled
+:criticality: high
+:verify: required
+:refines: RUL-changed_time_stops_plan
+:uses: DEF-decision
+
+Geotag SHALL ask the user, of each photo holding a time changed since geotag wrote it, whether the photo keeps the
+time it holds or takes back geotag's.
+:::
+
+:::{rul} A time the user keeps becomes the photo's own
+:id: RUL-changed_time_kept_is_own
+:status: ruled
+:criticality: high
+:verify: required
+:refines: RUL-changed_time_asked
+:uses: DEF-recorded_time
+
+A time the user keeps SHALL become the photo's own time, from before geotag's first write: geotag decides about the
+photo from it, from then on, as about any photo from its own time.
+:::
+
+:::{rul} A time taken back is written again
+:id: RUL-changed_time_restored
+:status: ruled
+:criticality: high
+:verify: required
+:refines: RUL-changed_time_asked
+
+Where the user takes back geotag's time, geotag SHALL plan to write its time again over the one the photo holds,
+decided from the photo's own time as before.
 :::
 
 :::{rul} Geotag's gates are the present state, not its history

@@ -163,6 +163,9 @@ with its English `name` and its `zones` (sorted).
   "local_time_readings": {                                // optional: a photo's time its zone skips or repeats (§4.6)
     "<relative_path>": { /* §4.6 */ }
   },
+  "changed_times": {                                      // optional: a photo's time changed since geotag wrote it (§4.8)
+    "<relative_path>": { /* §4.8 */ }
+  },
   "unidentified_files": { /* §4.7 */ },                   // optional: its files naming no camera, one question
   "unreadable_offset_tags": [                             // SYSTEM, optional: photos whose offset tag holds no offset
     { "relative_path": "…", "field": "OffsetTimeOriginal", "value": "local" }   // read as no tag; warned of
@@ -409,6 +412,30 @@ one question for the destination, kept for files arriving later while the zone i
 
 **By hand:** `"user_decision": { "accept_proposal": true, "accepted_timezone": "Europe/Brussels" }`. Not reading them
 so: move them out of `6-photos-by-dest/`, or give them their offset (`OffsetTimeOriginal`) and run prep again.
+
+---
+
+### 4.8 `changed_times[<relative_path>]` — a time changed since geotag wrote the photo
+
+Geotag decides about a photo it has written to from what it held before the first write (its pinned own values). A
+photo that now holds a `DateTimeOriginal` / `OffsetTimeOriginal` pair that is neither that nor one geotag wrote had its
+time changed since — in another tool, or by a slip. Geotag neither writes its time back over it nor takes it as the
+photo's unasked: it asks here, alone, which the photo keeps. Until answered, photos-21 is not complete.
+
+| Field | Type | Editable | Meaning |
+|-------|------|----------|---------|
+| `content_fingerprint` | string | no | The photo's fingerprint: its answer is found again by it. |
+| `held_time` | `{ "DateTimeOriginal", "OffsetTimeOriginal" }` | no | The pair the photo holds now (either may be `null`). |
+| `geotag_wrote` | object \| `null` | no | The last pair geotag wrote to it (`null`: geotag wrote it no time). |
+| `own_time` | object | no | Its own pair from before geotag's first write. |
+| **`user_decision.keep`** | `"new"` \| `"geotag"` \| `""` | **yes** | `"new"`: keep the time it holds — it becomes the photo's own time, its recorded time read from that `DateTimeOriginal` with that offset, and is corrected as any photo's own time is (its camera's clock offset applied to it); the next `geotag execute` makes it the pinned own time, so later runs decide from it. `"geotag"`: take back geotag's — the plan writes geotag's time again, from the photo's own time as before. `""`: not answered. |
+| **`user_decision.answered_for`** | object \| `""` | **yes** | The `held_time` the answer is given for — written with `keep`, a copy of `held_time`. The answer holds while the photo holds that pair; changed again, the cell is `stale_user_decision` and asks. |
+| `effective_answer` | `"new"` \| `"geotag"` \| `""` | no | The answer in effect. |
+| `requires_user_input` / `stale_user_decision` | bool | no | As elsewhere. |
+
+**By hand:** `"user_decision": { "keep": "geotag", "answered_for": { "DateTimeOriginal": "2024:07:03 14:45:00",
+"OffsetTimeOriginal": "+02:00" } }` — `answered_for` copied from `held_time`. `"new"` needs a time to keep: a
+`held_time` with no `DateTimeOriginal` can only be answered `"geotag"`.
 
 ---
 
@@ -706,6 +733,7 @@ UI should make the *effective* choice obvious and ideally offer them as mutually
 - **A phone's day (§4.5):** `manual_offset_seconds` → `keep_as_recorded` → `accept_proposal` → two or more photos
   applying their offset themselves; one photo's never applies itself.
 - **A time at a daylight-saving change (§4.6):** `utc_offset_seconds`, one of the two readings for a repeated time.
+- **A time changed since geotag wrote it (§4.8):** `keep`, while `answered_for` is the pair the photo holds.
 - **Drift:** `confirmed` holding for the current offset (`confirmed_offset_seconds` equal to it) and for the
   tracks (`confirmed_against_tracks` each unchanged under `gpx_root`, or `[]` with no track shown) →
   `corrected_offset_seconds` if given, else the current offset; otherwise nothing.
@@ -731,6 +759,7 @@ Mirror these client-side; a value that fails makes geotag reject the whole artif
 | `confirmed_despite_recorded_offsets` | A list of whole numbers of seconds; `[]` (or `null`, or the field absent) = not given. |
 | `keep_as_recorded` | `true` or `false` on a phone's cell (absent or `null` reads as `false`); anything else a blocker. |
 | `accepted_timezone` (`unidentified_files`) | Text; required, the zone accepted, whenever `accept_proposal` is `true`. |
+| `keep` / `answered_for` (`changed_times`) | `keep` is `""`, `"new"` or `"geotag"`; with an answer, `answered_for` must be an object of exactly `DateTimeOriginal` and `OffsetTimeOriginal` (one for another pair than `held_time` is `stale_user_decision`, not a blocker); `"new"` for a `held_time` with no time is a blocker. |
 | `utc_offset_seconds` (`local_time_readings`) | `""`, or a whole number of seconds within ±14 hours (not a boolean, not a string such as `"+01:00"`); for a `repeated` time, one of `offsets_seconds` (another is `stale_user_decision`, not a blocker). |
 | `manual_offset_seconds` | A whole number of seconds (an integer, or a float with no fraction), of any size (a clock reset to its factory date is years out). Not a boolean, not a string. `""` allowed. |
 | `accepted_offset_seconds` | Required, as a whole number of seconds, whenever `accept_proposal` is `true` (and no manual offset is set): the `proposed_offset_seconds` accepted. `""` with `accept_proposal: false`. |

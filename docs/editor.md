@@ -275,6 +275,24 @@ was (each shown with its UTC instant); for a time that never happened you may ty
 `utc_offset_seconds` in the photo's entry of `local_time_readings` (see the
 [decision-JSON reference](../cartographer/editor/decision-json-reference.md)).
 
+### A time changed since geotag wrote it
+
+A photo geotag has written to whose time (`DateTimeOriginal` or its offset) was changed afterwards — in
+another tool, or by a slip — gets a row of its own, **Time changed since geotag**, under its destination,
+with its thumbnail. The panel names the time it holds, the one geotag wrote and the photo's own from
+before geotag. Choose:
+
+- **keep the time it holds** — it becomes the photo's own time, as though the camera had recorded it, and
+  is corrected like any photo's own time (its camera's clock offset applied to it). A time you already
+  corrected to the true time elsewhere would be corrected again: take back geotag's instead, or fix the
+  camera's offset;
+- **take back geotag's time** — geotag writes its time again, from the photo's own time.
+
+The answer is for the time the photo holds now: change the photo's time again and it asks again. Until
+answered, the time decisions are not complete. By hand: `keep` (`"new"` or `"geotag"`) and `answered_for`
+(a copy of `held_time`) in the photo's entry of `changed_times` (see the
+[decision-JSON reference](../cartographer/editor/decision-json-reference.md)).
+
 ---
 
 ## Drift view

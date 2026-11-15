@@ -340,6 +340,8 @@ def _edit_cell(art, e):
         cell = (d.get("local_time_readings") or {}).get(e.get("key"))
     elif kind == "unidentified":                # the destination's files naming no camera
         cell = d.get("unidentified_files")
+    elif kind == "changed":                     # a photo's time changed since geotag wrote it, keyed by its path
+        cell = (d.get("changed_times") or {}).get(e.get("key"))
     elif kind == "drift":
         cell = (d.get("drift_decisions") or {}).get(e.get("key"))
     elif kind == "fallback":

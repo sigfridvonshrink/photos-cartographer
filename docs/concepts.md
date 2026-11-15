@@ -512,8 +512,9 @@ then run prep); a `gpx_root` that is not there, or tracks of which not one can b
 written for you to fix); prep's record made by another fingerprint method (run prep again). And a photo
 whose time (`DateTimeOriginal` or its offset) was changed — in another tool — since geotag wrote to it:
 geotag decides from the photo's own time from before its first write, and neither writes its time back
-over yours nor takes yours instead. The stop names the time the photo holds, the one geotag wrote and the
-photo's own; put one of those back, then run prep and geotag again.
+over yours nor takes yours instead unasked. It asks, in photos-21 (`changed_times`) and the editor, which
+the photo keeps: the time it holds — which becomes the photo's own, corrected like any — or geotag's,
+written again. The question names the time the photo holds, the one geotag wrote and the photo's own.
 
 **Geotag execute and finalize** — a plan no longer current (plan again); a journal, execution summary or
 earlier plan in `.photos-ingest/` that cannot be read (the stop names it; repair it — it is never taken for

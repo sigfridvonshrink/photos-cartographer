@@ -78,6 +78,7 @@ function cellAt(arts, ref) {
     const d = arts.time?.destinations?.[ref.dest]; if (!d) return null;
     if (ref.kind === "reading") return d.local_time_readings?.[ref.key];
     if (ref.kind === "unidentified") return d.unidentified_files;
+    if (ref.kind === "changed") return d.changed_times?.[ref.key];
     return ref.kind === "timezone" ? d.destination_timezone : d.camera_group_time_decisions?.[ref.key];
   }
   if (ref.file === "drift") {
@@ -102,6 +103,7 @@ function allRefs() {
     out.push({ file: "time", dest, kind: "timezone" });
     for (const key of Object.keys(d.camera_group_time_decisions || {})) out.push({ file: "time", dest, kind: "offset", key });
     for (const key of Object.keys(d.local_time_readings || {})) out.push({ file: "time", dest, kind: "reading", key });
+    for (const key of Object.keys(d.changed_times || {})) out.push({ file: "time", dest, kind: "changed", key });
     if (d.unidentified_files) out.push({ file: "time", dest, kind: "unidentified" });
   }
   for (const [dest, d] of Object.entries(state.work.drift?.destinations || {})) {
@@ -130,6 +132,7 @@ function refInvalid(ref) {
   if (ref.kind === "drift") return !validOffset(u.corrected_offset_seconds);
   if (ref.kind === "fingerprint") return typeof u.accept_fingerprint_change !== "boolean";
   if (ref.kind === "camera") return !["", ...DEVICE_CLASSES].includes(u.device_class ?? "");
+  if (ref.kind === "changed") return !["", ...CHANGED_ANSWERS].includes(u.keep ?? "");
   if (ref.kind === "fallback") return !validLat(u.fallback_lat) || !validLon(u.fallback_lon) || !bothOrNeither(u.fallback_lat, u.fallback_lon);
   return !validLat(u.manual_lat) || !validLon(u.manual_lon) || !bothOrNeither(u.manual_lat, u.manual_lon);
 }
@@ -252,6 +255,7 @@ function wouldResolve(ref) {
   if (ref.kind === "unidentified") return unidentifiedHolds(ref.dest, c);
   if (ref.kind === "fingerprint") return mismatchAccepted(c);
   if (ref.kind === "camera") return DEVICE_CLASSES.includes(u.device_class);
+  if (ref.kind === "changed") return changedHolds(c);
   if (ref.kind === "drift")                       // confirmed for this offset (zero-scrub or a valid correction)
     return driftConfirmHolds(c) && validOffset(u.corrected_offset_seconds);
   if (ref.kind === "fallback")
@@ -420,6 +424,9 @@ function previewEffective(ref) {
     return validOffset(u.corrected_offset_seconds)
       ? `${fmtOffset(u.corrected_offset_seconds)} (corrected)` : "✗ invalid offset";
   }
+  if (ref.kind === "changed") return !changedHolds(c) ? (u.keep ? "— (answered for another time — answer again)" : "— (needs input)")
+    : u.keep === "new" ? `keeps ${timePair(c.held_time)} as its own time — corrected like any photo's`
+      : `geotag's time written back${c.geotag_wrote ? ` (${timePair(c.geotag_wrote)}, from its own time)` : ""}`;
   if (ref.kind === "camera") return u.device_class === "phones" ? "a phone — written into device_groups.phones"
     : u.device_class === "fixed_clock_cameras" ? "a camera with a hand-set clock — written into device_groups.fixed_clock_cameras"
       : "— (needs input: geotag stops until it is classed)";
@@ -580,6 +587,8 @@ function renderTreeNode(node, box) {
       n.append(row({ file: "time", dest: node.path, kind: "unidentified" }, "Files naming no camera",
         `${q.files} file${q.files === 1 ? "" : "s"}`, q.effective_iana_timezone ? leaf(q.effective_iana_timezone) : "—"));
     }
+    for (const [key, cc] of Object.entries(node.dest.changed_times || {}))
+      n.append(row({ file: "time", dest: node.path, kind: "changed", key }, "Time changed since geotag", leaf(key), timePair(cc.held_time)));
     for (const [key, rc] of Object.entries(node.dest.local_time_readings || {}))
       n.append(row({ file: "time", dest: node.path, kind: "reading", key }, "Time at a clock change", leaf(key),
         rc.effective_utc_offset_seconds === "" || rc.effective_utc_offset_seconds == null ? "—" : utcOff(rc.effective_utc_offset_seconds)));
@@ -1034,6 +1043,8 @@ function controls(ref) {
     wrap.append(mismatchControls(ref));
   } else if (ref.kind === "camera") {
     wrap.append(cameraControls(ref));
+  } else if (ref.kind === "changed") {
+    wrap.append(changedControls(ref));
   } else if (ref.kind === "fallback") {
     const hasProp = p.proposal_source === "inherited";
     const cb = checkbox(hasProp ? `accept inherited (${p.proposed_fallback.lat}, ${p.proposed_fallback.lon})` : "accept inherited — none",
@@ -1313,8 +1324,8 @@ function driftMap(ref, frame, fi) {
 // decision" box for a GPS review item (the big map gets the rest of the panel). Null in demo mode or
 // for non-photo cells; for a multi-photo run, `ref.path` is the first photo.
 function decisionThumb(ref) {
-  const photo = ref.kind === "reading" ? ref.key : ref.kind === "camera" ? (workCell(ref)?.examples || [])[0] : ref.path;
-  if (state.base.demo || !["review", "reading", "fingerprint", "camera"].includes(ref.kind) || !photo) return null;
+  const photo = ref.kind === "reading" || ref.kind === "changed" ? ref.key : ref.kind === "camera" ? (workCell(ref)?.examples || [])[0] : ref.path;
+  if (state.base.demo || !["review", "reading", "fingerprint", "camera", "changed"].includes(ref.kind) || !photo) return null;
   const img = el("img", { class: "decision-thumb", alt: photo, title: photo.split("/").pop(),
     src: "/api/photo?path=" + encodeURIComponent(photo) });
   img.addEventListener("error", () => img.remove());
@@ -1535,6 +1546,34 @@ function unidentifiedControls(ref) {
     `Accepted for ${u.accepted_timezone || "no timezone"}; the timezone here is now ${zone || "none"} — accept again, or move the files out.`));
   return wrap;
 }
+// A photo's time changed since geotag wrote it (photos-21 changed_times, BLD-changed_time_question): keep the time it
+// holds — it becomes the photo's own, corrected like any — or take back geotag's. The answer names the time it was given
+// for (answered_for, a copy of held_time) and holds while the photo holds that time.
+const CHANGED_ANSWERS = ["new", "geotag"];
+const timePair = (t) => !t || !t.DateTimeOriginal ? "no time" : `${t.DateTimeOriginal}${t.OffsetTimeOriginal ? " " + t.OffsetTimeOriginal : " (no offset)"}`;
+function changedHolds(c) {
+  const u = (c && c.user_decision) || {}, a = u.answered_for, h = (c && c.held_time) || {};
+  return CHANGED_ANSWERS.includes(u.keep) && !!a && typeof a === "object"
+    && a.DateTimeOriginal === h.DateTimeOriginal && (a.OffsetTimeOriginal ?? null) === (h.OffsetTimeOriginal ?? null)
+    && (u.keep !== "new" || !!h.DateTimeOriginal);
+}
+const changedFields = (c, keep) => ({ keep, answered_for: keep ? { ...(c.held_time || {}) } : "" });
+function changedControls(ref) {
+  const c = workCell(ref), u = c.user_decision || {}, wrap = el("div", { class: "ctl-block" });
+  wrap.append(el("div", { class: "hint warn" }, `${leaf(ref.key)} holds ${timePair(c.held_time)}, but geotag wrote ` +
+    `${c.geotag_wrote ? timePair(c.geotag_wrote) : "no time"} to it, and its own time before geotag was ${timePair(c.own_time)}. ` +
+    "Its time was changed since — in another tool, or by a slip. Only you know which it is."));
+  const on = changedHolds(c) ? u.keep : "";
+  const opt = (keep, label, disabled) => el("div", { class: "off-opt" + (on === keep ? " on" : "") + (disabled ? " disabled" : ""),
+    onclick: disabled ? undefined : () => editMany(ref, changedFields(c, keep)) }, el("span", { class: "off-dot" }, on === keep ? "●" : "○"), el("span", {}, label));
+  wrap.append(opt("new", `keep ${timePair(c.held_time)} — it becomes the photo's own time, and is corrected by its camera's offset like any`,
+    !(c.held_time || {}).DateTimeOriginal));
+  wrap.append(opt("geotag", "take back geotag's time — written again from the photo's own time"));
+  if (u.keep && !changedHolds(c)) wrap.append(el("div", { class: "hint warn" },
+    "Answered for another time than the one the photo holds now — answer again."));
+  if (u.keep) wrap.append(el("button", { class: "mini", onclick: () => editMany(ref, changedFields(c, "")) }, "clear"));
+  return wrap;
+}
 // A photo's time at a daylight-saving change (photos-21 local_time_readings): pick one of its readings — for a time
 // skipped, or type the offset its clock was on. Writes user_decision.utc_offset_seconds.
 function readingControls(ref) {
@@ -1700,13 +1739,14 @@ function renderPanel() {
   const multi = ref.peers && ref.peers.length > 1;
   const title = ref.kind === "offset" ? `Offset · ${c.camera_group || ref.key}${c.phone ? " (phone)" : ""}`
     : ref.kind === "reading" ? "Time at a daylight-saving change"
+    : ref.kind === "changed" ? "Time changed since geotag wrote it"
     : ref.kind === "unidentified" ? "Files naming no camera"
     : ref.kind === "drift" ? `Drift · ${c.camera_group || ref.key}`
     : ref.kind === "fingerprint" ? "Content changed after a write"
     : ref.kind === "camera" ? "A new camera group"
     : ref.kind === "review" ? (multi ? `GPS review · ${ref.peers.length} photos` : "GPS review item")
       : ref.kind === "fallback" ? "Folder fallback" : "Timezone";
-  p.append(el("h2", {}, title), el("div", { class: "path" }, ref.path || (ref.kind === "reading" || ref.kind === "camera" ? ref.key : ref.dest)));
+  p.append(el("h2", {}, title), el("div", { class: "path" }, ref.path || (["reading", "camera", "changed"].includes(ref.kind) ? ref.key : ref.dest)));
   const head = el("div", { class: "pblock" }, ...(statusChip(ref) ? [statusChip(ref)] : []), ...tags(ref));
   // A multi-cell ref edits several siblings at once — say so. Offset cluster → which days; review run → how many.
   if (ref.kind === "offset" && multi) {
@@ -1724,7 +1764,7 @@ function renderPanel() {
   if (isDirty(ref)) head.append(el("button", { class: "mini", onclick: () => resetRef(ref) }, "reset"));
   // Fixed top: title + status + the decision controls + the effective preview — always visible, no scroll.
   const top = el("div", { class: "panel-top" },
-    el("h2", {}, title), el("div", { class: "path" }, ref.path || (ref.kind === "reading" || ref.kind === "camera" ? ref.key : ref.dest)), head,
+    el("h2", {}, title), el("div", { class: "path" }, ref.path || (["reading", "camera", "changed"].includes(ref.kind) ? ref.key : ref.dest)), head,
     el("div", { class: "pblock" }, el("h3", {}, "Your decision"), decisionThumb(ref), controls(ref)),
     el("div", { class: "pblock eff" }, el("h3", {}, "Effective (advisory — re-run to apply)"), el("div", { class: "eff-val" }, previewEffective(ref))));
   // Scroll area, the only thing that scrolls. For a GPS coord cell the MAP comes first — directly under
@@ -1863,6 +1903,6 @@ export {
   zoneContradiction, offsetCellNotes, zoneSpokenFor, zoneDespiteFields, effectiveCountry, clearCountriesInside,
   scrubOffset, scrubSeedIndex, mapKeyFor, savePayload,
   ambiguousTimeNote, gpsTimeAsideNote, zoneOffer, validReading, keepHolds, keepFields, keepOffered, phoneNote,
-  trueInstant, parseUtcOff, mismatchAccepted, recordAbsentText, DEVICE_CLASSES, unidentifiedHolds, unidentifiedFields, loadRefusal, hasUnsavedEdits, utcOff,
+  trueInstant, parseUtcOff, mismatchAccepted, recordAbsentText, DEVICE_CLASSES, changedHolds, changedFields, unidentifiedHolds, unidentifiedFields, loadRefusal, hasUnsavedEdits, utcOff,
   fmtSpan, utcToZonedWallMs, zonedWallToUtcMs, offsetFromTrueTime, trueTimeOf,
 };

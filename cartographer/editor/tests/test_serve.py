@@ -305,6 +305,21 @@ def test_apply_edits_saves_the_questions_of_a_phone_and_of_a_time_at_a_clock_cha
     assert d["local_time_readings"][rel]["offsets_seconds"] == before["destinations"][dest]["local_time_readings"][rel]["offsets_seconds"]
 
 
+@pytest.mark.spec("RUL-every_question_in_editor", "BLD-editor_answers_every_question", "RUL-changed_time_asked",
+                  test="TST-serve-saves_a_changed_time_s_answer")
+def test_apply_edits_saves_the_answer_for_a_time_changed_since_geotag_wrote_it():
+    """A photo's time changed since geotag wrote it: the answer saved into its entry of photos-21's changed_times, by its
+    photo's path, nothing else of the record touched."""
+    dest, rel = "6-photos-by-dest/T", "6-photos-by-dest/T/a.arw"
+    held = {"DateTimeOriginal": "2024:07:03 14:45:00", "OffsetTimeOriginal": "+02:00"}
+    art = {"destinations": {dest: {"changed_times": {rel: {"held_time": held, "content_fingerprint": "fp",
+                                                           "user_decision": {"keep": "", "answered_for": ""}}}}}}
+    edits = [{"dest": dest, "kind": "changed", "key": rel, "user_decision": {"keep": "new", "answered_for": held}}]
+    assert serve._unapplicable_edits(art, edits) == [] and serve._apply_edits(art, edits) == 1
+    c = art["destinations"][dest]["changed_times"][rel]
+    assert c["user_decision"] == {"keep": "new", "answered_for": held} and c["held_time"] == held
+
+
 @pytest.mark.spec("RUL-every_question_in_editor", "BLD-editor_answers_every_question",
                   test="TST-serve-saves_the_camera_less_files_answer")
 def test_apply_edits_saves_the_answer_for_a_destination_s_files_naming_no_camera():

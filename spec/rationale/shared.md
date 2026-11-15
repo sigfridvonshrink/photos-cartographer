@@ -893,14 +893,20 @@ recognised as corrected whichever workspace it is in.
 :id: RAT-changed_time_is_asked
 :status: ruled
 :forced: no
-:follows_from: RAT-rerun_is_safe, CHC-ask_only_what_data_cannot_settle
-:justifies: RUL-changed_time_stops_plan
+:follows_from: RAT-rerun_is_safe, CHC-ask_only_what_data_cannot_settle, RAT-every_question_answerable
+:justifies: RUL-changed_time_stops_plan, RUL-changed_time_asked, RUL-changed_time_kept_is_own, RUL-changed_time_restored
 
 Geotag decides from what a photo held before it first wrote to it. A time the photo holds that is neither that nor
 what geotag wrote was put there since, by someone: a correction made in another tool, or a slip. Geotag cannot tell
 which. Writing its own time back would undo a correction without a word; taking the new time as the photo's recorded
 time would turn a camera's clock offset onto a time already corrected, or build on the slip. Only the person who made
-the change knows, so geotag stops and shows both times.
+the change knows, so geotag does neither unasked: it shows the times and asks which the photo keeps — a question like
+any other the tool asks, and the owner ruled *"the user should be able to answer all questions in the editor"*, so it is
+a decision, answered there or by hand, rather than a stop to be cleared outside the tool. The answer is one of the two
+the user has. A slip, or a change to undo: geotag's time, written again from the photo's own. A time to keep: it
+becomes the photo's own, as though the device had recorded it, and is decided from as every photo's own time is — a
+camera's clock offset applied to it as to its siblings — since one own time per photo, not two, is what keeps every
+later run deciding the same way.
 :::
 
 :::{rat} An empty inbox means nothing is waiting

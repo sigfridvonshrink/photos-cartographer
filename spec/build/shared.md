@@ -77,7 +77,8 @@ Each question geotag asks SHALL be a `user_decision` of a cell of its record, it
 `cartographer/editor/decision-json-reference.md`, which geotag reads whether the editor or a hand wrote it. The
 editor loads and saves each by its kind: in photos-21, `timezone` (`destination_timezone`), `offset` (a cell of
 `camera_group_time_decisions`, a phone's among them, by its key), `reading` (an entry of `local_time_readings`, by
-its photo's path) and `unidentified` (`unidentified_files`); in photos-22, `drift`; in photos-23, `fallback` and `review`;
+its photo's path), `changed` (an entry of `changed_times`, by its photo's path) and `unidentified`
+(`unidentified_files`); in photos-22, `drift`; in photos-23, `fallback` and `review`;
 in `photos-25-execution-summary.json`, which `geotag execute` reads, `fingerprint` (an entry of `fingerprint_mismatches`,
 by its photo's path); and a camera group's class, `camera`, in the configuration ({need}`BLD-editor_lists_new_camera_groups`).
 The editor writes each answer as geotag takes it: where an offset cell lists `conflicts_with`, a proposal the user takes
@@ -736,9 +737,56 @@ so a write interrupted after it landed is known as geotag's own.
 :uses: BLD-time_written_recorded
 
 The executable plan SHALL be `blocked` by a file with pinned values whose `DateTimeOriginal` and `OffsetTimeOriginal`
-are neither the pinned pair nor one the ledger records geotag writing, its blocker naming the file, the pair it holds,
-the last pair geotag wrote to it — or that geotag wrote it no time — and its pinned pair; a file with no pin is not
-checked, and only those two fields are compared.
+are neither the pinned pair nor one the ledger records geotag writing, and whose question photos-21 holds no answer to
+in effect ({need}`BLD-changed_time_question`), its blocker naming the file, the pair it holds, the last pair geotag wrote
+to it — or that geotag wrote it no time — and its pinned pair; a file with no pin is not checked, and only those two
+fields are compared.
+:::
+
+:::{bld} photos-21 asks of each changed time, by its photo
+:id: BLD-changed_time_question
+:status: ruled
+:realises: RUL-changed_time_asked, RUL-every_question_answerable_by_hand
+:uses: BLD-changed_time_blocks
+
+Each file such a pair blocks SHALL be asked about in photos-21, in its destination's `changed_times` keyed by its path:
+the cell names its `content_fingerprint`, its `held_time`, the last pair geotag wrote (`geotag_wrote`, or null) and its
+pinned `own_time`, and asks `user_decision.keep` — `new`, keep the time it holds, or `geotag`, take back geotag's —
+with `answered_for`, the `held_time` it is given for. The answer is found again by the file's fingerprint and is in
+effect (`effective_answer`) while `answered_for` is the pair the file holds, and, for `new`, while that pair holds a
+time; another `keep`, or an answer with no `answered_for`, is a blocker; one given for another pair is
+`stale_user_decision`. While a cell has no answer in effect it requires input, and photos-21 is not complete.
+:::
+
+:::{bld} A time kept is decided from as the photo's own
+:id: BLD-changed_time_kept
+:status: ruled
+:realises: RUL-changed_time_kept_is_own
+:uses: BLD-changed_time_question, BLD-original_values_pinned
+
+A file whose answer in effect is `new` SHALL be decided from the pair it holds as its own — its recorded time read from
+its `DateTimeOriginal`, with `OffsetTimeOriginal` as its offset.
+:::
+
+:::{bld} A time kept becomes the pin's at execution
+:id: BLD-changed_time_kept_pinned
+:status: ruled
+:realises: RUL-changed_time_kept_is_own
+:uses: BLD-changed_time_kept, BLD-original_values_pinned
+
+The executable plan SHALL carry each kept pair, with the recorded time and tag it gives, under `own_times_kept` by the
+file's path, which execution writes into the file's pin in the original-values ledger before any write, while the
+file still holds that pair, every other pinned value staying — so every later plan decides from it.
+:::
+
+:::{bld} A time taken back is planned like any other
+:id: BLD-changed_time_restored_written
+:status: ruled
+:realises: RUL-changed_time_restored
+:uses: BLD-changed_time_question, BLD-decided_from_own_values
+
+A file whose answer in effect is `geotag` SHALL be planned from its pinned values as before, its time write planned
+over the pair it holds as any write that differs from what a file holds.
 :::
 
 :::{bld} A re-run treats a marked file as geotag's work
