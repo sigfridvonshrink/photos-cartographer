@@ -51,6 +51,18 @@ The decision editor's save SHALL take the workspace lock for the time it writes,
 the editor's display reads take none, each record being replaced whole. The editor is given, with each record it loads, the SHA-256 of its bytes, and sends them back with a save; under the lock the save compares them with the records on disk and checks that every edit names a decision its record holds, writing none of the three otherwise, and returns the hashes of what it leaves.
 :::
 
+:::{bld} The editor's own lock, held for its session
+:id: BLD-editor_session_lock
+:status: ruled
+:realises: RUL-one_editor_at_a_time, RUL-editor_kept_until_stopped
+
+The decision editor SHALL take `photos-00-decision-editor.lock`, an exclusive lock taken without waiting that records
+its owner, as `edit` opens a workspace, holding it until `edit` stops; the console's Edit tab takes it on its first
+request for a workspace and holds it until the console stops. While another holds it, `edit` refuses to start and the
+tab refuses to read or save. It is the editor's alone, apart from the workspace lock its saves take
+({need}`BLD-editor_save_locks`).
+:::
+
 :::{bld} The lock records its owner
 :id: BLD-lock_owner_record
 :status: ruled

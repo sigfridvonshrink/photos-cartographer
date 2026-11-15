@@ -152,6 +152,7 @@ def test_lock_creates_control_dir(tmp_path):
         lock.close()
 
 
+@pytest.mark.spec("RUL-one_editor_at_a_time", "BLD-editor_session_lock", test="TST-serve-lock_blocks_second_editor")
 def test_lock_blocks_second_editor(tmp_path):
     first, _ = serve._acquire_editor_lock(str(tmp_path))
     try:
@@ -463,6 +464,7 @@ def test_edit_help_names_both_refusals_and_the_whole_loop():
     assert "geotag execute -> geotag finalize" in serve.EDIT_BLURB
 
 
+@pytest.mark.spec("RUL-one_editor_at_a_time", "BLD-editor_session_lock", test="TST-serve-serve_refuses_a_second_editor_without_naming_a_workspace_argument")
 def test_serve_refuses_a_second_editor_without_naming_a_workspace_argument(tmp_path, capsys):
     # The editor works on the cwd: the refusal says to close the other editor (or console Edit tab), or to
     # run this one from another workspace's folder — never to "point it at" a workspace it takes no argument for.

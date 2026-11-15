@@ -2973,6 +2973,28 @@ workspace lock. Its records MAY still be read.
 The decision editor SHALL NOT open a sealed workspace.
 :::
 
+:::{rul} One decision editor at a time
+:id: RUL-one_editor_at_a_time
+:status: ruled
+:criticality: med
+:anti: yes
+:verify: required
+:uses: DEF-decision
+
+A workspace SHALL be open in at most one decision editor at a time, another being refused while it is.
+:::
+
+:::{rul} An editor keeps the workspace until it stops
+:id: RUL-editor_kept_until_stopped
+:status: ruled
+:criticality: med
+:verify: required
+:refines: RUL-one_editor_at_a_time
+
+A decision editor SHALL keep a workspace it has opened as its one editor until the editor itself stops, never giving
+it up between one save or display and the next.
+:::
+
 :::{rul} The editor saves only over what it showed
 :id: RUL-save_only_what_was_shown
 :status: ruled

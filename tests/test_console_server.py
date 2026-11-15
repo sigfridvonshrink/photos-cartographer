@@ -435,7 +435,7 @@ def test_edit_tab_refuses_a_sealed_workspace(tmp_path):
         server._release_editor_locks()
 
 
-@pytest.mark.spec("BLD-control_directory_contents", test="TST-console_server-edit_tab_is_one_editor_at_a_time")
+@pytest.mark.spec("BLD-control_directory_contents", "RUL-one_editor_at_a_time", "RUL-editor_kept_until_stopped", "BLD-editor_session_lock", test="TST-console_server-edit_tab_is_one_editor_at_a_time")
 def test_edit_tab_is_one_editor_at_a_time(tmp_path):
     # One decision editor at a time: while a standalone editor holds the editor lock, the console's Edit
     # tab is refused (it neither reads nor saves); once the tab has opened, it holds the lock itself and
