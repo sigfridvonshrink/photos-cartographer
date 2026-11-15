@@ -274,7 +274,7 @@ Item 16's planned reading of scattered photos as suspect positions would then pr
 correct ones.
 
 **Ruled (2026-11-16)** — the owner: *"no, this needs a workspace setting, default being that it's just one camera. If the
-setting says multile cameras, then do the recommended"*: a configuration setting names the camera groups that are
+setting says multiple cameras, then do the recommended"*: a configuration setting names the camera groups that are
 several bodies (by default none: a group is one camera). For a group so named: an offset from its GPS never applies
 itself — always a proposal, noting that the group may be several bodies; item 16 never reads its disagreeing photos as
 wrong positions; the bodies are split by moving one's photos into a sub-folder (which gives them their own cells).
