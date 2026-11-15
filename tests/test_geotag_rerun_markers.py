@@ -742,7 +742,52 @@ def test_an_unvouched_prep_log_stops_the_plan(tmp_path, monkeypatch, capsys, spo
     out = capsys.readouterr()
     assert ei.value.code == 2 and "prep's log" in (out.out + out.err).lower()
     assert plan_p.read_bytes() == before                                     # nothing planned past it
-    assert not cal.GeotagWorkflow(str(ws)).preflight(for_execute=True)[0]    # the plan alone stops on it
+
+
+@pytest.mark.spec("RUL-geotag_executes_on_vouched_log", "BLD-original_values_follow_fingerprint",
+                  test="TST-geotag_rerun_markers-an_unvouched_prep_log_stops_execution")
+@pytest.mark.parametrize("spoil", ["changed", "missing", "no_hash"])
+def test_an_unvouched_prep_log_stops_execution(tmp_path, monkeypatch, capsys, spoil):
+    """A plan made on a vouched log, the log then changed under it: execution would carry the pinned values by a
+    mapping nothing vouches for. It stops before any change — no snapshot, no decision kept, no write, no pin
+    moved — exits 2, and sends the user to prep, then to plan again."""
+    ws = _executed_round(tmp_path, monkeypatch)
+    pinned = _originals(ws)
+    _retake_fingerprint(ws, "fp-a.arw", "fp-new")
+    _confirm_drift(ws, SLOW - 300)
+    _plan(monkeypatch, ws)
+    ctl = ws / ".photos-ingest"
+    log, ho_p = ctl / "photos-15-prep-log.json", ctl / "photos-11-handoff.json"
+    if spoil == "changed":
+        log.write_text(json.dumps({"photos": {}}))
+    elif spoil == "missing":
+        log.unlink()
+    else:
+        ho = json.loads(ho_p.read_text())
+        del ho["depends_on"]["prep_log"]
+        ho_p.write_text(json.dumps(ho))
+
+    def state():
+        return {p.relative_to(ws).as_posix(): p.read_bytes() for p in sorted(ws.rglob("*"))
+                if p.is_file() and not p.name.startswith("photos-00-")}
+    before = state()
+
+    def untouchable(*a, **k):
+        raise AssertionError("execution went past an unvouched log")
+    monkeypatch.setattr(cal, "take_zfs_snapshot", untouchable)
+    monkeypatch.setattr(cal.GeotagWorkflow, "_exiftool_write", untouchable)
+    monkeypatch.setattr(cal.GeotagWorkflow, "_keep_executed_decisions", untouchable)
+    monkeypatch.chdir(str(ws))
+    monkeypatch.setattr(sys, "argv", ["photos-2-geotag", "execute"])
+    capsys.readouterr()
+    with pytest.raises(SystemExit) as ei:
+        cal.main()
+    out = capsys.readouterr()
+    said = (out.out + out.err).lower()
+    assert ei.value.code == 2
+    assert "prep's log" in said and "`prep plan` and `prep execute`, then `geotag plan`" in said
+    assert state() == before
+    assert _originals(ws) == pinned                                          # the pin did not move
 
 
 @pytest.mark.spec("BLD-original_values_follow_fingerprint",

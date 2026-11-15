@@ -2981,6 +2981,17 @@ def run(args):
                     reporter.log(f"  - {b}")
                 emit_next_step(reporter, "resolve the blocker(s) above, then re-run `geotag execute`.")
                 sys.exit(2)
+            # Execution builds its file model from prep's log, carrying a photo's pinned values to a retaken
+            # fingerprint: a log the handoff does not vouch for says nothing trustworthy of that, so execute
+            # stops on it before any change — before the snapshot, before keeping decisions
+            # (RUL-geotag_executes_on_vouched_log).
+            log_blk = prep_log_blocker(workspace_root, wf.handoff)
+            if log_blk:
+                reporter.error("\nExecution cannot proceed:")
+                reporter.log(f"  - {log_blk[0].upper() + log_blk[1:]}.")
+                emit_next_step(reporter, "`prep plan` and `prep execute`, then `geotag plan`, then "
+                                         "`geotag execute`.")
+                sys.exit(2)
             if not os.path.exists(executable_plan_path(workspace_root)):
                 reporter.log(f"No {EXECUTABLE_PLAN_ARTIFACT} — run `plan` first.")
                 emit_next_step(reporter, "`geotag plan` first to build the executable plan.")

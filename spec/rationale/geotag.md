@@ -672,7 +672,7 @@ of what they saw, for them to replace.
 :status: ruled
 :forced: yes
 :follows_from: RAT-decision_withdrawable, RAT-decoded_pixel_identity
-:justifies: RUL-own_values_follow_new_fingerprint, RUL-geotag_plans_on_vouched_log
+:justifies: RUL-own_values_follow_new_fingerprint, RUL-geotag_plans_on_vouched_log, RUL-geotag_executes_on_vouched_log
 
 A new ImageMagick may decode a photo to a new fingerprint; the photo is the same, and so are its own time and
 position. Lost with the old value, they would leave geotag taking the photo's corrected time for its own: a changed
@@ -680,7 +680,8 @@ offset would never reach it, a withdrawn one never undo. Prep's log says which o
 it does not say so one for one, no photo's values can be told apart, and geotag stops rather than guess. A log the
 handoff does not vouch for says nothing that can be trusted of which became which: planned past it, as though no
 fingerprint had changed, a photo would lose its pinned values without a word — so geotag stops on it as well, as
-finalize and merge do.
+finalize and merge do. Execution builds the same model again from the log and moves each pin to its new value; the
+log may have changed since the plan was made, so execution asks the same of it, before it changes anything.
 :::
 
 

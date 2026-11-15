@@ -1131,6 +1131,18 @@ one, so long as the change maps one value to one.
 Geotag SHALL NOT plan while prep's log is not the one the handoff vouches for.
 :::
 
+:::{rul} Geotag executes only on the prep log the handoff vouches for
+:id: RUL-geotag_executes_on_vouched_log
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+:refines: RUL-geotag_plans_on_vouched_log
+
+Geotag SHALL NOT execute a plan, nor change anything toward it, while prep's log is not the one the handoff vouches
+for.
+:::
+
 
 ## 16. Placing each photo
 

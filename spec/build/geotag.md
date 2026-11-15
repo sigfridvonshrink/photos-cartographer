@@ -388,14 +388,16 @@ A drift cell's `proposal` SHALL hold `tracks`, each track file its `track_segmen
 :::{bld} The pinned values follow a retaken fingerprint
 :id: BLD-original_values_follow_fingerprint
 :status: ruled
-:realises: RUL-own_values_follow_new_fingerprint, RUL-geotag_plans_on_vouched_log
+:realises: RUL-own_values_follow_new_fingerprint, RUL-geotag_plans_on_vouched_log, RUL-geotag_executes_on_vouched_log
 
 `build_file_model` SHALL find a photo's pinned values under its fingerprint or, failing it, under the value it was
 taken again from, step by step back through the `fingerprint_retaken` steps of prep's log (`retaken_fingerprints`),
 when the handoff vouches for the log; execution then moves the pin to the current value, unless one is held there. A
 log holding two steps that give one value two predecessors, or one value two successors, is a blocker of geotag's
 preflight, and so, for `geotag plan`, is a log the handoff does not vouch for (`prep_log_blocker`: missing,
-unreadable, its SHA-256 other than `depends_on.prep_log`'s, or the handoff recording none).
+unreadable, its SHA-256 other than `depends_on.prep_log`'s, or the handoff recording none); `geotag execute` stops on
+such a log after its preflight, before the plan is read and before any snapshot, kept decision or write, with exit
+status 2.
 :::
 
 
