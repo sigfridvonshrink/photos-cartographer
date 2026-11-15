@@ -101,6 +101,40 @@ def merge_db_snapshot_path(ws):
     return _cd(ws, MERGE_DB_SNAPSHOT)
 
 
+class UnreadableRecord(Exception):
+    """A plan or journal of merge's own that cannot be read: merge stops on it, naming the file, never taking it as
+    empty (RUL-merge_unreadable_record_stops)."""
+
+    def __init__(self, path, error):
+        super().__init__(f"{path}: {error}")
+        self.path, self.error = path, error
+
+
+def _read_record(path, required=("plan_id",)):
+    """The JSON object at `path`, holding each key of `required`; UnreadableRecord otherwise."""
+    try:
+        with open(path) as f:
+            obj = json.load(f)
+    except (OSError, ValueError) as e:
+        raise UnreadableRecord(path, e)
+    if not isinstance(obj, dict):
+        raise UnreadableRecord(path, "not a JSON object")
+    missing = [k for k in required if k not in obj]
+    if missing:
+        raise UnreadableRecord(path, f"no {', '.join(missing)}")
+    return obj
+
+
+def _unreadable_refusal(reporter, err, command):
+    """Stop on a record of merge's own it cannot read, naming it (RUL-merge_unreadable_record_stops): exit 2."""
+    reporter.error(f"\nMerge cannot {command}: {err.path} cannot be read ({err.error}). Nothing was changed, and "
+                   "the file was left as it is — merge never takes a record of its own it cannot read for an "
+                   "empty one.")
+    emit_next_step(reporter, "repair the file, or restore it from a `-NNN` copy beside it, then re-run "
+                             f"`merge {command}`.")
+    return 2
+
+
 def merge_execution_status(results):
     """Terminal status of a merge execution from per-file results (BLD-merge_records):
     `success` (nothing blocked — a plan of no photo among them, which seals: RUL-empty_merge_seals), `failed`
@@ -651,12 +685,12 @@ class MergeWorkflow:
         stem, ext = os.path.splitext(cur)
         found = {}
         for p in reversed(sorted(glob.glob(glob.escape(stem) + "-[0-9]*" + ext)) + [cur]):
-            try:
-                with open(p) as f:
-                    plan = json.load(f)
-                pid = plan["plan_id"]
-            except (OSError, ValueError, KeyError, TypeError):
+            if not os.path.exists(p):
                 continue
+            # One that cannot be read stops the plan, naming it (RUL-merge_unreadable_record_stops): passed over, a
+            # photo it placed would block for a reason that is not true — that no earlier plan placed it.
+            plan = _read_record(p)
+            pid = plan["plan_id"]
             for d in (plan.get("destinations") or {}).values():
                 for rec in d.get("files") or []:
                     if rec.get("disposition") != "blocked" and rec.get("library_target"):
@@ -776,6 +810,8 @@ class MergeWorkflow:
         cache = WorkspaceCache(ws)
         try:
             plan = self.build_merge_plan(ws, self.calib_plan, library_root, cache)
+        except UnreadableRecord as e:
+            return _unreadable_refusal(reporter, e, "plan")
         finally:
             cache.close()
         mpp = merge_plan_path(ws)
@@ -812,8 +848,10 @@ class MergeWorkflow:
             reporter.log(f"No {MERGE_PLAN_ARTIFACT} — run `plan` first.")
             emit_next_step(reporter, "`merge plan` first to build the plan.")
             return 2
-        with open(p) as f:
-            plan = json.load(f)
+        try:
+            plan = _read_record(p)
+        except UnreadableRecord as e:
+            return _unreadable_refusal(reporter, e, "dry-run")
         stale = self.revalidate_plan_deps(ws, plan)
         if stale:
             reporter.log("\nThe saved merge plan is stale — re-run `plan`:")
@@ -993,11 +1031,28 @@ class MergeWorkflow:
         p = merge_plan_path(ws)
         if not os.path.exists(p):
             return {"status": "no_plan"}
-        with open(p) as f:
-            plan = json.load(f)
+        try:
+            plan = _read_record(p)
+        except UnreadableRecord as e:
+            return {"status": "unreadable", "error": e}
         stale = self.revalidate_plan_deps(ws, plan)
         if stale:
             return {"status": "rejected", "plan_id": plan.get("plan_id"), "stale": stale}
+
+        # The journal an earlier run of this plan wrote, carried into the one this run writes so it keeps every
+        # confirmation (BLD-merge_journal_resume) — read before anything is changed, so that one which cannot be
+        # read stops the run whole rather than be overwritten by this run's first confirmation
+        # (RUL-merge_unreadable_record_stops). No outcome is read from it: a photo gone from by-dest is checked in
+        # the library whatever the journal says (RUL-resume_rechecks_library).
+        jpath = journal_path(ws, plan["plan_id"])
+        journal = {}
+        if os.path.exists(jpath):
+            try:
+                journal = _read_record(jpath, required=("operations",))["operations"]
+                if not isinstance(journal, dict):
+                    raise UnreadableRecord(jpath, "its operations are not a JSON object")
+            except UnreadableRecord as e:
+                return {"status": "unreadable", "error": e}
 
         # Pre-mutation snapshots (BLD-merge_snapshots), labelled "merge": the workspace, and
         # the library beside it — merge removes what it places from the workspace, so a snapshot of the
@@ -1018,17 +1073,6 @@ class MergeWorkflow:
         # prior INTERRUPTED run from the dirs this plan targets. Safe: the library lock makes concurrent
         # merges impossible, so any such temp is debris from a crash, never another run's live copy.
         swept = self._sweep_orphan_temps(plan, library_root)
-
-        # The journal an earlier run of this plan wrote, carried into the one this run writes so it keeps
-        # every confirmation (BLD-merge_journal_resume). No outcome is read from it: a photo gone from by-dest
-        # is checked in the library whatever the journal says (RUL-resume_rechecks_library).
-        jpath = journal_path(ws, plan["plan_id"])
-        journal = {}
-        if os.path.exists(jpath):
-            try:
-                journal = (json.load(open(jpath)) or {}).get("operations", {}) or {}
-            except Exception:
-                journal = {}
 
         recs = sorted((f for d in plan.get("destinations", {}).values() for f in d.get("files", [])),
                       key=lambda r: r["by_dest_source"])
@@ -1254,6 +1298,8 @@ class MergeWorkflow:
         jobs = jobs or CONFIG.get("jobs") or 4
         result = self.execute_plan(ws, library_root, jobs, now_iso, execution_id)
         st = result["status"]
+        if st == "unreadable":
+            return _unreadable_refusal(reporter, result["error"], "execute")
         if st == "no_plan":
             reporter.log(f"No {MERGE_PLAN_ARTIFACT} — run `plan` first.")
             emit_next_step(reporter, "`merge plan` first to build the plan.")

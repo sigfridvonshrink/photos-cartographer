@@ -1879,6 +1879,41 @@ def test_either_way_out_of_a_library_pointed_away_from_finishes_the_merge(tmp_pa
     assert log["photos"]["A"]["library_path"] == os.path.join(str(home), "Trip", "a.jpg")
 
 
+@pytest.mark.parametrize("record, command", [("earlier plan", "plan"), ("set-aside plan", "plan"),
+                                             ("plan", "dry-run"), ("plan", "execute"), ("journal", "execute")])
+@pytest.mark.parametrize("damage", ["garbled", "not an object"])
+@pytest.mark.spec("RUL-merge_unreadable_record_stops", "BLD-merge_carry_forward", "BLD-merge_journal_resume",
+                  test="TST-merge_execute-a_record_of_merges_own_it_cannot_read_stops_it")
+def test_a_record_of_merges_own_it_cannot_read_stops_it(tmp_path, capsys, record, command, damage):
+    """A plan of merge's own — the saved one, or one a re-plan set aside — or its journal that cannot be read stops
+    the command reading it (exit 2), naming the file, which is left as it was: never taken for an empty one, nothing
+    moved, no plan or summary written."""
+    ws, lib = _ws(tmp_path, [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"},
+                             {"fp": "B", "dest": "Trip", "final_name": "b.jpg"}],
+                  library_files=[{"fp": "FAIL", "dest": "Trip", "name": "b.jpg"}])
+    assert merge._run_locked_workflow("plan", str(ws)) == 2                   # b.jpg blocked
+    assert merge._run_locked_workflow("execute", str(ws)) == 3                # a.jpg placed and journalled
+    plan_id = json.load(open(merge.merge_plan_path(str(ws))))["plan_id"]
+    if record == "set-aside plan":
+        assert merge._run_locked_workflow("plan", str(ws)) == 2               # the first set aside as -001
+        target = os.path.splitext(merge.merge_plan_path(str(ws)))[0] + "-001.json"
+    elif record == "journal":
+        target = merge.journal_path(str(ws), plan_id)
+    else:
+        target = merge.merge_plan_path(str(ws))
+    with open(target, "w") as f:
+        f.write("{torn" if damage == "garbled" else "[]")
+    capsys.readouterr()
+
+    def state():
+        return _tree(str(ws)), _tree(str(lib))
+    before = state()
+    assert merge._run_locked_workflow(command, str(ws)) == 2
+    out = capsys.readouterr()
+    assert target in out.out + out.err, out
+    assert state() == before                                                  # the record, and all else, as it was
+
+
 @pytest.mark.spec("RUL-empty_merge_seals", "BLD-merge_success_sequence",
                   test="TST-merge_execute-a_merge_of_no_photos_seals")
 def test_a_merge_of_no_photos_seals(tmp_path):

@@ -108,6 +108,19 @@ photo — a record the user would rely on to find it. Fingerprinting the place a
 a resume.
 :::
 
+:::{rat} A record that cannot be read is not an empty one
+:id: RAT-unreadable_record_not_empty
+:status: ruled
+:forced: yes
+:follows_from: RAT-library_is_evidence_of_move, RAT-durable_record
+:justifies: RUL-merge_unreadable_record_stops
+
+Merge's earlier plans say where its photos went, and its journal what it confirmed. Read as empty, an earlier plan
+drops out and a photo it placed blocks for a reason that is not true — that no merge placed it; a journal read as
+empty is written over by the run's first confirmation, and what it held is gone. Stopped, merge names the file to
+repair or restore, and has lost nothing.
+:::
+
 :::{rat} Another library's photos are not in this one
 :id: RAT-merged_means_in_this_library
 :status: ruled

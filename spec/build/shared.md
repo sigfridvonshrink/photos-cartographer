@@ -20,9 +20,9 @@ records, `photos-1-prep`, `photos-2-geotag` and `photos-3-merge`.
 :realises: RUL-exit_status_says_how_it_ended, RUL-blocked_plan_ends_refused
 
 Geotag's and merge's commands SHALL exit 0 for a run that did what it was asked; 1 for a workspace or a library found
-locked; 2 for a refusal — no control directory, the seal, a precondition, a plan missing or stale, a required
-snapshot not taken, and a plan, or merge's dry run, that reports a blocker; 3 for an execution that ended
-partial or failed; and 130 for an interrupt. An error the build did not foresee ends a command with 1, as Python ends
+locked; 2 for a refusal — no control directory, the seal, a precondition, a plan missing or stale, a plan or
+journal of merge's own it cannot read, a required snapshot not taken, and a plan, or merge's dry run, that reports a
+blocker; 3 for an execution that ended partial or failed; and 130 for an interrupt. An error the build did not foresee ends a command with 1, as Python ends
 it. Prep's plan, dry run and execute end the same, but for: its plan with exiftool absent, 3; a dry run or execute
 whose plan fails its checks — a plan holding a blocker among them — and an execute one of whose operations fails, 1;
 an execute or dry run with nothing to do, 0. `merge init-library` ends 0, 1 or 2 alike, and a phase named with no

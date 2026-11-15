@@ -211,6 +211,18 @@ A photo gone from photos by destination whose library place does not hold it SHA
 A run in which a photo gone from photos by destination blocks SHALL be partial.
 :::
 
+:::{rul} A record of merge's own that cannot be read stops it
+:id: RUL-merge_unreadable_record_stops
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+:uses: DEF-merge
+
+Merge SHALL stop, naming the file and changing nothing, on a plan or journal of its own that it cannot read — never
+taking it for an empty one.
+:::
+
 ## 6. User-visible outputs and the merge summary
 
 :::{rul} Merge records how its run ended
