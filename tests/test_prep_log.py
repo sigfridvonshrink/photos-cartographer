@@ -439,3 +439,50 @@ def test_an_earlier_runs_duplicates_are_kept(tmp_path, monkeypatch):
     dq = next(iter(photos.values()))["deduplicated"]["quarantined"]
     assert dq[:1] == first and len(dq) == 2, dq
     assert dq[1]["origin"] == "0-sources/c.jpg"
+
+
+_UNREADABLE_LOGS = ["{not json", "[]", '{"schema_version": 1, "tool": "photos-1-prep"}', '{"photos": null}']
+
+
+@pytest.mark.parametrize("content", _UNREADABLE_LOGS, ids=["not_json", "a_list", "no_photos", "photos_null"])
+@pytest.mark.spec("RUL-unreadable_prep_log_stops", "BLD-unreadable_prep_log", test="TST-prep_log-an_unreadable_log_blocks_the_plan")
+def test_an_unreadable_log_blocks_the_plan(tmp_path, monkeypatch, content):
+    """An earlier log that cannot be read is never taken for an empty one: the plan blocks, naming it, and execute
+    refuses the plan before any change — the new photo stays in the inbox and the log as it was."""
+    _install(monkeypatch)
+    ws = _ws(tmp_path)
+    (ws / "0-sources" / "a.jpg").write_bytes(b"AAAA")
+    _run(ws)
+    plp = utils.prep_log_path(str(ws))
+    with open(plp, "w") as f:
+        f.write(content)
+    (ws / "0-sources" / "b.jpg").write_bytes(b"BBBB")
+    cache = prep.WorkspaceCache(str(ws))
+    plan = prep.WorkspacePrepWorkflow(str(ws), cache).plan()
+    cache.close()
+    assert [b for b in plan.blockers if "photos-15-prep-log.json" in b], plan.blockers
+    with pytest.raises(ValueError):
+        prep.PlanExecutor(str(ws)).execute(plan)
+    assert (ws / "0-sources" / "b.jpg").exists()
+    assert open(plp).read() == content
+
+
+@pytest.mark.spec("RUL-unreadable_prep_log_stops", "BLD-unreadable_prep_log", test="TST-prep_log-a_log_unreadable_since_the_plan_is_refused_before_any_change")
+def test_a_log_unreadable_since_the_plan_is_refused_before_any_change(tmp_path, monkeypatch):
+    """A log that became unreadable after a clean plan is refused by execute's preflight, before any change."""
+    _install(monkeypatch)
+    ws = _ws(tmp_path)
+    (ws / "0-sources" / "a.jpg").write_bytes(b"AAAA")
+    _run(ws)
+    (ws / "0-sources" / "b.jpg").write_bytes(b"BBBB")
+    cache = prep.WorkspaceCache(str(ws))
+    plan = prep.WorkspacePrepWorkflow(str(ws), cache).plan()
+    cache.close()
+    assert not plan.blockers, plan.blockers
+    plp = utils.prep_log_path(str(ws))
+    with open(plp, "w") as f:
+        f.write("{not json")
+    with pytest.raises(ValueError, match="photos-15-prep-log.json"):
+        prep.PlanExecutor(str(ws)).execute(plan)
+    assert (ws / "0-sources" / "b.jpg").exists()
+    assert open(plp).read() == "{not json"

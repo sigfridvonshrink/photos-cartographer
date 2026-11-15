@@ -196,6 +196,35 @@ def test_quarantine_manifest_corruption_is_preserved_not_truncated(tmp_path):
         [{"operation_id": "op-2", "original_path": "b.jpg"}]                  # fresh, valid manifest
 
 
+@pytest.mark.spec("RUL-unreadable_manifest_kept", "BLD-quarantine_layout", test="TST-guards_quarantine-a_manifest_that_cannot_be_set_aside_is_never_written_over")
+def test_a_manifest_that_cannot_be_set_aside_is_never_written_over(tmp_path, monkeypatch):
+    """A manifest that can be neither read nor set aside stops the quarantine move before the file is moved: the
+    manifest keeps its bytes, the duplicate stays where it was, and the run fails."""
+    _mock(monkeypatch)
+    prep.CONFIG["zfs"] = {"enabled": False}
+    ws = _ws(tmp_path)
+    (ws / "0-sources" / "dup1.jpg").write_bytes(b"SAME")
+    (ws / "0-sources" / "dup2.jpg").write_bytes(b"SAME")
+    plan = _plan(ws)
+    (q,) = [op for op in plan.operations if op.type == "quarantine_move"]
+    mdir = os.path.join(utils.quarantine_dir(str(ws)), q.verification["plan_id"])
+    os.makedirs(mdir)
+    with open(os.path.join(mdir, "manifest.json"), "w") as f:
+        f.write("{ earlier entries, damaged")
+    real = prep.replace_durably
+
+    def no_set_aside(src, dst):
+        if ".corrupt-" in dst:
+            raise OSError(30, "Read-only file system")
+        return real(src, dst)
+    monkeypatch.setattr(prep, "replace_durably", no_set_aside)
+    with pytest.raises(RuntimeError):
+        prep.PlanExecutor(str(ws)).execute(plan)
+    assert open(os.path.join(mdir, "manifest.json")).read() == "{ earlier entries, damaged"
+    assert sorted(os.listdir(mdir)) == ["manifest.json"]
+    assert (ws / q.source).exists()
+
+
 def test_quarantine_manifest_appends_preserving_history(tmp_path):
     """The normal path keeps appending; a valid manifest is never backed up."""
     mdir = tmp_path / "qd"; mdir.mkdir()

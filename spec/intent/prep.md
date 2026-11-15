@@ -793,6 +793,18 @@ Prep SHALL record why it quarantines a file — its path, the copy kept and the 
 file into the quarantine.
 :::
 
+:::{rul} An unreadable quarantine record is never written over
+:id: RUL-unreadable_manifest_kept
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+:refines: RUL-evidence_before_quarantine
+
+Prep SHALL stop rather than write over a quarantine record it cannot read and cannot set aside, the file it was to
+quarantine left where it was.
+:::
+
 :::{rul} No run deletes from the quarantine
 :id: RUL-quarantine_never_auto_deleted
 :status: ruled
@@ -935,6 +947,19 @@ fingerprint the handoff records.
 
 Prep's log SHALL be made from prep's plans, journals, quarantine evidence and database alone, holding nothing they do
 not.
+:::
+
+:::{rul} An unreadable log stops prep
+:id: RUL-unreadable_prep_log_stops
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+:refines: RUL-partial_history_shown
+:uses: DEF-transformation_log
+
+Prep SHALL stop, before any change and naming the file, where its earlier log exists and cannot be read — never taking
+it for an empty log.
 :::
 
 :::{rul} Prep's log names what it set aside

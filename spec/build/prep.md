@@ -403,12 +403,13 @@ empty, journals a folder found not empty or not removable as skipped, and warns 
 :::{bld} The quarantine's layout and manifest
 :id: BLD-quarantine_layout
 :status: ruled
-:realises: RUL-evidence_before_quarantine
+:realises: RUL-evidence_before_quarantine, RUL-unreadable_manifest_kept
 
 A quarantined file SHALL go to `.photos-ingest-quarantine/<plan-id>/` at its workspace path, its entry — original path,
 quarantine path, the copy kept, the fingerprint and the plan id — appended to that folder's `manifest.json` before the
 move; the manifest is replaced whole at each append, and one found unreadable is set aside as
-`manifest.json.corrupt-<time>-<random>` and a new one begun.
+`manifest.json.corrupt-<time>-<random>` and a new one begun — or, where it cannot be set aside, the quarantine move
+fails before the file is moved, the manifest left as it was.
 :::
 
 :::{bld} `prune-quarantine` and its selectors
@@ -448,6 +449,16 @@ final inventory, metadata extractor, plan and database versions, image engine) a
 `diagnostics`, `execution_journal`, `prep_log`, `content_fingerprint`, `cache_freshness` and `conflicts_or_duplicates`
 wherever they appear — the last two being each camera group's and destination folder's run-scoped counts and
 duplicates.
+:::
+
+:::{bld} An unreadable `photos-15-prep-log.json` is a blocker
+:id: BLD-unreadable_prep_log
+:status: ruled
+:realises: RUL-unreadable_prep_log_stops
+
+Where `photos-15-prep-log.json` exists and is not readable JSON holding a `photos` object, prep's plan SHALL record a
+blocker naming it, execute's preflight refuses on the same before any change, and the log's rebuild fails the run
+rather than read it as empty; with no such file, the earlier log is empty.
 :::
 
 :::{bld} How prep's log is built

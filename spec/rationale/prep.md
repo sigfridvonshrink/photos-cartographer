@@ -645,6 +645,19 @@ reason lost. Written first, the record survives a crash before the move; the fil
 run sets it aside again under a new record — the old one at worst a record of a move that did not happen.
 :::
 
+:::{rat} The record of the set-aside files is not traded for a fresh one
+:id: RAT-manifest_not_traded
+:status: ruled
+:forced: yes
+:follows_from: RAT-reason_first, RAT-no_automatic_deletion
+:justifies: RUL-unreadable_manifest_kept
+
+A quarantine record found unreadable may still be read by hand, so it is set aside, kept, and a new one begun. Where
+it cannot even be set aside, a new one written in its place would be the end of it: the files already quarantined
+would lie there with nothing saying why. Stopping keeps the record and the file not yet moved; the user mends the
+folder, and the next run quarantines it again.
+:::
+
 :::{rat} The safety net stays until the user lifts it
 :id: RAT-safety_net_stays
 :status: ruled
@@ -739,6 +752,20 @@ real change — a file filed, sorted or changed — restales geotag.
 The log is for reading, not deciding: it gathers what prep's own records already say into one account per photo. Made
 from them alone, it can be checked against them and never contradicts them; and a set-aside copy appears beside the
 photo it copies, so the account of that photo is whole.
+:::
+
+:::{rat} A log that cannot be read is not an empty one
+:id: RAT-unreadable_log_not_empty
+:status: ruled
+:forced: yes
+:follows_from: RAT-log_adds_no_authority, RAT-durable_record
+:justifies: RUL-unreadable_prep_log_stops
+
+Each run's log is the earlier one with this run's steps added. Read as empty, the rewrite would drop every earlier
+step: the photos already filed would start again marked partial, and those sorted into destinations would have no
+entry at all — a log that looks whole and holds one run. Whatever made the file unreadable, a disk, a hand edit, the
+history in it is not prep's to throw away; stopping before any change names it, and the user restores it, or removes it
+knowing the history goes with it.
 :::
 
 :::{rat} A new fingerprint is not a new photo
