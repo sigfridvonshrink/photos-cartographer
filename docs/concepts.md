@@ -13,8 +13,9 @@ see [How this compares](comparison.md).
 All work happens inside a **workspace**: a transient working area, separate from your permanent photo
 library, on one filesystem. A workspace begins the first time you run `prep` in a folder: `prep plan`
 creates a hidden control folder `.photos-ingest/` (configuration, plans, decision files, journals, the
-workspace database, and disposable memos of the fingerprints planning computed and the tracks geotag
-parsed; no phase ever takes anything in it for a photo), and the first `prep execute` creates the
+workspace database — the track points geotag decided by among what it holds — and a disposable memo of the
+fingerprints prep's planning computed; no phase ever takes anything in it for a photo), and the first `prep execute`
+creates the
 managed folders and moves the dump into the inbox.
 
 The managed folders, by number:
@@ -61,7 +62,7 @@ Every change to your files is made the same way, in every phase:
   it refuses before changing anything: plan again.
 
 So a plan goes stale when you edit the configuration (any setting), change a decision, add or change a
-track, a file appears in the workspace, or a photo is edited after planning. Geotag never writes over a
+track at your photos' times, a file appears in the workspace, or a photo is edited after planning. Geotag never writes over a
 photo edited since its plan. An interrupted run is recoverable: for prep, plan again — it plans from
 what is on disk; for geotag and merge, execute again — it finishes what was outstanding and skips what
 was done.
@@ -329,6 +330,19 @@ Where two tracks of the same rank cover a photo's time but put it farther apart 
 someone else's trip: file your own in a ranked folder, or take theirs out of `gpx_root`.
 
 With `gpx_root` set to `""`, or no track in it, geotag runs without tracks.
+
+Geotag keeps the tracks it decides by in the workspace database, so the workspace holds its own evidence: a
+catalogue of every track file under `gpx_root`, and each file's points around your photos' times — as far each way
+as the settings that read them reach: `gpx_anchor_max_clock_error_seconds` around each photo's camera time,
+`drift_check_track_window_seconds` and the placement limits around its corrected time. A track file unchanged since
+geotag read it (same size, modification time and inode) is not read again, and tracks of other times change
+nothing: last week's walk added to `gpx_root` makes no decision about a trip three years ago stale. The points are
+archived and sealed with the workspace, so `geotag finalize` and `merge` never need `gpx_root`.
+
+A track file you take out of `gpx_root` is named at the next `geotag plan` and no longer used — the one reason to
+take one out is that it is someone else's trip. If an executed plan placed or timed photos by it, its points stay in
+the database, marked withdrawn: what was written into your photos keeps its evidence. A `gpx_root`, or a folder in it,
+that cannot be listed stops `geotag plan` and `geotag execute`: what it holds cannot be checked.
 
 ---
 

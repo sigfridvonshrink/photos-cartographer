@@ -490,7 +490,7 @@ def test_geotag_keeps_its_records_in_the_one_control_directory(tmp_path, monkeyp
     records = ("photos-21-time-decisions.json", "photos-22-gps-drift-validation.json", "photos-23-gps-decisions.json",
                "photos-24-executable-plan.json", "photos-25-execution-summary.json", "photos-26-complete-log.json",
                "photos-26-finalized-media.json", "photos-26-geotag-ingest.db", "photos-26-archive-manifest.json",
-               "photos-26-archive.tar.gz", "photos-00-track-memo.db")
+               "photos-26-archive.tar.gz", "photos-00-ingest.db")
     for name, folders in (("default", None), ("renamed", renamed)):
         (tmp_path / name).mkdir()
         ws, ctl = _ready_ws(tmp_path / name, monkeypatch, folders=folders)
@@ -835,3 +835,129 @@ def test_summary_and_package_made_again_keep_the_earlier(tmp_path, monkeypatch):
     assert not any(n.endswith(".tar.gz") for n in listed)
     with tarfile.open(ctl / "photos-26-archive.tar.gz") as tar:
         assert not any(m.name.endswith(".tar.gz") for m in tar.getmembers())
+
+
+# --- the tracks kept with the workspace (BLD-track_catalogue, BLD-track_window, BLD-withdrawn_track_points) -------
+
+def _track_rows(ctl, sql):
+    conn = sqlite3.connect(str(ctl / "photos-00-ingest.db"))
+    try:
+        return conn.execute(sql).fetchall()
+    finally:
+        conn.close()
+
+
+@pytest.mark.spec("RUL-track_points_kept", "RUL-database_archived", "BLD-track_catalogue", "BLD-workspace_database",
+                  test="TST-geotag_finalize-the_tracks_decided_by_are_sealed_in_the_archive")
+def test_the_tracks_decided_by_are_sealed_in_the_archive(tmp_path, monkeypatch):
+    """The track points the plan was decided by are in the database of record from the plan on — no scratch memo
+    beside it — and finalize archives them, in the database and in its image."""
+    import tarfile
+    ws, ctl = _ready_ws(tmp_path, monkeypatch)
+    _run(monkeypatch, ws, "plan")
+    assert not (ctl / "photos-00-track-memo.db").exists()
+    assert _track_rows(ctl, "SELECT f.path, COUNT(*) FROM gpx_track_points JOIN gpx_track_files f USING (track_id) "
+                            "GROUP BY f.path") == [("t.gpx", 2)]
+    _to_executed(monkeypatch, ws, ctl)
+    assert _run(monkeypatch, ws, "finalize") == 0
+    image = sqlite3.connect(str(ctl / "photos-26-geotag-ingest.db"))
+    try:
+        assert image.execute("SELECT lat, lon, time_utc FROM gpx_track_points ORDER BY point_index").fetchall() == [
+            (50.0, 4.0, "2024-07-03T12:00:00+00:00"), (51.0, 5.0, "2024-07-03T13:00:00+00:00")]
+    finally:
+        image.close()
+    with tarfile.open(ctl / "photos-26-archive.tar.gz") as tar:
+        names = {m.name for m in tar.getmembers()}
+    assert any(n.endswith("photos-00-ingest.db") for n in names) and any(n.endswith("photos-26-geotag-ingest.db")
+                                                                         for n in names)
+
+
+@pytest.mark.spec("RUL-withdrawn_track_points_kept", "BLD-withdrawn_track_points", "RUL-gone_track_told",
+                  test="TST-geotag_finalize-execute_marks_the_tracks_it_times_photos_by")
+def test_execute_marks_the_tracks_it_times_photos_by(tmp_path, monkeypatch):
+    """The offset the camera's own GPS gave rests on t.gpx: execute records it as used, and when the file is taken
+    out the tracks, catalogued again as a plan does, name it and keep its points, withdrawn."""
+    ws, ctl = _ready_ws(tmp_path, monkeypatch)
+    _to_executed(monkeypatch, ws, ctl)
+    plan = json.load(open(ctl / "photos-24-executable-plan.json"))
+    assert _track_rows(ctl, "SELECT u.plan_id, f.path FROM gpx_track_use u JOIN gpx_track_files f USING (track_id)") \
+        == [(plan["plan_id"], "t.gpx")]
+    gpx = cal.selected_gpx_root()
+    os.remove(os.path.join(gpx, "t.gpx"))
+    again = cal.GeotagWorkflow(str(ws)).plan_tracks(plan, keep=True)
+    assert again.gone == ["t.gpx"] and any("t.gpx" in w and "withdrawn" in w for w in again.warnings)
+    assert not again.points
+    assert _track_rows(ctl, "SELECT f.withdrawn, COUNT(*) FROM gpx_track_points JOIN gpx_track_files f "
+                            "USING (track_id) GROUP BY f.track_id") == [(1, 2)]
+
+
+@pytest.mark.spec("RUL-sealing_needs_no_tracks", "RUL-finalize_requires_plan_still_holds", "BLD-track_window",
+                  test="TST-geotag_finalize-finalize_seals_without_the_tracks_folder")
+def test_finalize_seals_without_the_tracks_folder(tmp_path, monkeypatch):
+    """Finalize seals what the workspace keeps: with the tracks folder gone after execute it packages all the same,
+    and never builds the tracks from gpx_root."""
+    ws, ctl = _ready_ws(tmp_path, monkeypatch)
+    _to_executed(monkeypatch, ws, ctl)
+    gpx = cal.selected_gpx_root()
+    os.rename(gpx, gpx + "-unmounted")
+    real = cal.GPXIndex.build
+    monkeypatch.setattr(cal.GPXIndex, "build", lambda self, *a, **k: (k.get("read") is False or pytest.fail(
+        "finalize read gpx_root")) and real(self, *a, **k))
+    assert _run(monkeypatch, ws, "finalize") == 0
+    assert (ctl / "photos-26-archive.tar.gz").exists()
+
+
+@pytest.mark.spec("RUL-tracks_elsewhere_restale_nothing", "RUL-tracks_in_dependencies", "BLD-track_window", "BLD-gpx_root_missing",
+                  test="TST-geotag_finalize-execute_checks_the_tracks_over_the_plan_s_window")
+def test_execute_checks_the_tracks_over_the_plan_s_window(tmp_path, monkeypatch):
+    """The plan records the window its tracks' fingerprint is of; execute takes the tracks again over it: a track of
+    another year added since stales nothing, a point moved inside it stales the plan."""
+    ws, ctl = _ready_ws(tmp_path, monkeypatch)
+    _run(monkeypatch, ws, "plan")
+    p = ctl / "photos-21-time-decisions.json"; p.write_text(p.read_text())
+    _run(monkeypatch, ws, "plan")
+    plan = json.load(open(ctl / "photos-24-executable-plan.json"))
+    assert cal.valid_window(plan["depends_on"]["gpx_window"])
+    gpx = cal.selected_gpx_root()
+    with open(os.path.join(gpx, "2019.gpx"), "w") as f:
+        f.write('<gpx xmlns="http://www.topografix.com/GPX/1/1"><trk><trkseg>'
+                '<trkpt lat="50.0" lon="4.0"><time>2019-07-03T12:00:00Z</time></trkpt></trkseg></trk></gpx>')
+    wf = cal.GeotagWorkflow(str(ws)); wf.preflight(for_execute=True)
+    assert wf.revalidate_plan(plan, wf.plan_tracks(plan)) == []
+    t = os.path.join(gpx, "t.gpx")
+    with open(t) as f:
+        moved = f.read().replace('lat="51.0"', 'lat="51.5"')
+    with open(t, "w") as f:
+        f.write(moved)
+    assert any("gpx_fingerprint" in s for s in wf.revalidate_plan(plan, wf.plan_tracks(plan)))
+    os.rename(gpx, gpx + "-unmounted")                                    # not there: cannot be checked
+    assert any("cannot be checked" in s for s in wf.revalidate_plan(plan, wf.plan_tracks(plan)))
+    os.rename(gpx + "-unmounted", gpx)
+    del plan["depends_on"]["gpx_window"]
+    assert any("gpx_window" in s for s in wf.revalidate_plan(plan, wf.plan_tracks(plan)))
+
+
+@pytest.mark.skipif(hasattr(os, "geteuid") and os.geteuid() == 0, reason="root lists every folder")
+@pytest.mark.spec("RUL-unlisted_tracks_stop_geotag", "RUL-unchecked_counts_as_changed", "BLD-track_catalogue",
+                  test="TST-geotag_finalize-tracks_that_cannot_be_listed_stop_plan_and_execute")
+def test_tracks_that_cannot_be_listed_stop_plan_and_execute(tmp_path, monkeypatch, capsys):
+    """A tracks folder that cannot be listed cannot be checked: the plan stops on it, naming it, and execute finds the
+    plan stale, changing nothing."""
+    ws, ctl = _ready_ws(tmp_path, monkeypatch)
+    _run(monkeypatch, ws, "plan")
+    p = ctl / "photos-21-time-decisions.json"; p.write_text(p.read_text())
+    _run(monkeypatch, ws, "plan")
+    gpx = cal.selected_gpx_root()
+    plan = (ctl / "photos-24-executable-plan.json").read_bytes()
+    before = sorted(os.listdir(ws / BYDEST / "T"))
+    os.chmod(gpx, 0)
+    try:
+        capsys.readouterr()
+        assert _run(monkeypatch, ws, "execute") == 2
+        assert sorted(os.listdir(ws / BYDEST / "T")) == before
+        assert _run(monkeypatch, ws, "plan") == 2
+        said = capsys.readouterr()
+        assert "cannot be checked" in said.out + said.err and "cannot be seen" in said.out + said.err
+    finally:
+        os.chmod(gpx, 0o755)
+    assert (ctl / "photos-24-executable-plan.json").read_bytes() == plan

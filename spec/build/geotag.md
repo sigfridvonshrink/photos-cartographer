@@ -37,7 +37,7 @@ photos and `2-missing-metadata`.
 
 `photos-24-executable-plan.json` SHALL record in `depends_on` the SHA-256 of `photos-21`, `photos-22` and `photos-23`;
 the handoff's `content_fingerprint`; `config_fingerprint`, `code_fingerprint`, `camera_group_fingerprint`,
-`camera_group_key_version`, `gpx_fingerprint`, `metadata_field_set_version`, `filename_format_fingerprint`,
+`camera_group_key_version`, `gpx_fingerprint` with the `gpx_window` it is of, `metadata_field_set_version`, `filename_format_fingerprint`,
 `folders_fingerprint` and `media_extensions_fingerprint`; `resolved_utc_cache_fingerprint` and
 `prep_cache_fingerprint`; each photo's `media_preconditions`; and `planned_operation_fingerprint`. Execute recomputes
 all but the two cache fingerprints — vouched for by the records and handoff they were derived from, checked where they
@@ -153,7 +153,7 @@ executable runs on.
 :status: ruled
 :realises: RUL-missing_tracks_stop_geotag, RUL-no_tracks_no_stop, RUL-tracks_never_joined
 
-`geotag plan` SHALL stop before its first record, exit 2, when `gpx_root` is set and is not a directory; an empty `gpx_root`, or one holding no track, plans without tracks. The index keeps each file's points as a track of its own (`GPXIndex.tracks()`) and its SHA-256 (`file_sha`); placement and anchoring read the tracks one by one.
+`geotag plan` SHALL stop before its first record, exit 2, when `gpx_root` is set and is not a directory — `geotag execute` then finds its plan stale; an empty `gpx_root`, or one holding no track, plans without tracks. The index keeps each file's points as a track of its own (`GPXIndex.tracks()`) and its SHA-256 (`file_sha`); placement and anchoring read the tracks one by one.
 :::
 
 :::{bld} How tracks are ranked
@@ -162,6 +162,33 @@ executable runs on.
 :realises: RUL-tracks_ranked_by_folder, RUL-ranked_folder_missing_told, RUL-track_ranking_in_dependencies
 
 `gpx_track_precedence` SHALL be a list of folder names directly under `gpx_root`, best first, each once, a single path component not starting with `.` — else the configuration is refused; empty, every track ranks alike. `GPXIndex.rank` gives a track file the place of the first folder of its path under `gpx_root` in that list, and a file in no listed folder the list's length. A listed folder that is not a directory under `gpx_root`, or is a link, is the index's first warning. The list, as JSON, enters the tracks' `fingerprint`.
+:::
+
+:::{bld} The catalogue of the tracks, and the points kept
+:id: BLD-track_catalogue
+:status: ruled
+:realises: RUL-track_points_kept, RUL-gone_track_told, RUL-gone_track_not_used, RUL-unlisted_tracks_stop_geotag, RUL-reuse_valid_work
+:uses: BLD-workspace_database, BLD-track_window
+
+`GPXIndex` SHALL keep, in geotag's region of `photos-00-ingest.db`, a catalogue of every `*.gpx` file under `gpx_root` — `gpx_track_files`, one entry per file as it was read: its path under the root, the folder directly under the root it is filed in, the size, modification time and inode it was read at, the SHA-256 of its bytes, the parse version that read it, the first and last of its points' UTC times, the window its kept points cover, its warnings and why it could not be parsed, and whether it is withdrawn — and, in `gpx_track_points`, each entry's points within the window it covers, each with its UTC time, latitude, longitude, point index, track and segment. A file whose size, modification time and inode are its entry's is not read again unless the window has grown into the span from its first point to its last past what the entry covers; a new or changed file, or one the window has grown into, is read and parsed, and becomes the entry for its bytes, its kept points those of the window it covered grown by the new one. `geotag plan` writes the catalogue and its points outside the plan's operations, as it writes the resolved-UTC cache: they are what the track files hold, read again while the files are there, and decide nothing by themselves — the parse memo they replace was written the same way; `geotag execute` and `finalize` leave them as they are but for the marks of use ({need}`BLD-withdrawn_track_points`). A file catalogued and no longer under `gpx_root`, or no longer readable, leaves the index; one gone is named in a warning. A folder under `gpx_root` that cannot be listed stops `geotag plan`, exit 2, naming it, before anything is withdrawn, and makes the plan stale at `geotag execute`.
+:::
+
+:::{bld} The window of the tracks
+:id: BLD-track_window
+:status: ruled
+:realises: RUL-tracks_elsewhere_restale_nothing, RUL-track_points_kept, RUL-sealing_needs_no_tracks
+:uses: BLD-anchor_matching, BLD-offset_far_from_evidence, BLD-drift_validation, BLD-track_placement
+
+The tracks' window SHALL be the union of what each reader of the tracks reaches, from the reader's own settings, never a setting of its own: each photo's camera time, read as UTC, give or take `gpx_anchor_max_clock_error_seconds` and the larger of `gpx_direct_match_max_seconds` and `gpx_interpolation_max_gap_seconds` — offset inference, the far-from-evidence check, and a higher-ranked track covering an anchor candidate's time; each camera's photos of one day in one destination, from the first camera time to the last, give or take `drift_check_track_window_seconds` — the drift check falling back on the camera's clock; once photos-21 is complete, each drift bucket's photos at their corrected times, from the first to the last, give or take `drift_check_track_window_seconds`; and once photos-22 is complete, each photo placement places, at its corrected time, give or take the largest of `gpx_direct_match_max_seconds`, `gpx_interpolation_max_gap_seconds`, and `gpx_extrapolation_max_seconds` with `gpx_extrapolation_heading_seconds`. A span is of whole seconds since the epoch, both ends in it. `geotag plan` indexes the first two before photos-21 and widens the index before photos-22 and again before photos-23, each record's `gpx_fingerprint` that of the window it was made in. `photos-24-executable-plan.json` records its window in `depends_on` as `gpx_window`, a list of `[start, end]`: `geotag execute` indexes the tracks under `gpx_root` over it, leaving the catalogue as it was, and `geotag finalize` the points the catalogue keeps, never reading `gpx_root`; a plan whose `gpx_window` is missing or not such a list is stale. Past the window a reader finds no track: the far-from-evidence check reports none within reach where one lies past it, the skipped-frame reason `outside_time_window` sees only the window's points, and an unplaced photo's reason measures to the window's points.
+:::
+
+:::{bld} The tracks an executed plan used, withdrawn and kept
+:id: BLD-withdrawn_track_points
+:status: ruled
+:realises: RUL-withdrawn_track_points_kept
+:uses: BLD-track_catalogue
+
+`geotag execute` SHALL record in `gpx_track_use`, after revalidation and before the first write, the plan's id with each current catalogue entry by which the plan places or times photos: the track a GPS write's provenance names; for each cell of photos-21 whose offset the camera's own GPS gave, the tracks of its anchors within `gpx_anchor_offset_spread_max_seconds` of the offset — of every anchor where none is — and those of its `anchored_by`; and the `tracks` of each cell of photos-22 whose drift offset is in effect. An entry no longer its file's — the file gone, changed, or unreadable — is kept with its points, `withdrawn` 1, when `gpx_track_use` names it, and deleted with them when not. A withdrawn entry is not indexed; the file back with the same bytes makes it its file's again.
 :::
 
 
@@ -659,5 +686,5 @@ photo, to proceed without it.
 :status: ruled
 :realises: RUL-finalize_requires_success, RUL-finalize_checks_photos, RUL-finalize_reports_placement, RUL-unlocated_logged, RUL-placement_recorded_with_its_track
 
-`geotag finalize` SHALL refuse, writing nothing, unless `photos-24-executable-plan.json` is `ready`, `photos-25-execution-summary.json` is `success` for the same `plan_id`, every dependency of the plan but the handoff still holds — the handoff left out because prep, run after execute, records geotag's own writes and renames in it — and every photo under `6-photos-by-dest` is one of the plan's, at its final path, with the size and modification time the journal's `media_after` records for it, or the plan's `media_preconditions` for a photo the plan had nothing to do to. It prints the plan's `placement` and writes it into the archive manifest; the log gives each photo in `left_unlocated` a `left_unlocated` step citing its decision, and each position from the tracks its `gpx_file` and `at_utc`.
+`geotag finalize` SHALL refuse, writing nothing, unless `photos-24-executable-plan.json` is `ready`, `photos-25-execution-summary.json` is `success` for the same `plan_id`, every dependency of the plan but the handoff still holds — the handoff left out because prep, run after execute, records geotag's own writes and renames in it, and the tracks taken as the catalogue keeps them ({need}`BLD-track_window`) — and every photo under `6-photos-by-dest` is one of the plan's, at its final path, with the size and modification time the journal's `media_after` records for it, or the plan's `media_preconditions` for a photo the plan had nothing to do to. It prints the plan's `placement` and writes it into the archive manifest; the log gives each photo in `left_unlocated` a `left_unlocated` step citing its decision, and each position from the tracks its `gpx_file` and `at_utc`.
 :::

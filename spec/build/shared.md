@@ -262,7 +262,6 @@ The control records SHALL be these files in `.photos-ingest/` ({need}`DEF-archiv
   photos-00-sealed.json            terminal/sealed marker, written by a successful merge ALONGSIDE the guard (a separate file, not a field inside the guard) — its presence seals the workspace (BLD-seal_marker)
   photos-00-ingest.db              SQLite identity/metadata cache + derived caches (live working DB, BLD-workspace_database)
   photos-00-plan-memo.db           prep-phase scratch: plan memo, what planning read of each media file (disposable, NOT part of the record)
-  photos-00-track-memo.db          geotag-phase scratch: each track file's parsed points, by the SHA-256 of its bytes (disposable, NOT part of the record)
   photos-15-prep-ingest.db         prep-phase artifact: DB backup snapshot, end of prep (BLD-database_images)
   journal-*.json                   execution journals
   photos-10-prep-plan.json         prep-phase artifact: prep plan (written by `plan`, consumed by `dry-run`/`execute`; see "Canonical plan persistence" below)
@@ -520,7 +519,7 @@ configured format at plan once a file outside the inbox carries a timestamp name
 The tracks' location SHALL be the configuration key `gpx_root`: a path, absolute or relative to the workspace, resolved
 through links before use; empty means no tracks. It MAY be anywhere outside `0-sources` … `6-photos-by-dest` — on any
 disk, or under the control directory, such as `.photos-ingest/gpx/`, which prep's skip of `.photos-ingest/` already keeps
-out of the scan. Geotag reads every `*.gpx` file beneath it. The value and the matching thresholds are read by geotag;
+out of the scan. Geotag catalogues every `*.gpx` file beneath it ({need}`BLD-track_catalogue`). The value and the matching thresholds are read by geotag;
 their detail is {need}`BLD-track_points` and {need}`BLD-anchor_matching`.
 :::
 
@@ -557,9 +556,11 @@ Prep SHALL raise one blocker for each track file it inventories, naming it, and 
 :status: ruled
 :realises: RUL-tracks_in_dependencies
 
-The GPX fingerprint SHALL be a SHA-256 over the resolved `gpx_root`, a version tag, and, in sorted order, each `*.gpx`
-file's path relative to the root and the SHA-256 of its bytes, then every point read from them, in time order. An empty `gpx_root`, and a `gpx_root` that is not a
-directory, each give a fixed value of their own, the second with a warning. It is recorded as `gpx_fingerprint` in the
+The GPX fingerprint SHALL be a SHA-256 over a version tag, the ranking of the tracks, and every point in the tracks'
+window ({need}`BLD-track_window`), in time order, each with its time, position, file under `gpx_root`, index, track and
+segment — so a track file's bytes outside the window, and the root's own path, enter it not at all. An empty
+`gpx_root`, a `gpx_root` that is not a directory, and one with a folder that cannot be listed, each give a fixed value
+of their own, the last two with a warning. It is recorded as `gpx_fingerprint` in the
 `depends_on` of `photos-21-time-decisions.json`, `photos-22-gps-drift-validation.json`, `photos-23-gps-decisions.json`
 and `photos-24-executable-plan.json`, and checked before each is used.
 :::
@@ -737,9 +738,8 @@ modification time are unchanged, carrying a moved file's identity forward withou
 ({need}`RUL-plan_memo_kept`); geotag reads no photo,
 taking every photo's metadata from prep, works out its results again on each run — a result that comes out the same
 leaving everything that depends on it as it is — keeps each decision whose target is unchanged
-({need}`RUL-decision_kept`), and reads every track file whole for its fingerprint but parses only one whose bytes it has
-not parsed before, taking the
-rest from its track memo, `photos-00-track-memo.db`; merge, a library file's fingerprint while its size and
+({need}`RUL-decision_kept`), and reads only a track file new or changed since the catalogue recorded it, or one the
+tracks' window has grown into, taking the rest from the points the catalogue keeps ({need}`BLD-track_catalogue`); merge, a library file's fingerprint while its size and
 modification time are unchanged ({need}`BLD-library_file_fingerprinted`). Fingerprinting (ImageMagick `identify`,
 `ffmpeg`), metadata extraction (`exiftool`) and GPX parsing thus run only for new or changed inputs. Each phase's own
 consequences are in its spec:
@@ -886,7 +886,7 @@ the archival package reads them, and is no write.
 
 `geotag finalize` SHALL write `photos-26-complete-log.json` and the database snapshot `photos-26-geotag-ingest.db`, then
 list every file of the control directory but the transient ones — locks, `.tmp-` files, SQLite's `-journal` files, the
-plan and track memos `photos-00-plan-memo.db` and `photos-00-track-memo.db`, and any `*-archive.tar.gz` or its `-NNN` copy — with its SHA-256 and path in
+plan memo `photos-00-plan-memo.db`, and any `*-archive.tar.gz` or its `-NNN` copy — with its SHA-256 and path in
 `photos-26-archive-manifest.json`, recording the workspace's identity — the init run id prep wrote in the guard — with
 the folder's name beside it, and the plan and execution ids, and archive those files and the manifest into
 `photos-26-archive.tar.gz` in the control directory, by a temporary name and an atomic rename — writing nothing else,
@@ -982,11 +982,12 @@ The workspace database SHALL be SQLite, `photos-00-ingest.db` in `.photos-ingest
 metadata caches (`file_cache`, `metadata_cache`) and their version row (`meta`), through its single-writer path (execute's main
 thread); geotag, of the resolved-UTC cache (`resolved_utc_cache`), the values each photo held before geotag first wrote
 to it and the times geotag wrote to it (`original_values`, {need}`BLD-original_values_pinned`,
-{need}`BLD-time_written_recorded`); merge, of the library-file fingerprint cache
+{need}`BLD-time_written_recorded`), and the catalogue of the tracks with the points kept and the tracks each executed plan
+used (`gpx_track_files`, `gpx_track_points`, `gpx_track_use`, {need}`BLD-track_catalogue`); merge, of the library-file fingerprint cache
 (`library_fingerprint_cache`, keyed by the library file's absolute path with its size and modification time). Where each
 photo landed is in merge's
-JSON records, not the database. The other databases are scratch, re-derivable and deletable at any time: prep's
-plan memo, `photos-00-plan-memo.db` ({need}`BLD-plan_memo`), and geotag's track memo, `photos-00-track-memo.db`.
+JSON records, not the database. The other database is scratch, re-derivable and deletable at any time: prep's
+plan memo, `photos-00-plan-memo.db` ({need}`BLD-plan_memo`).
 :::
 
 :::{bld} The database images and how each is captured

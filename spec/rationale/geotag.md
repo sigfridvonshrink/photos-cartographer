@@ -416,9 +416,51 @@ it would cost a question for something the ranking has settled; recording and co
 :status: ruled
 :forced: yes
 :follows_from: RAT-folder_gps_fallback, RAT-decisions_reread_cache_only
-:justifies: RUL-missing_tracks_stop_geotag, RUL-no_tracks_no_stop
+:justifies: RUL-missing_tracks_stop_geotag, RUL-no_tracks_no_stop, RUL-unlisted_tracks_stop_geotag
 
-A library with no tracks at all is a supported case: every decision falls to its other sources. A tracks folder that is named and not there is something else — a volume not mounted — and planning on as if there were none would place by folder fallback every photo the tracks place precisely, and drop the confirmations given against them. Nothing in the result would show it. Stopping costs one mount command.
+A library with no tracks at all is a supported case: every decision falls to its other sources. A tracks folder that is named and not there is something else — a volume not mounted — and planning on as if there were none would place by folder fallback every photo the tracks place precisely, and drop the confirmations given against them. Nothing in the result would show it. Stopping costs one mount command. A folder of the tracks that cannot be listed is the same at every step — at execute too, where the plan's tracks are checked again: what it holds cannot be seen, and taking it for empty would withdraw every track in it.
+:::
+
+:::{rat} The evidence stays with what it decided
+:id: RAT-tracks_kept_with_workspace
+:status: ruled
+:forced: no
+:follows_from: RAT-database_is_record, CHC-photos_matter
+:justifies: RUL-track_points_kept, RUL-withdrawn_track_points_kept, RUL-sealing_needs_no_tracks
+
+A placement or a clock offset rests on track points, and the tracks folder is the user's, outside the workspace: it is
+reorganised, pruned, moved to another disk. A sealed workspace that recorded only a track's fingerprint and name could no
+longer show why a photo was put where it was once the folder had changed. The owner: *"I will have always the gps data
+used during the process, in the form used during the decisioning, which would make the workspace truly
+self-contained."* Kept in the database of record, the points are archived and sealed with every other record, and
+sealing then needs nothing outside the workspace. A track taken out after its plan was executed takes nothing out of the
+evidence of what was written into the photos: the points stay, withdrawn.
+:::
+
+:::{rat} The tracks are read where the photos reach them
+:id: RAT-tracks_read_where_reached
+:status: ruled
+:forced: no
+:follows_from: RAT-tracks_change_the_answers, RAT-remainder_worklist
+:justifies: RUL-tracks_elsewhere_restale_nothing
+
+A tracks folder holds years of recordings, and a workspace is one trip. Reading every track file whole on every run,
+and fingerprinting it all, makes the whole folder a dependency of the trip: a walk recorded last week restales the
+decisions of a holiday three years ago, and every decision asks again for no reason in its evidence. Only the points a
+decision can reach change it; a track unchanged since it was last read need not be read again.
+:::
+
+:::{rat} A track is taken out because it is someone else's
+:id: RAT-gone_track_withdrawn
+:status: ruled
+:forced: no
+:follows_from: RAT-track_is_one_device, CHC-ask_only_what_data_cannot_settle
+:justifies: RUL-gone_track_told, RUL-gone_track_not_used
+
+The one reason a user takes a track file out of the tracks folder is that it is not this trip's: a companion's phone
+recording the same afternoon elsewhere, which keeps photos from being placed. Taking the file out is the user's answer,
+and geotag decides as if it never was; but a file that has merely vanished — a folder renamed, a sync gone wrong — would
+change positions as silently, so each one gone is named.
 :::
 
 :::{rat} A break is where nothing is known

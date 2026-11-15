@@ -2394,7 +2394,7 @@ never writing a log that looks whole but reflects only the last run.
 
 The **workspace database** is the one database of record: what cartographer knows about the workspace's media — each
 file's identity and metadata, what each phase derived from them, the values a photo held before geotag first changed
-it, and the fingerprints of library files merge has read.
+it, the track points geotag decided by, and the fingerprints of library files merge has read.
 :::
 
 :::{def} A phase's database image
