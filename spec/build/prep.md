@@ -31,7 +31,9 @@ that holds one; prep reads the files there for their fingerprint and metadata on
 :realises: RUL-initialized_marked_last
 
 The mark SHALL be the file `photos-00-workspace-guard` in `.photos-ingest/`, which the initializing run's execute writes
-after every other operation has succeeded; the managed folders it creates are `0-sources` … `6-photos-by-dest`.
+after every other operation has succeeded; the managed folders it creates are `0-sources` … `6-photos-by-dest`. It
+holds `initialized`, `tool` and `initialized_by_run`, the initializing plan's id, which the archival package's manifest
+records as the workspace's identity ({need}`BLD-archive_manifest`).
 :::
 
 :::{bld} A taken inbox path takes the next `-NNN`
@@ -478,7 +480,8 @@ plan's summary carries the quarantine's footprint. An age below one day is refus
 Prep's execute SHALL write `photos-11-handoff.json` last but for the database image and the mark, through a temporary
 file renamed over it, holding: `schema_version`, `tool`, `run_metadata` (plan and execution ids), `cache_fingerprint`,
 `folders_scanned` (the managed folders but `1-strays`, each with whether prep may change it), `files` (sorted, each with
-its path, size, `mtime_ns`, media class, fingerprint and its status, folder and metadata),
+its path, size, `mtime_ns`, `inode` — as the file's database row last recorded it — media class, fingerprint and its
+status, folder and metadata),
 `filename_timestamp_format`, `camera_groups`, `destination_folders` ({need}`BLD-handoff_grouping_facts`),
 `diagnostics` (duplicates, the other files quarantined, blockers, warnings, quarantine footprint), `depends_on` (configuration, prep log, journal,
 final inventory, metadata extractor, plan and database versions, image engine) and `content_fingerprint`.
@@ -492,7 +495,8 @@ final inventory, metadata extractor, plan and database versions, image engine) a
 `content_fingerprint` SHALL be the SHA-256 of the handoff serialized with sorted keys, without the keys `run_metadata`,
 `diagnostics`, `execution_journal`, `prep_log`, `content_fingerprint`, `cache_freshness` and `conflicts_or_duplicates`
 wherever they appear — the last two being each camera group's and destination folder's run-scoped counts and
-duplicates.
+duplicates. Each file's `inode` is in what it covers, as it is in `cache_fingerprint`: a file whose row is written again
+at another inode changes both, though its size, time and fingerprint do not.
 :::
 
 :::{bld} An unreadable `photos-15-prep-log.json` is a blocker

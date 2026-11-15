@@ -294,6 +294,24 @@ def test_handoff_content_fingerprint_ignores_run_metadata_and_audit():
         {**base, "camera_groups": [{"group_key": "g2", "cache_freshness": {"metadata_extracted_ok": 1}}]}) != fp1
 
 
+@pytest.mark.spec("BLD-handoff_content", "BLD-handoff_content_fingerprint", test="TST-handoff-a_files_inode_is_in_the_handoff_and_its_fingerprints")
+def test_a_files_inode_is_in_the_handoff_and_its_fingerprints(tmp_path, monkeypatch):
+    """Each file of the handoff carries its inode as its database row recorded it, and both the content fingerprint
+    and the inventory's fingerprint cover it: another inode alone, size, time and fingerprint the same, changes both."""
+    _mock(monkeypatch)
+    ws = _ws(tmp_path)
+    (ws / "0-sources" / "a.jpg").write_bytes(b"AAAA")
+    _run(ws)
+    h = _handoff(ws)
+    (f,) = [f for f in h["files"] if f["relative_path"].endswith(".jpg")]
+    assert f["inode"] == os.stat(ws / f["relative_path"]).st_ino
+    moved = json.loads(json.dumps(h))
+    (g,) = [g for g in moved["files"] if g["relative_path"] == f["relative_path"]]
+    g["inode"] += 1
+    assert utils.handoff_content_fingerprint(moved) != h["content_fingerprint"]
+    assert prep.OperationPlanner.compute_index_fingerprint(moved["files"]) != h["cache_fingerprint"]
+
+
 @pytest.mark.spec("RUL-run_only_refresh_restales_nothing", "RUL-handoff_deterministic", test="TST-handoff-handoff_content_fingerprint_stable_across_real_noop_rerun")
 def test_handoff_content_fingerprint_stable_across_real_noop_rerun(tmp_path, monkeypatch):
     """End-to-end (RUL-run_only_refresh_restales_nothing): a second prep run that changes nothing organized produces the

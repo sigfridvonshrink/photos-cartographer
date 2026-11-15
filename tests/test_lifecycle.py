@@ -109,6 +109,19 @@ def test_init_creates_structure_and_moves_dump_structure_preserved(tmp_path, mon
     assert not _plan(ws).blockers
 
 
+@pytest.mark.spec("BLD-workspace_guard", test="TST-lifecycle-the_guard_names_the_run_that_initialized_the_workspace")
+def test_the_guard_names_the_run_that_initialized_the_workspace(tmp_path, monkeypatch):
+    """The guard holds the initializing plan's id, which is the workspace's identity in the archival package."""
+    _install(monkeypatch)
+    ws = _bare(tmp_path)
+    (ws / "photo.jpg").write_bytes(b"img")
+    plan = _plan(ws)
+    prep.PlanExecutor(str(ws)).execute(plan)
+    with open(_guard(ws)) as f:
+        assert json.load(f) == {"initialized": True, "tool": "photos-1-prep", "initialized_by_run": plan.plan_id}
+    assert utils.workspace_id(str(ws)) == plan.plan_id
+
+
 @pytest.mark.spec("RUL-init_taken_place_suffixed", "BLD-init_move_suffix", test="TST-lifecycle-init_move_to_a_taken_inbox_path_is_suffixed")
 def test_init_move_to_a_taken_inbox_path_is_suffixed(tmp_path, monkeypatch):
     # The inbox already holds MyDump/a.jpg (an interrupted first run moved it), and the dump holds another file
