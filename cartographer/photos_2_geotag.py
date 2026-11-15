@@ -62,7 +62,7 @@ from .photos_utils import (fingerprint_method_blocker, links_under, replace_dura
     control_archive_members, write_control_archive, workspace_id,
     WorkspaceLock, ProgressCoordinator,
 )
-from .reporting import get_reporter, emit_next_step
+from .reporting import get_reporter, emit_next_step, next_steps_muted
 
 TIME_DECISIONS_ARTIFACT = "photos-21-time-decisions.json"
 DRIFT_VALIDATION_ARTIFACT = "photos-22-gps-drift-validation.json"
@@ -2582,14 +2582,20 @@ def _auto_reprep_for_clean_move(args, workspace_root, reporter):
     for cmd in ("plan", "execute"):
         prep_args = types.SimpleNamespace(command=cmd, jobs=getattr(args, "jobs", 4))
         try:
-            photos_1_prep._run_locked(prep_args, workspace_root, reporter)   # under geotag's lock
+            # Prep's own closing `Next:` lines are held back: they name prep's next command where geotag goes on
+            # (or stops) by itself, so only geotag's says what to do (output affordance;
+            # test_auto_reprep_prints_only_geotag_s_next_step).
+            with next_steps_muted():
+                photos_1_prep._run_locked(prep_args, workspace_root, reporter)   # under geotag's lock
         except SystemExit as e:
             if e.code not in (0, None):
                 reporter.error(f"Auto prep {cmd} did not succeed (exit {e.code}). Resolve it and re-run "
                                "geotag — nothing was geotagged.")
+                emit_next_step(reporter, "resolve what prep reported above, then re-run `geotag plan`.")
                 sys.exit(2)
         except Exception as e:
             reporter.error(f"Auto prep {cmd} failed: {e}. Resolve it and re-run geotag — nothing was geotagged.")
+            emit_next_step(reporter, "resolve what prep reported above, then re-run `geotag plan`.")
             sys.exit(2)
         if cmd == "plan":
             _stop_unless_prep_plan_records_only(workspace_root, reporter)

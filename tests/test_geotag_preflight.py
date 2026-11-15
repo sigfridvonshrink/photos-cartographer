@@ -458,6 +458,34 @@ def test_auto_reprep_runs_prep_for_a_photo_changed_since_prep(tmp_path, monkeypa
     assert any("is out of date" in m for m in rep.logs), rep.logs
 
 
+@pytest.mark.parametrize("fail", [None, "execute"])
+def test_auto_reprep_prints_only_geotag_s_next_step(tmp_path, monkeypatch, fail):
+    """When geotag plan runs prep's plan and execute itself, prep's own closing `Next:` lines are held back —
+    they name prep's next command where geotag goes on, or stops, by itself — and only geotag's is printed."""
+    import photos_1_prep as prep
+    from cartographer.reporting import emit_next_step
+    ws = _ws(tmp_path, bydest=("6-photos-by-dest/Trip/a.jpg",), handoff_files=[])   # a clean move to record
+
+    def fake_prep_run_locked(a, workspace_root, reporter):
+        emit_next_step(reporter, f"`prep {a.command}` said so")
+        if a.command == "plan":
+            _write_prep_plan(workspace_root, _RECORDS_ONLY)
+        if a.command == fail:
+            raise SystemExit(2)
+    monkeypatch.setattr(prep, "_run_locked", fake_prep_run_locked)
+    rep = _CollectRep()
+    if fail:
+        with pytest.raises(SystemExit):
+            cal._auto_reprep_for_clean_move(_types.SimpleNamespace(command="plan", jobs=4), str(ws), rep)
+    else:
+        cal._auto_reprep_for_clean_move(_types.SimpleNamespace(command="plan", jobs=4), str(ws), rep)
+    nexts = [m for m in rep.logs if m.lstrip("\n").startswith("Next:")]
+    assert not any("said so" in m for m in nexts), nexts
+    assert nexts == ([] if fail is None else ["\nNext: resolve what prep reported above, then re-run `geotag plan`."])
+    emit_next_step(rep, "after")                                        # held back only while prep runs
+    assert rep.logs[-1] == "\nNext: after"
+
+
 def test_auto_reprep_skips_when_nothing_pending(tmp_path, monkeypatch):
     calls, _ = _autoreprep(_ws(tmp_path), monkeypatch)               # a.jpg recorded → nothing pending
     assert calls == []
