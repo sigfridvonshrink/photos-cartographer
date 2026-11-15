@@ -484,11 +484,29 @@ def get_reporter() -> Reporter:
     return _REPORTER
 
 
+_NEXT_STEPS_MUTED = 0     # >0 while one phase runs another's commands: only the outer one says what to do next
+
+
 def emit_next_step(reporter, text: str) -> None:
     """Print the closing 'what to do next' guidance — the last line of a phase command, so the operator
     is never left guessing the next move. A single uniform `Next: …` line, on stdout, shared by the CLI
-    and the console (both drive the same phase `run()`)."""
+    and the console (both drive the same phase `run()`). Nothing while :func:`next_steps_muted` holds."""
+    if _NEXT_STEPS_MUTED:
+        return
     reporter.log(f"\nNext: {text}", stream="stdout")
+
+
+@contextmanager
+def next_steps_muted() -> Iterator[None]:
+    """Hold back every `Next: …` line printed inside — for a phase running another's commands as a step of its
+    own (geotag plan running prep's plan and execute), whose own `Next:` is the one that applies. A global like
+    the reporter, for the same reason: the whole-run lock serializes runs."""
+    global _NEXT_STEPS_MUTED
+    _NEXT_STEPS_MUTED += 1
+    try:
+        yield
+    finally:
+        _NEXT_STEPS_MUTED -= 1
 
 
 def set_reporter(reporter: Optional[Reporter]) -> Optional[Reporter]:

@@ -465,6 +465,16 @@ def test_dev_subfolder_blocks(tmp_path):
     assert any("development subfolder" in b for b in blockers), blockers
 
 
+@pytest.mark.spec("RUL-development_subfolder_any_case", "BLD-development_subfolder_case",
+                  test="TST-merge_preflight-dev_subfolder_of_any_case_blocks")
+@pytest.mark.parametrize("name", ["JPG", "JpG", "Tif"])
+def test_dev_subfolder_of_any_case_blocks(tmp_path, name):
+    ws, _ = _make(tmp_path)
+    (ws / "6-photos-by-dest" / "Trip" / name).mkdir(parents=True)
+    blockers, _, _ = _pf(ws)
+    assert any("development subfolder" in b and f"Trip/{name}" in b for b in blockers), blockers
+
+
 def test_bydest_symlink_blocks(tmp_path):
     ws, _ = _make(tmp_path)
     os.symlink(str(tmp_path), str(ws / "6-photos-by-dest" / "Trip" / "link"))

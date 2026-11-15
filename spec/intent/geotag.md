@@ -80,6 +80,18 @@ Geotag SHALL change only files in photos by destination — never a file in any 
 Geotag SHALL NOT plan, execute or finalize while a photo in photos by destination has no fingerprint.
 :::
 
+:::{rul} Geotag plans only from metadata read as this build reads it
+:id: RUL-handoff_fields_of_this_build
+:status: ruled
+:criticality: med
+:anti: yes
+:verify: required
+:uses: DEF-geotag
+
+Geotag SHALL NOT plan from prep's record of a photo whose metadata was read as another version of cartographer reads
+it — another set of fields, or another order of finding them.
+:::
+
 :::{rul} Geotag runs prep itself only to record a sort
 :id: RUL-auto_reprep_moves_no_media
 :status: ruled
@@ -1566,6 +1578,19 @@ A photo's changed content SHALL stay open to accept until the photo's changes ar
 Geotag SHALL NOT write to a photo while the image engine is not the one the photos' fingerprints were taken with.
 :::
 
+:::{rul} A record of an earlier execution that cannot be read stops geotag
+:id: RUL-unreadable_execution_record_stops
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+:refines: RUL-every_change_journaled
+:uses: DEF-geotag
+
+Geotag's execution and finalize SHALL NOT take a record of an earlier execution that they cannot read for none: they
+stop before they change or write anything, naming it.
+:::
+
 
 ## 21. Finalize
 
@@ -1633,4 +1658,27 @@ Finalize SHALL keep the plan's count of how every photo came by its position in 
 :refines: RUL-log_cites_decisions
 
 A photo the user left unlocated SHALL have that in its log, with the decision that left it so.
+:::
+
+:::{rul} Geotag's records of a run are set aside, never overwritten
+:id: RUL-geotag_run_records_kept
+:status: ruled
+:criticality: med
+:anti: yes
+:verify: required
+:uses: DEF-finalize
+
+Geotag SHALL never overwrite an execution's summary or finalize's package: made again, the earlier one is first set
+aside, recoverably.
+:::
+
+:::{rul} Finalize needs no tool it never runs
+:id: RUL-finalize_needs_no_metadata_tool
+:status: ruled
+:criticality: med
+:anti: yes
+:verify: required
+:uses: DEF-finalize
+
+Finalize SHALL NOT refuse for want of the tool geotag reads and writes photos' metadata with, which it never runs.
 :::

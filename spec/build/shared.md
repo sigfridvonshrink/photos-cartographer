@@ -418,6 +418,20 @@ the handoff manifest and SQLite ({need}`BLD-metadata_extraction`); geotag consum
 ({need}`BLD-known_camera_group`).
 :::
 
+:::{bld} Blank identity values
+:id: BLD-camera_identity_values
+:status: ruled
+:realises: RUL-prep_derives_camera_group, RUL-unidentified_files_solved_alone
+:uses: BLD-camera_group_key
+
+Each identity field a file holds — `BodySerialNumber`, `CameraSerialNumber`, `InternalSerialNumber`, `SerialNumber`,
+`Make`, `Model`, `OwnerName`, in that order — SHALL enter `camera_group_key` as its value's text with the blanks
+around it stripped, the parts joined by `|`: a blank value is an empty part, so a file whose only identity fields are
+blank has a key of empty parts (`""`, `"|"`, …), a camera group like any other; only a file holding none of them has
+`NO_IDENTITY_KEY` (`unknown`) — and one whose only field reads `unknown`, which is then taken for a file naming no
+camera ({need}`BLD-unidentified_files`).
+:::
+
 :::{bld} `CAMERA_GROUP_KEY_VERSION`
 :id: BLD-camera_group_key_version
 :status: ruled
@@ -622,6 +636,16 @@ development gate and the workspace's shape, and validate against the plan's own 
 re-prep gates ({need}`RUL-geotag_gates`, {need}`BLD-reprep_pending`); merge's preflight checks the inbox, the
 development gate and that photos by destination holds only photos ({need}`BLD-merge_preflight`). A development subfolder
 is one named in `destination_distribution_subfolders`. Geotag's preflight stops as well on a photo in `6-photos-by-dest` whose handoff record holds no fingerprint, named.
+:::
+
+:::{bld} A development subfolder's name, case folded
+:id: BLD-development_subfolder_case
+:status: ruled
+:realises: RUL-development_subfolder_any_case
+:uses: BLD-loop_gates
+
+Geotag's and merge's preflights SHALL take a folder under `6-photos-by-dest` for a development subfolder when its name,
+case folded, is one of `destination_distribution_subfolders`, case folded.
 :::
 
 :::{bld} Geotag marks what it wrote
@@ -862,7 +886,7 @@ the archival package reads them, and is no write.
 
 `geotag finalize` SHALL write `photos-26-complete-log.json` and the database snapshot `photos-26-geotag-ingest.db`, then
 list every file of the control directory but the transient ones — locks, `.tmp-` files, SQLite's `-journal` files, the
-plan and track memos `photos-00-plan-memo.db` and `photos-00-track-memo.db`, and any `*-archive.tar.gz` — with its SHA-256 and path in
+plan and track memos `photos-00-plan-memo.db` and `photos-00-track-memo.db`, and any `*-archive.tar.gz` or its `-NNN` copy — with its SHA-256 and path in
 `photos-26-archive-manifest.json`, recording the workspace's identity — the init run id prep wrote in the guard — with
 the folder's name beside it, and the plan and execution ids, and archive those files and the manifest into
 `photos-26-archive.tar.gz` in the control directory, by a temporary name and an atomic rename — writing nothing else,

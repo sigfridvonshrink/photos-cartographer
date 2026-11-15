@@ -626,6 +626,23 @@ def test_an_edit_made_since_the_plan_is_never_overwritten(tmp_path, monkeypatch)
     assert not cal._holds_writes({"GPSLatitude": 33.9}, {"GPSLatitude": 33.865143})
 
 
+@pytest.mark.spec("BLD-own_write_recognised", test="TST-geotag_execution-planned_tags_held_by_magnitude_text_or_absence")
+def test_planned_tags_held_by_magnitude_text_or_absence():
+    """The read-back test that tells geotag's own interrupted write from an edit: a coordinate equal in magnitude to
+    within a millionth of a degree, its sign left to the reference tag; any other tag equal as text; a tag planned
+    empty absent or empty."""
+    lat = {"GPSLatitude": 50.123456}
+    assert cal._holds_writes({"GPSLatitude": 50.1234569}, lat)                   # 0.9e-6 off: held
+    assert cal._holds_writes({"GPSLatitude": "-50.123456"}, lat)                 # sign aside, read as text
+    assert not cal._holds_writes({"GPSLatitude": 50.1234575}, lat)               # 1.5e-6 off: not held
+    assert not cal._holds_writes({"GPSLatitude": "north"}, lat) and not cal._holds_writes({}, lat)
+    t = {"DateTimeOriginal": "2024:07:03 14:00:00", "OffsetTimeOriginal": "+02:00"}
+    assert cal._holds_writes(dict(t), t)
+    assert not cal._holds_writes(dict(t, OffsetTimeOriginal="+0200"), t)          # text, not meaning
+    assert cal._holds_writes({"GPSLatitude": ""}, {"GPSLatitude": ""}) and cal._holds_writes({}, {"GPSLatitude": None})
+    assert not cal._holds_writes({"GPSLatitude": 0}, {"GPSLatitude": ""})         # a value where none was planned
+
+
 def test_apply_file_rename_skip_and_failure(tmp_path, monkeypatch):
     wf = cal.GeotagWorkflow(str(tmp_path))
     p = tmp_path / "a.arw"; p.write_bytes(b"x")
@@ -673,15 +690,16 @@ def test_a_plan_made_by_other_code_is_stale(tmp_path, monkeypatch):
         assert any("code_fingerprint" in s for s in wf.revalidate_plan(pk, gpx)), recorded
 
 
-def test_corrupt_journal_is_ignored(tmp_path, monkeypatch):
+def test_corrupt_journal_stops_execution(tmp_path, monkeypatch):
     ws, ctl = _ready_ws(tmp_path, monkeypatch)
     _mock_tools(monkeypatch, ws)
-    # a corrupt journal must not crash execution (treated as empty -> a fresh apply)
+    # a corrupt journal is never taken for an empty one (RUL-unreadable_execution_record_stops)
     plan = json.load(open(ctl / "photos-24-executable-plan.json"))
     with open(utils.journal_path(str(ws), plan["plan_id"]), "w") as f:
         f.write("{corrupt")
-    assert _execute(monkeypatch, ws) == 0
-    assert _summary(ctl)["status"] == "success"
+    assert _execute(monkeypatch, ws) == 2
+    assert not (ctl / "photos-25-execution-summary.json").exists()
+    assert open(utils.journal_path(str(ws), plan["plan_id"])).read() == "{corrupt"
 
 
 @pytest.mark.spec("BLD-rename_planning", "BLD-geotag_execution",
@@ -725,12 +743,12 @@ def test_apply_file_already_renamed_resumes_without_journal(tmp_path, monkeypatc
     assert "is not this photo as planned" in r["blocker"]
 
 
-def test_corrupt_prior_summary_ignored(tmp_path, monkeypatch):
+def test_corrupt_prior_summary_stops_execution(tmp_path, monkeypatch):
     ws, ctl = _ready_ws(tmp_path, monkeypatch)
     _mock_tools(monkeypatch, ws)
-    (ctl / "photos-25-execution-summary.json").write_text("{corrupt")   # unreadable prior reconciliation
-    assert _execute(monkeypatch, ws) == 0                              # ignored -> a clean apply
-    assert _summary(ctl)["status"] == "success"
+    (ctl / "photos-25-execution-summary.json").write_text("{corrupt")   # unreadable: its acceptances unknown
+    assert _execute(monkeypatch, ws) == 2                              # never taken for none
+    assert (ctl / "photos-25-execution-summary.json").read_text() == "{corrupt"
 
 
 def test_execute_on_sealed_workspace_warns_and_blocks(tmp_path, monkeypatch):
@@ -798,6 +816,51 @@ def test_execute_aborts_when_required_snapshot_fails(tmp_path, monkeypatch):
     assert s["blockers"] and "snapshot failed" in s["blockers"][0]
 
 
+@pytest.mark.spec("BLD-execution_summary_written", "RUL-content_acceptance_stays_open",
+                  test="TST-geotag_execution-summary_written_only_by_a_run_that_executes")
+def test_summary_written_only_by_a_run_that_executes(tmp_path, monkeypatch):
+    """photos-25 is written by a run that applied the plan, or whose required snapshot failed — that one carrying
+    the mismatches still open, acceptances and all. A preflight refusal, a stale plan or an interrupt writes none:
+    the earlier summary stays as it was."""
+    zfs = {"enabled": True, "snapshots_required": True, "snapshot_prefix": "px-",
+           "datasets": {"workspace": "auto", "library": "auto"}}
+    ws, ctl = _ready_ws(tmp_path, monkeypatch, zfs=zfs)
+    _mock_tools(monkeypatch, ws, content_changed=True); _mock_zfs(monkeypatch)
+    assert _execute(monkeypatch, ws) == 3                                 # applied: written, mismatches in it
+    sp = ctl / "photos-25-execution-summary.json"
+    s = _summary(ctl)
+    assert s["fingerprint_mismatches"]
+    for m in s["fingerprint_mismatches"]:
+        m["user_decision"]["accept_fingerprint_change"] = True
+    sp.write_text(json.dumps(s))
+    earlier = sp.read_bytes()
+
+    def unchanged():
+        return sp.read_bytes() == earlier and not list(ctl.glob("photos-25-execution-summary-*.json"))
+
+    (ws / "6-photos-by-dest" / "T" / "jpg").mkdir()                         # a preflight refusal
+    assert _execute(monkeypatch, ws) == 2 and unchanged()
+    (ws / "6-photos-by-dest" / "T" / "jpg").rmdir()
+    gd = ctl / "photos-23-gps-decisions.json"
+    held = gd.read_bytes()
+    gd.write_bytes(held + b" ")                                            # a stale plan
+    assert _execute(monkeypatch, ws) == 2 and unchanged()
+    gd.write_bytes(held)
+
+    def interrupted(*a, **k):
+        raise KeyboardInterrupt
+    with monkeypatch.context() as m:                                      # an interrupt while applying
+        m.setattr(cal.GeotagWorkflow, "_apply_file_contained", interrupted)
+        assert _execute(monkeypatch, ws) == 130 and unchanged()
+
+    _mock_zfs(monkeypatch, fail=True)                                     # a required snapshot that fails
+    assert _execute(monkeypatch, ws) == 2
+    s = _summary(ctl)
+    assert s["status"] == "rejected"
+    assert s["fingerprint_mismatches"] == json.loads(earlier)["fingerprint_mismatches"]   # acceptances kept
+    assert (ctl / "photos-25-execution-summary-001.json").read_bytes() == earlier
+
+
 @pytest.mark.spec("RUL-camera_classes_not_derivation",
                   test="TST-geotag_execution-reclassing_a_camera_group_changes_its_treatment_not_its_key")
 def test_reclassing_a_camera_group_changes_its_treatment_not_its_key(tmp_path, monkeypatch):
@@ -820,7 +883,12 @@ def test_reclassing_a_camera_group_changes_its_treatment_not_its_key(tmp_path, m
             assert not e.code, groups
         dest = json.load(open(ctl / "photos-21-time-decisions.json"))["destinations"]["6-photos-by-dest/T"]
         cells = dest.get("camera_group_time_decisions") or {}
-        seen.append((dest["camera_groups_present"], {k: c["camera_group_class"] for k, c in cells.items()}))
+        cache = cal.GeotagCache(str(ws))
+        try:
+            keys = sorted({r["camera_group"] for r in cache.get_rows()})   # the group each photo was resolved as
+        finally:
+            cache.close()
+        seen.append((keys, {k: c["camera_group_class"] for k, c in cells.items()}))
         assert json.load(open(ctl / "photos-24-executable-plan.json"))["status"] == "ready", groups
     assert seen == [([CAM], {CAM: "camera"}), ([CAM], {}), ([CAM], {CAM: "camera"})], seen
 

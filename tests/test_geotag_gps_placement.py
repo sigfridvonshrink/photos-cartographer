@@ -104,6 +104,42 @@ def test_extrapolation_past_window_blocked():
     assert cal.place_gps(_utc(12, 0, 0), g, CFG) is None               # 300 s before first > 120 (backward)
 
 
+@pytest.mark.spec("BLD-coordinate_precision", test="TST-geotag_gps_placement-coordinates_to_six_decimal_places")
+def test_coordinates_to_six_decimal_places():
+    """A position placed between two points, or projected past an end, is rounded to six decimal places; a direct
+    match is the track point as the track gives it; and a photo already holding a position to six places, under the
+    marker the write would carry, is written no position."""
+    g = _gpx([_pt(50.0, 4.0, 12, 0, 0), _pt(50.001, 4.001, 12, 1, 0)])
+    r = cal.place_gps(_utc(12, 0, 20), g, _cfg(gpx_direct_match_max_seconds=5.0))
+    assert r["method"] == "interpolated" and (r["lat"], r["lon"]) == (50.000333, 4.000333)
+    r = cal.place_gps(_utc(12, 1, 20), _gpx([_pt(50.0, 4.0, 12, 0, 0), _pt(50.0, 4.001, 12, 1, 0)]),
+                      _cfg(gpx_direct_match_max_seconds=5.0))
+    assert r["method"] == "extrapolated" and r["lon"] == 4.001333
+    r = cal.place_gps(_utc(12, 0, 0), _gpx([_pt(50.12345678, 4.98765432, 12, 0, 0)]), CFG)
+    assert r["method"] == "direct_match" and (r["lat"], r["lon"]) == (50.12345678, 4.98765432)
+    coord = {"lat": 50.000333, "lon": 4.000333, "method": "interpolated"}
+    f = {"relative_path": "a.jpg", "content_fingerprint": "fp", "size": 1, "mtime_ns": 1,
+         "held": {"lat": 50.0003334, "lon": 4.0003334, "method": "interpolated"}}
+    assert cal.plan_file_ops(f, None, None, "gpx_interpolation", coord, None) == []          # held to six places
+    f["held"]["lat"] = 50.0003336
+    assert "metadata_gps_write" in [o["type"] for o in cal.plan_file_ops(f, None, None, "gpx_interpolation", coord, None)]
+
+
+@pytest.mark.spec("BLD-projection_without_heading", "RUL-track_placement_bounded",
+                  test="TST-geotag_gps_placement-a_projection_with_no_heading_point_lands_on_the_end")
+def test_a_projection_with_no_heading_point_lands_on_the_end():
+    """Past an end whose nearest other point lies outside the heading stretch, there is nothing to take a heading
+    over: the photo is placed on the end itself, still `extrapolated` — never projected from a point that far."""
+    g = _gpx([_pt(50.0, 4.0, 12, 0, 0), _pt(50.0, 4.001, 12, 1, 30)])   # 90 s apart: more than the 60 s stretch
+    r = cal.place_gps(_utc(12, 3, 0), g, CFG)                          # 90 s past the last point
+    assert r["method"] == "extrapolated" and (r["lat"], r["lon"]) == (50.0, 4.001)
+    r = cal.place_gps(_utc(11, 58, 30), g, CFG)                        # 90 s before the first
+    assert r["method"] == "extrapolated" and (r["lat"], r["lon"]) == (50.0, 4.0)
+    near = _gpx([_pt(50.0, 4.0, 12, 0, 40), _pt(50.0, 4.001, 12, 1, 30)])   # 50 s apart: a heading
+    assert cal.place_gps(_utc(12, 3, 0), near, CFG)["lon"] > 4.001
+
+
+@pytest.mark.spec("BLD-projection_without_heading", test="TST-geotag_gps_placement-extrapolation_single_point_uses_endpoint")
 def test_extrapolation_single_point_uses_endpoint():
     g = _gpx([_pt(50.0, 4.0, 12, 0, 0)])
     fwd = cal.place_gps(_utc(12, 1, 30), g, CFG)                       # 90 s after the only point
@@ -112,6 +148,7 @@ def test_extrapolation_single_point_uses_endpoint():
     assert back["method"] == "extrapolated" and (back["lat"], back["lon"]) == (50.0, 4.0)
 
 
+@pytest.mark.spec("BLD-projection_without_heading", test="TST-geotag_gps_placement-extrapolation_zero_span_vector_uses_endpoint")
 def test_extrapolation_zero_span_vector_uses_endpoint():
     # two end points at the same instant -> no velocity vector -> fall back to the endpoint coords
     g = _gpx([_pt(50.0, 4.0, 12, 0, 0), _pt(50.0, 4.0, 12, 0, 0)])
@@ -330,6 +367,30 @@ def _trk(*segments):
         return (f'<trkpt lat="{lat}" lon="{lon}"><time>'
                 f'{(_utc(12, 0, 0) + timedelta(seconds=s)).strftime("%Y-%m-%dT%H:%M:%SZ")}</time></trkpt>')
     return "<trk>" + "".join("<trkseg>" + "".join(pt(*p) for p in seg) + "</trkseg>" for seg in segments) + "</trk>"
+
+
+@pytest.mark.spec("BLD-track_time_parser", "RUL-track_time_never_guessed",
+                  test="TST-geotag_gps_placement-track_times_are_read_as_the_host_python_reads_them")
+def test_track_times_are_read_as_the_host_python_reads_them(tmp_path):
+    """A track point's time is what the host Python's `datetime.fromisoformat` reads, a final `Z` taken as
+    `+00:00`: the xsd:dateTime forms on every Python, the other ISO 8601 forms where this one takes them, and a
+    time with no offset never — its point skipped, never read as some zone's."""
+    def host_reads(t):
+        try:
+            return datetime.fromisoformat(t[:-1] + "+00:00" if t[-1:] in "Zz" else t).tzinfo is not None
+        except ValueError:
+            return False
+    times = ["2024-07-03T12:00:00Z", "2024-07-03T14:00:01+02:00", "2024-07-03T12:00:02.000Z",   # xsd:dateTime
+             "2024-07-03T12:00:03.5Z", "2024-07-03 12:00:04+00:00", "20240703T120005Z",       # host-dependent
+             "2024-07-03T12:00:06"]                                                            # no offset
+    body = "<trk><trkseg>" + "".join(f'<trkpt lat="50.0" lon="{4 + i / 1000}"><time>{t}</time></trkpt>'
+                                     for i, t in enumerate(times)) + "</trkseg></trk>"
+    g = _gpx_file(tmp_path, "t.gpx", body)
+    read = {round((p.lon - 4) * 1000) for p in g.points}
+    assert read == {i for i, t in enumerate(times) if host_reads(t)}
+    assert {0, 1, 2} <= read and 6 not in read
+    assert sorted(p.time_utc for p in g.points if round((p.lon - 4) * 1000) < 3) == \
+        [_utc(12, 0, 0), _utc(12, 0, 1), _utc(12, 0, 2)]
 
 
 @pytest.mark.spec("RUL-track_is_one_trk", "RUL-tracks_never_joined", "BLD-track_placement",

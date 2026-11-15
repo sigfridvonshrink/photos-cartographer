@@ -724,7 +724,6 @@ def infer_anchor_proposal(frames, gpx, cfg):
         "proposed_offset_seconds": best["offset_seconds"],
         "proposed_real_utc": best["gpx_time"].strftime("%Y-%m-%dT%H:%M:%SZ"),
         "confidence": confidence,
-        "rank": "recommended",
         "recommended_gpx_match": {"match_type": best["match_type"], "gpx_file": best["gpx_file"],
                                   "distance_m": best["distance_m"],
                                   "segment_duration_seconds": best["segment_duration_seconds"]},
@@ -899,7 +898,7 @@ def recorded_offset_proposal(photos, rep_naive):
     (own, paths), = seen.items()
     proposal = {"proposal_source": "recorded_offset", "proposed_offset_seconds": -own,
                 "recorded_offset_seconds": own, "recorded_by": len(paths), "example": paths[0],
-                "confidence": "review_required", "rank": "recorded_offset"}
+                "confidence": "review_required"}
     naive = _parse_camera_naive(rep_naive)
     if naive is not None:
         try:

@@ -84,6 +84,20 @@ Geotag runs prep itself so that sorting photos and going straight to geotag work
 :::
 
 
+:::{rat} A field read another way is another reading
+:id: RAT-fields_read_one_way
+:status: ruled
+:forced: yes
+:follows_from: RAT-no_chain_of_vouching
+:justifies: RUL-handoff_fields_of_this_build
+
+Geotag decides from the fields prep read out of each photo — its times and their offsets, its position, its camera.
+A version of cartographer that reads them otherwise — another field kept, another group preferred — may give the same
+photo another time to correct or another offset to read it by. Planned from a reading the running version would not
+make, the corrections would rest on values neither version would now take for the photo's; prep reads the photos again
+first, and the plan then rests on one reading throughout.
+:::
+
 ## 5. JSON artifact rule
 
 :::{rat} A missing record should mean one thing
@@ -854,6 +868,20 @@ The journal is what later says which run changed which photo. A run that falls o
 :::
 
 
+:::{rat} A record that cannot be read is not an empty one
+:id: RAT-unreadable_record_not_empty
+:status: ruled
+:forced: yes
+:follows_from: RAT-record_covers_broken_runs
+:justifies: RUL-unreadable_execution_record_stops
+
+A journal says which of a plan's changes were made and how each photo was left; the execution summary holds the
+user's acceptance of a changed picture; a kept plan and its journal are a pass the log must tell. Taken as empty, the
+first is written over by the next confirmation, the second loses its acceptances, the third drops a pass from the
+log without a word — each loss silent, and none recoverable from the photos. A damaged record is the user's to look
+at; stopping and naming it keeps it as it is until they have.
+:::
+
 ## 21. Finalize
 
 :::{rat} The package records what was done
@@ -877,4 +905,32 @@ library.
 :justifies: RUL-finalize_checks_photos, RUL-finalize_reports_placement, RUL-unlocated_logged
 
 Merge refuses a photo changed since finalize, on the strength of what finalize recorded. If finalize records whatever it finds, an edit made between execute and finalize becomes the baseline, and the library receives a photo the log describes as something else. Finalize is given once the user judges the work done, so it is also where they are told how done: how many photos have a position and by what means, how many were left without one — each of those by their own recorded answer.
+:::
+
+:::{rat} What a run reported stays on the record
+:id: RAT-run_records_outlive_the_next
+:status: ruled
+:forced: yes
+:follows_from: RAT-superseded_plans_recoverable
+:justifies: RUL-geotag_run_records_kept
+
+An execution's summary is the one account of what that run did — what it applied, what failed, which pictures came
+out changed — and a package is what was handed on for keeping. The next execution, or a finalize run again after a
+further pass, would otherwise replace them, and with them a failure not yet looked at or the package already copied
+to storage, which the workspace could then no longer show as it was. Set aside, as a superseded plan is, they cost
+a file each and lose nothing.
+:::
+
+:::{rat} A refusal names what the command needs
+:id: RAT-refusal_for_what_is_needed
+:status: ruled
+:forced: no
+:follows_from: RAT-package_records_what_was_done
+:justifies: RUL-finalize_needs_no_metadata_tool
+
+Finalize reads records and the photos' sizes and times, and writes only into the control folder; it reads and writes
+no photo's metadata. Execution writes every photo's through that tool, and a plan is made to be executed, so those two
+stop without it. Refusing it because the metadata tool is not installed — on a machine the workspace was moved to
+for archiving, say — would stop the one step that packages work already done, for a tool nothing in it would run, and
+send the user to install something they do not need.
 :::

@@ -23,7 +23,7 @@ The generator self-verifies that **every distinct decision-cell state** appears 
 | `photos-23-gps-decisions.requires-input.json` | `requires_user_input` | Per-destination summaries; **blocked** files surfaced as `review_items` (`no_reliable_gps_source`). |
 | `photos-23-gps-decisions.complete.json` | `complete` | Every GPS category — preserve-native, interpolation, **extrapolation**, **manual** & **inherited** folder fallback — and the two review resolutions (`manual_locked`, `accepted_unlocated`). |
 | `photos-21-time-decisions.offset-variants.json` | `complete` | The GPX-offset proposal/resolution variants: `confidence` **high** (point) / **medium** (segment) / **review_required** (conflicting anchors); effective sources **gpx_anchor_accepted** (single anchor) and **manual**. |
-| `photos-21-time-decisions.no-default-timezone.json` | `requires_user_input` | A timezone cell with `proposal_source: "none"` / `proposal_confidence: "none"` (no config default, no resolved ancestor). |
+| `photos-21-time-decisions.no-default-timezone.json` | `requires_user_input` | A timezone cell with `proposal_source: "none"` (no config default, no resolved ancestor). |
 | `photos-21-time-decisions.stale-decision.json` | `requires_user_input` | `stale_user_decision: true` — an accepted proposal that no longer exists (the inputs changed since the human decided); re-decide. |
 
 The first four are a coherent trip scenario (`Japan` with a GPX-anchored camera, `Japan/Kyoto`,

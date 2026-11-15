@@ -45,6 +45,16 @@ are made — before any change, and each photo's preconditions as it applies it.
 never checked as a dependency.
 :::
 
+:::{bld} The handoff's field set is this build's
+:id: BLD-handoff_field_set_checked
+:status: ruled
+:realises: RUL-handoff_fields_of_this_build
+
+Geotag's preflight for `plan` SHALL block when a handoff record's `metadata_status.field_set_version` is not this
+build's `FIELD_SET_VERSION`, naming how many records and one of them, with prep's plan and execute as the remedy;
+execute compares the plan's `metadata_field_set_version` likewise ({need}`BLD-geotag_dependencies`).
+:::
+
 ## 4. Geotag scope
 
 :::{bld} Geotag's file model
@@ -122,6 +132,20 @@ seconds optional, the zone `Z` or a numeric offset — normalised to UTC; a poin
 range or not a number, lacking a `<time>`, or with a time unparseable or naive is skipped with a warning naming the
 file and the point's index, as is a file that cannot be read or parsed. `geotag plan` prints the count of warnings and
 the first `GPX_WARNINGS_SHOWN`, with the number of the rest. A point keeps the index of its `<trk>` and of its `<trkseg>`: the points of one `<trk>` of one file are one track. A file that cannot be opened, or is not well-formed, is unreadable; a folder holding track files all of them unreadable stops the plan, each named with why, and a linked folder under `gpx_root` is named in a warning and not followed.
+:::
+
+:::{bld} Track times are read as the host's Python reads them
+:id: BLD-track_time_parser
+:status: ruled
+:realises: RUL-track_time_never_guessed, RUL-unreadable_point_reported
+:uses: BLD-track_points
+
+A track point's `<time>` SHALL be parsed by the host Python's `datetime.fromisoformat`, a final `Z` or `z` first
+written `+00:00`, and a time it takes with no offset skipped as naive ({need}`BLD-track_points`): on Python 3.11 and
+later it takes, beside every `xsd:dateTime`, the other ISO 8601 forms it knows — a space for the `T`, the basic format,
+a week date, a time without seconds; on 3.9 and 3.10 it refuses a fraction of a second of other than three or six
+digits, whose point is skipped as unparseable. Which points a track gives therefore depends on the Python the
+executable runs on.
 :::
 
 :::{bld} Tracks kept apart, and a root that is not there
@@ -210,6 +234,36 @@ each takes the `effective_iana_timezone` of its nearest ancestor that has one; o
 For each native-GPS photo of a (camera group, destination, day) bucket, `frame_candidates` SHALL take, track by track, every point within `gpx_anchor_max_point_distance_meters` of it and every segment — two consecutive points of that track at most `gpx_anchor_max_segment_gap_seconds` apart — within `gpx_anchor_max_segment_distance_meters`, each at a time within `gpx_anchor_max_clock_error_seconds` of the photo's camera time read as UTC; a pass is an unbroken run of them along the track, passes of one track closer in time than `gpx_anchor_same_pass_max_seconds` being one; and keep each pass's best, a point before a segment, then the closest — dropped where a track of a better rank places a photo at its time by a point or between two (`BLD-track_placement`) — with `time_span_seconds` — the time from the first to the last match of the pass no farther than the best by `gpx_anchor_stay_distance_meters`. A candidate whose span exceeds `gpx_anchor_stay_max_seconds` agrees with any offset within that span, and the spread, of its own, and ranks after every other. `infer_anchor_proposal` clusters the candidates' offsets within the spread, `gpx_anchor_offset_spread_max_seconds`, and proposes the cluster the most photos support, a tie going to the smaller offset, its best-ranked candidate the representative; its confidence is `review_required` when a photo supports no pass of it, another cluster ties (`tied`), or its representative's span exceeds `gpx_anchor_stay_max_seconds` (`imprecise_seconds`), else `high` when another photo supports it or it is a point match, else `medium`. Only an agreed offset — no conflicting photo, no tie, not imprecise — applies itself, under `multi_anchor_auto_apply` or `single_anchor_auto_apply`; an imprecise one, accepted, takes effect as `gpx_anchor_imprecise`. The proposal names the photos no pass of which agrees (`conflicting_files`), and each cluster in `groups` with its photo count and a representative, its track file included; a `manual_offset_seconds` within the spread of a group's offset of a proposal that is not imprecise takes effect as `gpx_anchor_chosen`, which no drift check follows.
 :::
 
+:::{bld} How anchor offsets are clustered, and how a tie falls
+:id: BLD-anchor_clustering
+:status: ruled
+:realises: RUL-anchor_consensus
+:uses: BLD-anchor_matching
+
+`infer_anchor_proposal` SHALL cluster the candidates one by one in rank order — a precise one before an imprecise
+one, a point before a segment, then the nearer, then by file and offset — each joining the first cluster whose offset
+it agrees with, else starting one: a cluster's offset is that of its first and best-ranked candidate, never moved by
+those that join it, so offsets are never chained beyond the spread. It proposes the cluster the most photos support; a
+tie goes to the offset smaller in magnitude, then to the cluster started first. `groups` lists the clusters by photo
+count, then magnitude, then signed offset, so where two tied clusters' offsets differ only in sign the first group may
+be the other one than the proposal's.
+:::
+
+:::{bld} The anchors a GPS proposal records
+:id: BLD-anchor_proposal_record
+:status: ruled
+:realises: RUL-anchor_proposal_carries_evidence, RUL-anchor_offset_auto_as_configured
+:uses: BLD-anchor_matching
+
+A proposal from the camera's own GPS SHALL hold `anchors` — one per photo that matched a pass, the representative
+first, then by rank: its candidate in the proposed cluster, else its own best — each with `proposal_id`
+(`anchor-NNN`), `source_file`, `camera_source_naive_time`, `native_gps`, `gpx_match` (`match_type`, `gpx_file`,
+`distance_m`, `segment_duration_seconds`) and `proposed_offset_seconds`; and `anchor_count`, how many photos matched a
+pass, the count `multi_anchor_auto_apply` and `single_anchor_auto_apply` are read by ({need}`BLD-auto_apply_settings`).
+A cell's `anchored_by` names the track files of the anchors within the spread of its offset
+({need}`BLD-day_offset_kept`).
+:::
+
 :::{bld} The country a destination is in
 :id: BLD-country_choice
 :status: ruled
@@ -269,7 +323,9 @@ when any of its cells needs the user, `executable: false`, `depends_on`, and, wh
 `no_op_or_auto_resolved` for photos-21 and photos-23, `no_op_or_confirmed` for photos-22. The `depends_on` of photos-21
 holds the handoff's content fingerprint, `camera_time_policy_fingerprint` — over the whole
 `camera_time_and_timezone_policy`, the camera groups' classes included — `gpx_fingerprint` and
-`camera_group_key_version`.
+`camera_group_key_version`. That of photos-23 holds `resolved_utc_cache_fingerprint`, `gpx_fingerprint`,
+`gps_policy_fingerprint` — the SHA-256 of the nine placement settings of {need}`BLD-track_placement` as sorted JSON —
+and `handoff`, the handoff's content fingerprint ({need}`BLD-handoff_content_fingerprint`).
 :::
 
 
@@ -401,6 +457,28 @@ accepted proposal that does not exist is `stale_user_decision`. Its `requires_us
 `place_gps` SHALL place a photo on each track by itself, taking the first of: the nearer in time of the two points around its resolved time, within `gpx_direct_match_max_seconds` (`direct_match`); the place between those two, linear in time and the short way round in longitude, when they are at most `gpx_interpolation_max_gap_seconds`, `gpx_interpolation_max_distance_meters` and `gpx_interpolation_max_speed_kmh` apart (`interpolated`); past the nearer point when it is within `gpx_extrapolation_max_seconds` and is an end — the track's first or last point, or a side of a gap longer than `gpx_interpolation_max_gap_seconds` (`extrapolated`). The projection follows the heading from the farthest point of the track within `gpx_extrapolation_heading_seconds` of the end, and falls back to the end itself when it lands farther than `gpx_extrapolation_max_distance_meters` from it or the heading is faster than `gpx_extrapolation_max_speed_kmh`. Of the tracks that place the photo, those placing it by a point or between two count, and only where there is none the projections; of those, the tracks of the best rank (`BLD-track_precedence`), of which the best wins — by method in that order, then the nearest in time, then the file name; but when another of that rank lies more than `gpx_tracks_agree_max_distance_meters` from it, none places the photo, the reason `tracks_disagree` naming both files. Each counted track of a lower rank is kept with the placement in `lower_tracks`: its file — with the track's number where the file gives two — and `apart_meters` from the position. Two points either side of a `<trkseg>` break are never interpolated between — each is an end of its segment, the reason `track_gap` carrying `segment_break` — and a heading is taken from the end's own segment; two disagreeing tracks of one file are named by the file and the track's number.
 :::
 
+:::{bld} A projection with no heading lands on the end
+:id: BLD-projection_without_heading
+:status: ruled
+:realises: RUL-track_placement_bounded
+:uses: BLD-track_placement
+
+A photo past a track's end SHALL be placed on the end itself, still `extrapolated`, when no other point of the end's
+own segment lies within `gpx_extrapolation_heading_seconds` of it — a track of one point among them — or the farthest
+that does is at the end's own time: with no stretch to take a heading over, no projection is made.
+:::
+
+:::{bld} Coordinates to six decimal places
+:id: BLD-coordinate_precision
+:status: ruled
+:realises: RUL-mutate_on_difference, RUL-track_placement_bounded
+
+Geotag SHALL round a position it places between two track points or projects past an end to six decimal places of a
+degree (about 0.1 m), and write a direct match's track point as the track gives it; a photo holds a position already
+when its position marker is the one the write would carry and both its coordinates equal the position's to six
+decimal places, and then no position is written ({need}`BLD-executable_plan`).
+:::
+
 :::{bld} A review item is its photo's
 :id: BLD-review_item_identity
 :status: ruled
@@ -485,6 +563,44 @@ A cell's dates SHALL be counted over all its group's photos in the destination, 
 `geotag execute` SHALL, under the workspace lock: revalidate every dependency of photos-24 — and, when it holds an operation, that the image engine is the handoff's `depends_on.cache.image_engine_version` — and stop before any change if one moved; keep photos-21, -22 and -23 in `executed/<plan id>/`; take the snapshot labelled `geotag`, a required one that fails ending the run as `rejected`; pin and move the own values, single-threaded; then, per photo and under `-j`, skip one whose operations the journal confirms; take one gone from its path with its rename target in place as applied before — its operations recorded, not redone — once the target has the planned fingerprint (or the accepted one) and holds the planned tags, else block; and for one whose size or modification time changed since the plan block if its decoded content differs and is not accepted, else read its tags back — holding the planned values it is counted applied, otherwise, or with only a rename planned, it blocks as edited since the plan. Otherwise it writes the photo's tags in one `exiftool` call ({need}`BLD-metadata_safe_write`), retakes its fingerprint — a changed one, not accepted, or one that cannot be taken, a mismatch that holds the photo's writes and rename back — and renames it, the target checked free. Anything a photo's application raises is that photo's failure and blocker. The results merge in path order into the journal, kept per plan id — each confirmed photo's final path, size and modification time under `media_after` — and photos-25.
 :::
 
+:::{bld} How geotag knows a photo holds what it planned
+:id: BLD-own_write_recognised
+:status: ruled
+:realises: RUL-applied_unrecorded_is_recorded, RUL-edit_since_plan_never_overwritten
+:uses: BLD-geotag_execution
+
+`_holds_writes` SHALL take a photo for holding its planned tags when, of what `exiftool -n` reads back, each tag
+planned empty is absent or empty, each planned number — a coordinate — equals the value read in magnitude to within
+10⁻⁶ of a degree (about 0.1 m; the sign is in its reference tag), and each other equals it as text; a photo changed in
+size or modification time since the plan that holds them so is geotag's own interrupted write, one that does not an
+edit since the plan ({need}`BLD-geotag_execution`).
+:::
+
+:::{bld} When the execution summary is written
+:id: BLD-execution_summary_written
+:status: ruled
+:realises: RUL-failure_recorded, RUL-content_acceptance_stays_open
+:uses: BLD-execution_summary
+
+`geotag execute` SHALL write `photos-25-execution-summary.json` only once its plan is revalidated and the records of
+its earlier runs are read: when it has applied the plan, whatever the outcome, or, `rejected`, when a required snapshot
+fails, carrying the fingerprint mismatches the summary it sets aside reports for the same plan. A refusal of the
+preflight, a stale plan, a record that cannot be read or an interrupt writes none, the earlier summary left as it was;
+an interrupted run's confirmations are in its journal.
+:::
+
+:::{bld} Records of earlier executions that cannot be read
+:id: BLD-unreadable_execution_records
+:status: ruled
+:realises: RUL-unreadable_execution_record_stops
+
+`geotag execute` SHALL stop, exit 2, once its plan is revalidated and before it keeps a decision, takes a snapshot or
+writes anything, when the plan's `journal-<plan id>.json` or `photos-25-execution-summary.json` is there and cannot be
+opened or parsed as a JSON object; `geotag finalize` refuses likewise, writing nothing, on the summary, the plan's
+journal, a kept plan `photos-24-executable-plan-NNN.json` or any `journal-*.json` it reads to find the earlier passes.
+Each names the file. A file that is not there is none.
+:::
+
 :::{bld} The execution summary
 :id: BLD-execution_summary
 :status: ruled
@@ -495,6 +611,30 @@ A cell's dates SHALL be counted over all its group's photos in the destination, 
 
 
 ## 21. Finalize
+
+:::{bld} Summaries and packages set aside under `-NNN`
+:id: BLD-geotag_records_versioned
+:status: ruled
+:realises: RUL-geotag_run_records_kept
+:uses: BLD-plan_backups
+
+`photos-25-execution-summary.json` SHALL be written as {need}`BLD-plan_backups` writes a plan — an existing one that
+differs first copied whole to the next free `-NNN` — and `geotag finalize`, which may be run again, first copies each
+file of an existing package so — `photos-26-complete-log.json`, `photos-26-finalized-media.json`,
+`photos-26-geotag-ingest.db`, `photos-26-archive-manifest.json` and `photos-26-archive.tar.gz`, the last as
+`photos-26-archive-NNN.tar.gz` — before it writes the new one; the copies are archived with the rest of the control
+directory, an archive and its copies excepted.
+:::
+
+:::{bld} Where exiftool is needed
+:id: BLD-geotag_exiftool_needed
+:status: ruled
+:realises: RUL-finalize_needs_no_metadata_tool
+
+Geotag's preflight SHALL stop `plan` and `execute`, exit 2, when `exiftool` is not on `PATH` — execution reads and
+writes the photos' tags through it, and a plan is made to be executed — and leave `finalize`, which runs no tool on a
+photo, to proceed without it.
+:::
 
 :::{bld} What finalize checks first
 :id: BLD-finalize_preconditions

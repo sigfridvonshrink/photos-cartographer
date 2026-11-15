@@ -1912,6 +1912,17 @@ Development SHALL happen in the library, after merge: a development subfolder an
 an empty one — stops geotag's planning, execution and finalize, and merge.
 :::
 
+:::{rul} A development subfolder is known whatever its case
+:id: RUL-development_subfolder_any_case
+:status: ruled
+:criticality: high
+:verify: required
+:refines: RUL-development_after_merge
+:uses: DEF-development
+
+A folder SHALL count as a development subfolder whatever the case of its name.
+:::
+
 ## 10. Change only what needs changing
 
 :::{inv} A run changes only what its inputs require

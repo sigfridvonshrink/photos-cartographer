@@ -632,7 +632,11 @@ def _not_archived(name: str) -> bool:
     SQLite's rollback journal), the plan and track memos (scratch), or an archive itself."""
     return (name.endswith(".lock") or name.startswith(".tmp-") or name.endswith(".tmp") or name.endswith("-journal")
             or name in (os.path.basename(plan_memo_db_path("")), os.path.basename(track_memo_db_path("")))
-            or name.endswith("-archive.tar.gz"))
+            or _ARCHIVE_NAME_RE.search(name) is not None)
+
+
+# An archive, or an earlier one set aside under its -NNN (BLD-geotag_records_versioned): never archived again.
+_ARCHIVE_NAME_RE = re.compile(r"-archive(-\d{3,})?\.tar\.gz$")
 
 
 def control_archive_members(ws: str, exclude=()) -> list:
@@ -835,9 +839,12 @@ def backup_existing_artifact(path: str):
     if not os.path.lexists(path):
         return None
     d = os.path.dirname(path) or "."
-    stem, ext = os.path.splitext(os.path.basename(path))
+    base = os.path.basename(path)
+    # an archive keeps its whole `.tar.gz` after the suffix: photos-26-archive-001.tar.gz
+    stem, ext = (base[:-len(".tar.gz")], "tar.gz") if base.endswith(".tar.gz") else \
+        (os.path.splitext(base)[0], os.path.splitext(base)[1].lstrip("."))
     existing = {n.lower() for n in os.listdir(d)}
-    name = allocate_suffix(stem, ext.lstrip("."), existing, start_idx=1, bare_first=False)
+    name = allocate_suffix(stem, ext, existing, start_idx=1, bare_first=False)
     backup = os.path.join(d, name)
     tmp = os.path.join(d, ".tmp-" + name)
     shutil.copy2(path, tmp)

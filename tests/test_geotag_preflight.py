@@ -170,7 +170,8 @@ def test_missing_handoff_blocks(tmp_path):
     assert any("handoff" in b and "photos-cartographer prep" in b for b in blockers), blockers
 
 
-@pytest.mark.spec("RUL-camera_group_derivation_versioned", test="TST-geotag_preflight-handoff_of_another_derivation_version_blocks")
+@pytest.mark.spec("RUL-camera_group_derivation_versioned", "RUL-handoff_fields_of_this_build",
+                  "BLD-handoff_field_set_checked", test="TST-geotag_preflight-handoff_of_another_derivation_version_blocks")
 @pytest.mark.parametrize("field", ["camera_group_key_version", "field_set_version"])
 def test_handoff_of_another_derivation_version_blocks(tmp_path, field):
     rel = "6-photos-by-dest/Trip/a.jpg"
@@ -258,6 +259,17 @@ def test_dev_subfolder_blocks(tmp_path):
     (ws / "6-photos-by-dest" / "Trip" / "jpg").mkdir()       # empty dev subfolder still blocks
     blockers, _, _ = _pf(ws)
     assert any("Development has already started" in b for b in blockers), blockers
+
+
+@pytest.mark.spec("RUL-development_subfolder_any_case", "BLD-development_subfolder_case",
+                  test="TST-geotag_preflight-dev_subfolder_of_any_case_blocks")
+@pytest.mark.parametrize("name", ["JPG", "JpG", "Tif"])
+def test_dev_subfolder_of_any_case_blocks(tmp_path, name):
+    ws = _ws(tmp_path)
+    (ws / "6-photos-by-dest" / "Trip" / name).mkdir()
+    for execute in (False, True):
+        blockers, _, _ = cal.GeotagWorkflow(str(ws)).preflight(for_execute=execute)
+        assert any("Development has already started" in b and f"Trip/{name}" in b for b in blockers), blockers
 
 
 @pytest.mark.spec("BLD-loop_gates", "RUL-development_after_merge", test="TST-geotag_preflight-dev_subfolder_blocks_at_execute")
@@ -444,6 +456,34 @@ def test_auto_reprep_runs_prep_for_a_photo_changed_since_prep(tmp_path, monkeypa
     calls, rep = _autoreprep(ws, monkeypatch)
     assert calls == ["plan", "execute"], calls
     assert any("is out of date" in m for m in rep.logs), rep.logs
+
+
+@pytest.mark.parametrize("fail", [None, "execute"])
+def test_auto_reprep_prints_only_geotag_s_next_step(tmp_path, monkeypatch, fail):
+    """When geotag plan runs prep's plan and execute itself, prep's own closing `Next:` lines are held back —
+    they name prep's next command where geotag goes on, or stops, by itself — and only geotag's is printed."""
+    import photos_1_prep as prep
+    from cartographer.reporting import emit_next_step
+    ws = _ws(tmp_path, bydest=("6-photos-by-dest/Trip/a.jpg",), handoff_files=[])   # a clean move to record
+
+    def fake_prep_run_locked(a, workspace_root, reporter):
+        emit_next_step(reporter, f"`prep {a.command}` said so")
+        if a.command == "plan":
+            _write_prep_plan(workspace_root, _RECORDS_ONLY)
+        if a.command == fail:
+            raise SystemExit(2)
+    monkeypatch.setattr(prep, "_run_locked", fake_prep_run_locked)
+    rep = _CollectRep()
+    if fail:
+        with pytest.raises(SystemExit):
+            cal._auto_reprep_for_clean_move(_types.SimpleNamespace(command="plan", jobs=4), str(ws), rep)
+    else:
+        cal._auto_reprep_for_clean_move(_types.SimpleNamespace(command="plan", jobs=4), str(ws), rep)
+    nexts = [m for m in rep.logs if m.lstrip("\n").startswith("Next:")]
+    assert not any("said so" in m for m in nexts), nexts
+    assert nexts == ([] if fail is None else ["\nNext: resolve what prep reported above, then re-run `geotag plan`."])
+    emit_next_step(rep, "after")                                        # held back only while prep runs
+    assert rep.logs[-1] == "\nNext: after"
 
 
 def test_auto_reprep_skips_when_nothing_pending(tmp_path, monkeypatch):

@@ -51,7 +51,8 @@ Every change to your files is made the same way, in every phase:
   `photos-10-prep-plan.json`, geotag's `photos-24-executable-plan.json`, merge's
   `photos-30-merge-plan.json`). Planning moves and changes no photo; it keeps only fingerprints, so the
   next run need not compute them again. Planning again sets the earlier plan aside as `-001`, `-002`, …
-  rather than overwriting it.
+  rather than overwriting it — and so does each geotag execution with the earlier execution summary, and
+  `geotag finalize`, run again, with the earlier archival package.
 - **Dry run** (prep and merge) checks the saved plan and summarizes it. It is the plan execute would run,
   not a simulation. Geotag has no dry run: its plan, and the decision files beside it, are the review.
 - **Execute** carries out the saved plan and nothing else, recording each change in a journal. It first
@@ -414,8 +415,8 @@ outside the inbox not named as prep named it (prep gives the name it should carr
 
 **Geotag plan** — `0-sources/` not empty, photos still in `5-photos-by-date/`, or a sort prep hasn't
 recorded (run prep, or let geotag run it); anything but photos in `6-photos-by-dest/`, or a `jpg` / `tif`
-development subfolder; a camera group not yet classed; a photo there with no recorded time (it belongs
-in `2-missing-metadata/`) or with no fingerprint (move it out, or repair it so ImageMagick can read it,
+development subfolder (`JPG` or `Tif` as well — the case does not matter); a camera group not yet
+classed; a photo there with no recorded time (it belongs in `2-missing-metadata/`) or with no fingerprint (move it out, or repair it so ImageMagick can read it,
 then run prep); a `gpx_root` that is not there, or tracks of which not one can be read; a local time at a
 daylight-saving change; a decision file that doesn't parse or holds an invalid value (it is kept as
 written for you to fix); prep's record made by another fingerprint method (run prep again). And a photo
@@ -424,8 +425,10 @@ geotag decides from the photo's own time from before its first write, and neithe
 over yours nor takes yours instead. The stop names the time the photo holds, the one geotag wrote and the
 photo's own; put one of those back, then run prep and geotag again.
 
-**Geotag execute and finalize** — a plan no longer current (plan again). Execute leaves a photo edited
-since the plan untouched; finalize refuses while a photo has changed since execute.
+**Geotag execute and finalize** — a plan no longer current (plan again); a journal, execution summary or
+earlier plan in `.photos-ingest/` that cannot be read (the stop names it; repair it — it is never taken for
+empty). Execute leaves a photo edited since the plan untouched; finalize refuses while a photo has changed
+since execute.
 
 **Merge** — geotag not finalized, or `6-photos-by-dest/` changed since; a hidden file or folder among
 the photos; a photo with no fingerprint; a library folder without its mark (run `merge init-library`), or

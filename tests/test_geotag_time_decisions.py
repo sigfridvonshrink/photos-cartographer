@@ -404,7 +404,6 @@ def test_a_photo_timed_by_its_modification_opens_no_day(tmp_path, monkeypatch):
     assert _run(monkeypatch, ws) == 0                                # `other` is not stopped as an unknown group
     d = _artifact(ws)["destinations"]["6-photos-by-dest/Brussels"]
     assert sorted(d["camera_group_time_decisions"]) == [CAM]         # one day: the edit's date opens none
-    assert other not in d["camera_groups_present"]
 
 
 @pytest.mark.spec("RUL-modified_time_opens_no_day", "BLD-modified_time_files", "RUL-recorded_time_order",

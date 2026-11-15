@@ -153,7 +153,6 @@ with its English `name` and its `zones` (sorted).
 {
   "destination_path": "Belgium/Brussels",
   "destination_timezone": { /* §4.3 tz cell */ },
-  "camera_groups_present": ["<camera_group_key>", ...],   // SYSTEM: groups seen in this destination
   "camera_group_time_decisions": {                        // one offset cell per FIXED-CLOCK camera group,
     "<camera_group_key>": { /* §4.4 offset cell */ },     //   SPLIT per naive date when the group spans >1
     "<camera_group_key>@<YYYY-MM-DD>": { /* §4.4 */ }      //   day here (see §4.4 "per-date buckets")
@@ -164,7 +163,7 @@ with its English `name` and its `zones` (sorted).
 
 Note: smartphones are resolved per-file and get **no** offset cell — `camera_group_time_decisions` only
 holds `camera`-class groups (those listed under `fixed_clock_cameras`); smartphone, unidentified and
-unknown groups appear in `camera_groups_present` only. A photo whose time was read from `ModifyDate` (no valid
+unknown groups have none. A photo whose time was read from `ModifyDate` (no valid
 `DateTimeOriginal` or `CreateDate`: an export, timed by the editing computer) counts under `unknown`, as a file
 naming no camera does — it opens no cell of its camera's and takes no offset from one. A bucket whose photos are all already corrected by
 geotag gets a cell only when it still resolves (its earlier answer, derived again), so that photos of the
@@ -186,7 +185,6 @@ The editor badges these destinations as `container` and keeps them off the to-do
 |-------|------|----------|---------|
 | `proposed_iana_timezone` | string \| null | no | Suggested zone, or null if none. |
 | `proposal_source` | `"inherited"` \| `"country"` \| `"config_default"` \| `"none"` | no | Where the proposal came from. `country`: the one timezone of the country in effect; applies itself like `inherited`. `config_default`: the configured `default_folder_timezone` (within a country, only when it is one of the country's zones); only offered. |
-| `proposal_confidence` | `"review_required"` \| `"high"` \| `"none"` | no | `inherited` is always `review_required`; `country` and `config_default` are `high`; `none` with no proposal. |
 | `inherited_from` | string | no | Present only when `proposal_source == "inherited"`: the ancestor destination. |
 | `contradicted_by` | object | no | Present when the destination's own photos speak against its zone — the one written, else the one it would inherit. The photos counted are those not yet corrected, of any group but a fixed-clock camera (whose offset tag says what its clock was set to, not where it was), whose time is recorded with an offset that is not the zone's at that time: `{ "photos": int, "example": "<path>", "recorded_offset_seconds": int, "recorded_offsets": [int…], "timezone": "<zone>", "timezone_offset_seconds": int }` (`recorded_offsets`: each distinct one, sorted). The zone then does **not** take effect: the cell asks, and destinations inside inherit nothing through it, until another zone is written that the photos agree with, or the zone is kept by `confirmed_despite_recorded_offsets` (then `"confirmed": true` appears here). A destination has one timezone: photos taken in another belong in a folder of their own. |
 | **`user_decision.country`** | string (`""`) | **yes** | The country this destination is in — it need not be the country's own folder — as an ISO 3166 code from the artifact's top-level `countries` table (`{ "<code>": { "name", "zones": [...] } }`, read from the zone database) — whatever the folder is called. A country of one timezone gives it to everything inside; one of several gives none, and each destination inside answers for itself, among `country_zones` only. Chosen once, at the top of its tree: inside a country none can be chosen, and one found there is written back `""` by the next run (`country_removed` says so). |
@@ -248,7 +246,6 @@ offset; else manual required.
     "proposed_offset_seconds": -3600,
     "proposed_real_utc": "2024-07-03T14:12:21Z",
     "confidence": "high",                 // "high" | "medium" | "review_required"
-    "rank": "recommended",
     "recommended_gpx_match": { "match_type": "gpx_point_match", "gpx_file": "…", "distance_m": 4.2,
                                "segment_duration_seconds": 0 },
     "anchor_count": 3, "supporting_count": 2, "conflicting_count": 0,
@@ -282,8 +279,7 @@ offset; else manual required.
   for a time read from `DateTimeOriginal` — the field paired with the one the time came from), and every one
   recording one records the same. The camera's clock was on that offset, so the clock offset is its negative:
   `{ "proposal_source": "recorded_offset", "proposed_offset_seconds": -3600, "recorded_offset_seconds": 3600,
-     "recorded_by": int, "example": "<path>", "proposed_real_utc": "…Z", "confidence": "review_required",
-     "rank": "recorded_offset" }`.
+     "recorded_by": int, "example": "<path>", "proposed_real_utc": "…Z", "confidence": "review_required" }`.
   A value in the tag that is no offset counts as none. Taking effect exactly as the timezone-derived offset
   below does: `recorded_offset_unconfirmed` to photos-22 where tracks lie by the photos, else accepted here
   (`recorded_offset_accepted`). Photos recording different offsets give no such proposal; the cell lists
@@ -292,7 +288,7 @@ offset; else manual required.
   timezone is resolved, so the offset is derived from the bucket's local time assuming the camera clock
   tracked it (DST-aware, per day):
   `{ "proposal_source": "timezone_naive", "proposed_offset_seconds": int, "proposed_real_utc": "…Z",
-     "proposed_from_timezone": "Europe/Brussels", "confidence": "review_required", "rank": "timezone_derived" }`.
+     "proposed_from_timezone": "Europe/Brussels", "confidence": "review_required" }`.
   Confirmable only — the assumption can be wrong (camera on home time). Where tracks lie by the bucket's
   photos it is asked about once, in photos-22: the cell's effective source is `timezone_unconfirmed`
   (`decision_mode: "to_be_confirmed_against_tracks"`), nothing is asked here, and the drift confirmation
@@ -301,8 +297,7 @@ offset; else manual required.
 - **The same day elsewhere** (`proposal_source: "same_day_elsewhere"`) — no photo of the bucket has its
   own position, and the camera's GPS fixed its clock that day in another destination:
   `{ "proposal_source": "same_day_elsewhere", "proposed_offset_seconds": int,
-     "shared_from": { "destination": "…", "bucket": "…" }, "confidence": "high" | "review_required",
-     "rank": "same_day" }`.
+     "shared_from": { "destination": "…", "bucket": "…" }, "confidence": "high" | "review_required" }`.
   `high`: it applied itself there and applies itself here (`same_day_auto`, `decision_mode: "auto_resolved"`).
   `review_required`: accept it here (`same_day_accepted`). It takes the place only of a proposal that would
   be `recorded_offset`, `timezone_naive` or `manual_required`. Never another day's offset, never one written by hand (the
