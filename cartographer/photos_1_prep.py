@@ -1171,6 +1171,10 @@ class JournalWriter:
         self.journal: Optional[Journal] = None
 
     def start_journal(self, plan_id: str, depends_on: Optional[Dict[str, Any]] = None):
+        # A plan executed again keeps the earlier attempt's journal under -NNN, never written over
+        # (RUL-prep_journal_kept).
+        from .photos_utils import backup_existing_artifact
+        backup_existing_artifact(self.journal_path)
         self.journal = Journal(
             journal_version=1,
             plan_id=plan_id,

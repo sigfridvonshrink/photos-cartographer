@@ -22,6 +22,9 @@ the removed one's history.
 - **a run killed outright** — its own half-done work is recognised from its plan and journal and passes; a change it
   would not have left still stops.
 - **prep's log** — a fingerprint counts as retaken only where the file is unchanged.
+- **found on the way** (BACKLOG 51, ruled *"ok both"*): a prep plan executed again kept no journal of the earlier
+  attempt — it is set aside under `-NNN` now; and a JPEG set aside beside a RAW that was given a time keeps its
+  name, the two not pairable there.
 
 ## 2026-11-15 — the tracks geotag used, kept and sealed with the workspace (BACKLOG 13)
 

@@ -215,7 +215,9 @@ against the names on disk and those already planned.
 Prep's organization stage SHALL take each file in `2-missing-metadata` whose metadata gives a recorded time with the
 inbox's files to be filed — one `move_no_clobber` of reason `Chronological Organization` into its day folder of
 `5-photos-by-date` or `4-videos-by-date`, its name allocated against the names already planned — after the duplicates
-stage has set aside any copy of it, and leave one with no recorded time where and as it lies.
+stage has set aside any copy of it, and leave one with no recorded time where and as it lies. A JPEG set aside beside
+its RAW in `3-redundant-jpgs` keeps its name when the RAW is so filed: the two cannot be paired there (the pairing
+rests on their sharing a dump folder), and the set-aside copy is never used.
 :::
 
 :::{bld} A filed file's extension is lowercased in two renames

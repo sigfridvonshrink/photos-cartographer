@@ -1134,6 +1134,18 @@ duplicates of files it may change apart from those of photos by destination, the
 and failed, the blockers and warnings, and which records it wrote.
 :::
 
+:::{rul} A plan executed again keeps the earlier attempt's journal
+:id: RUL-prep_journal_kept
+:status: ruled
+:criticality: med
+:anti: yes
+:verify: required
+:uses: DEF-prep
+
+A prep execution of a plan already executed SHALL never overwrite the earlier attempt's journal: it is first set aside,
+recoverably.
+:::
+
 :::{rul} What prep quarantines is counted by why
 :id: RUL-set_aside_counted_by_reason
 :status: ruled

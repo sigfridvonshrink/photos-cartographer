@@ -4,7 +4,7 @@
 
 - **What this is:** [`README.md`](README.md). **The record:** [`HISTORY.md`](HISTORY.md).
 
-*Open items: **27** — 6 to 7, 11, 14 to 16, 18, 20 to 23, 25, 27, 28, 30 to 32, 35, 39, 40, 43, 45 to 49, 51.* 🛑 Numbers are never reused; the next is **52**.
+*Open items: **26** — 6 to 7, 11, 14 to 16, 18, 20 to 23, 25, 27, 28, 30 to 32, 35, 39, 40, 43, 45 to 49.* 🛑 Numbers are never reused; the next is **52**.
 
 ---
 
@@ -405,14 +405,3 @@ each shot in the other guides that shows something changed; then take the note o
 natural run to take them from.
 
 **When:** after item 17's text, so the pictures are taken once.
-
-### 51. Prep's journal of a plan executed again is written over
-
-**Why:** found while building item 50 (2026-11-15). Prep's `start_journal` writes `journal-<plan id>.json`; a plan
-executed a second time — after a failed or interrupted execute — writes over the journal of the first attempt, so
-the record of what that attempt did is lost. Every other record is kept under `-NNN` when made again
-(`BLD-canonical_plan_paths`, `RUL-geotag_run_records_kept`). Geotag's and merge's journals resume rather than
-restart, and item 50's recognition of an interrupted prep run reads the plan, not the journal, so neither is
-affected.
-
-**Open:** keep the earlier journal under `-NNN` (as every record is), or append the second attempt to it.

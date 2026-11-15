@@ -957,9 +957,10 @@ the entry's `library_path` to the same place.
 :::{bld} The journals and the decisions each execution used are kept
 :id: BLD-history_kept
 :status: ruled
-:realises: RUL-history_retained, RUL-log_cites_decisions
+:realises: RUL-history_retained, RUL-log_cites_decisions, RUL-prep_journal_kept
 
-Each plan's journal SHALL be kept as its own `journal-<plan id>.json`, each geotag execution keeping the decision records its
+Each plan's journal SHALL be kept as its own `journal-<plan id>.json` — prep's, where the plan is executed again,
+first copied to the next free `journal-<plan id>-NNN.json` (`backup_existing_artifact`) — each geotag execution keeping the decision records its
 plan depended on, verified by hash, in `executed/<plan id>/`, which a step's `because_record` and
 `because_record_sha256` name.
 :::
