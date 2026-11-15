@@ -306,4 +306,6 @@ dump → prep plan → review config → prep plan / dry-run / execute
 
 You can run prep → sort → re-prep over several cycles before geotagging, and add more dumps (via
 `0-sources/`) any time before the final merge — after a geotag execute too, which you then plan, execute
-and finalize again. See [concepts](concepts.md) for the model underneath all of this.
+and finalize again. See [concepts](concepts.md) for the model underneath all of this, and the
+[specification](https://sigfridvonshrink.github.io/photos-cartographer/) for exactly what each phase guarantees: [prep](https://sigfridvonshrink.github.io/photos-cartographer/intent/prep.html),
+[geotag](https://sigfridvonshrink.github.io/photos-cartographer/intent/geotag.html), [merge](https://sigfridvonshrink.github.io/photos-cartographer/intent/merge.html).

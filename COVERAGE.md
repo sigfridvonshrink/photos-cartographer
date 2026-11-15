@@ -37,7 +37,9 @@ tools/coverage          # bootstraps a local .venv, runs the suite, writes htmlc
 
 ## Spec coverage
 
-The specification is one corpus of typed items (`spec/`; see `spec/README.md`): 521 rules and invariants, 290
+The specification is one corpus of typed items (`spec/`; see `spec/README.md`; published at
+[sigfridvonshrink.github.io/photos-cartographer](https://sigfridvonshrink.github.io/photos-cartographer/), its tests at
+[`_generated/tests.html`](https://sigfridvonshrink.github.io/photos-cartographer/_generated/tests.html)): 521 rules and invariants, 290
 rationales, 191 build items, 32 definitions, the philosophy's 3 facts and 4 choices — and the 708 tests that name the
 items they verify, made items of the corpus from their `@pytest.mark.spec(…, test="TST-…")` marks. 1040 items are
 ruled; one is at seed: `RUL-disagreeing_tracks_place_nothing`, held for BACKLOG 29.

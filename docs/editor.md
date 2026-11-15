@@ -324,3 +324,7 @@ Two reset behaviors worth knowing (both take effect on the next run):
 | Set a coordinate (GPS) | paste `lat, lon`, place-name search, or pan + "use map center" |
 | Place a run of photos | click, then shift-click another in the same destination |
 | Copy a location to the next photo | "copy location" → "paste" |
+
+What geotag guarantees about each decision — what applies itself, what waits for you, what is asked again —
+is in the [specification](https://sigfridvonshrink.github.io/photos-cartographer/intent/geotag.html); the decision files' fields are in the
+[decision-file reference](../cartographer/editor/decision-json-reference.md).

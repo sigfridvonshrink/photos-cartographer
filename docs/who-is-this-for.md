@@ -57,7 +57,8 @@ another way. These can be argued with.
    tracks allow, rough or manual where they don't: a *map-complete* library.
 
 Each is written up, with where one has met it or what it commits to, in
-[the philosophy](../spec/rationale/philosophy.md) — part of [the specification](../spec/README.md).
+[the philosophy](../spec/rationale/philosophy.md) ([read it online](https://sigfridvonshrink.github.io/photos-cartographer/rationale/philosophy.html)) — part of
+[the specification](../spec/README.md), published at [sigfridvonshrink.github.io/photos-cartographer](https://sigfridvonshrink.github.io/photos-cartographer/).
 
 **If the roots above aren't a match, stop here.** Everything below is only their consequence.
 The **facts** are not up for disagreement — clocks drift, batches are large, coverage is partial —

@@ -3,7 +3,7 @@
 The ideas behind photos-cartographer — *why* the pipeline is shaped the way it is, and what it does
 when something is not as it should be. Read this once and the [quick start](quickstart.md) and the
 [editor guide](editor.md) will make sense. For the safety model see the [main README](../README.md); the
-behaviour described here is defined by [the specification](../spec/README.md). For the tool comparison,
+behaviour described here is defined by [the specification](../spec/README.md), which you can [read online](https://sigfridvonshrink.github.io/photos-cartographer/). For the tool comparison,
 see [How this compares](comparison.md).
 
 ---

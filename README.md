@@ -167,7 +167,11 @@ browser instead. The **[quick start](docs/quickstart.md)** walks through each st
 - **[How this compares](docs/comparison.md)** — HoudahGeo, GeoSetter, gpscorrelate, darktable, exiftool and
   others, side by side.
 
-The authoritative behavioral specification lives in [`spec/`](spec/) (see *How it works (the detail)* below).
+The authoritative behavioral specification lives in [`spec/`](spec/) and is published, rendered and
+cross-linked, at **[sigfridvonshrink.github.io/photos-cartographer](https://sigfridvonshrink.github.io/photos-cartographer/)** — what each phase guarantees
+([shared](https://sigfridvonshrink.github.io/photos-cartographer/intent/shared.html), [prep](https://sigfridvonshrink.github.io/photos-cartographer/intent/prep.html), [geotag](https://sigfridvonshrink.github.io/photos-cartographer/intent/geotag.html),
+[merge](https://sigfridvonshrink.github.io/photos-cartographer/intent/merge.html)), [why](https://sigfridvonshrink.github.io/photos-cartographer/rationale/philosophy.html), and
+[the tests that verify each rule](https://sigfridvonshrink.github.io/photos-cartographer/_generated/tests.html). See *How it works (the detail)* below.
 
 ## Decide in the browser
 
@@ -257,7 +261,7 @@ checked by `tools/spec-build` and published at
 **[sigfridvonshrink.github.io/photos-cartographer](https://sigfridvonshrink.github.io/photos-cartographer/)**, in four
 documents at each level: the shared contract — the facts all phases share: the run lock, the `.photos-ingest/` control
 directory, the configuration, formats, the tracks and the operator loop — then prep, geotag and merge; the
-rationale adds the [philosophy](spec/rationale/philosophy.md), the roots the design follows from. Start with
+rationale adds the [philosophy](spec/rationale/philosophy.md) ([rendered](https://sigfridvonshrink.github.io/photos-cartographer/rationale/philosophy.html)), the roots the design follows from. Start with
 **[`spec/README.md`](spec/README.md)** for how the specification is organized and its discipline.
 
 ## Requirements
@@ -296,8 +300,7 @@ OpenStreetMap/Nominatim at runtime and degrade gracefully offline.
 
 The geotag phase — the one that writes time and GPS into irreplaceable originals — is the most heavily
 tested. Coverage is tracked on two axes — line/branch and **spec** (which items of the specification a test
-verifies; every rule has one, and the corpus build fails on a rule no test verifies) — both reported in
-**[`COVERAGE.md`](COVERAGE.md)**.
+verifies; every rule has one, and the corpus build fails on a rule no test verifies) — both reported in **[`COVERAGE.md`](COVERAGE.md)**; the published corpus lists [every test beside the rules it verifies](https://sigfridvonshrink.github.io/photos-cartographer/_generated/tests.html).
 
 Run the suite from the repository root (`conftest.py` puts the repo root on `sys.path`):
 
