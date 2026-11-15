@@ -49,6 +49,7 @@ def test_time_write_carries_its_offset():
 
 
 @pytest.mark.spec("RUL-other_capture_times_corrected", "BLD-other_time_fields_written", "BLD-geotag_log_steps",
+                  "RUL-log_records_other_times_replaced",
                   test="TST-geotag_executable_plan-the_other_time_fields_it_holds_are_written_with_the_time")
 def test_the_other_time_fields_it_holds_are_written_with_the_time():
     """Each other field recording the making that the photo holds is written to the corrected local time, in its

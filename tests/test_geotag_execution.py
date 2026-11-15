@@ -865,7 +865,7 @@ def test_execute_aborts_when_required_snapshot_fails(tmp_path, monkeypatch):
     assert s["blockers"] and "snapshot failed" in s["blockers"][0]
 
 
-@pytest.mark.spec("BLD-execution_summary_written", "RUL-content_acceptance_stays_open",
+@pytest.mark.spec("BLD-execution_summary_written", "RUL-content_acceptance_stays_open", "RUL-geotag_summary_only_for_execution",
                   test="TST-geotag_execution-summary_written_only_by_a_run_that_executes")
 def test_summary_written_only_by_a_run_that_executes(tmp_path, monkeypatch):
     """photos-25 is written by a run that applied the plan, or whose required snapshot failed — that one carrying

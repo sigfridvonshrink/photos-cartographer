@@ -15,11 +15,14 @@
 """The tracks geotag decides by, kept in the record (BLD-track_catalogue, BLD-track_window,
 BLD-withdrawn_track_points): a catalogue of every track file, the points of each in the window the photos reach, a
 file unchanged since it was read not read again, and the points an executed plan rested on kept when the file goes."""
+import json
 import os
 import sqlite3
+import sys
 from datetime import datetime, timezone
 
 import pytest
+from _handoff import match_disk, vouched
 
 import photos_2_geotag as cal
 import photos_utils as utils
@@ -249,7 +252,7 @@ def test_the_points_an_executed_plan_used_stay_withdrawn(tracks, tmp_path):
     file's again."""
     record = tmp_path / "record.db"
     _build(tracks, record)
-    cal.GPXIndex.mark_used(str(record), "plan-1", ["b.gpx", "2024/a.gpx"])
+    cal.GPXIndex.mark_used(str(record), "plan-1", ["b.gpx", "2024/a.gpx"], JULY)
     data = (tracks / "b.gpx").read_text()
     (tracks / "b.gpx").unlink()
     (tracks / "2024" / "a.gpx").write_text(_gpx(_pt("2024-07-03T12:05:00Z")))           # changed
@@ -365,3 +368,126 @@ def test_a_kept_point_keeps_its_track_and_segment(tmp_path):
     assert again.read == 0
     assert [(p.track, p.segment) for p in again.points] == [(p.track, p.segment) for p in idx.points] \
         == [(0, 0), (0, 1), (1, 0)]
+
+
+# --- points outside the window are not kept ---------------------------------------------------------------
+
+FOURTH = [cal.around(_at("2024-07-04T12:00:00Z"), 3600)]            # a second window, a day later
+
+
+def _kept(record):
+    return _rows(record, "SELECT f.path, p.time_utc FROM gpx_track_points p JOIN gpx_track_files f USING (track_id) "
+                         "ORDER BY f.path, p.point_index")
+
+
+@pytest.fixture
+def two_days(tmp_path):
+    root = tmp_path / "gpx2"
+    root.mkdir()
+    (root / "a.gpx").write_text(_gpx(_pt("2024-07-03T12:00:00Z"), _pt("2024-07-04T12:00:00Z", 50.2)))
+    (root / "b.gpx").write_text(_gpx(_pt("2024-07-03T11:30:00Z", 51.0, 5.0), _pt("2024-07-04T11:30:00Z", 51.2, 5.0)))
+    return root
+
+
+@pytest.mark.spec("RUL-track_points_kept", "BLD-track_catalogue",
+                  test="TST-kept_tracks-a_narrower_window_prunes_the_points_outside_it")
+def test_a_narrower_window_prunes_the_points_outside_it(two_days, tmp_path):
+    """A plan whose window narrows — a photo moved out, a setting tightened — leaves the record holding only its
+    window's points: those outside it go, the fingerprint is the one the narrow window gives, and the file is read
+    again if a later window reaches there."""
+    record = tmp_path / "record.db"
+    wide = _build(two_days, record, window=cal.window_union(JULY, FOURTH))
+    wide.prune()
+    assert len(_kept(record)) == 4                                     # its own window: nothing goes
+    narrow = _build(two_days, record, window=JULY)
+    fp = narrow.fingerprint
+    narrow.prune()
+    assert _kept(record) == [("a.gpx", "2024-07-03T12:00:00+00:00"), ("b.gpx", "2024-07-03T11:30:00+00:00")]
+    again = _build(two_days, record, window=JULY)
+    assert again.read == 0 and again.fingerprint == fp                 # the window's points untouched
+    assert cal.GPXIndex(str(two_days), None, ["2024"]).build(window=JULY).fingerprint == fp
+    assert _build(two_days, record, window=FOURTH).read == 2           # pruned, so read again when reached
+
+
+@pytest.mark.spec("RUL-withdrawn_track_points_kept", "BLD-track_catalogue", "BLD-withdrawn_track_points",
+                  test="TST-kept_tracks-points_an_executed_plan_used_survive_a_narrower_window")
+def test_points_an_executed_plan_used_survive_a_narrower_window(two_days, tmp_path):
+    """The points of a track an executed plan placed or timed photos by, in the window that plan was made in, stay
+    when a later plan's window no longer reaches them: they are the evidence of what was written into the photos. A
+    track it did not use is pruned."""
+    record = tmp_path / "record.db"
+    both = cal.window_union(JULY, FOURTH)
+    _build(two_days, record, window=both)
+    cal.GPXIndex.mark_used(str(record), "plan-1", ["a.gpx"], both)
+    narrow = _build(two_days, record, window=JULY)
+    narrow.prune()
+    assert _kept(record) == [("a.gpx", "2024-07-03T12:00:00+00:00"), ("a.gpx", "2024-07-04T12:00:00+00:00"),
+                             ("b.gpx", "2024-07-03T11:30:00+00:00")]
+    assert [p.time_utc for p in narrow.points if p.source_file == "a.gpx"] == [_at("2024-07-03T12:00:00Z")]
+    assert _build(two_days, record, window=JULY).fingerprint == narrow.fingerprint
+    # what the executed plan used is kept for finalize, which reads no track
+    os.rename(two_days, tmp_path / "elsewhere")
+    kept = _build(two_days, record, window=both, read=False)
+    assert {(p.source_file, p.time_utc) for p in kept.points} >= {("a.gpx", _at("2024-07-04T12:00:00Z"))}
+
+
+@pytest.mark.spec("BLD-track_catalogue", test="TST-kept_tracks-a_build_that_kept_nothing_prunes_nothing")
+def test_a_build_that_kept_nothing_prunes_nothing(two_days, tmp_path):
+    """Execute's check keeps nothing, and prunes nothing: the record is as planning left it."""
+    record = tmp_path / "record.db"
+    _build(two_days, record, window=cal.window_union(JULY, FOURTH))
+    _build(two_days, record, window=JULY, keep=False).prune()
+    assert len(_kept(record)) == 4
+
+
+MANAGED = ["0-sources", "1-strays", "2-missing-metadata", "3-redundant-jpgs",
+           "4-videos-by-date", "5-photos-by-date", "6-photos-by-dest"]
+CAM = "SONY|ILCE-6400|123"
+
+
+@pytest.mark.parametrize("how", ["asks", "blocked", "interrupted"])
+@pytest.mark.spec("BLD-track_catalogue", test="TST-kept_tracks-geotag_plan_prunes_once_it_has_stopped")
+def test_geotag_plan_prunes_once_it_has_stopped(tmp_path, monkeypatch, how):
+    """`geotag plan` prunes the record to the window it reached once it has stopped — at a decision for the user, or
+    at a blocker — never mid-run, where a window still to widen would read its files again, and never when
+    interrupted."""
+    ws = tmp_path / "ws"; ws.mkdir()
+    for m in MANAGED:
+        (ws / m).mkdir()
+    ctl = ws / ".photos-ingest"; ctl.mkdir()
+    (ctl / "photos-00-workspace-guard").touch()
+    root = tmp_path / "gpx"; root.mkdir()
+    (root / "t.gpx").write_text(_gpx(_pt("2019-05-01T10:00:00Z"), _pt("2024-07-03T12:00:00Z")))
+    cfg = {k: v for k, v in utils.CONFIG.items() if k != "jobs"}
+    cfg["gpx_root"] = str(root)
+    cfg["camera_time_and_timezone_policy"] = dict(
+        cfg["camera_time_and_timezone_policy"], device_groups={"fixed_clock_cameras": [CAM], "phones": []})
+    (ctl / "photos-00-config.json").write_text(json.dumps(cfg))
+    rel = "6-photos-by-dest/T/a.arw"
+    dto = "2024:07:03 12:00:00"
+    parsed = {"DateTimeOriginal": dto, "selected_source_naive_timestamp": dto,
+              "selected_source_timestamp_tag": "EXIF:DateTimeOriginal", "camera_group_key": CAM, "has_timestamp": True}
+    files = [{"relative_path": rel, "media_class": "image", "folder_class": "6-photos-by-dest", "size": 1,
+              "mtime_ns": 1, "content_hash": json.dumps({"value": "fp-a", "status": "valid"}),
+              "metadata_status": {"camera_group_key_version": utils.CAMERA_GROUP_KEY_VERSION,
+                                  "camera_group_key": CAM, "has_timestamp": True, "has_native_gps": False,
+                                  "field_set_version": utils.FIELD_SET_VERSION, "parsed_json": json.dumps(parsed)}}]
+    (ws / rel).parent.mkdir(parents=True); (ws / rel).write_bytes(b"x")
+    (ctl / "photos-11-handoff.json").write_text(json.dumps(vouched(ctl.parent, {
+        "filename_timestamp_format": utils.CONFIG["filename_timestamp_format"], "files": match_disk(ws, files),
+        "depends_on": {"cache": {"fingerprint_algorithm_version": utils.FINGERPRINT_ALGORITHM_VERSION}}})))
+    record = utils.db_path(str(ws))
+    cal.GPXIndex(str(root), record, []).build()                        # an earlier window held every point
+    assert len(_kept(record)) == 2
+    if how != "asks":
+        def stop(*a, **k):
+            raise KeyboardInterrupt if how == "interrupted" else SystemExit(2)
+        monkeypatch.setattr(cal.GeotagWorkflow, "build_time_decisions", stop)
+    monkeypatch.chdir(str(ws))
+    monkeypatch.setattr(sys, "argv", ["photos-2-geotag", "plan"])
+    with pytest.raises(SystemExit) as e:
+        cal.main()
+        raise SystemExit(0)
+    assert e.value.code == {"asks": 0, "blocked": 2, "interrupted": 130}[how]
+    assert _kept(record) == ([("t.gpx", "2019-05-01T10:00:00+00:00"), ("t.gpx", "2024-07-03T12:00:00+00:00")]
+                             if how == "interrupted" else [("t.gpx", "2024-07-03T12:00:00+00:00")])

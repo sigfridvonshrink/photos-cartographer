@@ -350,7 +350,9 @@ For a camera's clock offset, no timezone-derived offset is proposed at such a ti
 GPS is placed only once every photo's true time is resolved. A photo keeps its own GPS position, always.
 A position of exactly latitude 0, longitude 0 is not one — it is what a device writes with no fix — so
 that photo is placed like one without, its camera's clock is never read from it, and the log records the
-(0, 0) a position written over it replaced. One without is placed by the first of:
+(0, 0) a position written over it replaced. If you leave such a photo unlocated, geotag removes the (0, 0)
+— coordinates and hemisphere tags together — so digiKam does not show it off the coast of Africa, and the
+log records what it removed. One without is placed by the first of:
 
 1. **a position you set** for that photo in the editor;
 2. **the tracks**, at its corrected time — on a track point within `gpx_direct_match_max_seconds`
@@ -386,8 +388,10 @@ catalogue of every track file under `gpx_root`, and each file's points around yo
 as the settings that read them reach: `gpx_anchor_max_clock_error_seconds` around each photo's camera time,
 `drift_check_track_window_seconds` and the placement limits around its corrected time. A track file unchanged since
 geotag read it (same size, modification time and inode) is not read again, and tracks of other times change
-nothing: last week's walk added to `gpx_root` makes no decision about a trip three years ago stale. The points are
-archived and sealed with the workspace, so `geotag finalize` and `merge` never need `gpx_root`.
+nothing: last week's walk added to `gpx_root` makes no decision about a trip three years ago stale. Points your
+photos no longer reach — a photo moved out, a setting tightened — leave the database when `geotag plan` stops, except
+those an executed plan placed or timed photos by. The points are archived and sealed with the workspace, so
+`geotag finalize` and `merge` never need `gpx_root`.
 
 A track file you take out of `gpx_root` is named at the next `geotag plan` and no longer used — the one reason to
 take one out is that it is someone else's trip. If an executed plan placed or timed photos by it, its points stay in

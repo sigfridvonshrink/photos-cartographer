@@ -532,6 +532,18 @@ user chose from those positions that day in another destination, SHALL NOT take 
 right.
 :::
 
+:::{rul} An offset accepted as proposed is the positions' own
+:id: RUL-accepted_offset_is_the_positions_own
+:status: ruled
+:criticality: high
+:verify: required
+:refines: RUL-chosen_offset_checked_same_day
+
+An offset the user accepted as the camera's own positions proposed it SHALL count, wherever offsets of one day in
+different destinations are held against each other, as one those positions gave by themselves, not as one the user
+chose.
+:::
+
 :::{rul} The user's choice is not set aside by an offset it was not asked about
 :id: RUL-chosen_offset_not_withheld
 :status: ruled
@@ -1266,6 +1278,18 @@ A photo whose position is latitude 0 and longitude 0 SHALL count, wherever geota
 having none.
 :::
 
+:::{rul} A photo left unlocated keeps no position at latitude 0 and longitude 0
+:id: RUL-unlocated_null_island_cleared
+:status: ruled
+:criticality: med
+:anti: yes
+:verify: required
+:refines: RUL-null_island_is_no_position
+
+A photo the user leaves unlocated SHALL NOT keep a position of latitude 0 and longitude 0: geotag removes it whole, as
+it removes a position of its own it no longer places.
+:::
+
 :::{rul} A photo is placed by the most specific source it has
 :id: RUL-placement_order
 :status: ruled
@@ -1740,6 +1764,18 @@ Geotag SHALL NOT write to a photo while the image engine is not the one the phot
 
 Geotag's execution and finalize SHALL NOT take a record of an earlier execution that they cannot read for none: they
 stop before they change or write anything, naming it.
+:::
+
+:::{rul} Geotag's summary is written only for an execution
+:id: RUL-geotag_summary_only_for_execution
+:status: ruled
+:criticality: low
+:verify: required
+:uses: DEF-geotag
+
+Geotag SHALL write no execution summary for a run stopped before its execution began — by a precondition, a plan no
+longer current, or a record of an earlier execution it cannot read — nor for a run interrupted, leaving the summary an
+earlier run wrote as it was.
 :::
 
 

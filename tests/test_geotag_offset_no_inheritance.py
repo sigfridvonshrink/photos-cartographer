@@ -217,6 +217,35 @@ def test_a_chosen_offset_is_held_against_the_day_s_anchored_one(tmp_path):
     assert third["effective_time_anchor"] == {"offset_seconds": -7200, "source": "same_day_auto"}
 
 
+@pytest.mark.spec("RUL-accepted_offset_is_the_positions_own", "RUL-chosen_offset_checked_same_day",
+                  "BLD-offset_shared_within_day",
+                  test="TST-geotag_offset_no_inheritance-an_accepted_offset_is_withheld_against_a_chosen_one")
+def test_an_accepted_offset_is_withheld_against_a_chosen_one(tmp_path):
+    """The museum's offset of −2 h, proposed from the camera's own GPS, the user accepted as proposed; in the castle
+    the user picked −1 h 50 min from the camera's GPS groups. Accepting said the GPS read the clock right, not that
+    the user chose −2 h: the museum's counts as the positions' own, and waits for the user, as an offset that applied
+    itself would; the pick keeps its effect."""
+    wf = _wf(tmp_path)
+    castle = [_file(f"{BYDEST}/Castle/x.arw", f"{BYDEST}/Castle", gps=(50.0, 4.0), naive="2024:07:03 13:50:00"),
+              _file(f"{BYDEST}/Castle/y.arw", f"{BYDEST}/Castle", gps=(51.0, 5.0), naive="2024:07:03 14:50:00")]
+    prior = {"destinations": {
+        f"{BYDEST}/Trip": {"camera_group_time_decisions": {CAM: {"user_decision": {
+            "accept_proposal": True, "accepted_offset_seconds": -7200}}}},
+        f"{BYDEST}/Castle": {"camera_group_time_decisions": {CAM: {"user_decision": {
+            "manual_offset_seconds": -6600}}}}}}
+    art, _ = _build(wf, PARENT_FRAMES + castle, _gpx(TRACK), prior, multi=False)
+    trip, cas = _cell(art, f"{BYDEST}/Trip"), _cell(art, f"{BYDEST}/Castle")
+    assert cas["effective_time_anchor"] == {"offset_seconds": -6600, "source": "gpx_anchor_chosen"}
+    assert not cas["requires_user_input"]                                        # the user's word stands
+    assert trip["effective_time_anchor"] == "" and trip["requires_user_input"]   # the accepted one waits
+    assert trip["conflicts_with"] == [{"destination": f"{BYDEST}/Castle", "bucket": CAM, "offset_seconds": -6600, "chosen": True}]
+    assert cas["conflicts_with"] == [{"destination": f"{BYDEST}/Trip", "bucket": CAM, "offset_seconds": -7200, "chosen": False}]
+    # without the pick the accepted offset is the positions' own and stands
+    del prior["destinations"][f"{BYDEST}/Castle"]
+    art, _ = _build(wf, PARENT_FRAMES, _gpx(TRACK), prior, multi=False)
+    assert _cell(art, f"{BYDEST}/Trip")["effective_time_anchor"] == {"offset_seconds": -7200, "source": "gpx_anchor_accepted"}
+
+
 def test_no_ancestor_is_manual_required(tmp_path):
     wf = _wf(tmp_path)
     files = [_file(f"{BYDEST}/Alone/x.arw", f"{BYDEST}/Alone")]              # no GPS, no ancestor, no tz

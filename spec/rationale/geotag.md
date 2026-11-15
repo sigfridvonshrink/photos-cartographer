@@ -239,6 +239,20 @@ their knowledge. Both are shown, each naming the other; and while they disagree 
 would decide a third destination from one side of an open question.
 :::
 
+:::{rat} Accepting a proposal vouches for the reading, not for a number
+:id: RAT-accepted_offset_is_the_positions_own
+:status: ruled
+:forced: no
+:follows_from: RAT-chosen_offset_evidence_and_word
+:justifies: RUL-accepted_offset_is_the_positions_own
+
+An offset the camera's own positions proposed, accepted as it stood, is still what those positions gave: accepting
+says the GPS's reading is fine, not "I chose this number". The user picked nothing against the evidence, so there is
+no word of theirs that a disagreement elsewhere that day would set aside unasked — it is held against another
+destination's offset as an offset that applied itself is, and waits for the user where those would. The owner's
+ruling: *"proposal counts as automatic today - keep it automatic"*.
+:::
+
 :::{rat} A camera that records its offset says which zone its clock was on
 :id: RAT-camera_records_its_clock_zone
 :status: ruled
@@ -437,6 +451,22 @@ sealing then needs nothing outside the workspace. A track taken out after its pl
 evidence of what was written into the photos: the points stay, withdrawn.
 :::
 
+:::{rat} The record holds what the decisions rest on
+:id: RAT-kept_points_are_the_windows
+:status: ruled
+:forced: no
+:follows_from: RAT-tracks_kept_with_workspace, RAT-tracks_read_where_reached
+:justifies: BLD-track_catalogue
+
+The points are kept because decisions rest on them; a point no decision of the latest planning reaches is evidence of
+nothing, and kept it would grow the record by every window a trip's planning ever passed through — a photo sorted
+out, a setting tightened. So what lies outside the window the planning reached goes, and is read again from the track
+file should a window reach it later. What an executed plan used is the exception: it is evidence of a value written
+into an original, and stays, as a withdrawn track's points do. The owner's ruling: *"track points outside window - as
+per recommended"*. The planning prunes only once it has stopped, at the window it last reached: mid-run the window
+is still to widen, and pruning there would read the same files again on every run.
+:::
+
 :::{rat} The tracks are read where the photos reach them
 :id: RAT-tracks_read_where_reached
 :status: ruled
@@ -448,6 +478,23 @@ A tracks folder holds years of recordings, and a workspace is one trip. Reading 
 and fingerprinting it all, makes the whole folder a dependency of the trip: a walk recorded last week restales the
 decisions of a holiday three years ago, and every decision asks again for no reason in its evidence. Only the points a
 decision can reach change it; a track unchanged since it was last read need not be read again.
+:::
+
+:::{rat} The window is what the readers reach, not a setting of its own
+:id: RAT-track_window_from_readers
+:status: ruled
+:forced: no
+:follows_from: RAT-tracks_read_where_reached, RAT-setting_read_once
+:justifies: BLD-track_window
+
+The window bounds which points are read, and every point a reader of the tracks can reach must be in it — so it is
+computed from each reader's own settings, never set by one of its own. The owner asked: *"aren't you reusing a config
+value for a different purpose?"* — the window does read the matching, gap and drift settings. But it reads each as that
+reader's reach, for that reader: the same judgement the setting is tuned for, not a second one beside it. Retuning
+`gpx_interpolation_max_gap_seconds` for a museum widens the window with it, which is what it should do; no other
+judgement moves unseen. A window setting of its own would be the second judgement: set smaller than a reader's reach,
+it would starve that reader unseen — a photo the gap would bridge left unplaced, an anchor never found, with nothing in
+the decisions to say the tracks were cut short — and set larger, it reads what nothing uses.
 :::
 
 :::{rat} A track is taken out because it is someone else's
@@ -569,7 +616,7 @@ its time and its name, now hidden under the right folder.
 
 A position typed for a photo, or the answer to leave it unlocated, is given looking at the photo where it lies: the
 place its folder names, the fallback that folder has or lacks, the tracks that covered it there. Any of these may have
-been part of the answer. Moved, the photo stands among another folder's answers — a fallback that would place it now,
+been part of the answer — the owner: *"it may have been decided partially because of the destination"*. Moved, the photo stands among another folder's answers — a fallback that would place it now,
 a place it was not — and the old one, carried, could keep it unlocated beside a fallback or pinned where the folder
 says it was not. Asked again, it costs one answer.
 :::
@@ -772,6 +819,22 @@ point counts — a position merely near it, or far from the others, may be real.
 so the log keeps it, and the photo's history still shows what it carried.
 :::
 
+:::{rat} A photo left unlocated is not shown in the sea
+:id: RAT-unlocated_null_island_cleared
+:status: ruled
+:forced: no
+:follows_from: RAT-null_island_no_fix
+:justifies: RUL-unlocated_null_island_cleared, RUL-log_records_null_island_cleared
+
+A photo the user leaves unlocated is one whose place nothing knows. Kept, the device's latitude 0 and longitude 0 still
+reads as a position to every program that shows the library: the owner's reason — a kept (0, 0) shows the photo off
+the coast of Africa in digiKam. Leaving it unlocated means no position, so the no-fix value goes, whole — coordinates
+and hemispheres together, as geotag takes away a position of its own, since a half-cleared fix is a torn one. It was
+measured nowhere, so nothing true is lost; and as with a position written over it, the log keeps what the device
+wrote, so the photo's history still shows what it carried. A photo with a real position is never left unlocated — it
+keeps its own — and a (0, 0) photo that something places is written over as before.
+:::
+
 :::{rat} Most specific first
 :id: RAT-placement_most_specific_first
 :status: ruled
@@ -972,6 +1035,20 @@ user's acceptance of a changed picture; a kept plan and its journal are a pass t
 first is written over by the next confirmation, the second loses its acceptances, the third drops a pass from the
 log without a word — each loss silent, and none recoverable from the photos. A damaged record is the user's to look
 at; stopping and naming it keeps it as it is until they have.
+:::
+
+:::{rat} Geotag's summary, too, records an execution
+:id: RAT-geotag_summary_records_an_execution
+:status: ruled
+:forced: no
+:follows_from: RAT-summary_records_an_execution, RAT-unreadable_record_not_empty
+:justifies: RUL-geotag_summary_only_for_execution
+
+Geotag's summary is what merge's is: the record of an execution, and the one place the user's acceptance of a
+changed picture is kept. A run turned away at the door executed nothing, and the terminal has said why; a summary
+written for it would put a record of nothing over the last execution's — and with it the acceptances finalize and the
+next run read. An interrupted run reached no end to record: its journal holds what it confirmed, and the run that
+finishes it writes the summary.
 :::
 
 ## 21. Finalize

@@ -191,3 +191,80 @@ def test_zero_point_is_never_an_anchor(tmp_path, monkeypatch, lon, anchored):
     art = json.load(open(ctl / "photos-21-time-decisions.json"))
     cell = art["destinations"][f"{BYDEST}/B"]["camera_group_time_decisions"][CAM]
     assert (cell["proposal"]["proposal_source"] == "gpx_self_anchor") is anchored
+
+
+def _unlocated_plan(tmp_path, files, rows, unlocated):
+    """The executable plan for `files` in one destination, each of `unlocated` left unlocated by the user."""
+    ws = tmp_path / "ws"; ctl = ws / ".photos-ingest"; ctl.mkdir(parents=True)
+    (ctl / "photos-00-config.json").write_text(json.dumps({k: v for k, v in utils.CONFIG.items() if k != "jobs"}))
+    (ctl / "photos-11-handoff.json").write_text(json.dumps(vouched(ctl.parent, {"cache_fingerprint": "pcf"})))
+    d = f"{BYDEST}/T"
+    time_art = {"status": "complete", "destinations": {d: {"destination_timezone": {"effective_iana_timezone": "UTC"}}}}
+    gps_art = {"status": "complete", "destinations": {d: {
+        "folder_fallback": {"effective_fallback": None},
+        "gps_decisions": {"review_items": [{"relative_path": rel, "user_decision": {"accept_unlocated": True}}
+                                           for rel in unlocated]}}}}
+    for name, art in (("photos-21-time-decisions.json", time_art), ("photos-23-gps-decisions.json", gps_art),
+                      ("photos-22-gps-drift-validation.json", {"status": "complete", "destinations": {}})):
+        (ctl / name).write_text(json.dumps(art))
+    wf = cal.GeotagWorkflow(str(ws)); wf.handoff = {"cache_fingerprint": "pcf"}; wf._gpx_fingerprint = "gfp"
+    plan, blk = wf.build_executable_plan(files, rows, time_art, gps_art, _gpx(), "rfp")
+    assert not blk
+    return plan, plan["destinations"][d]["operations"]
+
+
+_CLEARED = {"GPSLatitude": "", "GPSLatitudeRef": "", "GPSLongitude": "", "GPSLongitudeRef": ""}
+
+
+@pytest.mark.spec("RUL-unlocated_null_island_cleared", "RUL-log_records_null_island_cleared",
+                  "BLD-unlocated_null_island_cleared", "BLD-geotag_log_steps",
+                  test="TST-geotag_null_island-zero_point_left_unlocated_is_cleared_and_logged")
+def test_zero_point_left_unlocated_is_cleared_and_logged(tmp_path):
+    # A photo left unlocated loses the device's no-fix position whole — coordinates and refs — and the log keeps it.
+    # Beside it: a photo with no position left unlocated is planned no clear, and a (0, 0) photo the track places
+    # is written over as before.
+    d = f"{BYDEST}/T"
+    files = [_model(f"{d}/z.jpg", 0, 0), _model(f"{d}/m.jpg", None, None), _model(f"{d}/p.jpg", 0, 0)]
+    rows = [{"relative_path": f["relative_path"], "resolved_utc_status": "valid",
+             "resolved_utc": "2024-07-03T12:00:30Z" if f["relative_path"].endswith("p.jpg") else "2024-07-03T18:00:00Z"}
+            for f in files]
+    plan, ops = _unlocated_plan(tmp_path, files, rows, [f"{d}/z.jpg", f"{d}/m.jpg"])
+
+    def by(name, typ):
+        return [o for o in ops if o["relative_path"].endswith(name) and o["type"] == typ]
+
+    [clear] = by("z.jpg", "gps_marker_write")
+    assert {k: clear["writes"][k] for k in _CLEARED} == _CLEARED
+    assert clear["writes"]["GPSProcessingMethod"] == cal.with_time_fixed("")      # its time is written: marked so
+    assert clear["pre_state"] == {"present": True, "GPSLatitude": 0, "GPSLongitude": 0, "GPSProcessingMethod": ""}
+    assert not by("z.jpg", "metadata_gps_write")
+    assert all("GPSLatitude" not in o["writes"] for o in by("m.jpg", "gps_marker_write"))   # nothing to clear
+    [placed] = by("p.jpg", "metadata_gps_write")                                 # placed: written over, as before
+    assert placed["gps_origin"] == "recompute_automated" and placed["writes"]["GPSLatitude"] == 50.0
+    assert placed["pre_state"]["GPSLatitude"] == 0
+    photos = cal.build_complete_log({}, files, rows, {}, plan)
+    [step] = [s for s in photos[f"fp{d}/z.jpg"]["journey"] if s["action"] == "gps_cleared"]
+    assert step["pre_state"] == clear["pre_state"]
+    assert not [s for s in photos[f"fp{d}/m.jpg"]["journey"] if s["action"] == "gps_cleared"]
+
+
+@pytest.mark.spec("RUL-unlocated_null_island_cleared", "BLD-unlocated_null_island_cleared",
+                  test="TST-geotag_null_island-zero_point_left_unlocated_cleared_without_a_time")
+def test_zero_point_left_unlocated_cleared_without_a_time():
+    # No time to write: the position is cleared alone, no mark added; a photo holding none is planned nothing.
+    z = _model(f"{BYDEST}/T/z.jpg", 0, 0)
+    [op] = cal.plan_file_ops(z, None, "UTC", "no_change", None, None)
+    assert op["type"] == "gps_marker_write" and op["writes"] == _CLEARED
+    assert cal.plan_file_ops(_model(f"{BYDEST}/T/z.jpg", None, None), None, "UTC", "no_change", None, None) == []
+
+
+@pytest.mark.spec("RUL-unlocated_null_island_cleared", "RUL-own_position_kept", "BLD-unlocated_null_island_cleared",
+                  test="TST-geotag_null_island-real_position_left_unlocated_is_untouched")
+def test_real_position_left_unlocated_is_untouched(tmp_path):
+    # A photo with a position of its own keeps it, whatever the answer says — and is planned no clear.
+    d = f"{BYDEST}/T"
+    files = [_model(f"{d}/r.jpg", 50.84, 4.35)]
+    rows = [{"relative_path": f"{d}/r.jpg", "resolved_utc": "2024-07-03T18:00:00Z", "resolved_utc_status": "valid"}]
+    _, ops = _unlocated_plan(tmp_path, files, rows, [f"{d}/r.jpg"])
+    assert not [o for o in ops if o["type"] == "metadata_gps_write"]
+    assert all("GPSLatitude" not in (o.get("writes") or {}) for o in ops)

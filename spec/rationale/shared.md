@@ -216,7 +216,9 @@ archived, it lets a future reader know not only what was decided but **under wha
 A threshold is tuned against one judgement — how close a track must pass to anchor a photo, how far two points may be
 joined across. Read for a second judgement as well, it cannot be moved for the first without moving the second unseen,
 and the user who retunes it for a museum has also changed when two tracks are said to disagree. Each judgement has a
-setting of its own, at the cost of more settings to read.
+setting of its own, at the cost of more settings to read. Reading a setting to gather what its own judgement will
+need — as the tracks' window reads each reader's reach ({need}`RAT-track_window_from_readers`) — is that judgement
+still, not a second one.
 :::
 
 :::{rat} Surgical staleness: one hash for everything would restale everything
@@ -1236,12 +1238,14 @@ may be long gone with the workspace.
 :status: ruled
 :forced: yes
 :follows_from: RAT-why_beside_what, RAT-consolidated_log
-:justifies: RUL-log_records_time_replaced
+:justifies: RUL-log_records_time_replaced, RUL-log_records_other_times_replaced
 
 Once geotag has written a time, the photo no longer says what its camera recorded: the log is the only place that can.
 And two photos written alike may have been found differently — one by the offset its phone recorded, one by assuming
 it was taken on the destination's local time. The second is a guess; a reader checking a photo that looks an hour out
-must be able to see which it was, and what stood there before.
+must be able to see which it was, and what stood there before. The same holds of every other field the time is
+written into — `CreateDate` and its offset, the dates of XMP and IPTC: rewritten, what each held is gone from the
+photo too, and may not have been what `DateTimeOriginal` held.
 :::
 
 :::{rat} Each phase writes only its own steps
