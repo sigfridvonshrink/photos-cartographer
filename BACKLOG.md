@@ -459,6 +459,13 @@ stays a gone one.
   execute and finalize; merge's plan, dry run and execute. Not prune, `init-library` or the editor. Control files keep
   their own checks (the vouched log, the decision fingerprints, the stale plan).
 
+**Built (2026-11-15)**, and two points it found, ruled *"both recommended"*, to finish it:
+- **a hard kill mid-execute** (power loss, a killed process) left the tool's own half-finished work for the next run
+  to list as unexpected, to be accepted once: it is recognised instead from what the run left in writing — geotag's
+  journal notes each file's state after its write; prep's plan says where each file goes — and passes unasked;
+- **a missing-metadata photo given a time** stayed in missing metadata, prep never filing it on: prep files it into
+  photos by date like a photo of a new dump (case 6 implies it).
+
 **To mind when it is built:**
 - The owner: *"a replaced file would also typically have a different inode."* So the inode is the strongest of the
   three: a replacement keeps none of them reliably, an untouched file keeps all.
