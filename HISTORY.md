@@ -2,6 +2,24 @@
 
 *What was decided and why, newest first. A record: never corrected forward. Per-commit detail is `git log`.*
 
+## 2026-11-15 — a phone's clock and a fix's time checked, nothing assumed silently (BACKLOG 6, 20, 35)
+
+Geotag trusted a phone's clock with nothing checking it, read no camera's GPS fix time, and read phone photos with no
+offset tag and files naming no camera by the zone, unasked. Ruled *"otherwise all as recommended"*: a photo's true
+time has four sources, strongest first — a track against its own position, its fix's GPS time, its offset tag, the
+zone's guess.
+
+- **phones anchored like cameras**, by the same settings: agreeing, nothing; several disagreeing, the anchored offset
+  applies for that phone and day; one, a proposal. The user may keep the phone as it records itself.
+- **a fix's GPS time** is clock evidence below a track: counted only where the fixes' times all differ and agree (a
+  stale fix repeats its time); two or more apply themselves, one is a proposal.
+- **untagged phone photos** read as the phone's tagged ones that day show, else settled by its GPS, else the drift
+  check, else asked; **files naming no camera**, one question per destination, answered once.
+- **a time a daylight-saving change skips or repeats** is answered in the time decisions, per photo, no longer a stop;
+  an offset tag that is no offset is named and read as none.
+- **every question answerable in the editor and by hand** (*"the user should be able to answer all questions in the
+  editor"*; *"the editor is not the only possibility to answer"*) — the new ones are; the existing gaps are item 52.
+
 ## 2026-11-15 — every ruling checked against the corpus
 
 The owner asked: *"all rulings I am making, are they transcribed in the corpus?"* An audit of every ruling since the

@@ -4,45 +4,11 @@
 
 - **What this is:** [`README.md`](README.md). **The record:** [`HISTORY.md`](HISTORY.md).
 
-*Open items: **27** — 6 to 7, 11, 14 to 16, 18, 20 to 23, 25, 27, 28, 30 to 32, 35, 39, 40, 43, 45 to 49, 52.* 🛑 Numbers are never reused; the next is **53**.
+*Open items: **24** — 7, 11, 14 to 16, 18, 21 to 23, 25, 27, 28, 30 to 32, 39, 40, 43, 45 to 49, 52.* 🛑 Numbers are never reused; the next is **53**.
 
 ---
 
 ## Open
-
-### 6. Check a phone's time against the tracks
-
-**Why:** geotag trusts a phone's clock — a phone takes its time from the network — and resolves each phone photo from
-its own offset tag, or failing that from the destination's timezone, with nothing checking it. A phone set to the wrong
-zone, a photo whose offset tag is missing while the phone sat in another zone, or a phone's clock that did drift, would
-pass unseen and misplace every such photo on the track. The owner wants the check built.
-
-**What existed:** four settings nothing read, removed with BACKLOG 2 (2026-11-15) until this is built:
-`phone_gpx_agreement_tolerance_seconds` (60), `phone_gpx_conflict_threshold_seconds` (300),
-`phone_gpx_max_distance_meters` (250) and `dst_conflict_tolerance_seconds` (120). Their names suggest the shape:
-where a phone photo carries its own position and a track covers it, compare the photo's time with the track's time at
-that position.
-
-**Ruled (2026-11-15), with items 35 and 20** (*"otherwise all as recommended"*). A photo's true time has four
-sources, strongest first: a track against the photo's own position; the GPS time its fix recorded; its own offset tag;
-the destination's zone (a guess).
-1. **Phones anchored like cameras:** a phone's photos holding their own position are anchors, by the same anchoring
-   and its settings — no new setting (the four removed stay removed; a phone's error is a whole zone, not drift). Per
-   phone, destination and day the anchored offset is compared with the recorded one: agreeing within
-   `gpx_anchor_decision_tolerance_seconds`, nothing; disagreeing, several photos agreeing among themselves, the
-   anchored offset takes effect for that phone and day, as a camera's several anchors do, the cell showing it; one
-   photo, a proposal to accept.
-2. **The GPS time** (item 35) below a track anchor and above the zone's guess — see item 35.
-3. **Untagged phone photos and files naming no camera** (item 20) — see item 20.
-4. **A time a daylight-saving change skips or repeats** is answered in `photos-21`: per photo, which reading (repeated)
-   or the offset (skipped), instead of only outside the tool.
-5. **An offset tag that is not an offset** is warned of, named and logged as unreadable, then treated as no tag.
-6. **A camera's zone proposal at its cell's earliest time:** stated as it is — a camera's clock does not change at a
-   daylight-saving switch, so one offset for the day is right for it.
-
-**And a rule over all questions** (the owner: *"the user should be able to answer all questions in the editor"*):
-every question the tool asks is answerable in the editor; the questions above get their editor view as they are
-built.
 
 ### 7. One obligation per item, checked by reading
 
@@ -166,23 +132,6 @@ done: merge clears them as its execution starts.)
 the batch's size and stops or warns; rule it into the spec, then code it.
 
 **When:** any time; low priority.
-
-### 20. Zone-resolved times of phones and camera-less files are assumed, never asked
-
-**Settled in part (2026-11-15):** a local time the zone skips or repeats at a daylight-saving change is never
-resolved by the zone (`RUL-ambiguous_local_time_never_guessed`): the photo stops geotag, named with both readings,
-and a camera's timezone-derived proposal at such a time is not made — the cell asks for the offset.
-
-**Why, for what remains:** a camera's "clock was on local time" is a proposal the user must accept, and is then
-checked against the tracks. The same assumption is applied silently to a phone photo with no offset tag, to a file
-naming no camera, and to a corrected photo whose offset tag is gone — and those photos are then placed on the tracks
-by it. Close to item 6, which checks a phone's time against the tracks where it has its own position.
-
-**Ruled (2026-11-15), with item 6:** a phone photo with no offset tag is read as the same phone's tagged photos that
-day show, unasked, where those show the zone's offset; else its GPS time or a track settles it (items 35, 6); with
-neither, it rides the drift check where there are tracks, and is asked where there are none. Files naming no camera
-are one question per destination — "N files name no camera and no offset: read them as local time in <zone>?" —
-answered once, in the editor, and kept.
 
 ### 21. Let the user leave one photo unlocated in a folder that has a fallback
 
@@ -311,19 +260,6 @@ are kept, so a change to a threshold or to the inference is read as a difference
 *Items 35 to 46 come from the adversarial review of time handling, 2026-11-14 (33, 34 and 41, from the same review, are ruled and built). Each is a choice between behaviours:
 none is coded until ruled. What the review found that was plainly wrong was fixed with it.*
 
-### 35. The time a camera's own GPS recorded is not used as evidence of its clock
-
-**Why:** a native-GPS photo carries the fix's UTC (`GPSDateStamp`, `GPSTimeStamp`); prep reads them, geotag does
-not. With no track covering it the cell falls to the zone guess and a question, though the photo states its own
-offset. The same evidence would settle phone photos with no offset tag (item 20) and give item 6 its check.
-
-**Ruled (2026-11-15), with item 6:** a frame's GPS time less its camera time is evidence of the clock, below a track
-anchor and above the zone's guess — counted only from frames whose GPS times all differ and whose differences agree
-within `gpx_anchor_offset_spread_max_seconds`, two at least (a stale fix repeats its time while the camera's moves
-on); two or more agreeing apply themselves as `multi_anchor_auto_apply` does, one is a proposal. A camera writing
-local time into the GPS field shows a whole-hour difference, caught by a track where there is one and by the
-far-from-evidence check. The same GPS time checks phone photos.
-
 ### 39. Two bodies in one camera group
 
 **Why:** two bodies of one model that write no serial are one group. Both with GPS: their anchors disagree for good
@@ -450,6 +386,6 @@ also write by hand, in the same file and field, documented:
 Left outside, being no answer but a fix (a file moved, a drive mounted, the configuration mended): the workspace
 hygiene stops, prep's misnamed or unknown files, missing tracks, merge's same picture in other bytes. Already answered
 elsewhere: `--accept-changes` and `init-library`, in the console. To come with their items: 22 (no recorded time), 25
-(a photo exiftool cannot write); the daylight-saving reading comes with item 6.
+(a photo exiftool cannot write); the daylight-saving reading came with item 6 (built).
 
-**When:** after items 6, 35 and 20 (they work in the editor too).
+**When:** now — items 6, 35 and 20 are built.
