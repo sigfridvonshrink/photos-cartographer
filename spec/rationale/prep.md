@@ -465,6 +465,20 @@ fixes the machine, not the file, so its size and time do not change; a failure k
 gone. Taking it again costs one attempt per run for a file that still fails.
 :::
 
+:::{rat} Geotag has nothing else to read a photo's metadata from
+:id: RAT-metadata_failure_stops_everywhere
+:status: ruled
+:forced: yes
+:follows_from: RAT-geotag_reads_the_handoff, RAT-crash_not_a_verdict
+:justifies: RUL-metadata_failure_blocks
+
+A failed fingerprint in photos by destination decides nothing there, for prep never sets a file there aside. Its
+metadata is another matter: geotag reads no photo, and takes each one's camera, times and position from what prep kept.
+A photo of photos by destination handed on with none would reach geotag as one with no time and no camera — renamed,
+grouped and placed on what is only a failed read. So prep stops and names it there as anywhere, and the next run reads
+it again.
+:::
+
 :::{rat} A duplicate's record points at its twin
 :id: RAT-duplicate_points_at_twin
 :status: ruled

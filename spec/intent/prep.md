@@ -599,6 +599,17 @@ A media file outside photos by destination whose fingerprint failed SHALL block 
 Prep SHALL take a media file's fingerprint again at every run while it has failed.
 :::
 
+:::{rul} Metadata that could not be read blocks, in photos by destination too
+:id: RUL-metadata_failure_blocks
+:status: ruled
+:criticality: high
+:verify: required
+:uses: DEF-workspace_database, DEF-managed_folders
+
+A media file whose metadata prep could not read, and of which it keeps no record still valid, SHALL block prep's plan
+wherever it lies, photos by destination included.
+:::
+
 :::{rul} A duplicate is recorded with the copy kept
 :id: RUL-duplicate_recorded_with_kept
 :status: ruled

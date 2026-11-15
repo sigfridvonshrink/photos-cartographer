@@ -329,6 +329,17 @@ recorded time's field and group, stamped with `exiftool`, its version, the field
 options, the metadata-schema version and the camera-group-key version.
 :::
 
+:::{bld} A metadata read that failed is a blocker
+:id: BLD-metadata_failure_blocker
+:status: ruled
+:realises: RUL-metadata_failure_blocks
+
+A media file whose folder exiftool's batch failed on, or which is missing from its batch's result, SHALL have its
+metadata recorded `extraction_failed`, and prep's plan records a blocker naming it, `6-photos-by-dest` included: for a
+file whose folder's batch failed, always; for one missing from the result, unless the database holds a fresh record of
+its metadata ({need}`BLD-metadata_extraction`), which is kept.
+:::
+
 :::{bld} The other time fields are kept by their group
 :id: BLD-other_time_fields_read
 :status: ruled
