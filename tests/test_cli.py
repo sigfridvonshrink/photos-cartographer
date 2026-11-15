@@ -161,16 +161,16 @@ def test_prep_dry_run_validates_the_saved_plan(tmp_path, monkeypatch, capsys):
     cfg_p = ws / ".photos-ingest" / "photos-00-config.json"
     cfg = cfg_p.read_text()
     cfg_p.write_text(cfg + "\n")                               # a dependency changed after planning
-    assert _main(monkeypatch, ws, "dry-run") == 1
+    assert _main(monkeypatch, ws, "dry-run") == 2
     assert "workspace config changed" in capsys.readouterr().err
     cfg_p.write_text(cfg)
 
     doctored = json.loads(saved)
     doctored["blockers"] = ["a blocker written into the saved plan"]
     open(pp, "w").write(json.dumps(doctored))                  # the saved plan itself no longer passes
-    assert _main(monkeypatch, ws, "dry-run") == 1
+    assert _main(monkeypatch, ws, "dry-run") == 2
     assert "a blocker written into the saved plan" in capsys.readouterr().err
-    assert _main(monkeypatch, ws, "execute") == 1              # the plan execute would refuse too
+    assert _main(monkeypatch, ws, "execute") == 2              # the plan execute would refuse too
     assert (ws / "0-sources" / "note.txt").exists()
     open(pp, "w").write(saved)
     assert _main(monkeypatch, ws, "dry-run") == 0
@@ -208,7 +208,7 @@ def test_prep_takes_no_snapshot_before_the_plan_is_validated(tmp_path, monkeypat
     cfg_p = ws / ".photos-ingest" / "photos-00-config.json"
     cfg = cfg_p.read_text()
     cfg_p.write_text(cfg + "\n")                               # a dependency changed after planning
-    assert _main(monkeypatch, ws, "execute") == 1
+    assert _main(monkeypatch, ws, "execute") == 2
     assert events == [("validate", pid)]                       # refused, and no snapshot taken
     assert (ws / "0-sources" / "note.txt").exists()
 

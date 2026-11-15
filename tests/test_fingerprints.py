@@ -189,11 +189,38 @@ def test_journal_is_version_stamped(tmp_path, monkeypatch):
     plan = _run(ws)
     with open(utils.journal_path(str(ws), plan.plan_id)) as f:
         dep = json.load(f)["depends_on"]
-    assert dep["tool"] == "photos-1-prep"
+    assert set(dep) == {"config_fingerprint", "plan_schema_version", "cache_schema_version",
+                        "fingerprint_algorithm_version"}
     assert dep["config_fingerprint"] == plan.config_fingerprint.value
     assert dep["plan_schema_version"] == prep.PLAN_SCHEMA_VERSION
     assert dep["cache_schema_version"] == prep.CACHE_SCHEMA_VERSION
     assert dep["fingerprint_algorithm_version"] == prep.FINGERPRINT_ALGORITHM_VERSION
+
+
+@pytest.mark.spec("BLD-prep_plan_contents", "BLD-prep_dependencies", "BLD-handoff_content", "BLD-workspace_database",
+                  test="TST-fingerprints-prep_records_hold_no_field_nothing_reads")
+def test_prep_records_hold_no_field_nothing_reads(tmp_path, monkeypatch):
+    """Prep's plan records no `workspace_root` and its database effects no `absolute_path`; its journal records no
+    `snapshots` and no tool or execution id among its dependencies; its handoff no `hash_algorithm`; and the database's
+    `file_cache` no `absolute_path`."""
+    _mock(monkeypatch)
+    ws = _ws(tmp_path)
+    (ws / "0-sources" / "a.jpg").write_bytes(b"AAAA")
+    plan = _run(ws)
+    saved = json.loads(plan.to_json())
+    assert "workspace_root" not in saved
+    effects = [fx for op in saved["operations"] for fx in op["database_effects_after_verification"]]
+    assert effects and all("absolute_path" not in (fx.get("data") or {}) for fx in effects)
+    with open(utils.journal_path(str(ws), plan.plan_id)) as f:
+        journal = json.load(f)
+    assert "snapshots" not in journal
+    assert not {"tool", "execution_id"} & set(journal["depends_on"])
+    with open(utils.handoff_path(str(ws))) as f:
+        assert "hash_algorithm" not in json.load(f)
+    con = sqlite3.connect(str(ws / ".photos-ingest" / "photos-00-ingest.db"))
+    cols = {r[1] for r in con.execute("PRAGMA table_info(file_cache)")}
+    con.close()
+    assert "relative_path" in cols and "absolute_path" not in cols
 
 
 @pytest.mark.spec("BLD-prep_dependencies", test="TST-fingerprints-handoff_depends_on_coverage")
@@ -286,7 +313,7 @@ def test_handoff_uses_fingerprint_status(tmp_path, monkeypatch):
 
 def test_transaction_commits_on_success(tmp_path):
     cache = prep.WorkspaceCache(str(tmp_path))
-    row = {"relative_path": "a", "absolute_path": "/a", "size": 1, "mtime_ns": 1,
+    row = {"relative_path": "a", "size": 1, "mtime_ns": 1,
            "inode": 1, "media_class": "image", "hash": "h", "content_hash": "ch",
            "last_seen_ns": 1}
     with cache.transaction():
@@ -296,7 +323,7 @@ def test_transaction_commits_on_success(tmp_path):
 
 def test_transaction_rolls_back_on_exception(tmp_path):
     cache = prep.WorkspaceCache(str(tmp_path))
-    row = {"relative_path": "b", "absolute_path": "/b", "size": 1, "mtime_ns": 1,
+    row = {"relative_path": "b", "size": 1, "mtime_ns": 1,
            "inode": 1, "media_class": "image", "hash": "h", "content_hash": "ch",
            "last_seen_ns": 1}
     try:
@@ -310,7 +337,7 @@ def test_transaction_rolls_back_on_exception(tmp_path):
 
 def test_default_writes_still_commit_per_op(tmp_path):
     cache = prep.WorkspaceCache(str(tmp_path))
-    row = {"relative_path": "c", "absolute_path": "/c", "size": 1, "mtime_ns": 1,
+    row = {"relative_path": "c", "size": 1, "mtime_ns": 1,
            "inode": 1, "media_class": "image", "hash": "h", "content_hash": "ch",
            "last_seen_ns": 1}
     cache.upsert_file(row)                     # no batch

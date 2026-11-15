@@ -58,16 +58,20 @@ def _mock_media(monkeypatch):
 
 
 def _intercept_zfs_snapshot(monkeypatch, fail=False):
-    """Let everything run except `zfs snapshot ...`, which we fake (success or failure)."""
+    """Let everything run except `zfs snapshot ...`, which we fake (success or failure); returns the names of the
+    snapshots asked for."""
     real = prep.subprocess.run
+    asked = []
 
     def fake(cmd, *a, **k):
         if isinstance(cmd, list) and cmd[:2] == ["zfs", "snapshot"]:
+            asked.append(cmd[2])
             if fail:
                 raise subprocess.CalledProcessError(1, cmd, output="", stderr="boom")
             return types.SimpleNamespace(returncode=0, stdout="", stderr="")
         return real(cmd, *a, **k)
     monkeypatch.setattr(prep.subprocess, "run", fake)
+    return asked
 
 
 # --- config validation (the "validate human-authored input" principle) -------
@@ -138,18 +142,16 @@ def _plan(ws):
 def test_snapshot_taken_with_detected_dataset_and_prefix(tmp_path, monkeypatch, seed_from_live_config):
     _mock_media(monkeypatch)
     monkeypatch.setattr(utils, "detect_zfs_dataset", lambda p: "pool/ws")
-    _intercept_zfs_snapshot(monkeypatch, fail=False)
+    asked = _intercept_zfs_snapshot(monkeypatch, fail=False)
     prep.CONFIG["zfs"] = {"enabled": True, "snapshots_required": True,
                           "snapshot_prefix": "photos-cartographer-", "datasets": {"workspace": "auto", "library": "auto"}}
     ws = _ws(tmp_path)
     (ws / "0-sources" / "a.jpg").write_bytes(b"AAAA")
     plan = _plan(ws)
     prep.PlanExecutor(str(ws)).execute(plan)
-    j = json.load(open(glob.glob(str(ws / ".photos-ingest" / "journal-*.json"))[0]))
-    snap = j["snapshots"]["workspace"]
-    assert snap["exit_code"] == 0
     # the shared helper labels prep's snapshot "prep-" so it never collides with geotag's
-    assert snap["snapshot_name"] == f"pool/ws@photos-cartographer-prep-{plan.plan_id}"
+    assert asked == [f"pool/ws@photos-cartographer-prep-{plan.plan_id}"]
+    assert not (ws / "0-sources" / "a.jpg").exists()                  # and the plan was carried out
 
 
 @pytest.mark.spec("RUL-required_snapshot_or_nothing", test="TST-zfs-required_snapshot_with_no_dataset_aborts")
@@ -161,7 +163,7 @@ def test_required_snapshot_with_no_dataset_aborts(tmp_path, monkeypatch, seed_fr
     ws = _ws(tmp_path)
     (ws / "0-sources" / "a.jpg").write_bytes(b"AAAA")
     plan = _plan(ws)
-    with pytest.raises(RuntimeError, match="no dataset found"):
+    with pytest.raises(prep.ExecuteRefused, match="no dataset found"):
         prep.PlanExecutor(str(ws)).execute(plan)
     assert os.path.exists(ws / "0-sources" / "a.jpg")                  # no mutation
 

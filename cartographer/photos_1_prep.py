@@ -506,6 +506,16 @@ def _rescan_inventory(workspace_root):
     return sorted(files + wf._collect_dump_dotfiles(blockers)), blockers
 
 
+class ExecuteRefused(ValueError):
+    """Prep's execute stopped before changing anything: its plan failed its checks, or a snapshot it requires was
+    not taken. The command ends as a refusal (BLD-exit_statuses)."""
+
+
+class ExecuteFailed(RuntimeError):
+    """Prep's execute began carrying out its plan and did not finish it: an operation failed, or the records that
+    close the run could not be written. The command ends as an execution that failed (BLD-exit_statuses)."""
+
+
 class PlanExecutor:
     def __init__(self, workspace_root: str):
         self.workspace_root = workspace_root
@@ -543,13 +553,11 @@ class PlanExecutor:
                 self.coordinator.finish_phase()
             except ValueError as e:
                 get_reporter().error(f"Preflight validation failed: {e}", stream="stdout")
-                raise
+                raise ExecuteRefused(str(e)) from e
 
             # 2. Start Journal (version-stamped so a stale/foreign journal is detectable, BLD-prep_dependencies)
             journal = JournalWriter(journal_path)
             journal.start_journal(plan.plan_id, depends_on={
-                "tool": "photos-1-prep",
-                "execution_id": self.execution_id,
                 "plan_schema_version": plan.plan_version,
                 "config_fingerprint": plan.config_fingerprint.value,
                 "cache_schema_version": CACHE_SCHEMA_VERSION,
@@ -561,14 +569,10 @@ class PlanExecutor:
             from .photos_utils import take_zfs_snapshot
             snap = take_zfs_snapshot(self.workspace_root, plan.plan_id, "prep")
             if snap is not None:
-                if snap["snapshot_name"] is not None:          # a snapshot was attempted -> journal it
-                    journal.add_snapshot("workspace", command=snap["command"], exit_code=snap["exit_code"],
-                                         stdout=snap["stdout"], stderr=snap["stderr"],
-                                         required=snap["required"], snapshot_name=snap["snapshot_name"])
                 if not snap["ok"]:
                     if snap["required"]:
                         journal.finish_journal("aborted_before_mutation")
-                        raise RuntimeError(f"ZFS snapshot required but failed: {snap['stderr']}")
+                        raise ExecuteRefused(f"ZFS snapshot required but failed: {snap['stderr']}")
                     get_reporter().warn(f"Warning: {snap['stderr'] or 'ZFS snapshot failed'}; skipping snapshot.",
                                         stream="stdout")
 
@@ -728,7 +732,7 @@ class PlanExecutor:
                 journal.journal.details = getattr(journal.journal, 'details', {})
                 journal.save()
                 journal.finish_journal("failed_intervention_required")
-                raise RuntimeError(f"Execution failed; intervention required. See journal. Failed ops: {failed_ops}")
+                raise ExecuteFailed(f"Execution failed; intervention required. See journal. Failed ops: {failed_ops}")
             else:
                 journal.finish_journal("success")
 
@@ -857,7 +861,7 @@ class PlanExecutor:
                                 if ts:
                                     cg["timestamps"].append(ts)
 
-                        filtered_record = {k: v for k, v in record.items() if k not in ["last_seen_ns", "absolute_path"]}
+                        filtered_record = {k: v for k, v in record.items() if k != "last_seen_ns"}
                         if md_record:
                             filtered_md = {k: v for k, v in md_record.items() if k != "relative_path"}
                             filtered_record["metadata_status"] = filtered_md
@@ -937,7 +941,7 @@ class PlanExecutor:
                     try:
                         prior_photos = read_prior_prep_log(self.workspace_root)
                     except ValueError as e:
-                        raise RuntimeError(str(e))
+                        raise ExecuteFailed(str(e))
                     log_photos, log_warnings = build_prep_log(
                         prior_photos, plan.operations, cache.get_all_files(),
                         quarantine_evidence, plan.plan_id)
@@ -960,7 +964,7 @@ class PlanExecutor:
                                 os.remove(ltmp)
                             except Exception:
                                 pass
-                        raise RuntimeError(f"Failed to write prep log: {e}")
+                        raise ExecuteFailed(f"Failed to write prep log: {e}")
 
                     # 2. Re-hash journal
                     journal_hash = OperationPlanner._hash_file(journal_path).value
@@ -976,7 +980,6 @@ class PlanExecutor:
                         # (RUL-handoff_deterministic).
                         "run_metadata": {"plan_id": plan.plan_id, "execution_id": self.execution_id},
                         "cache_fingerprint": cache_fingerprint,
-                        "hash_algorithm": "sha256",
                         # The folders prep actually scans/organizes — `1-strays` is deliberately EXCLUDED:
                         # strays are abandoned once moved there (written, never re-scanned), so they are
                         # not part of the deterministic content downstream phases depend on (BLD-handoff_content).
@@ -1058,7 +1061,7 @@ class PlanExecutor:
                             plan.summary["performance_and_cache"]["handoff_written_after_successful_validation"] = True
                         self.coordinator.finish_phase()
                     except Exception as e:
-                        raise RuntimeError(f"Failed to write handoff manifest: {e}")
+                        raise ExecuteFailed(f"Failed to write handoff manifest: {e}")
                 # End-of-prep DB backup snapshot (BLD-database_images): a transactionally
                 # consistent image of the live cache, captured at the same success gate as the
                 # handoff and written atomically over the earlier one — VACUUM INTO a temp name, then atomic
@@ -1106,18 +1109,6 @@ class JournalWriter:
             depends_on=depends_on or {}
         )
         self.save()
-
-    def add_snapshot(self, key: str, command: str, exit_code: int, stdout: str, stderr: str, required: bool, snapshot_name: Optional[str] = None):
-        if self.journal:
-            self.journal.snapshots[key] = {
-                "command": command,
-                "exit_code": exit_code,
-                "stdout": stdout,
-                "stderr": stderr,
-                "required": required,
-                "snapshot_name": snapshot_name
-            }
-            self.save()
 
     def add_operation_result(self, result: JournalOperationResult):
         if self.journal:
@@ -1299,7 +1290,6 @@ class WorkspacePrepWorkflow:
                 _st = _tgt_stat[_new_path]
                 _carried = dict(_old_row,
                                 relative_path=_new_path,
-                                absolute_path=os.path.join(self.workspace_root, _new_path),
                                 size=_st.st_size, mtime_ns=_st.st_mtime_ns, inode=_st.st_ino,
                                 last_seen_ns=int(datetime.now(timezone.utc).timestamp() * 1e9))
                 _carried["metadata"] = _old_md
@@ -1423,7 +1413,7 @@ class WorkspacePrepWorkflow:
                     _top == _sources_top or (self._initializing and _top not in self.managed_folders)):
                 e = os.path.splitext(f['relative_path'])[1].lower().lstrip('.')
                 if e and e not in _stray_ext_sample:
-                    _stray_ext_sample[e] = f['absolute_path']
+                    _stray_ext_sample[e] = os.path.join(self.workspace_root, f['relative_path'])
         for e, sample in sorted(_stray_ext_sample.items()):
             mime = exiftool_mime_type(sample)
             if mime and (mime.startswith('image/') or mime.startswith('video/')):
@@ -1777,7 +1767,6 @@ class WorkspacePrepWorkflow:
 
         result["db_file"] = {
             "relative_path": rel_path,
-            "absolute_path": abs_path,
             "size": stat.st_size,
             "mtime_ns": stat.st_mtime_ns,
             "inode": stat.st_ino,
@@ -1814,9 +1803,7 @@ class WorkspacePrepWorkflow:
             if rel_path in existing_cache:
                 continue                                  # the executed state is authoritative
             md = rec.get("metadata")
-            memo_files[rel_path] = dict(
-                {k: v for k, v in rec.items() if k != "metadata"},
-                absolute_path=os.path.join(self.workspace_root, rel_path))
+            memo_files[rel_path] = {k: v for k, v in rec.items() if k != "metadata"}
             if md:
                 # metadata_cache rows carry the identity columns that upsert_file adds on write; a memo
                 # stores the extractor's own dict, so re-attach them or is_metadata_cache_fresh rejects
@@ -1895,7 +1882,7 @@ class WorkspacePrepWorkflow:
                         destination=dest,
                         preconditions={"size": f["size"], "mtime_ns": f["mtime_ns"]},
                         verification={},
-                        database_effects_after_verification=[{"action": "remove", "relative_path": rel_path}, {"action": "upsert", "data": dict(f, relative_path=dest, absolute_path=os.path.join(self.workspace_root, dest))}]
+                        database_effects_after_verification=[{"action": "remove", "relative_path": rel_path}, {"action": "upsert", "data": dict(f, relative_path=dest)}]
                     ))
                     st.current_paths[f['relative_path']] = dest
 
@@ -1966,7 +1953,7 @@ class WorkspacePrepWorkflow:
                         destination=temp_rel,
                         preconditions={"size": f["size"], "mtime_ns": f["mtime_ns"]},
                         verification={},
-                        database_effects_after_verification=[{"action": "remove", "relative_path": rel_path}, {"action": "upsert", "data": dict(f, relative_path=temp_rel, absolute_path=os.path.join(self.workspace_root, temp_rel))}]
+                        database_effects_after_verification=[{"action": "remove", "relative_path": rel_path}, {"action": "upsert", "data": dict(f, relative_path=temp_rel)}]
                     ))
                     st.media_mutated_originals.add(f["relative_path"])
 
@@ -1980,7 +1967,7 @@ class WorkspacePrepWorkflow:
                         destination=final_rel,
                         preconditions={},
                         verification={},
-                        database_effects_after_verification=[{"action": "remove", "relative_path": temp_rel}, {"action": "upsert", "data": dict(f, relative_path=final_rel, absolute_path=os.path.join(self.workspace_root, final_rel))}]
+                        database_effects_after_verification=[{"action": "remove", "relative_path": temp_rel}, {"action": "upsert", "data": dict(f, relative_path=final_rel)}]
                     ))
                     st.current_paths[f['relative_path']] = final_rel
 
@@ -2035,7 +2022,7 @@ class WorkspacePrepWorkflow:
                                 destination=dest,
                                 preconditions={"size": f["size"], "mtime_ns": f["mtime_ns"]},
                                 verification={},
-                                database_effects_after_verification=[{"action": "remove", "relative_path": rel_path}, {"action": "upsert", "data": dict(f, relative_path=dest, absolute_path=os.path.join(self.workspace_root, dest))}]
+                                database_effects_after_verification=[{"action": "remove", "relative_path": rel_path}, {"action": "upsert", "data": dict(f, relative_path=dest)}]
                             ))
                             st.current_paths[f['relative_path']] = dest
 
@@ -2332,7 +2319,7 @@ class WorkspacePrepWorkflow:
                 destination=dest,
                 preconditions={"size": f["size"], "mtime_ns": f["mtime_ns"]},
                 verification={},
-                database_effects_after_verification=[{"action": "remove", "relative_path": rel_path}, {"action": "upsert", "data": dict(f, relative_path=dest, absolute_path=os.path.join(self.workspace_root, dest))}]
+                database_effects_after_verification=[{"action": "remove", "relative_path": rel_path}, {"action": "upsert", "data": dict(f, relative_path=dest)}]
             ))
             st.current_paths[f['relative_path']] = dest
 
@@ -2421,7 +2408,7 @@ class WorkspacePrepWorkflow:
 
             upsert = {
                 "action": "upsert",
-                "data": dict(f, relative_path=planned_rel, absolute_path=os.path.join(self.workspace_root, planned_rel)),
+                "data": dict(f, relative_path=planned_rel),
                 "preconditions": {
                     "size": f["size"],
                     "mtime_ns": f["mtime_ns"]
@@ -2580,8 +2567,7 @@ class WorkspacePrepWorkflow:
         # metadata change: the whole file). The old row is still pruned as a ghost.
         existing_cache, existing_metadata = dict(existing_cache), dict(existing_metadata)
         for _new, _old in relocated.items():
-            _abs = os.path.join(self.workspace_root, _new)
-            existing_cache[_new] = dict(existing_cache[_old], relative_path=_new, absolute_path=_abs)
+            existing_cache[_new] = dict(existing_cache[_old], relative_path=_new)
             if existing_metadata.get(_old):
                 existing_metadata[_new] = dict(existing_metadata[_old], relative_path=_new)
         recognized_moves = {**{n: cf["source"] for n, cf in carried_forward.items()}, **relocated}
@@ -2747,7 +2733,6 @@ class WorkspacePrepWorkflow:
             plan_id=plan_id_for_quarantine,
             command="prep",
             created_at=datetime.now(timezone.utc).isoformat(),
-            workspace_root=self.workspace_root,
             config_fingerprint=Fingerprint(algorithm="sha256", value=self._config_fingerprint),
             summary={
             "message": "Prep Plan generated",
@@ -3097,6 +3082,18 @@ def run(args):
         reporter.log("Lock released.")
 
 
+def _read_saved_plan(pp, reporter) -> Plan:
+    """The saved plan a dry run or an execute carries out; one that cannot be read refuses the command, nothing
+    changed (BLD-exit_statuses)."""
+    try:
+        with open(pp, "r") as f:
+            return Plan.from_dict(json.load(f))
+    except Exception as e:
+        reporter.error(f"The saved plan {os.path.basename(pp)} cannot be read ({e}). Nothing was changed.")
+        emit_next_step(reporter, "re-run `prep plan` to rebuild the plan.")
+        sys.exit(2)
+
+
 def _shape_blockers(workspace_root) -> list:
     """What is wrong with an initialized workspace's shape, as its top level shows it (RUL-shape_checked_first);
     [] for one not yet initialized, whose first run builds the shape, or one whose configuration cannot be read —
@@ -3169,7 +3166,7 @@ def _run_locked(args, workspace_root, reporter):
         if miss:
             reporter.error(f"Required external tool not found on PATH: {', '.join(miss)}. "
                            "Install exiftool and re-run `photos-cartographer prep plan`.")
-            sys.exit(3)
+            sys.exit(2)                                     # a refusal (BLD-exit_statuses)
         soft = missing_tools(["magick", "ffmpeg"])
         if soft:
             reporter.warn(f"Warning: {', '.join(soft)} not found on PATH — content fingerprinting will be "
@@ -3183,6 +3180,13 @@ def _run_locked(args, workspace_root, reporter):
         _config_was_seeded = not os.path.exists(_config_path(workspace_root))
 
         cache = WorkspaceCache(workspace_root, read_only=True)
+        # A database of another schema is never migrated: the plan is refused, nothing planned (BLD-exit_statuses).
+        from .photos_utils import cache_schema_mismatch
+        _schema_stop = cache_schema_mismatch(cache)
+        if _schema_stop:
+            cache.close()
+            reporter.error(_schema_stop)
+            sys.exit(2)
         workflow = WorkspacePrepWorkflow(workspace_root, cache)
         plan = workflow.plan()
         cache.close()
@@ -3231,16 +3235,14 @@ def _run_locked(args, workspace_root, reporter):
         # has nothing to validate — the saved plan is stale (its moves are already applied).
         if _prep_nothing_to_do(workspace_root, reporter):
             sys.exit(0)
-        with open(pp, "r") as f:
-            plan_data = json.load(f)
-        plan = Plan.from_dict(plan_data)
+        plan = _read_saved_plan(pp, reporter)
 
         try:
             PlanValidator.validate_plan_preflight(plan, workspace_root)
         except ValueError as e:
             reporter.error(f"Preflight validation failed: {e}")
             emit_next_step(reporter, "re-run `prep plan` to rebuild the plan against the current state.")
-            sys.exit(1)
+            sys.exit(2)                                     # a refusal (BLD-exit_statuses)
 
         # Dry-run is not a simulation: it validates the REAL saved plan (no virtual-filesystem
         # walk) and reports a SUMMARY of it. The full exact plan is the saved artifact at `pp`,
@@ -3282,19 +3284,24 @@ def _run_locked(args, workspace_root, reporter):
         # dry-run, gated on a plan existing so a missing plan still takes the "run plan first" path.
         if _prep_nothing_to_do(workspace_root, reporter):
             sys.exit(0)
-        with open(pp, "r") as f:
-            plan_data = json.load(f)
-        plan = Plan.from_dict(plan_data)
+        plan = _read_saved_plan(pp, reporter)
 
         executor = PlanExecutor(workspace_root)
 
+        # How execute ended decides its exit status (BLD-exit_statuses): refused before anything changed, 2; an
+        # operation failed or the run's closing records could not be written, 3; an error not foreseen, 1.
         try:
             executor.execute(plan)
+        except ExecuteRefused as e:
+            reporter.error(f"Execution refused: {e}. Nothing was changed.")
+            emit_next_step(reporter, "resolve the error above — for a stale plan, re-run `prep plan` — then "
+                                     "re-run `prep execute`.")
+            sys.exit(2)
         except Exception as e:
             reporter.error(f"Execution failed: {e}")
             emit_next_step(reporter, "resolve the error above and re-run `prep execute` "
                                      "(execute is idempotent — safe to re-run).")
-            sys.exit(1)
+            sys.exit(3 if isinstance(e, ExecuteFailed) else 1)
 
         # Next step depends on whether sorting is still pending: an empty by-dest means this was a
         # first ingest (sort, re-prep, then geotag); a populated by-dest means the move is recorded

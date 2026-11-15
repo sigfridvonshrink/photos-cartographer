@@ -734,7 +734,6 @@ def test_stale_ghost_prune_reappeared_file_aborts_before_cache_remove(mock_meta,
     # Create cache row for a missing file
     cache = photos_ingest.WorkspaceCache(str(ws), in_memory=False)
     cache.upsert_file({
-        "absolute_path": str(ws / "5-photos-by-date" / "reappeared.jpg"),
         "relative_path": "5-photos-by-date/reappeared.jpg",
         "size": 100,
         "mtime_ns": 1000,

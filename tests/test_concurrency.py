@@ -107,7 +107,6 @@ def test_deterministic_plan_with_jobs(mock_read, mock_popen, workspace):
         "created_at",
         "operation_id",
         "last_seen_ns",
-        "absolute_path",
         "duration_seconds",
         "progress",
         # NOTE: jobs is deliberately NOT scrubbed here — it is no longer recorded in the plan, so the
@@ -206,7 +205,6 @@ def test_quiet_plan_executor_execution(mock_validate, mock_popen, workspace):
         plan_version=prep.PLAN_SCHEMA_VERSION, code_fingerprint=prep.code_fingerprint(),
         command="prep",
         created_at="now",
-        workspace_root=workspace,
         config_fingerprint=prep.Fingerprint("sha256", "val"),
         summary={"metadata_plan_status": {}},
         blockers=[],

@@ -141,7 +141,7 @@ def test_metadata_cache_creation_and_staleness(workspace, monkeypatch):
 
     # Actually mock read to return updated metadata
     def mock_read_updated(folders, max_workers=4, progress_coordinator=None):
-         return { upsert_fx["data"]["absolute_path"]: { "DateTimeOriginal": "2023:01:01 12:00:00", "Make": "Canon", "Model": "EOS R5", "SerialNumber": "12345", "camera_group_key": "12345|Canon|EOS R5", "has_native_gps": False, "has_timestamp": True } }, set()
+         return { os.path.join(str(workspace), upsert_fx["data"]["relative_path"]): { "DateTimeOriginal": "2023:01:01 12:00:00", "Make": "Canon", "Model": "EOS R5", "SerialNumber": "12345", "camera_group_key": "12345|Canon|EOS R5", "has_native_gps": False, "has_timestamp": True } }, set()
     import photos_utils as utils
     monkeypatch.setattr(utils.MetadataReader, "read_metadata_concurrently", mock_read_updated)
 

@@ -55,7 +55,7 @@ def test_prep_refuses_a_move_onto_a_name_taken_in_another_case(tmp_path):
     cfg_sha = utils.load_or_seed_config(str(ws))
     plan = prep.Plan(
         plan_version=prep.PLAN_SCHEMA_VERSION, code_fingerprint=prep.code_fingerprint(), plan_id="p",
-        command="prep", created_at="now", workspace_root=str(ws),
+        command="prep", created_at="now",
         config_fingerprint=prep.Fingerprint("sha256", cfg_sha), summary={}, blockers=[], warnings=[],
         metadata_dependencies=prep.current_metadata_dependencies(),
         operations=[prep.Operation(operation_id="op-1", type="move_no_clobber", reason="test",

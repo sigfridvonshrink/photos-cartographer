@@ -98,8 +98,9 @@ PREP_ALLOWED_OPERATION_TYPES = {
 }
 
 # Plan serialization/schema version. A plan whose version differs from this is rejected at execute
-# time (BLD-prep_dependencies). 3: the plan records the code that made it, and plans its folder removals.
-PLAN_SCHEMA_VERSION = 3
+# time (BLD-prep_dependencies). 3: the plan records the code that made it, and plans its folder removals; 4: no
+# workspace_root, and no absolute_path in its database effects.
+PLAN_SCHEMA_VERSION = 4
 
 
 # ==============================================================================
@@ -129,7 +130,6 @@ class Plan:
     plan_id: str
     command: str
     created_at: str
-    workspace_root: str
     config_fingerprint: Fingerprint
     summary: Dict[str, Any]
     blockers: List[str]
@@ -164,7 +164,6 @@ class Journal:
     started_at: str
     finished_at: Optional[str] = None
     status: str = "started" # "started" | "success" | "failed_intervention_required" | "aborted_before_mutation"
-    snapshots: Dict[str, Dict[str, Any]] = field(default_factory=dict)
     operations: List[JournalOperationResult] = field(default_factory=list)
     details: Dict[str, Any] = field(default_factory=dict)
     depends_on: Dict[str, Any] = field(default_factory=dict)  # version/fingerprint stamp (BLD-prep_dependencies)
