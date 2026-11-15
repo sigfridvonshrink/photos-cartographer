@@ -424,7 +424,21 @@ no-clobber move.
 :status: ruled
 :realises: RUL-time_before_gps, RUL-execution_only_the_plan, RUL-mutate_on_difference, RUL-no_plan_while_a_decision_waits, RUL-plan_counts_placement, RUL-placement_recorded_with_its_track, RUL-corrected_time_written_local
 
-`photos-24-executable-plan.json` SHALL hold `status` — `ready`, or `blocked` with the plan's `blockers`, which `geotag plan` prints, exiting 2 — `executable`, `depends_on`, `plan_id` (the first 16 hex digits of the SHA-256 of `depends_on`), `placement` — its photos counted as `native`, `matched`, `interpolated`, `extrapolated`, `manual_locked`, `manual_fallback` or `unlocated` — and per destination its `operations`, `no_ops` (the photos it holds already as planned), `left_unlocated` (each photo marked `accept_unlocated`, with the decision) and a `summary`. An operation is `metadata_time_write`, carrying the resolved time, its rule, offset and timezone, and the decision it followed; `metadata_gps_write`, its origin `apply_manual` — with the decision and the position it replaces — or `recompute_automated`, with the track file that placed it and the resolved time it was placed at; `gps_marker_write`, one that clears geotag's position carrying the position it removes; or `rename_no_clobber`. A write the photo already holds is not planned. A time is written as `DateTimeOriginal` with `OffsetTimeOriginal` as a sign, hours and minutes — an offset with seconds, as a zone's before it kept standard time, to the nearest minute — and its operation carries in `pre_state` the two values the photo held and in `provenance` the field its time was read from.
+`photos-24-executable-plan.json` SHALL hold `status` — `ready`, or `blocked` with the plan's `blockers`, which `geotag plan` prints, exiting 2 — `executable`, `depends_on`, `plan_id` (the first 16 hex digits of the SHA-256 of `depends_on`), `placement` — its photos counted as `native`, `matched`, `interpolated`, `extrapolated`, `manual_locked`, `manual_fallback` or `unlocated` — and per destination its `operations`, `no_ops` (the photos it holds already as planned), `left_unlocated` (each photo marked `accept_unlocated`, with the decision) and a `summary`. An operation is `metadata_time_write`, carrying the resolved time, its rule, offset and timezone, and the decision it followed; `metadata_gps_write`, its origin `apply_manual` — with the decision and the position it replaces — or `recompute_automated`, with the track file that placed it and the resolved time it was placed at; `gps_marker_write`, one that clears geotag's position carrying the position it removes; or `rename_no_clobber`. A write the photo already holds is not planned. A time is written as `DateTimeOriginal` with `OffsetTimeOriginal` as a sign, hours and minutes — an offset with seconds, as a zone's before it kept standard time, to the nearest minute — and its operation carries in `pre_state` the value each field it writes held and in `provenance` the field its time was read from.
+:::
+
+:::{bld} The other time fields are written with the time
+:id: BLD-other_time_fields_written
+:status: ruled
+:realises: RUL-other_capture_times_corrected
+:uses: BLD-executable_plan, BLD-other_time_fields_read
+
+A time write SHALL carry as well, of the fields the photo holds, `EXIF:CreateDate` as `DateTimeOriginal` is written,
+with `EXIF:OffsetTimeDigitized` as `OffsetTimeOriginal` when the photo holds it too; `XMP:DateCreated` as the local time
+followed by any fraction of a second its value held and the offset, `YYYY:MM:DD HH:MM:SS[.ff]+HH:MM` as `exiftool -n`
+takes it; `IPTC:DateCreated` as the local date, `YYYY:MM:DD`; and `IPTC:TimeCreated` as the local time and offset,
+`HH:MM:SS+HH:MM` — never a field the photo does not hold. `ModifyDate` and `OffsetTime`, the last edit's, and the
+sub-second fields are left as they are, a clock offset being whole seconds.
 :::
 
 :::{bld} Position tags

@@ -312,6 +312,24 @@ def test_parse_exiftool_item_timestamp_source_fallback():
     assert r["selected_source_naive_timestamp"] is None
 
 
+@pytest.mark.spec("BLD-other_time_fields_read", "RUL-other_capture_times_corrected",
+                  test="TST-exif_metadata-the_other_time_fields_are_kept_by_their_group")
+def test_the_other_time_fields_are_kept_by_their_group():
+    """The time fields geotag rewrites are kept each under its group's name, from that group alone — so a photo's
+    IPTC date is never taken for an XMP one it does not hold — beside the field taken by the group order."""
+    import photos_utils as utils
+    parse = utils.MetadataReader._parse_exiftool_item
+    r = parse({"EXIF:CreateDate": "2024:07:03 13:00:00", "IPTC:DateCreated": "2024:07:03",
+               "IPTC:TimeCreated": "13:00:00+01:00", "XMP:CreateDate": "2024:07:03 13:00:00"})
+    assert {k: r[k] for k in utils.OTHER_TIME_FIELDS} == {
+        "EXIF:CreateDate": "2024:07:03 13:00:00", "EXIF:OffsetTimeDigitized": None, "XMP:DateCreated": None,
+        "IPTC:DateCreated": "2024:07:03", "IPTC:TimeCreated": "13:00:00+01:00"}
+    assert r["DateCreated"] == "2024:07:03"                               # by the group order, as before
+    assert utils.FIELD_SET_VERSION == 3                                   # a record of the fields before is read again
+    r = parse({"XMP:CreateDate": "2024:07:03 13:00:00", "XMP:DateCreated": "2024:07:03 13:00:00+01:00"})
+    assert (r["EXIF:CreateDate"], r["XMP:DateCreated"]) == (None, "2024:07:03 13:00:00+01:00")
+
+
 @pytest.mark.spec("RUL-recorded_time_order", test="TST-exif_metadata-a_placeholder_time_does_not_hide_a_valid_one")
 def test_a_placeholder_time_does_not_hide_a_valid_one():
     """A field present but holding no valid time is passed over for the next that holds one; a file whose

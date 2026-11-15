@@ -1323,7 +1323,7 @@ def test_merge_writes_only_its_own_part_of_the_database(tmp_path):
     geotag.GeotagCache(str(ws)).close()
     db = os.path.join(str(ws), ".photos-ingest", "photos-00-ingest.db")
     conn = sqlite3.connect(db)
-    conn.execute("INSERT INTO original_values VALUES ('NEW', '6-photos-by-dest/Trip/ts.jpg', '{}', 't')")
+    conn.execute("INSERT INTO original_values VALUES ('NEW', '6-photos-by-dest/Trip/ts.jpg', '{}', 't', '[]')")
     conn.execute("INSERT INTO meta VALUES ('a-prep-row', 'v')")
     conn.commit()
     conn.close()

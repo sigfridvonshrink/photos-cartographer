@@ -114,9 +114,13 @@ def test_a_time_written_is_logged_with_what_it_replaced_and_how_it_was_found():
     def op(rel, rule, held_off):
         f = {"relative_path": rel, "raw_times": {"DateTimeOriginal": "2024:07:03 19:00:00",
                                                  **({"OffsetTimeOriginal": held_off} if held_off else {})}}
+        writes = {"DateTimeOriginal": "2024:07:03 12:00:00", "OffsetTimeOriginal": "+02:00"}
+        if held_off:                              # another time field it holds, rewritten with it
+            f["other_times"] = {"IPTC:TimeCreated": "19:00:00" + held_off}
+            writes["IPTC:TimeCreated"] = "12:00:00+02:00"
         return {"type": "metadata_time_write", "relative_path": rel, "operation_id": "t-" + rel,
-                "writes": {"DateTimeOriginal": "2024:07:03 12:00:00", "OffsetTimeOriginal": "+02:00"},
-                "pre_state": cal.held_time_pre_state(f),
+                "writes": writes,
+                "pre_state": cal.held_time_pre_state(f, writes),
                 "provenance": {"time_rule_used": rule, "source_time_provenance": "EXIF:DateTimeOriginal"}}
     a, b = f"{BYDEST}/T/a.jpg", f"{BYDEST}/T/b.jpg"
     plan = {"plan_id": "p1", "destinations": {f"{BYDEST}/T": {"operations": [
@@ -124,11 +128,13 @@ def test_a_time_written_is_logged_with_what_it_replaced_and_how_it_was_found():
     photos = cal.build_complete_log({}, [_file(a, "fpA"), _file(b, "fpB")], [], {}, plan)
     wa = next(s for s in photos["fpA"]["journey"] if s["action"] == "time_written")
     wb = next(s for s in photos["fpB"]["journey"] if s["action"] == "time_written")
-    assert wa["pre_state"] == {"DateTimeOriginal": "2024:07:03 19:00:00", "OffsetTimeOriginal": "+09:00"}
+    assert wa["pre_state"] == {"DateTimeOriginal": "2024:07:03 19:00:00", "OffsetTimeOriginal": "+09:00",
+                               "IPTC:TimeCreated": "19:00:00+09:00"}          # every value the write replaced
     assert wb["pre_state"] == {"DateTimeOriginal": "2024:07:03 19:00:00", "OffsetTimeOriginal": None}
     assert (wa["rule"], wb["rule"]) == ("smartphone_native_offset", "destination_timezone")
     assert wa["read_from"] == "EXIF:DateTimeOriginal" and wa["run"] == "p1"
-    assert wa["writes"] == {"DateTimeOriginal": "2024:07:03 12:00:00", "OffsetTimeOriginal": "+02:00"}
+    assert wa["writes"] == {"DateTimeOriginal": "2024:07:03 12:00:00", "OffsetTimeOriginal": "+02:00",
+                            "IPTC:TimeCreated": "12:00:00+02:00"}
     # a pass executed earlier logs its time write the same way
     plan["destinations"][f"{BYDEST}/T"]["operations"][0]["preconditions"] = {"content_fingerprint": "fpA"}
     later = cal.build_complete_log({}, [_file(a, "fpA")], [], {}, {"plan_id": "p2", "destinations": {}},

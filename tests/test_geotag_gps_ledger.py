@@ -80,6 +80,7 @@ def _pinned(rel, dest, held_gps=None, held_method=None):
     f = dict(_model(rel, dest), from_originals=True, processing_method=None, geotag_marker=None)
     f["held"] = {"DateTimeOriginal": "2024:07:03 14:00:00", "OffsetTimeOriginal": "+02:00",
                  "lat": (held_gps or (None, None))[0], "lon": (held_gps or (None, None))[1], "method": held_method}
+    f["times_written"] = [{"DateTimeOriginal": "2024:07:03 14:00:00", "OffsetTimeOriginal": "+02:00"}]   # geotag's
     return f
 
 

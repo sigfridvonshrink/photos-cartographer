@@ -871,6 +871,20 @@ workspace, reaches the library, and is read back wherever the photo turns up aga
 recognised as corrected whichever workspace it is in.
 :::
 
+:::{rat} A time someone else changed is theirs to settle
+:id: RAT-changed_time_is_asked
+:status: ruled
+:forced: no
+:follows_from: RAT-rerun_is_safe, CHC-ask_only_what_data_cannot_settle
+:justifies: RUL-changed_time_stops_plan
+
+Geotag decides from what a photo held before it first wrote to it. A time the photo holds that is neither that nor
+what geotag wrote was put there since, by someone: a correction made in another tool, or a slip. Geotag cannot tell
+which. Writing its own time back would undo a correction without a word; taking the new time as the photo's recorded
+time would turn a camera's clock offset onto a time already corrected, or build on the slip. Only the person who made
+the change knows, so geotag stops and shows both times.
+:::
+
 :::{rat} An empty inbox means nothing is waiting
 :id: RAT-empty_inbox_means_nothing_waits
 :status: ruled

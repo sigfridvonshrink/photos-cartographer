@@ -1736,6 +1736,20 @@ A geotag re-run SHALL recognise a time an earlier run corrected, never correctin
 A geotag re-run SHALL derive again and replace a position geotag wrote, never keeping it as the file's own.
 :::
 
+:::{rul} A time changed since geotag wrote the photo stops the plan
+:id: RUL-changed_time_stops_plan
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+:refines: RUL-geotag_rerun_keeps_settled
+:uses: DEF-geotag, DEF-recorded_time
+
+Geotag SHALL NOT plan while a photo it has written to holds a time that is neither the photo's own from before
+geotag's first write nor one geotag wrote, neither writing its own time back over it nor taking it as the photo's
+recorded time.
+:::
+
 :::{rul} Geotag's gates are the present state, not its history
 :id: RUL-geotag_gates
 :status: ruled
