@@ -772,6 +772,22 @@ point counts — a position merely near it, or far from the others, may be real.
 so the log keeps it, and the photo's history still shows what it carried.
 :::
 
+:::{rat} A photo left unlocated is not shown in the sea
+:id: RAT-unlocated_null_island_cleared
+:status: ruled
+:forced: no
+:follows_from: RAT-null_island_no_fix
+:justifies: RUL-unlocated_null_island_cleared, RUL-log_records_null_island_cleared
+
+A photo the user leaves unlocated is one whose place nothing knows. Kept, the device's latitude 0 and longitude 0 still
+reads as a position to every program that shows the library: the owner's reason — a kept (0, 0) shows the photo off
+the coast of Africa in digiKam. Leaving it unlocated means no position, so the no-fix value goes, whole — coordinates
+and hemispheres together, as geotag takes away a position of its own, since a half-cleared fix is a torn one. It was
+measured nowhere, so nothing true is lost; and as with a position written over it, the log keeps what the device
+wrote, so the photo's history still shows what it carried. A photo with a real position is never left unlocated — it
+keeps its own — and a (0, 0) photo that something places is written over as before.
+:::
+
 :::{rat} Most specific first
 :id: RAT-placement_most_specific_first
 :status: ruled

@@ -1266,6 +1266,18 @@ A photo whose position is latitude 0 and longitude 0 SHALL count, wherever geota
 having none.
 :::
 
+:::{rul} A photo left unlocated keeps no position at latitude 0 and longitude 0
+:id: RUL-unlocated_null_island_cleared
+:status: ruled
+:criticality: med
+:anti: yes
+:verify: required
+:refines: RUL-null_island_is_no_position
+
+A photo the user leaves unlocated SHALL NOT keep a position of latitude 0 and longitude 0: geotag removes it whole, as
+it removes a position of its own it no longer places.
+:::
+
 :::{rul} A photo is placed by the most specific source it has
 :id: RUL-placement_order
 :status: ruled

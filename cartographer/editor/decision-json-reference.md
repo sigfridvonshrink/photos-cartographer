@@ -377,7 +377,7 @@ One entry per file that needs the human (or that the human already locked/accept
 | `reason` | `"no_reliable_gps_source"` \| `"manual_locked"` \| `"accepted_unlocated"` | no | Why it's here (see below). |
 | **`user_decision.manual_lat`** | number \| `""` | **yes** | Human-entered latitude (set both). |
 | **`user_decision.manual_lon`** | number \| `""` | **yes** | Human-entered longitude. |
-| **`user_decision.accept_unlocated`** | bool | **yes** | Accept leaving this file with no GPS (taken only when neither the tracks nor the folder fallback place it). |
+| **`user_decision.accept_unlocated`** | bool | **yes** | Accept leaving this file with no GPS (taken only when neither the tracks nor the folder fallback place it). A file holding exactly latitude 0, longitude 0 — a device's no-fix value — has it removed, and the log records it. |
 | `requires_user_input` | bool | no | `true` only for `no_reliable_gps_source` (until resolved). |
 | `stale_user_decision` | bool (always `false`) | no | — |
 

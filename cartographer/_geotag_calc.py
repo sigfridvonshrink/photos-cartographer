@@ -1730,12 +1730,19 @@ def plan_file_ops(file, resolved_utc, tz, gps_category, gps_coord, rename):
                                  "gps_origin": _GPS_OP_ORIGIN[gps_category]}, pre))
             ops.append(_make_op("gps_marker_write", rel, "gps provenance",
                                 {"writes": {"GPSProcessingMethod": new_marker}}, pre))
-    elif time_corrected:
-        target = with_time_fixed(device_method(file.get("processing_method")))
-        if geotag_marker(held.get("method")) in POSITION_MARKERS:
-            ops.append(time_fixed_marker_op(file, target, clear_position=True))   # geotag's old fix: not kept
-        elif (held.get("method") or "").strip() != target:
-            ops.append(time_fixed_marker_op(file, target))
+    else:
+        # A photo the user left unlocated loses the device's no-fix position, whole: a kept latitude 0,
+        # longitude 0 shows it off the coast of Africa (RUL-unlocated_null_island_cleared)
+        no_fix = gps_category == "no_change" and holds_no_fix(file)
+        if time_corrected:
+            target = with_time_fixed(device_method(file.get("processing_method")))
+            if no_fix or geotag_marker(held.get("method")) in POSITION_MARKERS:
+                ops.append(time_fixed_marker_op(file, target, clear_position=True))   # geotag's old fix: not kept
+            elif (held.get("method") or "").strip() != target:
+                ops.append(time_fixed_marker_op(file, target))
+        elif no_fix:                              # no time written: the position cleared alone, no mark added
+            ops.append(_make_op("gps_marker_write", rel, "no-fix position cleared",
+                                {"writes": dict(_CLEARED_POSITION)}, pre))
 
     if rename and rename.get("rename"):
         semantic = {"from": rename["current_name"], "to": rename["planned_name"]}

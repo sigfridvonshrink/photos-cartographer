@@ -929,14 +929,15 @@ the destination's folder fallback, with the destination it was accepted from.
 :::{bld} Geotag's steps in the log
 :id: BLD-geotag_log_steps
 :status: ruled
-:realises: RUL-log_entry_grows, RUL-log_records_gps_reverts, RUL-log_records_time_replaced, RUL-log_records_null_island_replaced
+:realises: RUL-log_entry_grows, RUL-log_records_gps_reverts, RUL-log_records_time_replaced, RUL-log_records_null_island_replaced, RUL-log_records_null_island_cleared
 
 Geotag's steps SHALL be `clock_offset_applied` (its `offset_seconds` with an `offset_description` in words, such as
 "camera clock 1 h 55 min ahead of UTC"), `resolved_utc`, `timezone_resolved`, `time_written` (with its `writes`, the
 `pre_state` it replaced — the value each field it writes held — the field `read_from` and the `rule`, from the plan), `gps_written` (with its
 origin, method and, for a manual position or one written over a position the device wrote that is none of the photo's
 own, the `pre_state` it replaced, from the plan), `gps_cleared` (a position geotag
-wrote and no longer places, with that position, from the plan, and the method left), `gps_preserved` and `final_rename`,
+wrote and no longer places, or the latitude 0 and longitude 0 of a photo left unlocated, with that position, from the
+plan, and the method left), `gps_preserved` and `final_rename`,
 each naming its `run`; finalize takes them from every executed pass — each superseded `photos-24` whose journal shows it
 ran, oldest first, matched by fingerprint — before the current plan's, from the provenance each time write carries.
 :::

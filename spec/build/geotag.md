@@ -454,6 +454,19 @@ pinned ones — take it from that test alone, so a photo at latitude 0 and longi
 `preserve_native`, never an anchor frame and never counted in `preserve_native_gps`.
 :::
 
+:::{bld} A no-fix position cleared from a photo left unlocated
+:id: BLD-unlocated_null_island_cleared
+:status: ruled
+:realises: RUL-unlocated_null_island_cleared, RUL-log_records_null_island_cleared
+:uses: BLD-own_position_test, BLD-placement_order, BLD-executable_plan
+
+For a photo `classify_gps` gives `no_change` that holds latitude 0 and longitude 0 by that test, `plan_file_ops` SHALL
+plan a `gps_marker_write` clearing `GPSLatitude`, `GPSLatitudeRef`, `GPSLongitude` and `GPSLongitudeRef`, as it clears
+a position geotag wrote — with the time-fixed `GPSProcessingMethod` where geotag writes or wrote the photo's time, else
+those four alone — carrying in `pre_state` the position it removes; finalize logs it as `gps_cleared` with that
+`pre_state` ({need}`BLD-geotag_log_steps`). A photo holding no position is planned no such write.
+:::
+
 :::{bld} The GPS decisions record
 :id: BLD-gps_decisions_record
 :status: ruled
@@ -563,7 +576,7 @@ photo interrupted between the two, completed once it is seen to be the photo as 
 :status: ruled
 :realises: RUL-time_before_gps, RUL-execution_only_the_plan, RUL-mutate_on_difference, RUL-no_plan_while_a_decision_waits, RUL-plan_counts_placement, RUL-placement_recorded_with_its_track, RUL-corrected_time_written_local
 
-`photos-24-executable-plan.json` SHALL hold `status` — `ready`, or `blocked` with the plan's `blockers`, which `geotag plan` prints, exiting 2 — `executable`, `depends_on`, `plan_id` (the first 16 hex digits of the SHA-256 of `depends_on`), `placement` — its photos counted as `native`, `matched`, `interpolated`, `extrapolated`, `manual_locked`, `manual_fallback` or `unlocated` — and per destination its `operations`, `no_ops` (the photos it holds already as planned), `left_unlocated` (each photo marked `accept_unlocated`, with the decision) and a `summary`. An operation is `metadata_time_write`, carrying the resolved time, its rule, offset and timezone, and the decision it followed; `metadata_gps_write`, its origin `apply_manual` — with the decision and the position it replaces — or `recompute_automated`, with the track file that placed it and the resolved time it was placed at; `gps_marker_write`, one that clears geotag's position carrying the position it removes; or `rename_no_clobber`. A write the photo already holds is not planned. A time is written as `DateTimeOriginal` with `OffsetTimeOriginal` as a sign, hours and minutes — an offset with seconds, as a zone's before it kept standard time, to the nearest minute — and its operation carries in `pre_state` the value each field it writes held and in `provenance` the field its time was read from.
+`photos-24-executable-plan.json` SHALL hold `status` — `ready`, or `blocked` with the plan's `blockers`, which `geotag plan` prints, exiting 2 — `executable`, `depends_on`, `plan_id` (the first 16 hex digits of the SHA-256 of `depends_on`), `placement` — its photos counted as `native`, `matched`, `interpolated`, `extrapolated`, `manual_locked`, `manual_fallback` or `unlocated` — and per destination its `operations`, `no_ops` (the photos it holds already as planned), `left_unlocated` (each photo marked `accept_unlocated`, with the decision) and a `summary`. An operation is `metadata_time_write`, carrying the resolved time, its rule, offset and timezone, and the decision it followed; `metadata_gps_write`, its origin `apply_manual` — with the decision and the position it replaces — or `recompute_automated`, with the track file that placed it and the resolved time it was placed at; `gps_marker_write`, one that clears geotag's position, or a no-fix one ({need}`BLD-unlocated_null_island_cleared`), carrying the position it removes; or `rename_no_clobber`. A write the photo already holds is not planned. A time is written as `DateTimeOriginal` with `OffsetTimeOriginal` as a sign, hours and minutes — an offset with seconds, as a zone's before it kept standard time, to the nearest minute — and its operation carries in `pre_state` the value each field it writes held and in `provenance` the field its time was read from.
 :::
 
 :::{bld} The other time fields are written with the time

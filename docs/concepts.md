@@ -350,7 +350,9 @@ For a camera's clock offset, no timezone-derived offset is proposed at such a ti
 GPS is placed only once every photo's true time is resolved. A photo keeps its own GPS position, always.
 A position of exactly latitude 0, longitude 0 is not one — it is what a device writes with no fix — so
 that photo is placed like one without, its camera's clock is never read from it, and the log records the
-(0, 0) a position written over it replaced. One without is placed by the first of:
+(0, 0) a position written over it replaced. If you leave such a photo unlocated, geotag removes the (0, 0)
+— coordinates and hemisphere tags together — so digiKam does not show it off the coast of Africa, and the
+log records what it removed. One without is placed by the first of:
 
 1. **a position you set** for that photo in the editor;
 2. **the tracks**, at its corrected time — on a track point within `gpx_direct_match_max_seconds`

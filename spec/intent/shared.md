@@ -2329,6 +2329,18 @@ A position geotag writes over a photo's position of latitude 0 and longitude 0 S
 position it replaced.
 :::
 
+:::{rul} A position at latitude 0 and longitude 0 removed is logged with it
+:id: RUL-log_records_null_island_cleared
+:status: ruled
+:criticality: med
+:verify: required
+:refines: RUL-unlocated_null_island_cleared
+:uses: DEF-transformation_log
+
+A position of latitude 0 and longitude 0 that geotag removes from a photo left unlocated SHALL appear in the log with
+the position it removed.
+:::
+
 :::{rul} A time written is logged with what it replaced and how it was found
 :id: RUL-log_records_time_replaced
 :status: ruled
