@@ -1534,8 +1534,8 @@ def take_zfs_snapshot(ws: str, snapshot_id: str, label: str, *, target_path=None
     Returns None when ZFS is disabled; otherwise a record
     `{required, snapshot_name (None if no dataset was found), command, exit_code, stdout, stderr, ok}`,
     plus `already_existed: True` when the snapshot was there before this call.
-    It NEVER raises — the caller records the result in its own journal/summary and, if `required` and
-    not `ok`, aborts before mutating (keeping the audit record + abort decision in the phase).
+    It NEVER raises — geotag and merge record the result in their summaries — and the caller, if `required`
+    and not `ok`, aborts before mutating (keeping the abort decision in the phase).
 
     A snapshot names its plan (RUL-snapshot_per_plan), so executing the same plan again (a geotag
     resume, a merge re-run) asks for a name that exists: that snapshot already precedes this plan's
@@ -1567,7 +1567,7 @@ def take_zfs_snapshot(ws: str, snapshot_id: str, label: str, *, target_path=None
             rec["already_existed"] = True
     # Surface a log line whenever a snapshot is actually taken, naming it — one place so EVERY phase
     # (prep/geotag/merge) that snapshots before mutating reports it. Failures are left to the caller
-    # (it warns or aborts per `required`); the durable record still goes to the journal/summary.
+    # (it warns or aborts per `required`); geotag's and merge's durable record goes to their summaries.
     if rec["ok"]:
         try:
             from .reporting import get_reporter
@@ -2475,7 +2475,8 @@ class ProgressCoordinator:
 # table, the journal, and the handoff depends_on so a stale/foreign cache or journal is
 # detectable downstream (BLD-cache_versions). The per-hash engine binding (e.g. ImageMagick
 # version) is carried separately in each content hash's engine_version.
-CACHE_SCHEMA_VERSION = 3   # 2: file_cache without the byte-hash column; 3: metadata_cache without the raw payload
+CACHE_SCHEMA_VERSION = 4   # 2: file_cache without the byte-hash column; 3: metadata_cache without the raw payload;
+                           # 4: file_cache without absolute_path
 FINGERPRINT_ALGORITHM_VERSION = "2"   # 2: every frame of an image, every stream of a video
 
 
@@ -2796,9 +2797,8 @@ class PlanFingerprintMemo:
                 continue                     # a failed fingerprint is never reused, so never kept
             if not rec.get("metadata"):
                 continue
-            stored = {k: v for k, v in rec.items() if k != "absolute_path"}   # path is machine-specific
             rows.append({"relative_path": rec["relative_path"], "size": rec.get("size"),
-                         "mtime_ns": rec.get("mtime_ns"), "record_json": json.dumps(stored, sort_keys=True)})
+                         "mtime_ns": rec.get("mtime_ns"), "record_json": json.dumps(rec, sort_keys=True)})
         with self._lock, self.conn:
             self.conn.execute("DELETE FROM plan_fingerprint_memo")
             self.conn.executemany("""
@@ -2847,7 +2847,6 @@ class WorkspaceCache:
             self.conn.execute("""
                 CREATE TABLE IF NOT EXISTS file_cache (
                     relative_path TEXT PRIMARY KEY,
-                    absolute_path TEXT,
                     size INTEGER,
                     mtime_ns INTEGER,
                     inode INTEGER,
@@ -2978,14 +2977,13 @@ class WorkspaceCache:
         with self._write_ctx():
             self.conn.execute("""
                 INSERT INTO file_cache (
-                    relative_path, absolute_path, size, mtime_ns, inode, media_class,
+                    relative_path, size, mtime_ns, inode, media_class,
                     content_hash, last_seen_ns
                 ) VALUES (
-                    :relative_path, :absolute_path, :size, :mtime_ns, :inode, :media_class,
+                    :relative_path, :size, :mtime_ns, :inode, :media_class,
                     :content_hash, :last_seen_ns
                 )
                 ON CONFLICT(relative_path) DO UPDATE SET
-                    absolute_path = excluded.absolute_path,
                     size = excluded.size,
                     mtime_ns = excluded.mtime_ns,
                     inode = excluded.inode,

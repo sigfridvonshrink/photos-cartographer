@@ -68,7 +68,6 @@ def test_execute_rejects_forbidden_operation_types(tmp_path):
         plan_id="test",
         command="prep",
         created_at="now",
-        workspace_root=str(tmp_path),
         config_fingerprint=photos_1_prep.Fingerprint("sha256", "val"),
         summary={},
         blockers=[],
@@ -94,7 +93,6 @@ def test_execute_rejects_non_prep_plans(tmp_path):
         plan_id="test",
         command="geotag",
         created_at="now",
-        workspace_root=str(tmp_path),
         config_fingerprint=photos_1_prep.Fingerprint("sha256", "val"),
         summary={},
         blockers=[],
@@ -203,7 +201,6 @@ def test_dry_run_rejects_metadata_write(tmp_path):
         plan_id="test",
         command="prep",
         created_at="now",
-        workspace_root=str(tmp_path),
         config_fingerprint=photos_1_prep.Fingerprint("sha256", "val"),
         summary={},
         blockers=[],
@@ -230,7 +227,6 @@ def test_execute_rejects_any_operation_in_by_dest(tmp_path, source, destination)
     executor = photos_1_prep.PlanExecutor(str(tmp_path))
     plan = photos_1_prep.Plan(
         plan_version=photos_1_prep.PLAN_SCHEMA_VERSION, code_fingerprint=photos_1_prep.code_fingerprint(), plan_id="test", command="prep", created_at="now",
-        workspace_root=str(tmp_path),
         config_fingerprint=photos_1_prep.Fingerprint("sha256", "val"),
         summary={}, blockers=[], warnings=[],
         operations=[photos_1_prep.Operation(operation_id="op-1", type="move_no_clobber", reason="test",

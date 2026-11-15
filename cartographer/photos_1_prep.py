@@ -558,8 +558,6 @@ class PlanExecutor:
             # 2. Start Journal (version-stamped so a stale/foreign journal is detectable, BLD-prep_dependencies)
             journal = JournalWriter(journal_path)
             journal.start_journal(plan.plan_id, depends_on={
-                "tool": "photos-1-prep",
-                "execution_id": self.execution_id,
                 "plan_schema_version": plan.plan_version,
                 "config_fingerprint": plan.config_fingerprint.value,
                 "cache_schema_version": CACHE_SCHEMA_VERSION,
@@ -571,10 +569,6 @@ class PlanExecutor:
             from .photos_utils import take_zfs_snapshot
             snap = take_zfs_snapshot(self.workspace_root, plan.plan_id, "prep")
             if snap is not None:
-                if snap["snapshot_name"] is not None:          # a snapshot was attempted -> journal it
-                    journal.add_snapshot("workspace", command=snap["command"], exit_code=snap["exit_code"],
-                                         stdout=snap["stdout"], stderr=snap["stderr"],
-                                         required=snap["required"], snapshot_name=snap["snapshot_name"])
                 if not snap["ok"]:
                     if snap["required"]:
                         journal.finish_journal("aborted_before_mutation")
@@ -867,7 +861,7 @@ class PlanExecutor:
                                 if ts:
                                     cg["timestamps"].append(ts)
 
-                        filtered_record = {k: v for k, v in record.items() if k not in ["last_seen_ns", "absolute_path"]}
+                        filtered_record = {k: v for k, v in record.items() if k != "last_seen_ns"}
                         if md_record:
                             filtered_md = {k: v for k, v in md_record.items() if k != "relative_path"}
                             filtered_record["metadata_status"] = filtered_md
@@ -986,7 +980,6 @@ class PlanExecutor:
                         # (RUL-handoff_deterministic).
                         "run_metadata": {"plan_id": plan.plan_id, "execution_id": self.execution_id},
                         "cache_fingerprint": cache_fingerprint,
-                        "hash_algorithm": "sha256",
                         # The folders prep actually scans/organizes — `1-strays` is deliberately EXCLUDED:
                         # strays are abandoned once moved there (written, never re-scanned), so they are
                         # not part of the deterministic content downstream phases depend on (BLD-handoff_content).
@@ -1116,18 +1109,6 @@ class JournalWriter:
             depends_on=depends_on or {}
         )
         self.save()
-
-    def add_snapshot(self, key: str, command: str, exit_code: int, stdout: str, stderr: str, required: bool, snapshot_name: Optional[str] = None):
-        if self.journal:
-            self.journal.snapshots[key] = {
-                "command": command,
-                "exit_code": exit_code,
-                "stdout": stdout,
-                "stderr": stderr,
-                "required": required,
-                "snapshot_name": snapshot_name
-            }
-            self.save()
 
     def add_operation_result(self, result: JournalOperationResult):
         if self.journal:
@@ -1309,7 +1290,6 @@ class WorkspacePrepWorkflow:
                 _st = _tgt_stat[_new_path]
                 _carried = dict(_old_row,
                                 relative_path=_new_path,
-                                absolute_path=os.path.join(self.workspace_root, _new_path),
                                 size=_st.st_size, mtime_ns=_st.st_mtime_ns, inode=_st.st_ino,
                                 last_seen_ns=int(datetime.now(timezone.utc).timestamp() * 1e9))
                 _carried["metadata"] = _old_md
@@ -1433,7 +1413,7 @@ class WorkspacePrepWorkflow:
                     _top == _sources_top or (self._initializing and _top not in self.managed_folders)):
                 e = os.path.splitext(f['relative_path'])[1].lower().lstrip('.')
                 if e and e not in _stray_ext_sample:
-                    _stray_ext_sample[e] = f['absolute_path']
+                    _stray_ext_sample[e] = os.path.join(self.workspace_root, f['relative_path'])
         for e, sample in sorted(_stray_ext_sample.items()):
             mime = exiftool_mime_type(sample)
             if mime and (mime.startswith('image/') or mime.startswith('video/')):
@@ -1787,7 +1767,6 @@ class WorkspacePrepWorkflow:
 
         result["db_file"] = {
             "relative_path": rel_path,
-            "absolute_path": abs_path,
             "size": stat.st_size,
             "mtime_ns": stat.st_mtime_ns,
             "inode": stat.st_ino,
@@ -1824,9 +1803,7 @@ class WorkspacePrepWorkflow:
             if rel_path in existing_cache:
                 continue                                  # the executed state is authoritative
             md = rec.get("metadata")
-            memo_files[rel_path] = dict(
-                {k: v for k, v in rec.items() if k != "metadata"},
-                absolute_path=os.path.join(self.workspace_root, rel_path))
+            memo_files[rel_path] = {k: v for k, v in rec.items() if k != "metadata"}
             if md:
                 # metadata_cache rows carry the identity columns that upsert_file adds on write; a memo
                 # stores the extractor's own dict, so re-attach them or is_metadata_cache_fresh rejects
@@ -1905,7 +1882,7 @@ class WorkspacePrepWorkflow:
                         destination=dest,
                         preconditions={"size": f["size"], "mtime_ns": f["mtime_ns"]},
                         verification={},
-                        database_effects_after_verification=[{"action": "remove", "relative_path": rel_path}, {"action": "upsert", "data": dict(f, relative_path=dest, absolute_path=os.path.join(self.workspace_root, dest))}]
+                        database_effects_after_verification=[{"action": "remove", "relative_path": rel_path}, {"action": "upsert", "data": dict(f, relative_path=dest)}]
                     ))
                     st.current_paths[f['relative_path']] = dest
 
@@ -1976,7 +1953,7 @@ class WorkspacePrepWorkflow:
                         destination=temp_rel,
                         preconditions={"size": f["size"], "mtime_ns": f["mtime_ns"]},
                         verification={},
-                        database_effects_after_verification=[{"action": "remove", "relative_path": rel_path}, {"action": "upsert", "data": dict(f, relative_path=temp_rel, absolute_path=os.path.join(self.workspace_root, temp_rel))}]
+                        database_effects_after_verification=[{"action": "remove", "relative_path": rel_path}, {"action": "upsert", "data": dict(f, relative_path=temp_rel)}]
                     ))
                     st.media_mutated_originals.add(f["relative_path"])
 
@@ -1990,7 +1967,7 @@ class WorkspacePrepWorkflow:
                         destination=final_rel,
                         preconditions={},
                         verification={},
-                        database_effects_after_verification=[{"action": "remove", "relative_path": temp_rel}, {"action": "upsert", "data": dict(f, relative_path=final_rel, absolute_path=os.path.join(self.workspace_root, final_rel))}]
+                        database_effects_after_verification=[{"action": "remove", "relative_path": temp_rel}, {"action": "upsert", "data": dict(f, relative_path=final_rel)}]
                     ))
                     st.current_paths[f['relative_path']] = final_rel
 
@@ -2045,7 +2022,7 @@ class WorkspacePrepWorkflow:
                                 destination=dest,
                                 preconditions={"size": f["size"], "mtime_ns": f["mtime_ns"]},
                                 verification={},
-                                database_effects_after_verification=[{"action": "remove", "relative_path": rel_path}, {"action": "upsert", "data": dict(f, relative_path=dest, absolute_path=os.path.join(self.workspace_root, dest))}]
+                                database_effects_after_verification=[{"action": "remove", "relative_path": rel_path}, {"action": "upsert", "data": dict(f, relative_path=dest)}]
                             ))
                             st.current_paths[f['relative_path']] = dest
 
@@ -2342,7 +2319,7 @@ class WorkspacePrepWorkflow:
                 destination=dest,
                 preconditions={"size": f["size"], "mtime_ns": f["mtime_ns"]},
                 verification={},
-                database_effects_after_verification=[{"action": "remove", "relative_path": rel_path}, {"action": "upsert", "data": dict(f, relative_path=dest, absolute_path=os.path.join(self.workspace_root, dest))}]
+                database_effects_after_verification=[{"action": "remove", "relative_path": rel_path}, {"action": "upsert", "data": dict(f, relative_path=dest)}]
             ))
             st.current_paths[f['relative_path']] = dest
 
@@ -2431,7 +2408,7 @@ class WorkspacePrepWorkflow:
 
             upsert = {
                 "action": "upsert",
-                "data": dict(f, relative_path=planned_rel, absolute_path=os.path.join(self.workspace_root, planned_rel)),
+                "data": dict(f, relative_path=planned_rel),
                 "preconditions": {
                     "size": f["size"],
                     "mtime_ns": f["mtime_ns"]
@@ -2590,8 +2567,7 @@ class WorkspacePrepWorkflow:
         # metadata change: the whole file). The old row is still pruned as a ghost.
         existing_cache, existing_metadata = dict(existing_cache), dict(existing_metadata)
         for _new, _old in relocated.items():
-            _abs = os.path.join(self.workspace_root, _new)
-            existing_cache[_new] = dict(existing_cache[_old], relative_path=_new, absolute_path=_abs)
+            existing_cache[_new] = dict(existing_cache[_old], relative_path=_new)
             if existing_metadata.get(_old):
                 existing_metadata[_new] = dict(existing_metadata[_old], relative_path=_new)
         recognized_moves = {**{n: cf["source"] for n, cf in carried_forward.items()}, **relocated}
@@ -2757,7 +2733,6 @@ class WorkspacePrepWorkflow:
             plan_id=plan_id_for_quarantine,
             command="prep",
             created_at=datetime.now(timezone.utc).isoformat(),
-            workspace_root=self.workspace_root,
             config_fingerprint=Fingerprint(algorithm="sha256", value=self._config_fingerprint),
             summary={
             "message": "Prep Plan generated",

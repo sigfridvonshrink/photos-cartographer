@@ -581,7 +581,6 @@ def test_source_changed_after_plan_abort_no_db(tmp_path, monkeypatch):
         plan_id="dummy",
         command="prep",
         created_at="now",
-        workspace_root=str(ws),
         config_fingerprint=photos_ingest.Fingerprint("sha256", cfg_sha),
         summary={},
         blockers=[],
