@@ -213,6 +213,16 @@ A JPEG SHALL be a file of the `image` class ending `.jpg` or `.jpeg`, matched ig
 `raw` class.
 :::
 
+:::{bld} A JPEG pairs with its RAW by its name, with case
+:id: BLD-raw_jpeg_pair_by_exact_name
+:status: ruled
+:realises: RUL-redundant_jpeg_set_aside, RUL-redundant_jpeg_only
+
+A JPEG and a raw file SHALL be a pair only where, in one inbox folder, their names before the extension are the same
+with case — `IMG_1.JPG` pairs with `IMG_1.cr2`, never with `img_1.cr2` — the extensions matched ignoring case
+({need}`BLD-jpeg_extensions`).
+:::
+
 :::{bld} The database is reconciled by planned operations
 :id: BLD-database_ops
 :status: ruled

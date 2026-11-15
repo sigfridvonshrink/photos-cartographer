@@ -103,6 +103,23 @@ def test_only_the_jpeg_beside_a_raw_is_set_aside(tmp_path):
     assert any(n.endswith(".png") for n in day), day                # the PNG is filed as a photo
 
 
+@pytest.mark.spec("BLD-raw_jpeg_pair_by_exact_name", test="TST-prep_pipeline-a_jpeg_pairs_with_its_raw_by_its_name_with_case")
+def test_a_jpeg_pairs_with_its_raw_by_its_name_with_case(tmp_path):
+    """The names before the extension must match with case: `IMG_1.JPG` beside `IMG_1.cr2` is set aside, `IMG_2.JPG`
+    beside `img_2.cr2` is not — it is filed as a photo — while the extension's case never matters."""
+    ws = _ws(tmp_path)
+    (ws / "0-sources" / "IMG_1.cr2").write_bytes(b"raw1")
+    (ws / "0-sources" / "IMG_1.JPG").write_bytes(b"jpg1")
+    (ws / "0-sources" / "img_2.cr2").write_bytes(b"raw2")
+    (ws / "0-sources" / "IMG_2.JPG").write_bytes(b"jpg2")
+    plan = _plan(ws)
+    moved = {op.source: op.destination for op in plan.operations if op.reason == "Separate redundant JPG"}
+    assert list(moved) == ["0-sources/IMG_1.JPG"], moved
+    organized = {op.source: op.destination for op in plan.operations
+                 if op.reason and "Chronological Organization" in op.reason}
+    assert organized["0-sources/IMG_2.JPG"].startswith("5-photos-by-date/")
+
+
 @pytest.mark.spec("RUL-duplicates_quarantined", "RUL-copy_kept_by_folder", "BLD-prep_stage_order",
                   test="TST-prep_pipeline-a_redumped_pair_settles_in_one_run")
 def test_a_redumped_pair_settles_in_one_run(tmp_path):
