@@ -52,6 +52,15 @@ test("a photos-25 fingerprint mismatch: asked until accepted, saved into photos-
     user_decision: { accept_fingerprint_change: true } }]);
 });
 
+test("recordAbsentText: a record that does not parse is shown as that error, never as no file", () => {
+  const err = { _error: "could not read photos-21-time-decisions.json: Expecting value: line 3 column 1 (char 7)" };
+  const said = app.recordAbsentText(err, "photos-21-time-decisions.json");
+  assert.match(said, /Expecting value: line 3 column 1/);
+  assert.doesNotMatch(said, /^No /);
+  assert.equal(app.recordAbsentText(null, "photos-21-time-decisions.json"), "No photos-21-time-decisions.json.");
+  assert.equal(app.recordAbsentText({}, "photos-22-gps-drift-validation.json"), "No photos-22-gps-drift-validation.json.");
+});
+
 test("savePayload with no hashes loaded sends none, which the server refuses", () => {
   assert.deepEqual(app.savePayload([], () => ({}), undefined).hashes, {});
 });

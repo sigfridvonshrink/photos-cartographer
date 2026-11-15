@@ -619,9 +619,20 @@ function renderOffsetRows(dest, destCell, n) {
     }
   }
 }
+// What a view shows of a record it has nothing to list from: the record absent, or — a record that is there but cannot
+// be read (the server's `_error`) — that, said as it is, never as "no file": a record a hand broke is still the answers.
+function recordAbsentText(art, name) {
+  if (art && art._error) return `${art._error} — repair it by hand (or restore it from a -NNN backup), then reload; ` +
+    "geotag stops on it too, and leaves it as it is.";
+  return `No ${name}.`;
+}
+function recordAbsent(art, name) {
+  return art && art._error ? el("div", { class: "gate warn" }, el("div", { class: "gate-title" }, `${name} cannot be read`),
+    recordAbsentText(art, name)) : el("div", { class: "empty" }, recordAbsentText(art, name));
+}
 function renderTime(list) {
   const t = state.work.time;
-  if (!t?.destinations) return list.append(el("div", { class: "empty" }, "No photos-21-time-decisions.json."));
+  if (!t?.destinations) return list.append(recordAbsent(t, "photos-21-time-decisions.json"));
   if (!state.base.demo && state.timeChangedSinceRerun)
     list.append(el("div", { class: "gate warn" }, "Time decisions changed — re-run `photos-cartographer geotag plan` (in a terminal), then reload, so GPS is recomputed from the new times."));
   const root = buildTree(t.destinations);
@@ -664,7 +675,7 @@ function renderGps(list) {
       "A manual or timezone-derived clock offset with no native-GPS anchor must be confirmed against the GPX "
       + "track before placement, or it could silently mis-place the whole batch. Confirm each bucket in the "
       + "Drift view, then re-run `photos-cartographer geotag plan` and reload."));
-  if (!g?.destinations) return list.append(el("div", { class: "empty" }, "No photos-23-gps-decisions.json."));
+  if (!g?.destinations) return list.append(recordAbsent(g, "photos-23-gps-decisions.json"));
   if (!state.base.demo && (state.timeChangedSinceRerun || state.driftChangedSinceRerun))
     list.append(el("div", { class: "gate warn" }, "Time or drift decisions changed since the last geotag run — re-run `photos-cartographer geotag plan` and reload to recompute GPS. The decisions below are stale until you do."));
   for (const dest of Object.keys(g.destinations).sort()) {
@@ -694,7 +705,7 @@ function renderDrift(list) {
       el("div", { class: "gate-title" }, "Drift validation is waiting on the time decisions"),
       "The GPS-drift check validates each bucket's clock offset against the GPX track, so it is generated "
       + "only once every timezone and clock-offset decision is resolved. Finish them in the Time view, then re-run `photos-cartographer geotag plan` and reload."));
-  if (!dr?.destinations) return list.append(el("div", { class: "empty" }, "No photos-22-gps-drift-validation.json."));
+  if (!dr?.destinations) return list.append(recordAbsent(dr, "photos-22-gps-drift-validation.json"));
   if (!state.base.demo && state.timeChangedSinceRerun)
     list.append(el("div", { class: "gate warn" }, "Time decisions changed since the last geotag run — re-run `photos-cartographer geotag plan` and reload so the drift buckets (and their track segments) are re-extracted. The buckets below are stale until you do."));
   const dests = Object.keys(dr.destinations);
@@ -720,7 +731,7 @@ function mismatchAccepted(c) {
 function renderExecution(list) {
   const x = state.work.execution;
   if (!x) return list.append(el("div", { class: "empty" }, "No photos-25-execution-summary.json — geotag has not executed here yet."));
-  if (x._error) return list.append(el("div", { class: "gate warn" }, x._error));
+  if (x._error) return list.append(recordAbsent(x, "photos-25-execution-summary.json"));
   const ms = (x.fingerprint_mismatches || []).filter((m) => m && m.relative_path);
   if (!ms.length) return list.append(el("div", { class: "empty" }, "No photo's content changed when geotag wrote to it."));
   list.append(el("div", { class: "hint" }, `The last \`geotag execute\` (plan ${x.plan_id || "?"}) found these photos' content ` +
@@ -1808,6 +1819,6 @@ export {
   zoneContradiction, offsetCellNotes, zoneSpokenFor, zoneDespiteFields, effectiveCountry, clearCountriesInside,
   scrubOffset, scrubSeedIndex, mapKeyFor, savePayload,
   ambiguousTimeNote, gpsTimeAsideNote, zoneOffer, validReading, keepHolds, keepFields, keepOffered, phoneNote,
-  trueInstant, parseUtcOff, mismatchAccepted, unidentifiedHolds, unidentifiedFields, loadRefusal, hasUnsavedEdits, utcOff,
+  trueInstant, parseUtcOff, mismatchAccepted, recordAbsentText, unidentifiedHolds, unidentifiedFields, loadRefusal, hasUnsavedEdits, utcOff,
   fmtSpan, utcToZonedWallMs, zonedWallToUtcMs, offsetFromTrueTime, trueTimeOf,
 };
