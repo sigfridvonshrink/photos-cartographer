@@ -63,6 +63,20 @@ Initializing, prep SHALL take a folder at the top level named as a managed folde
 it into the inbox.
 :::
 
+:::{rul} A dump file whose place in the inbox is taken is suffixed
+:id: RUL-init_taken_place_suffixed
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+:refines: RUL-init_moves_dump_to_inbox
+:uses: RUL-suffix_no_clobber
+
+Initializing, prep SHALL move a dump file whose place in the inbox is already taken — by a file there or one planned
+there, ignoring case — into the same folder of the inbox under its name with a differentiating suffix, never over the
+file holding that place.
+:::
+
 :::{rul} A workspace is marked initialized last
 :id: RUL-initialized_marked_last
 :status: ruled

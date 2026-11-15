@@ -109,6 +109,31 @@ def test_init_creates_structure_and_moves_dump_structure_preserved(tmp_path, mon
     assert not _plan(ws).blockers
 
 
+@pytest.mark.spec("RUL-init_taken_place_suffixed", "BLD-init_move_suffix", test="TST-lifecycle-init_move_to_a_taken_inbox_path_is_suffixed")
+def test_init_move_to_a_taken_inbox_path_is_suffixed(tmp_path, monkeypatch):
+    # The inbox already holds MyDump/a.jpg (an interrupted first run moved it), and the dump holds another file
+    # there, and two files differing only by case: each later one is moved beside the first under a -NNN name,
+    # its folder kept, and no original is lost.
+    _install(monkeypatch)
+    ws = _bare(tmp_path)
+    (ws / "0-sources" / "MyDump").mkdir(parents=True)
+    (ws / "0-sources" / "MyDump" / "a.jpg").write_bytes(b"already-in")
+    (ws / "MyDump").mkdir()
+    (ws / "MyDump" / "a.jpg").write_bytes(b"still-at-top")
+    (ws / "B.jpg").write_bytes(b"upper")
+    (ws / "b.jpg").write_bytes(b"lower")
+    plan = _plan(ws)
+    assert not plan.blockers, plan.blockers
+    moves = {op.source: op.destination for op in plan.operations
+             if op.reason and "Initialize: move" in op.reason}
+    assert moves == {"MyDump/a.jpg": "0-sources/MyDump/a-001.jpg",
+                     "B.jpg": "0-sources/B.jpg", "b.jpg": "0-sources/b-001.jpg"}
+    prep.PlanExecutor(str(ws)).execute(plan)
+    kept = sorted(open(p, "rb").read() for p in glob.glob(str(ws / "5-photos-by-date" / "**" / "*.jpg"),
+                                                           recursive=True))
+    assert kept == sorted([b"already-in", b"still-at-top", b"upper", b"lower"])
+
+
 @pytest.mark.spec("RUL-init_taken_up_again", "RUL-prep_replans", "RUL-initialized_marked_last", test="TST-lifecycle-guard_written_last_then_reentry_is_clean")
 def test_guard_written_last_then_reentry_is_clean(tmp_path, monkeypatch):
     _install(monkeypatch)

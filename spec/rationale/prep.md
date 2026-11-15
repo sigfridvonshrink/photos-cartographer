@@ -55,6 +55,19 @@ the structure around the dump and moves it into the inbox whole, its folders kep
 meaning — a trip, a day, a card. Afterwards the workspace has an inbox, and the top level is no place for a dump.
 :::
 
+:::{rat} A taken place keeps both files
+:id: RAT-init_taken_place_keeps_both
+:status: ruled
+:forced: yes
+:follows_from: RAT-names_never_collide, RAT-bootstrap_once
+:justifies: RUL-init_taken_place_suffixed
+
+The inbox can already hold a file at the place a dump file is bound for: an interrupted first run moved part of the
+dump, or two of its files differ only by case. Moving over it would lose an original; leaving the file out of the
+inbox would leave the top level unclean and the dump half taken in. Its folder is kept, for the folders are what a
+dump says of itself, so only its name can change — by the suffix every phase uses, which the file then carries on.
+:::
+
 :::{rat} The structure's names are reserved
 :id: RAT-structure_names_reserved
 :status: ruled

@@ -34,6 +34,17 @@ The mark SHALL be the file `photos-00-workspace-guard` in `.photos-ingest/`, whi
 after every other operation has succeeded; the managed folders it creates are `0-sources` … `6-photos-by-dest`.
 :::
 
+:::{bld} A taken inbox path takes the next `-NNN`
+:id: BLD-init_move_suffix
+:status: ruled
+:realises: RUL-init_taken_place_suffixed
+
+The initializing run's move of a dump file SHALL go to `0-sources/<its path>`, and where that path, ignoring case, is
+another file's current or planned path, to the same folder under `<name>-NNN.<ext>` with the first `NNN` from `001` so
+free ({need}`BLD-name_suffix`), the extension kept as it was; the suffixed name is the one the later stages name the
+file from.
+:::
+
 :::{bld} A run's strays go to `1-strays/<plan-id>/`
 :id: BLD-strays_per_run
 :status: ruled
