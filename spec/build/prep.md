@@ -54,6 +54,17 @@ Prep SHALL move a run's strays into `1-strays/<plan-id>/`, each at its path unde
 share a folder there.
 :::
 
+:::{bld} Where a stray is named
+:id: BLD-stray_records
+:status: ruled
+:realises: RUL-strays_leave_no_trace
+
+A stray SHALL be named in `photos-10-prep-plan.json` alone — in its `inventory` and `metadata_plan_status`, and in the
+move that sets it aside (on the first run, the move into `0-sources` too) with its size and `mtime_ns` — and in the
+journal only by that move's id; it has no fingerprint, no row in `photos-00-ingest.db` or the plan memo, and no entry in
+the handoff or `photos-15-prep-log.json`, the archival package holding it only within the plans it carries.
+:::
+
 :::{bld} The configuration is seeded before it is fingerprinted
 :id: BLD-seed_before_fingerprints
 :status: ruled
