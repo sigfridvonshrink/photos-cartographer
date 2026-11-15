@@ -60,6 +60,11 @@ Then run `prep plan` and `prep execute` again: prep now reads more of each photo
 a workspace prepped without them. A drift check you confirmed under 3.0.0 is asked again, since a confirmation now
 names the tracks it was made against.
 
+Geotag now keeps the tracks it decides by in the workspace database, in place of the scratch memo
+`.photos-ingest/photos-00-track-memo.db`: delete that file, or it is carried into the archive at finalize. The
+first `geotag plan` reads every track file once to catalogue it; the points of a plan executed under 3.0.0 are not
+in the database, only those of plans made from now on.
+
 ### Upgrading from 2.0.0
 
 Replace both files: a `photos-config-defaults.json` from 2.0.0 lacks settings this version needs, and a

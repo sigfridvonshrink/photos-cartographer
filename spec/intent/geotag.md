@@ -714,6 +714,80 @@ Geotag SHALL record the ranking of the tracks with their fingerprint, so that a 
 record a change to the tracks would.
 :::
 
+:::{rul} Tracks of other times restale nothing
+:id: RUL-tracks_elsewhere_restale_nothing
+:status: ruled
+:criticality: med
+:anti: yes
+:verify: required
+:refines: RUL-tracks_in_dependencies
+
+A change to the tracks at times no decision of geotag's reaches SHALL NOT make a record of geotag's stale.
+:::
+
+:::{rul} The track points decided by are kept with the workspace
+:id: RUL-track_points_kept
+:status: ruled
+:criticality: high
+:verify: required
+:uses: DEF-tracks, DEF-workspace_database
+
+Geotag SHALL keep in the workspace database each track point its decisions reach, as it decided by it.
+:::
+
+:::{rul} A track file gone is told
+:id: RUL-gone_track_told
+:status: ruled
+:criticality: med
+:verify: required
+:uses: DEF-tracks
+
+The user SHALL be told of each track file the tracks folder held and holds no longer, naming it.
+:::
+
+:::{rul} A track file gone is not decided by
+:id: RUL-gone_track_not_used
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+:uses: DEF-tracks
+
+Geotag SHALL NOT decide by a track file the tracks folder no longer holds.
+:::
+
+:::{rul} The points an executed plan rests on stay
+:id: RUL-withdrawn_track_points_kept
+:status: ruled
+:criticality: high
+:verify: required
+:refines: RUL-track_points_kept
+
+The points of a track file by which an executed plan placed or timed photos SHALL stay in the workspace database, marked
+withdrawn, once the file is gone or changed.
+:::
+
+:::{rul} Tracks that cannot be listed stop geotag
+:id: RUL-unlisted_tracks_stop_geotag
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+:uses: DEF-tracks, RUL-unchecked_counts_as_changed
+
+Geotag SHALL NOT plan or execute while its tracks folder, or a folder within it, cannot be listed.
+:::
+
+:::{rul} Sealing needs no tracks folder
+:id: RUL-sealing_needs_no_tracks
+:status: ruled
+:criticality: med
+:verify: required
+:uses: DEF-tracks, DEF-finalize, DEF-merge
+
+Finalize and merge SHALL proceed without the tracks folder, on the track points the workspace keeps.
+:::
+
 
 ## 9. Camera groups
 

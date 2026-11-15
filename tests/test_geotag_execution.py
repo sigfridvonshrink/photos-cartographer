@@ -22,6 +22,7 @@ from _zone import answer_root_zone, with_root_zone
 import os
 import shutil
 import stat
+import sqlite3
 import sys
 from datetime import datetime, timezone
 
@@ -366,24 +367,28 @@ def test_stale_plan_is_rejected_without_mutation(tmp_path, monkeypatch):
     assert not (ctl / "photos-25-execution-summary.json").exists()
 
 
-@pytest.mark.spec("RUL-scratch_database_not_journalled", test="TST-geotag_execution-the_track_memo_is_not_journalled")
-def test_the_track_memo_is_not_journalled(tmp_path, monkeypatch):
-    """The track memo geotag writes while it plans and executes is no operation of the plan and leaves no
-    entry in the journal: the journal holds the plan's operations and nothing else."""
+@pytest.mark.spec("BLD-track_catalogue", test="TST-geotag_execution-the_kept_tracks_are_no_operation_of_the_plan")
+def test_the_kept_tracks_are_no_operation_of_the_plan(tmp_path, monkeypatch):
+    """The catalogue of the tracks planning keeps in the record is written outside the plan's operations and leaves no
+    entry in the journal: the journal holds the plan's operations and nothing else; execute only checks the tracks."""
     ws, ctl = _ready_ws(tmp_path, monkeypatch)
-    memo = os.path.basename(utils.track_memo_db_path(str(ws)))
-    assert os.path.exists(utils.track_memo_db_path(str(ws)))              # planning wrote the memo...
+    conn = sqlite3.connect(str(ctl / "photos-00-ingest.db"))
+    catalogue = lambda: conn.execute("SELECT * FROM gpx_track_files ORDER BY track_id").fetchall()
+    planned = catalogue()
+    assert [r[1] for r in planned] == ["t.gpx"]                           # planning catalogued the tracks...
     assert not any(n.startswith("journal-") for n in os.listdir(ctl))     # ...and journalled nothing
     plan = json.load(open(ctl / "photos-24-executable-plan.json"))
     ops = [o for d in plan["destinations"].values() for o in d["operations"]]
-    assert ops and not any(memo in json.dumps(o) for o in ops)
+    assert ops and not any("gpx_track" in json.dumps(o) for o in ops)
     _mock_tools(monkeypatch, ws)
-    assert _execute(monkeypatch, ws) == 0                                 # execute reads the tracks again
+    assert _execute(monkeypatch, ws) == 0                                 # execute checks the tracks again
+    assert catalogue() == planned
+    conn.close()
     jpath = utils.journal_path(str(ws), plan["plan_id"])
     assert [n for n in os.listdir(ctl) if n.startswith("journal-")] == [os.path.basename(jpath)]
     journal = json.load(open(jpath))
     assert sorted(journal["operations"]) == sorted(o["operation_id"] for o in ops)
-    assert memo not in open(jpath).read()
+    assert "gpx_track" not in open(jpath).read()
 
 
 @pytest.mark.spec("RUL-no_plan_no_run", test="TST-geotag_execution-missing_plan_errors")
@@ -664,7 +669,7 @@ def test_revalidate_detects_each_stale_input(tmp_path, monkeypatch):
     ws, ctl = _ready_ws(tmp_path, monkeypatch)
     wf = cal.GeotagWorkflow(str(ws)); wf.preflight(for_execute=True)
     plan = json.load(open(ctl / "photos-24-executable-plan.json"))
-    gpx = cal.GPXIndex(cal.selected_gpx_root()).build()
+    gpx = wf.plan_tracks(plan)
     assert wf.revalidate_plan(plan, gpx) == []                        # fresh -> nothing stale
     assert any("not 'ready'" in s for s in wf.revalidate_plan({**plan, "status": "blocked"}, gpx))
     for k in ("config_fingerprint", "filename_format_fingerprint", "camera_group_fingerprint",
@@ -684,7 +689,7 @@ def test_a_plan_made_by_other_code_is_stale(tmp_path, monkeypatch):
     ws, ctl = _ready_ws(tmp_path, monkeypatch)
     wf = cal.GeotagWorkflow(str(ws)); wf.preflight(for_execute=True)
     plan = json.load(open(ctl / "photos-24-executable-plan.json"))
-    gpx = cal.GPXIndex(cal.selected_gpx_root()).build()
+    gpx = wf.plan_tracks(plan)
     assert plan["depends_on"]["code_fingerprint"] == utils.code_fingerprint()
     for recorded in ("0" * 64, None):
         pk = {**plan, "depends_on": {**plan["depends_on"], "code_fingerprint": recorded}}
@@ -1107,7 +1112,7 @@ def test_noop_reprep_does_not_restale_plan(tmp_path, monkeypatch):
     _mock_tools(monkeypatch, ws)
     wf = cal.GeotagWorkflow(str(ws)); wf.preflight(for_execute=True)
     plan = json.load(open(ctl / "photos-24-executable-plan.json"))
-    gpx = cal.GPXIndex(cal.selected_gpx_root()).build()
+    gpx = wf.plan_tracks(plan)
     assert wf.revalidate_plan(plan, gpx) == []                            # fresh
     ho = json.load(open(ctl / "photos-11-handoff.json"))
     ho["run_metadata"] = {"plan_id": "NEW-PLAN", "execution_id": "NEW-EXEC"}   # only run metadata changed
@@ -1238,7 +1243,7 @@ def test_another_image_engine_stops_execute_before_any_write(tmp_path, monkeypat
     ws, ctl = _ready_ws(tmp_path, monkeypatch)
     plan = json.load(open(ctl / "photos-24-executable-plan.json"))
     wf = cal.GeotagWorkflow(str(ws))
-    gpx = cal.GPXIndex(cal.selected_gpx_root()).build()
+    gpx = wf.plan_tracks(plan)
     monkeypatch.setattr(cal, "get_imagemagick_version", lambda: "IM-7.1.2")
     ho = json.load(open(ctl / "photos-11-handoff.json"))
     ho["depends_on"] = {"cache": {"image_engine_version": "IM-7.1.2"}}

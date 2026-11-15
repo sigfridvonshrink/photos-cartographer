@@ -146,6 +146,21 @@ def _tree(root):
     return out
 
 
+@pytest.mark.spec("RUL-sealing_needs_no_tracks", test="TST-merge_execute-merge_needs_no_tracks_folder")
+def test_merge_needs_no_tracks_folder(tmp_path, monkeypatch):
+    """Merge seals what the workspace keeps: with the configured tracks folder not there, it plans and executes, and
+    never builds the tracks."""
+    import photos_2_geotag as geo
+    ws, lib = _ws(tmp_path, [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"}])
+    cfg_p = ws / ".photos-ingest" / "photos-00-config.json"
+    cfg = json.loads(cfg_p.read_text()); cfg["gpx_root"] = str(tmp_path / "tracks-not-mounted")
+    cfg_p.write_text(json.dumps(cfg))
+    monkeypatch.setattr(geo.GPXIndex, "build", lambda *a, **k: pytest.fail("merge read the tracks"))
+    assert merge._run_locked_workflow("plan", str(ws)) == 0
+    assert merge._run_locked_workflow("execute", str(ws)) == 0
+    assert _summary(ws)["status"] == "success"
+
+
 # --- the four dispositions ---------------------------------------------------
 
 @pytest.mark.spec("RUL-library_creates_only_placements", "RUL-merge_moves", "BLD-merge_records", test="TST-merge_execute-execute_placed_new_moves_into_library")

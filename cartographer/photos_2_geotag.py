@@ -50,7 +50,7 @@ from datetime import datetime, timedelta, timezone
 from .photos_utils import (fingerprint_method_blocker, links_under, replace_durably,
     country_table,
     code_fingerprint,
-    CONFIG, CONTROL_DIR, control_dir, FINALIZED_MEDIA_ARTIFACT, track_memo_db_path, finalized_media_path, workspace_volume_error, config_path, handoff_path, guard_path, is_sealed, likely_new_dump,
+    CONFIG, CONTROL_DIR, control_dir, FINALIZED_MEDIA_ARTIFACT, finalized_media_path, workspace_volume_error, config_path, handoff_path, guard_path, is_sealed, likely_new_dump,
     validate_config, load_config, sha256_file, sha256_text, media_class_for_ext, folder_name,
     folders_fingerprint, media_extensions_fingerprint,
     selected_gpx_root, NO_IDENTITY_KEY, has_own_position, FIELD_SET_VERSION, CAMERA_GROUP_KEY_VERSION, FOLDER_ROLES,
@@ -296,6 +296,44 @@ def _prior_review(prior_items, file):
         if key is not None and key in by_fp:
             return by_fp[key]
     return by_path.get(file["relative_path"]) or {}
+
+
+def _stop_on_tracks(reporter, gpx, written):
+    """Stop the plan, exit 2, on tracks it cannot plan by: configured and not there, a folder of them that cannot be
+    listed, or track files of which not one can be read. `written` says what the plan has written so far."""
+    if gpx.status == "missing":
+        # Tracks that are configured but not there — a volume not mounted — are not "no tracks":
+        # planning on would place by folder fallback what the tracks place, and drop every
+        # answer given about them (RUL-missing_tracks_stop_geotag).
+        reporter.error(f"\nGeotag cannot proceed: {gpx.warnings[0]}")
+        reporter.log(f"\n{written}")
+        emit_next_step(reporter, "make the tracks available (or set gpx_root to \"\" in "
+                                 "photos-00-config.json to plan without tracks), then re-run `geotag plan`.")
+        sys.exit(2)
+    if gpx.status == "unlisted":
+        # A folder of the tracks that cannot be listed: what it holds cannot be checked, so it counts as changed
+        # (RUL-unlisted_tracks_stop_geotag) — never as a folder of no tracks.
+        reporter.error(f"\nGeotag cannot proceed: under gpx_root {gpx.gpx_root}, what is in "
+                       f"{len(gpx.unlisted)} folder(s) cannot be seen:")
+        for where, why in gpx.unlisted:
+            reporter.log(f"  - {where}: {why}")
+        reporter.log(f"\n{written}")
+        emit_next_step(reporter, "make the folder(s) readable, then re-run `geotag plan`.")
+        sys.exit(2)
+    if gpx.status == "unreadable":
+        # Track files there and not one read: planning on would place by folder fallback what the
+        # tracks place, as if there were none (RUL-unreadable_tracks_stop_geotag).
+        reporter.error(f"\nGeotag cannot proceed: not one of the {len(gpx.unreadable)} track file(s) under "
+                       f"gpx_root {gpx.gpx_root} can be read:")
+        for rel, why in gpx.unreadable:              # every one, each with why: the user's to repair
+            reporter.log(f"  - {rel}: {why}")
+        for w in gpx.warnings:
+            if w.startswith("Linked folder under gpx_root"):
+                reporter.warn(f"  Warning: {w}")
+        reporter.log(f"\n{written}")
+        emit_next_step(reporter, "repair or replace the track files (or set gpx_root to \"\" in "
+                                 "photos-00-config.json to plan without tracks), then re-run `geotag plan`.")
+        sys.exit(2)
 
 
 def _named(paths, shown=5):
@@ -744,10 +782,69 @@ class GeotagWorkflow:
 
     # --- Stage 3: GPX index (BLD-track_points) ---------------------------
 
-    def load_gpx(self):
-        idx = GPXIndex(selected_gpx_root(), track_memo_db_path(self.workspace_root), CONFIG["gpx_track_precedence"]).build(self.coordinator)
+    def load_gpx(self, files):
+        """The tracks in the window the photos' camera times reach (BLD-track_window), catalogued and kept in the
+        record (BLD-track_catalogue)."""
+        idx = GPXIndex(selected_gpx_root(), db_path(self.workspace_root), CONFIG["gpx_track_precedence"])
+        idx.build(self.coordinator, window=self.camera_window(files))
         self._gpx_fingerprint = idx.fingerprint
         return idx
+
+    def widen_tracks(self, gpx, spans):
+        """Grow the tracks' window by `spans` (BLD-track_window): a track file whose span meets the new part is read
+        again. The fingerprint is then of the wider window's points."""
+        wider = window_union(gpx.window, spans)
+        if wider != gpx.window:
+            gpx.build(self.coordinator, window=wider)
+            self._gpx_fingerprint = gpx.fingerprint
+        return gpx
+
+    def plan_tracks(self, plan, keep=False, read=True):
+        """The tracks in the window `plan` was made in, as they are now (`read`) or as the record keeps them —
+        none when the plan records no window, which `revalidate_plan` then finds stale (BLD-track_window)."""
+        window = valid_window(((plan or {}).get("depends_on") or {}).get("gpx_window"))
+        idx = GPXIndex(selected_gpx_root(), db_path(self.workspace_root), CONFIG["gpx_track_precedence"])
+        return idx.build(self.coordinator, window=window or [], keep=keep, read=read)
+
+    @staticmethod
+    def camera_window(files):
+        """The tracks' window before any time is corrected (BLD-track_window): each photo's camera time, read as UTC,
+        give or take how far anchoring reaches — `gpx_anchor_max_clock_error_seconds`, and from a candidate there
+        the placement a higher-ranked track would cover it by — and each camera day's photos, from the first to
+        the last, give or take `drift_check_track_window_seconds`, where the drift check falls back to them."""
+        reach = CONFIG["gpx_anchor_max_clock_error_seconds"] + max(CONFIG["gpx_direct_match_max_seconds"],
+                                                                   CONFIG["gpx_interpolation_max_gap_seconds"])
+        drift = CONFIG["drift_check_track_window_seconds"]
+        spans, days = [], {}
+        for f in files:
+            t = _parse_camera_naive(f.get("source_naive_time"))
+            if t is None:
+                continue
+            t = t.replace(tzinfo=timezone.utc)
+            spans.append(around(t, reach))
+            key = (f["destination"], f["camera_group_key"], t.date())
+            lo, hi = days.get(key, (t, t))
+            days[key] = (min(lo, t), max(hi, t))
+        spans.extend((around(lo, drift)[0], around(hi, drift)[1]) for lo, hi in days.values())
+        return window_union(spans)
+
+    def drift_window(self, files, time_artifact, rows0):
+        """What the drift check reaches past the camera window (BLD-track_window): each bucket's photos at their
+        corrected times, from the first to the last, give or take `drift_check_track_window_seconds`."""
+        drift = CONFIG["drift_check_track_window_seconds"]
+        return [(around(min(times), drift)[0], around(max(times), drift)[1])
+                for _dest, _bucket, _cell, _frames, times in self._drift_cases(files, time_artifact, rows0) if times]
+
+    @staticmethod
+    def placement_window(files, rows):
+        """What placement reaches (BLD-track_window): each photo it places, at its corrected time, give or take the
+        farthest a point can lie that places it — the direct match, the interpolation gap, or the extrapolation
+        reach and the stretch its heading is taken over."""
+        reach = max(CONFIG["gpx_direct_match_max_seconds"], CONFIG["gpx_interpolation_max_gap_seconds"],
+                    CONFIG["gpx_extrapolation_max_seconds"] + CONFIG["gpx_extrapolation_heading_seconds"])
+        native = {f["relative_path"] for f in files if f.get("has_native_gps")}
+        return [around(t, reach) for r in rows if r["resolved_utc_status"] == "valid"
+                and r["relative_path"] not in native and (t := _parse_utc(r["resolved_utc"]))]
 
     # --- Stage 4: camera-group recognition + classification (BLD-known_camera_group) ---
 
@@ -1356,48 +1453,35 @@ class GeotagWorkflow:
         blockers = _decision_shape_blockers(prior, "drift")
         if blockers:
             return None, blockers
-        by_dest_group = {}
-        for f in files:
-            if not f.get("geotag_marker"):                # a corrected time has no drift left to check
-                by_dest_group.setdefault((f["destination"], f["camera_group_key"]), []).append(f)
-        resolved_by_path = {r["relative_path"]: r["resolved_utc"] for r in rows0
-                            if r["resolved_utc_status"] == "valid"}
         prior_dests = ((prior or {}).get("destinations")) or {}
         track_sha = gpx.file_sha if gpx is not None else {}
         destinations = {}
-        for dest, d in (time_artifact.get("destinations") or {}).items():
+        for dest, bucket, cell, frames, times in self._drift_cases(files, time_artifact, rows0):
+            eff = cell["effective_time_anchor"]
+            group, date = cell.get("camera_group"), cell.get("date")
             prior_cells = (prior_dests.get(dest, {}).get("drift_decisions")) or {}
-            cells = {}
-            for bucket, cell in (d.get("camera_group_time_decisions") or {}).items():
-                eff = cell.get("effective_time_anchor")
-                if not (isinstance(eff, dict) and eff.get("source") in self._DRIFT_TRIGGER_SOURCES):
-                    continue                                  # gpx-anchored (or unresolved) -> reliable / N/A
-                group, date = cell.get("camera_group"), cell.get("date")
-                frames = [f for f in by_dest_group.get((dest, group), [])
-                          if date is None or _naive_date(f.get("source_naive_time")) == date]
-                prior_drift = _prior_day_cell(prior_cells, group, bucket, cell.get("day"))
-                if not frames:
-                    # every photo here is corrected already: keep the confirmation for later arrivals,
-                    # derived again from the decision and the current offset, never copied
-                    if prior_drift:
-                        kept = self._drift_cell(dest, bucket, cell, [], [], prior_drift, blockers, date=date,
-                                                track_sha=track_sha)
-                        if kept["effective_drift_offset"]:
-                            kept["requires_user_input"] = False
-                            cells[bucket] = kept
-                    continue
-                times = [t for f in frames if (t := _parse_utc(resolved_by_path.get(f["relative_path"])))]
-                if not times and eff.get("source") not in self._UNCONFIRMED_SOURCES:
-                    continue                                  # nothing resolves -> not a drift case
-                seg = self._tracks_by(gpx, times, frames)
-                # An offset nobody has accepted is never passed over: it is here to be confirmed, tracks
-                # or none.
-                if not seg and eff.get("source") not in self._UNCONFIRMED_SOURCES:
-                    continue                                  # no GPX coverage -> phase 23 fallback/lost
-                cells[bucket] = self._drift_cell(dest, bucket, cell, seg, frames,
-                                                 prior_drift, blockers, date=date, track_sha=track_sha)
-            if cells:
-                destinations[dest] = {"destination_path": dest, "drift_decisions": cells}
+            prior_drift = _prior_day_cell(prior_cells, group, bucket, cell.get("day"))
+            cells = destinations.setdefault(dest, {"destination_path": dest, "drift_decisions": {}})["drift_decisions"]
+            if not frames:
+                # every photo here is corrected already: keep the confirmation for later arrivals,
+                # derived again from the decision and the current offset, never copied
+                if prior_drift:
+                    kept = self._drift_cell(dest, bucket, cell, [], [], prior_drift, blockers, date=date,
+                                            track_sha=track_sha)
+                    if kept["effective_drift_offset"]:
+                        kept["requires_user_input"] = False
+                        cells[bucket] = kept
+                continue
+            if not times and eff.get("source") not in self._UNCONFIRMED_SOURCES:
+                continue                                  # nothing resolves -> not a drift case
+            seg = self._tracks_by(gpx, times, frames)
+            # An offset nobody has accepted is never passed over: it is here to be confirmed, tracks
+            # or none.
+            if not seg and eff.get("source") not in self._UNCONFIRMED_SOURCES:
+                continue                                  # no GPX coverage -> phase 23 fallback/lost
+            cells[bucket] = self._drift_cell(dest, bucket, cell, seg, frames,
+                                             prior_drift, blockers, date=date, track_sha=track_sha)
+        destinations = {dest: d for dest, d in destinations.items() if d["drift_decisions"]}
         requires = any(c["requires_user_input"] for d in destinations.values()
                        for c in d["drift_decisions"].values())
         artifact = {
@@ -1412,6 +1496,26 @@ class GeotagWorkflow:
         if not requires:
             artifact["decision_mode"] = "no_op_or_confirmed"
         return artifact, blockers
+
+    def _drift_cases(self, files, time_artifact, rows0):
+        """Each offset cell the drift check looks at — one whose offset is not the camera's own GPS's — as
+        (destination, bucket, cell, its photos not yet corrected, their corrected times under `rows0`)."""
+        by_dest_group = {}
+        for f in files:
+            if not f.get("geotag_marker"):                # a corrected time has no drift left to check
+                by_dest_group.setdefault((f["destination"], f["camera_group_key"]), []).append(f)
+        resolved_by_path = {r["relative_path"]: r["resolved_utc"] for r in rows0
+                            if r["resolved_utc_status"] == "valid"}
+        for dest, d in (time_artifact.get("destinations") or {}).items():
+            for bucket, cell in (d.get("camera_group_time_decisions") or {}).items():
+                eff = cell.get("effective_time_anchor")
+                if not (isinstance(eff, dict) and eff.get("source") in self._DRIFT_TRIGGER_SOURCES):
+                    continue                                  # gpx-anchored (or unresolved) -> reliable / N/A
+                group, date = cell.get("camera_group"), cell.get("date")
+                frames = [f for f in by_dest_group.get((dest, group), [])
+                          if date is None or _naive_date(f.get("source_naive_time")) == date]
+                times = [t for f in frames if (t := _parse_utc(resolved_by_path.get(f["relative_path"])))]
+                yield dest, bucket, cell, frames, times
 
     def _drift_cell(self, dest, bucket, time_cell, track_segment, frames, prior_cell, blockers, date=None,
                     track_sha=None):
@@ -1819,6 +1923,9 @@ class GeotagWorkflow:
 
         planned_op_fp = sha256_text(json.dumps(all_ops, sort_keys=True))
         depends_on = self._exec_depends_on(resolved_fp, media_pre, planned_op_fp)
+        # the window the tracks' fingerprint is of: execute and finalize take it again over the same times
+        # (BLD-track_window)
+        depends_on["gpx_window"] = [list(span) for span in (gpx.window if gpx is not None else [])]
         plan = {
             "artifact_type": "executable_plan",
             "artifact_name": EXECUTABLE_PLAN_ARTIFACT,
@@ -1940,6 +2047,12 @@ class GeotagWorkflow:
                        ("gpx_fingerprint", gpx.fingerprint)):
             if dep.get(k) != cur:
                 stale.append(f"{k} changed")
+        # The tracks that cannot be checked count as changed (RUL-unchecked_counts_as_changed): a gpx_root not
+        # there or a folder of it that cannot be listed, or a plan naming no window to check them over.
+        if gpx.status in ("missing", "unlisted"):
+            stale.append("the tracks cannot be checked: " + gpx.warnings[-1])
+        if valid_window(dep.get("gpx_window")) is None:
+            stale.append("gpx_window missing or malformed: the tracks cannot be checked")
         all_ops = [o for d in plan["destinations"].values() for o in d["operations"]]
         if dep.get("planned_operation_fingerprint") != sha256_text(json.dumps(all_ops, sort_keys=True)):
             stale.append("planned operations changed (plan tampered)")
@@ -2114,7 +2227,8 @@ class GeotagWorkflow:
         ws = self.workspace_root
         with open(executable_plan_path(ws)) as f:
             plan = json.load(f)
-        gpx = GPXIndex(selected_gpx_root(), track_memo_db_path(ws), CONFIG["gpx_track_precedence"]).build(self.coordinator)
+        # the tracks over the plan's window as they are now, the record left as it is (BLD-track_window)
+        gpx = self.plan_tracks(plan)
         stale = self.revalidate_plan(plan, gpx)
         if stale:
             return {"status": "rejected", "plan_id": plan.get("plan_id"), "stale": stale}
@@ -2126,6 +2240,9 @@ class GeotagWorkflow:
         journal, media_after = _j.get("operations") or {}, _j.get("media_after") or {}
         accepted = self._accepted_mismatches(ws, plan["plan_id"])
         self._keep_executed_decisions(plan)
+        # the tracks this plan places and times photos by stay in the record if they leave gpx_root
+        # (RUL-withdrawn_track_points_kept)
+        GPXIndex.mark_used(db_path(ws), plan["plan_id"], self._tracks_used(plan))
 
         # Optional pre-mutation ZFS snapshot (BLD-geotag_execution), labelled "geotag" so it never collides
         # with prep's "prep-" snapshot. A REQUIRED snapshot that cannot be taken aborts before any
@@ -2336,7 +2453,9 @@ class GeotagWorkflow:
         # handoff is left out: a
         # prep run after execute records geotag's own writes and renames in it, and that is the loop, not a
         # change of decision.
-        gpx = GPXIndex(selected_gpx_root(), track_memo_db_path(ws), CONFIG["gpx_track_precedence"]).build(self.coordinator)
+        # The tracks are those the record keeps: finalize seals what is kept and never reads gpx_root
+        # (RUL-sealing_needs_no_tracks).
+        gpx = self.plan_tracks(plan, read=False)
         stale = self.revalidate_plan(plan, gpx, with_handoff=False)
         if stale:
             return [f"The executed plan no longer holds ({'; '.join(stale)}) — re-run `geotag plan` and "
@@ -2450,6 +2569,33 @@ class GeotagWorkflow:
                 tmp = os.path.join(keep, ".tmp-" + os.path.basename(src))
                 shutil.copyfile(src, tmp)
                 replace_durably(tmp, dst)
+
+    def _tracks_used(self, plan):
+        """The track files `plan` places or times photos by (BLD-withdrawn_track_points): the track each GPS write
+        rests on; for each offset the camera's own GPS gave, the tracks of its anchors that agree with it — or of
+        every anchor where none does, as where the tracks stood still — and the tracks it was kept by; and the
+        tracks each drift confirmation in effect was made against. Read after revalidation has proven the records
+        are the plan's."""
+        ws = self.workspace_root
+        used = {(o.get("provenance") or {}).get("gpx_file") for d in plan["destinations"].values()
+                for o in d["operations"] if o["type"] == "metadata_gps_write"}
+        spread = CONFIG["gpx_anchor_offset_spread_max_seconds"]
+        for d in ((_read_record(time_decisions_path(ws)) or {}).get("destinations") or {}).values():
+            for cell in (d.get("camera_group_time_decisions") or {}).values():
+                eff = cell.get("effective_time_anchor")
+                if not (isinstance(eff, dict) and str(eff.get("source")).startswith("gpx_anchor")):
+                    continue
+                used |= {t.get("gpx_file") for t in cell.get("anchored_by") or [] if isinstance(t, dict)}
+                anchors = [a for a in (cell.get("proposal") or {}).get("anchors") or [] if isinstance(a, dict)]
+                agree = [a for a in anchors if isinstance(a.get("proposed_offset_seconds"), (int, float))
+                         and abs(a["proposed_offset_seconds"] - eff.get("offset_seconds", 0)) <= spread]
+                used |= {(a.get("gpx_match") or {}).get("gpx_file") for a in agree or anchors}
+        for d in ((_read_record(drift_validation_path(ws)) or {}).get("destinations") or {}).values():
+            for cell in (d.get("drift_decisions") or {}).values():
+                if isinstance(cell.get("effective_drift_offset"), dict):
+                    used |= {t.get("gpx_file") for t in (cell.get("proposal") or {}).get("tracks") or []
+                             if isinstance(t, dict)}
+        return sorted(f for f in used if isinstance(f, str) and f)
 
     def _earlier_passes(self, current_plan_id):
         """[(plan, confirmed operation ids)] of every geotag pass executed before the current plan,
@@ -2772,30 +2918,8 @@ def run(args):
                                          "re-run `geotag plan`.")
                 sys.exit(2)
 
-            gpx = wf.load_gpx()      # disk-heavy: only after the in-memory checks above have passed
-            if gpx.status == "missing":
-                # Tracks that are configured but not there — a volume not mounted — are not "no tracks":
-                # planning on would place by folder fallback what the tracks place, and drop every
-                # answer given about them (RUL-missing_tracks_stop_geotag).
-                reporter.error(f"\nGeotag cannot proceed: {gpx.warnings[0]}")
-                reporter.log("\nNo geotag JSON was written.")
-                emit_next_step(reporter, "make the tracks available (or set gpx_root to \"\" in "
-                                         "photos-00-config.json to plan without tracks), then re-run `geotag plan`.")
-                sys.exit(2)
-            if gpx.status == "unreadable":
-                # Track files there and not one read: planning on would place by folder fallback what the
-                # tracks place, as if there were none (RUL-unreadable_tracks_stop_geotag).
-                reporter.error(f"\nGeotag cannot proceed: not one of the {len(gpx.unreadable)} track file(s) under "
-                               f"gpx_root {gpx.gpx_root} can be read:")
-                for rel, why in gpx.unreadable:              # every one, each with why: the user's to repair
-                    reporter.log(f"  - {rel}: {why}")
-                for w in gpx.warnings:
-                    if w.startswith("Linked folder under gpx_root"):
-                        reporter.warn(f"  Warning: {w}")
-                reporter.log("\nNo geotag JSON was written.")
-                emit_next_step(reporter, "repair or replace the track files (or set gpx_root to \"\" in "
-                                         "photos-00-config.json to plan without tracks), then re-run `geotag plan`.")
-                sys.exit(2)
+            gpx = wf.load_gpx(files)      # disk-heavy: only after the in-memory checks above have passed
+            _stop_on_tracks(reporter, gpx, "No geotag JSON was written.")
             n_dest = len({f["destination"] for f in files})
             by_class = {}
             for g in groups.values():
@@ -2865,6 +2989,9 @@ def run(args):
                     emit_next_step(reporter, "give each photo's time its offset (or move it out), then re-run "
                                              "`prep plan` + `prep execute` and `geotag plan`.")
                     sys.exit(2)
+                # the drift check reaches the photos' corrected times (BLD-track_window)
+                wf.widen_tracks(gpx, wf.drift_window(files, artifact, rows0))
+                _stop_on_tracks(reporter, gpx, f"No geotag JSON was written past {TIME_DECISIONS_ARTIFACT}.")
 
                 # Stage 7a: GPS-drift validation (photos-22, RUL-unanchored_offset_confirmed) — the gate before phase
                 # 23. A manual/timezone-derived offset with no native-GPS anchor is placed purely from its
@@ -2898,6 +3025,9 @@ def run(args):
                     # and report the deterministic fingerprint downstream stages depend on
                     # (BLD-resolved_utc_fingerprint).
                     rows = compute_resolved_utc(files, groups, artifact, drift_offset_overrides(drift_artifact))
+                    # placement reaches the photos' corrected times (BLD-track_window)
+                    wf.widen_tracks(gpx, wf.placement_window(files, rows))
+                    _stop_on_tracks(reporter, gpx, f"No geotag JSON was written past {DRIFT_VALIDATION_ARTIFACT}.")
                     input_fps = {
                         "camera_time_policy_fingerprint": artifact["depends_on"]["camera_time_policy_fingerprint"],
                         "camera_group_key_version": CAMERA_GROUP_KEY_VERSION,

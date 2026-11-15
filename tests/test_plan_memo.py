@@ -289,7 +289,7 @@ def _ops(plan):
             for op in plan.operations]
 
 
-@pytest.mark.spec("RUL-memo_never_changes_plan", test="TST-plan_memo-the_memo_never_changes_the_plan")
+@pytest.mark.spec("RUL-memo_never_changes_plan", "RUL-other_databases_scratch", test="TST-plan_memo-the_memo_never_changes_the_plan")
 def test_the_memo_never_changes_the_plan(tmp_path, monkeypatch):
     """The same workspace plans to the same operations with the memo empty, reused, or gone."""
     hash_calls = []

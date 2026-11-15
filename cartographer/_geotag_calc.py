@@ -43,7 +43,7 @@ from .photos_utils import (
     parse_naive_time, has_own_position, NO_IDENTITY_KEY, OTHER_TIME_FIELDS,
     missing_managed_folders, by_dest_reprep_pending,
     json_dependency, verify_json_dependency, handoff_content_fingerprint, write_json_artifact, write_versioned_json, db_path, ensure_control_dir,
-    journal_path, ContentHasher, _move_no_clobber, allocate_suffix, carries_stem, track_memo_db_path,
+    journal_path, ContentHasher, _move_no_clobber, allocate_suffix, carries_stem,
     prep_log_path, write_db_snapshot, take_zfs_snapshot,
     WorkspaceLock, ProgressCoordinator,
 )
@@ -70,6 +70,10 @@ __all__ = [
     'haversine',
     'GPXPoint',
     'GPXIndex',
+    'window_union',
+    'valid_window',
+    'around',
+    'open_track_record',
     '_valid_iana',
     '_offsets_against_zone',
     '_ZONE_WAITS',
@@ -149,35 +153,133 @@ class GPXPoint:
         self.segment = segment
 
 
-_REL = "\x00rel\x00"            # stands for the file's path in a memoized warning: the memo is keyed by bytes
-GPX_PARSE_VERSION = "gpx-parse-v3"   # bump when the parse below changes what it yields: a memo of another
-                                     # version is never read, and is replaced as each file is parsed again
+_REL = "\x00rel\x00"            # stands for the file's path in a parse's warnings: a parse is of bytes, wherever they lie
+GPX_PARSE_VERSION = "gpx-parse-v3"   # bump when the parse below changes what it yields: a track file kept under
+                                     # another version is read and parsed again, as a new entry of the catalogue
+
+# Every instant there is, in seconds: the window of an index built without one.
+ALL_TIME = [(-(2 ** 62), 2 ** 62)]
+
+
+def window_union(*windows):
+    """The union of windows — each a list of (start, end), whole seconds since the epoch in UTC, both ends in it —
+    as one sorted list of disjoint spans (BLD-track_window)."""
+    out = []
+    for a, b in sorted((int(a), int(b)) for w in windows for a, b in (w or ()) if a <= b):
+        if out and a <= out[-1][1]:
+            out[-1] = (out[-1][0], max(out[-1][1], b))
+        else:
+            out.append((a, b))
+    return out
+
+
+def window_minus(window, kept):
+    """The parts of `window` outside `kept` (both unions), their ends included."""
+    out = []
+    for a, b in window:
+        cur = a
+        for c, d in kept:
+            if d < cur or c > b:
+                continue
+            if c > cur:
+                out.append((cur, c))
+            cur = max(cur, d)
+            if cur >= b:
+                break
+        if cur < b:
+            out.append((cur, b))
+    return out
+
+
+def around(t, reach):
+    """The span `reach` seconds each side of the instant `t` (an aware datetime), widened to whole seconds."""
+    x = t.timestamp()
+    return (math.floor(x - reach), math.ceil(x + reach))
+
+
+def _within(window, x):
+    """Whether the instant `x` (seconds since the epoch) lies in `window`, a union."""
+    i = bisect.bisect_right(window, (x, float("inf"))) - 1
+    return i >= 0 and window[i][0] <= x <= window[i][1]
+
+
+def valid_window(w):
+    """`w` as a union, when it is a list of [start, end] whole seconds with start <= end; else None."""
+    if not isinstance(w, list):
+        return None
+    out = []
+    for span in w:
+        if not (isinstance(span, (list, tuple)) and len(span) == 2
+                and all(isinstance(x, int) and not isinstance(x, bool) for x in span) and span[0] <= span[1]):
+            return None
+        out.append(tuple(span))
+    return window_union(out)
+
+
+_TRACK_TABLES = (
+    # the catalogue (BLD-track_catalogue): one entry per track file as it was read — its path under gpx_root, the
+    # folder directly under gpx_root it is filed in (its rank's), the size, modification time and inode it was read
+    # at, the SHA-256 of its bytes, the parse that read it, the first and last of its points' times, the window its
+    # kept points cover, its warnings, why it could not be parsed (none: it was), and whether it is withdrawn
+    "CREATE TABLE IF NOT EXISTS gpx_track_files (track_id INTEGER PRIMARY KEY, path TEXT NOT NULL, "
+    "rank_folder TEXT NOT NULL, size INTEGER, mtime_ns INTEGER, inode INTEGER, sha256 TEXT NOT NULL, "
+    "parse_version TEXT NOT NULL, first_utc TEXT, last_utc TEXT, covered TEXT NOT NULL, warnings TEXT NOT NULL, "
+    "unreadable TEXT, withdrawn INTEGER NOT NULL DEFAULT 0, UNIQUE (path, sha256, parse_version))",
+    # the points of each entry that fall in the window it covers, as decided on
+    "CREATE TABLE IF NOT EXISTS gpx_track_points (track_id INTEGER NOT NULL, point_index INTEGER NOT NULL, "
+    "time_utc TEXT NOT NULL, lat REAL NOT NULL, lon REAL NOT NULL, track INTEGER NOT NULL, "
+    "segment INTEGER NOT NULL, PRIMARY KEY (track_id, point_index))",
+    # the entries each executed plan placed or timed photos by (BLD-withdrawn_track_points)
+    "CREATE TABLE IF NOT EXISTS gpx_track_use (plan_id TEXT NOT NULL, track_id INTEGER NOT NULL, "
+    "PRIMARY KEY (plan_id, track_id))",
+)
+
+
+def open_track_record(record):
+    """A connection to the track region of the database of record (BLD-track_catalogue), its tables made; `record`
+    None is a database of no file, gone with the connection."""
+    conn = sqlite3.connect(record or ":memory:")
+    conn.row_factory = sqlite3.Row
+    for ddl in _TRACK_TABLES:
+        conn.execute(ddl)
+    conn.commit()
+    return conn
+
+
+def _epoch(iso):
+    return datetime.fromisoformat(iso).timestamp()
 
 
 class GPXIndex:
-    """Deterministically ordered, fingerprinted index of all GPX track points under gpx_root.
+    """The track points geotag decides by — those in its window (BLD-track_window) — and their fingerprint.
 
-    Availability is recorded in `status` (disabled / missing / empty / usable). The `fingerprint`
-    is a SHA-256 over the root, each file's bytes, and each parsed point — it becomes an upstream
-    dependency of the time/GPS artifacts in later phases (RUL-tracks_in_dependencies).
+    Availability is recorded in `status` (disabled / missing / unlisted / unreadable / empty / usable / kept). The
+    `fingerprint` is a SHA-256 over the ranking and each point in the window (BLD-gpx_fingerprint) — it becomes an
+    upstream dependency of the time/GPS artifacts (RUL-tracks_in_dependencies), and tracks of other times leave it as
+    it is (RUL-tracks_elsewhere_restale_nothing).
 
-    Every file is read whole on every build — its bytes are what the fingerprint checks — but with a
-    `memo_path` a file whose bytes were parsed before is not parsed again: its points come from the
-    track memo (RUL-other_databases_scratch), which yields exactly what parsing would."""
+    The record keeps a catalogue of every track file under gpx_root and the points of each in the window
+    (BLD-track_catalogue): a file whose size, modification time and inode are as the catalogue has them is not read
+    again, unless the window has grown into its span; a new or changed one is read and parsed. `record` None keeps
+    nothing past the build: every file is read."""
 
-    def __init__(self, gpx_root, memo_path=None, precedence=()):
+    def __init__(self, gpx_root, record=None, precedence=()):
         self.gpx_root = gpx_root
-        self.memo_path = memo_path
+        self.record = record
         # the folders under gpx_root, best device first (RUL-tracks_ranked_by_folder)
         self.precedence = list(precedence or ())
         self.points = []
         self.fingerprint = None
         self.status = "disabled"
         self.warnings = []
-        self.parsed = self.reused = 0      # files parsed this build / taken from the memo
+        self.window = []
+        self.read = 0                      # track files read this build
         self._tracks = None
+        self._any_points = False
         self.file_sha = {}                 # each track file's SHA-256, by its path under gpx_root
         self.unreadable = []               # [(file, why)] of the track files that could not be read or parsed
+        self.unlisted = []                 # [(folder, why)] of the folders under gpx_root that could not be listed
+        self.gone = []                     # the track files the catalogue had and gpx_root no longer holds
 
     def tracks(self):
         """The points as separate tracks — `[(file, points in time order, their times)]`, by file name, then by
@@ -204,10 +306,26 @@ class GPXIndex:
         """True when the tracks are of more than one rank — where precedence matters at all."""
         return len({self.rank(f) for f, _p, _t in self.tracks()}) > 1
 
-    def build(self, coordinator=None):
+    def build(self, coordinator=None, window=None, keep=True, read=True):
+        """Index the points in `window` (a list of (start, end) whole seconds; None: every point). `keep` False
+        leaves the record as it was: execute checks the tracks, planning keeps them. `read` False reads nothing
+        under gpx_root — the points are those the record keeps (finalize, RUL-sealing_needs_no_tracks)."""
+        self.window = window_union(window) if window is not None else list(ALL_TIME)
+        self.points, self.warnings, self.file_sha, self.unreadable, self.unlisted = [], [], {}, [], []
+        self.read, self._any_points = 0, False
         if not self.gpx_root:
             self.status = "disabled"
             self.fingerprint = hashlib.sha256(b"gpx-disabled-v1").hexdigest()
+            return self
+        if not read:
+            conn = open_track_record(self.record)
+            try:
+                for row in conn.execute("SELECT * FROM gpx_track_files WHERE withdrawn = 0 ORDER BY path").fetchall():
+                    self._take(conn, dict(row))
+            finally:
+                conn.close()
+            self._finish()
+            self.status = "kept"
             return self
         if not os.path.isdir(self.gpx_root):
             self.status = "missing"
@@ -221,130 +339,182 @@ class GPXIndex:
                              if not os.path.isdir(os.path.join(self.gpx_root, name))
                              or os.path.islink(os.path.join(self.gpx_root, name)))
         gpx_files, linked = [], []
-        for r, dirs, files in os.walk(self.gpx_root):
+
+        def unlisted(e):
+            where = os.path.relpath(e.filename, self.gpx_root) if getattr(e, "filename", None) else "."
+            self.unlisted.append((where, e.strerror or str(e)))
+        for r, dirs, files in os.walk(self.gpx_root, onerror=unlisted):
             gpx_files.extend((os.path.relpath(os.path.join(r, f), self.gpx_root), os.path.join(r, f))
                              for f in files if is_gpx_file(f))
             # the walk never follows a linked folder: the tracks in it are not read, and that is said
             # (RUL-unreadable_tracks_stop_geotag)
             linked.extend(os.path.relpath(os.path.join(r, d), self.gpx_root) for d in dirs
                           if os.path.islink(os.path.join(r, d)))
+        if self.unlisted:
+            # a folder of the tracks that cannot be listed: what is in it cannot be checked, and counts as changed
+            # (RUL-unlisted_tracks_stop_geotag) — nothing in the record is withdrawn for not being seen
+            self.status = "unlisted"
+            self.warnings.extend(f"Could not list {where!r} under gpx_root: {why}" for where, why in self.unlisted)
+            self.fingerprint = hashlib.sha256(("gpx-unlisted|" + self.gpx_root).encode()).hexdigest()
+            return self
         gpx_files.sort()
         self.warnings.extend(f"Linked folder under gpx_root not followed — any tracks in it were not read: {rel}"
                              for rel in sorted(linked))
 
-        memo = self._open_memo()
-        seen = set()
-        if coordinator:                       # per-file progress (count + %), named by GPX file
-            coordinator.start_phase("loading GPX tracks", len(gpx_files))
-        h = hashlib.sha256()
-        h.update(self.gpx_root.encode("utf-8"))
-        h.update(b"gpx-index-v1")
+        conn = open_track_record(self.record)
+        try:
+            current = {row["path"]: dict(row) for row in
+                       conn.execute("SELECT * FROM gpx_track_files WHERE withdrawn = 0").fetchall()}
+            if coordinator:                       # per-file progress (count + %), named by GPX file
+                coordinator.start_phase("loading GPX tracks", len(gpx_files))
+            taken = {}
+            for rel, abs_path in gpx_files:
+                if coordinator:
+                    coordinator.set_detail(rel)
+                entry = self._file(conn, rel, abs_path, current.get(rel))
+                if entry is not None:
+                    taken[rel] = entry["track_id"]
+                    self._take(conn, entry)
+                if coordinator:
+                    coordinator.increment_completed(1)
+            if coordinator:
+                coordinator.finish_phase()
+            listed = {rel for rel, _a in gpx_files}
+            for rel, row in sorted(current.items()):
+                if taken.get(rel) != row["track_id"]:
+                    self._retire(conn, row, gone=rel not in listed)
+            if keep:
+                conn.commit()
+            else:
+                conn.rollback()
+        finally:
+            conn.close()
+        self._finish()
+        # Track files there, and not one of them read: the tracks are not there to plan by, whatever
+        # "no tracks" would plan (RUL-unreadable_tracks_stop_geotag). A folder of no track file at all is empty.
+        self.status = ("unreadable" if gpx_files and len(self.unreadable) == len(gpx_files) else
+                       "usable" if self._any_points else "empty")
+        return self
+
+    def _finish(self):
+        """Order the points and take their fingerprint (BLD-gpx_fingerprint)."""
+        self.points.sort(key=lambda p: (p.time_utc, p.source_file, p.point_index))
+        h = hashlib.sha256(b"gpx-window-v1")
         # the ranking decides which track places and anchors: a change to it is a change to the tracks
         # (RUL-track_ranking_in_dependencies)
         h.update(("precedence|" + json.dumps(self.precedence)).encode("utf-8"))
-        for rel, abs_path in gpx_files:
-            if coordinator:
-                coordinator.set_detail(rel)
-            h.update(rel.encode("utf-8"))
-            try:
-                with open(abs_path, "rb") as f:
-                    data = f.read()
-            except OSError as e:
-                self.warnings.append(f"Could not read GPX file {rel}: {e}")
-                self.unreadable.append((rel, str(e)))
-                data = None
-            if data is not None:
-                digest = hashlib.sha256(data).digest()
-                h.update(digest)
-                seen.add(digest.hex())
-                self.file_sha[rel] = digest.hex()
-                parsed = self._memo_get(memo, digest.hex())
-                if parsed is None:
-                    parsed = self._parse_bytes(data)
-                    self._memo_put(memo, digest.hex(), parsed)
-                    self.parsed += 1
-                else:
-                    self.reused += 1
-                points, warnings, malformed = parsed
-                if malformed is not None:
-                    self.unreadable.append((rel, malformed))
-                self.points.extend(GPXPoint(lat, lon, datetime.fromisoformat(t), rel, idx, trk, seg)
-                                   for lat, lon, t, idx, trk, seg in points)
-                self.warnings.extend(w.replace(_REL, rel) for w in warnings)
-            if coordinator:
-                coordinator.increment_completed(1)
-        if coordinator:
-            coordinator.finish_phase()
-        self._close_memo(memo, seen)
-
-        self.points.sort(key=lambda p: (p.time_utc, p.source_file, p.point_index))
         for p in self.points:
             h.update(p.time_utc.isoformat().encode("utf-8"))
             h.update(f"{p.lat}|{p.lon}|{p.source_file}|{p.point_index}|{p.track}|{p.segment}".encode("utf-8"))
         self.fingerprint = h.hexdigest()
-        # Track files there, and not one of them read: the tracks are not there to plan by, whatever
-        # "no tracks" would plan (RUL-unreadable_tracks_stop_geotag). A folder of no track file at all is empty.
-        self.status = ("usable" if self.points else
-                       "unreadable" if gpx_files and len(self.unreadable) == len(gpx_files) else "empty")
-        return self
 
-    # --- the track memo: scratch, so any failure only means parsing again -----------------
+    # --- the catalogue (BLD-track_catalogue) -----------------------------------------------------------------
 
-    def _open_memo(self):
-        if not self.memo_path:
-            return None
-        for attempt in (1, 2):                 # a memo that is not a database is replaced: it is scratch
-            conn = None
-            try:
-                conn = sqlite3.connect(self.memo_path)
-                conn.execute("CREATE TABLE IF NOT EXISTS track_memo (sha256 TEXT PRIMARY KEY, "
-                             "parse_version TEXT, parsed_json TEXT)")
-                return conn
-            except sqlite3.Error:
-                if conn is not None:
-                    conn.close()
-                if attempt == 2:
-                    return None
-                try:
-                    os.remove(self.memo_path)
-                except OSError:
-                    return None
+    def _wants(self, row):
+        """Whether the window reaches into the entry's span past the window its kept points cover."""
+        if not row["first_utc"]:
+            return False
+        first, last = math.floor(_epoch(row["first_utc"])), math.ceil(_epoch(row["last_utc"]))
+        return any(a <= last and b >= first
+                   for a, b in window_minus(self.window, valid_window(json.loads(row["covered"])) or []))
+
+    def _file(self, conn, rel, abs_path, row):
+        """The catalogue's entry for the track file at `rel` as it is now — read and parsed when it is new or
+        changed, or when the window reaches into its span past what is kept — or None when it cannot be read."""
+        try:
+            st = os.stat(abs_path)
+        except OSError as e:
+            return self._cannot_read(rel, e)
+        stamp = (st.st_size, st.st_mtime_ns, st.st_ino)
+        if row is not None and row["parse_version"] == GPX_PARSE_VERSION \
+                and (row["size"], row["mtime_ns"], row["inode"]) == stamp \
+                and (row["unreadable"] is not None or not self._wants(row)):
+            return row                        # as it was read: not read again
+        try:
+            with open(abs_path, "rb") as f:
+                data = f.read()
+        except OSError as e:
+            return self._cannot_read(rel, e)
+        self.read += 1
+        sha = hashlib.sha256(data).hexdigest()
+        found = conn.execute("SELECT * FROM gpx_track_files WHERE path = ? AND sha256 = ? AND parse_version = ?",
+                             (rel, sha, GPX_PARSE_VERSION)).fetchone()
+        return self._keep(conn, rel, sha, stamp, self._parse_bytes(data), dict(found) if found else None)
+
+    def _cannot_read(self, rel, e):
+        self.warnings.append(f"Could not read GPX file {rel}: {e}")
+        self.unreadable.append((rel, str(e)))
         return None
 
-    @staticmethod
-    def _memo_get(conn, sha):
-        if conn is None:
-            return None
-        try:
-            row = conn.execute("SELECT parsed_json FROM track_memo WHERE sha256 = ? AND parse_version = ?",
-                               (sha, GPX_PARSE_VERSION)).fetchone()
-            return tuple(json.loads(row[0])) if row else None
-        except (sqlite3.Error, ValueError):
-            return None
+    def _keep(self, conn, rel, sha, stamp, parsed, entry):
+        """Keep the parse of the bytes `sha` of the file at `rel` as its current entry: its points in the window
+        the entry covered, grown by this build's."""
+        points, warnings, malformed = parsed
+        times = sorted((_epoch(p[2]), p[2]) for p in points)
+        covered = window_union(valid_window(json.loads(entry["covered"])) if entry else [], self.window)
+        values = (rel.split("/", 1)[0] if "/" in rel else "", stamp[0], stamp[1], stamp[2],
+                  times[0][1] if times else None, times[-1][1] if times else None,
+                  json.dumps(covered), json.dumps(warnings), malformed)
+        if entry:
+            tid = entry["track_id"]
+            conn.execute("UPDATE gpx_track_files SET rank_folder = ?, size = ?, mtime_ns = ?, inode = ?, first_utc = ?, "
+                         "last_utc = ?, covered = ?, warnings = ?, unreadable = ?, withdrawn = 0 WHERE track_id = ?",
+                         values + (tid,))
+            conn.execute("DELETE FROM gpx_track_points WHERE track_id = ?", (tid,))
+        else:
+            tid = conn.execute("INSERT INTO gpx_track_files (rank_folder, size, mtime_ns, inode, first_utc, last_utc, "
+                               "covered, warnings, unreadable, path, sha256, parse_version) "
+                               "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                               values + (rel, sha, GPX_PARSE_VERSION)).lastrowid
+        conn.executemany("INSERT INTO gpx_track_points VALUES (?, ?, ?, ?, ?, ?, ?)",
+                         [(tid, idx, t, lat, lon, trk, seg) for lat, lon, t, idx, trk, seg in points
+                          if _within(covered, _epoch(t))])
+        return dict(conn.execute("SELECT * FROM gpx_track_files WHERE track_id = ?", (tid,)).fetchone())
+
+    def _take(self, conn, entry):
+        """Index the entry's kept points in the window, with its SHA-256 and its warnings."""
+        rel = entry["path"]
+        self.file_sha[rel] = entry["sha256"]
+        self.warnings.extend(w.replace(_REL, rel) for w in json.loads(entry["warnings"] or "[]"))
+        if entry["unreadable"] is not None:
+            self.unreadable.append((rel, entry["unreadable"]))
+            return
+        self._any_points = self._any_points or bool(entry["first_utc"])
+        for idx, t, lat, lon, trk, seg in conn.execute(
+                "SELECT point_index, time_utc, lat, lon, track, segment FROM gpx_track_points WHERE track_id = ?",
+                (entry["track_id"],)).fetchall():
+            at = datetime.fromisoformat(t)
+            if _within(self.window, at.timestamp()):
+                self.points.append(GPXPoint(lat, lon, at, rel, idx, trk, seg))
+
+    def _retire(self, conn, row, gone):
+        """An entry no longer the file's: kept, withdrawn, where an executed plan placed or timed photos by it
+        (RUL-withdrawn_track_points_kept); else taken out of the record with its points. A file gone is told
+        (RUL-gone_track_told)."""
+        used = conn.execute("SELECT 1 FROM gpx_track_use WHERE track_id = ? LIMIT 1", (row["track_id"],)).fetchone()
+        if used:
+            conn.execute("UPDATE gpx_track_files SET withdrawn = 1 WHERE track_id = ?", (row["track_id"],))
+        else:
+            conn.execute("DELETE FROM gpx_track_points WHERE track_id = ?", (row["track_id"],))
+            conn.execute("DELETE FROM gpx_track_files WHERE track_id = ?", (row["track_id"],))
+        if gone:
+            self.gone.append(row["path"])
+            self.warnings.append(f"Track file gone from gpx_root, no longer used: {row['path']}"
+                                 + (" — its points stay in the record, withdrawn: an executed plan placed or "
+                                    "timed photos by it" if used else ""))
 
     @staticmethod
-    def _memo_put(conn, sha, parsed):
-        if conn is None:
-            return
+    def mark_used(record, plan_id, paths):
+        """Record that the plan `plan_id`, executed, placed or timed photos by the track files at `paths` — by
+        their current entries (BLD-withdrawn_track_points)."""
+        conn = open_track_record(record)
         try:
             with conn:
-                conn.execute("INSERT OR REPLACE INTO track_memo VALUES (?, ?, ?)",
-                             (sha, GPX_PARSE_VERSION, json.dumps(parsed)))
-        except sqlite3.Error:
-            pass
-
-    @staticmethod
-    def _close_memo(conn, seen):
-        """Drop the entries of tracks no longer under gpx_root, so the memo follows the tracks."""
-        if conn is None:
-            return
-        try:
-            with conn:
-                for (sha,) in conn.execute("SELECT sha256 FROM track_memo").fetchall():
-                    if sha not in seen:
-                        conn.execute("DELETE FROM track_memo WHERE sha256 = ?", (sha,))
-        except sqlite3.Error:
-            pass
+                for rel in sorted(set(paths)):
+                    row = conn.execute("SELECT track_id FROM gpx_track_files WHERE path = ? AND withdrawn = 0",
+                                       (rel,)).fetchone()
+                    if row is not None:
+                        conn.execute("INSERT OR IGNORE INTO gpx_track_use VALUES (?, ?)", (plan_id, row["track_id"]))
         finally:
             conn.close()
 
