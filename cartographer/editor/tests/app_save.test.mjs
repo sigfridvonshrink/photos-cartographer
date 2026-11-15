@@ -91,6 +91,18 @@ test("a time changed since geotag wrote it: keep it or take back geotag's, the a
   assert.equal(p.time[0].key, key);
 });
 
+test("a changed time's keep says it is the true local time, and an offset tag the zone does not give is noted", () => {
+  const held = { DateTimeOriginal: "2024:07:03 14:45:00", OffsetTimeOriginal: "+09:00" };
+  assert.match(app.changedKeepLabel({ held_time: held }), /^keep 2024:07:03 14:45:00 \+09:00 — this is the true local time/);
+  assert.match(app.changedKeepLabel({ held_time: held }), /no camera clock offset applied/);
+  assert.equal(app.keptTagNote({ held_time: held }), "");
+  const note = app.keptTagNote({ held_time: held, offset_tag_disagrees: { recorded_offset_seconds: 32400,
+    timezone: "Europe/Brussels", timezone_offsets_seconds: [7200] } });
+  assert.match(note, /^Its offset tag says \+09:00, but Europe\/Brussels is \+02:00 at that time\./);
+  assert.match(app.keptTagNote({ offset_tag_disagrees: { recorded_offset_seconds: 0, timezone: "Europe/Brussels",
+    timezone_offsets_seconds: [7200, 3600] } }), /is \+02:00 or \+01:00/);
+});
+
 test("recordAbsentText: a record that does not parse is shown as that error, never as no file", () => {
   const err = { _error: "could not read photos-21-time-decisions.json: Expecting value: line 3 column 1 (char 7)" };
   const said = app.recordAbsentText(err, "photos-21-time-decisions.json");

@@ -178,17 +178,17 @@ class GeotagCache:
         cur = self.conn.execute("SELECT content_fingerprint, original FROM original_values")
         return {r[0]: json.loads(r[1]) for r in cur.fetchall()}
 
-    def originals_retime(self, fp, kept):
-        """Make a time the user kept the pinned file's own (BLD-changed_time_kept_pinned): its pinned DateTimeOriginal,
-        OffsetTimeOriginal and recorded time become `kept`'s, every other pinned value staying, so every later run
-        decides about the photo from that time. A file with no pin is not touched."""
+    def originals_true_time(self, fp, kept):
+        """Record beside the pinned file's own values the time the user kept as its true local time
+        (BLD-changed_time_kept_pinned): its `true_time`, `kept`'s DateTimeOriginal and OffsetTimeOriginal, every pinned
+        own value staying, so every later run resolves the photo from that time by its destination's zone. A file with
+        no pin is not touched."""
         with self.conn:
             row = self.conn.execute("SELECT original FROM original_values WHERE content_fingerprint = ?",
                                     (fp,)).fetchone()
             if row is None:
                 return
-            original = dict(json.loads(row[0]), **{k: kept.get(k) for k in (*TIME_PAIR, "selected_source_naive_timestamp",
-                                                                          "selected_source_timestamp_tag")})
+            original = dict(json.loads(row[0]), true_time={k: kept.get(k) for k in TIME_PAIR})
             self.conn.execute("UPDATE original_values SET original = ? WHERE content_fingerprint = ?",
                               (json.dumps(original, sort_keys=True), fp))
 
@@ -733,8 +733,9 @@ class GeotagWorkflow:
         """One object per by-dest photo, built from the handoff's records (+ the EXIF prep already
         extracted into metadata_status.parsed_json). Geotag never re-reads the file — a stale
         handoff was already blocked (BLD-reprep_pending). Given the prior photos-21, a photo holding a time changed
-        since geotag wrote it carries the user's answer there (`changed_time`, BLD-changed_time_question), and one kept
-        is decided from that time (BLD-changed_time_kept)."""
+        since geotag wrote it carries the user's answer there (`changed_time`, BLD-changed_time_question); one kept, or
+        whose pin keeps a true time (BLD-changed_time_kept_pinned), is decided from that time as its true local time
+        (BLD-changed_time_kept)."""
         answers = _changed_time_answers(prior_time)
         by_dest = folder_name('photos_by_dest')
         files = []
@@ -797,13 +798,18 @@ class GeotagWorkflow:
             if key is not None:                        # decide from the file's own values (BLD-decided_from_own_values)
                 files[-1] = dict(from_originals(files[-1], originals[key]), original_key=key,
                                  times_written=written.get(key) or [])   # the times geotag wrote (BLD-time_written_recorded)
+                if isinstance(originals[key].get("true_time"), dict):
+                    # a time the user kept on an earlier pass: its true local time from then on
+                    # (BLD-changed_time_kept_pinned)
+                    files[-1] = keep_true_time(files[-1], originals[key]["true_time"])
                 ch = changed_time(files[-1])
                 if ch is not None:
                     # its time changed since geotag wrote it: the user's answer, found by its fingerprint
                     ud = (answers.get(fp) or answers.get(key) or {}).get("user_decision")
                     answer = _changed_time_answer(ud if isinstance(ud, dict) else {}, ch)
                     if answer == "new":
-                        files[-1] = keep_changed_time(files[-1])
+                        # kept: the photo's true local time (BLD-changed_time_kept), its pin's at execution
+                        files[-1] = dict(keep_true_time(files[-1], ch["held_time"]), time_kept=dict(ch["held_time"]))
                     files[-1]["changed_time"] = dict(ch, answer=answer)
             # a time read from ModifyDate is no camera's clock: solved on its own (BLD-modified_time_files)
             files[-1]["camera_group_key"] = clock_group_key(files[-1])
@@ -923,6 +929,7 @@ class GeotagWorkflow:
         eff_country, table = {}, country_table()
         self.country_removals = []
         self.unreadable_offset_tags = []
+        self.kept_tag_disagreements = []
         ordered, containers = _expand_destinations(by_dest)
         self.coordinator.start_phase("calibrating clock offsets", len(ordered))
         for dest in ordered:
@@ -997,7 +1004,9 @@ class GeotagWorkflow:
                 gframes = [f for f in by_dest[dest] if f["camera_group_key"] == group]
                 dates = sorted({d for f in gframes if (d := _naive_date(f.get("source_naive_time")))})
                 for date in (dates if len(dates) > 1 else [None]):
-                    sel = [f for f in gframes if not f.get("geotag_marker")
+                    # a time the user kept as the true one is no reading of the camera's clock
+                    # (BLD-changed_time_kept_not_anchor)
+                    sel = [f for f in gframes if not f.get("geotag_marker") and not f.get("true_time")
                            and (date is None or _naive_date(f.get("source_naive_time")) == date)]
                     bucket = group if date is None else f"{group}@{date}"
                     day = date or (dates[0] if dates else None)
@@ -1013,8 +1022,8 @@ class GeotagWorkflow:
                         continue
                     if not sel:
                         # Every time here is corrected already and none has its own values pinned (a photo
-                        # geotag marked elsewhere), so nothing asks. A resolved answer is kept for photos of
-                        # the same camera and day arriving later — derived again from the decision, never
+                        # geotag marked elsewhere), or was kept as the true one, so nothing asks. A resolved
+                        # answer is kept for photos of the same camera and day arriving later — derived again from the decision, never
                         # copied, so the record always says what the decision now says.
                         if prior_cell:
                             cell = self._offset_cell(dest, group, g, prior_cell, [], gpx, blockers,
@@ -1042,13 +1051,13 @@ class GeotagWorkflow:
                 # (BLD-unreadable_offset_tags)
                 bad = [{"relative_path": f["relative_path"], "field": u[0], "value": u[1]}
                        for f in sorted(by_dest[dest], key=lambda x: x["relative_path"])
-                       if not f.get("geotag_marker") and (u := unreadable_offset_tag(f))]
+                       if not f.get("geotag_marker") and not f.get("true_time") and (u := unreadable_offset_tag(f))]
                 if bad:
                     destinations[dest]["unreadable_offset_tags"] = bad
                     self.unreadable_offset_tags.extend(bad)
                 # files naming no camera and recording no offset: one question for the destination
                 # (BLD-unidentified_files_question)
-                nameless = [f for f in by_dest[dest] if not f.get("geotag_marker")
+                nameless = [f for f in by_dest[dest] if not f.get("geotag_marker") and not f.get("true_time")
                             and (groups.get(f["camera_group_key"]) or {}).get("camera_group_class") == "unidentified"
                             and _parse_camera_naive(f.get("source_naive_time")) and _own_offset(f) is None]
                 if nameless:
@@ -1167,12 +1176,15 @@ class GeotagWorkflow:
 
     def _ask_changed_times(self, destinations, by_dest, prior_dests, blockers):
         """Each photo holding a time changed since geotag wrote it is asked about here, alone
-        (BLD-changed_time_question): keep the time it holds — it becomes the photo's own — or take back geotag's. An
+        (BLD-changed_time_question): keep the time it holds — its true local time — or take back geotag's. An
         answer is the photo's, found again by its fingerprint, and holds for the time it was given for; until answered
-        the photo is unresolved and photos-21 asks (RUL-changed_time_asked)."""
+        the photo is unresolved and photos-21 asks (RUL-changed_time_asked). An offset tag held beside the time that its
+        destination's zone does not give then is recorded with the question and told
+        (BLD-changed_time_kept_tag_noted)."""
         for dest, d in destinations.items():
             if d.get("file_less"):
                 continue
+            tz = (d.get("destination_timezone") or {}).get("effective_iana_timezone") or ""
             earlier = {}
             for cell in ((prior_dests.get(dest) or {}).get("changed_times") or {}).values():
                 if isinstance(cell, dict) and isinstance(cell.get("content_fingerprint"), str):
@@ -1192,8 +1204,8 @@ class GeotagWorkflow:
                 answered = "" if answered is None else answered
                 stale = False
                 if keep not in ("",) + CHANGED_TIME_ANSWERS:
-                    blockers.append(f"{where}.keep must be \"new\" (keep the time it holds), \"geotag\" (write "
-                                    "geotag's time back) or \"\" (not answered).")
+                    blockers.append(f"{where}.keep must be \"new\" (keep the time it holds as the true local time), "
+                                    "\"geotag\" (write geotag's time back) or \"\" (not answered).")
                 elif keep and not (isinstance(answered, dict) and set(answered) == set(TIME_PAIR)):
                     blockers.append(f"{where}.answered_for must be the time answered for, as held_time gives it — the "
                                     f"one held now is {json.dumps(ch['held_time'], sort_keys=True)}.")
@@ -1212,6 +1224,10 @@ class GeotagWorkflow:
                     "requires_user_input": not answer,
                     "stale_user_decision": stale,
                 }
+                disagrees = kept_tag_disagreement(ch["held_time"], tz)
+                if disagrees is not None:
+                    out[rel]["offset_tag_disagrees"] = disagrees
+                    self.kept_tag_disagreements.append(dict(disagrees, relative_path=rel, answer=answer or ""))
             if out:
                 d["changed_times"] = out
 
@@ -1775,7 +1791,7 @@ class GeotagWorkflow:
         (destination, bucket, cell, its photos not yet corrected, their corrected times under `rows0`)."""
         by_dest_group = {}
         for f in files:
-            if not f.get("geotag_marker"):                # a corrected time has no drift left to check
+            if not f.get("geotag_marker") and not f.get("true_time"):   # a corrected or kept time: no drift to check
                 by_dest_group.setdefault((f["destination"], f["camera_group_key"]), []).append(f)
         resolved_by_path = {r["relative_path"]: r["resolved_utc"] for r in rows0
                             if r["resolved_utc_status"] == "valid"}
@@ -2161,6 +2177,12 @@ class GeotagWorkflow:
                             "timezone_because": f"photos-21 destinations.{dest}.destination_timezone",
                             "because": offset_decision_pointer(
                                 dict(row, camera_group=row.get("camera_group") or f.get("camera_group_key")), dest, cells)}
+                        if f.get("true_time"):
+                            # no clock offset decided it: the user's word that this is its true time, given in this
+                            # photos-21, or on an earlier pass and kept beside its pin (BLD-log_format)
+                            o["provenance"].pop("because")
+                            if f.get("time_kept"):
+                                o["provenance"]["because"] = f"photos-21 destinations.{dest}.changed_times[{rel}]"
                         o["pre_state"] = held_time_pre_state(f, o["writes"])   # every value it replaces, for the log
                     elif o["type"] == "metadata_gps_write" and o.get("gps_origin") == "recompute_automated":
                         # the track that placed it, and the instant it was placed at: what the position rests on
@@ -2209,9 +2231,11 @@ class GeotagWorkflow:
             "executable": not blockers,
             "blockers": blockers,
             "placement": dict(sorted(placement.items())),
-            # the times the user kept as the photos' own, which execution makes their pins' (BLD-changed_time_kept_pinned)
-            "own_times_kept": {f["relative_path"]: f["time_kept"]
-                               for f in sorted(files, key=lambda x: x["relative_path"]) if f.get("time_kept")},
+            # the times the user kept as the photos' true ones, which execution records beside their pins
+            # (BLD-changed_time_kept_pinned)
+            "true_times_kept": {f["relative_path"]: dict(f["time_kept"],
+                                                         content_fingerprint=f.get("content_fingerprint"))
+                                for f in sorted(files, key=lambda x: x["relative_path"]) if f.get("time_kept")},
             "destinations": destinations,
             "depends_on": depends_on,
         }
@@ -2575,7 +2599,7 @@ class GeotagWorkflow:
             # re-read — before geotag's first write to it, keyed by content fingerprint. A file already carrying
             # geotag's mark holds no original values any more, so it is not pinned.
             model = self.build_file_model()
-            kept_times = plan.get("own_times_kept") or {}
+            kept_times = plan.get("true_times_kept") or {}
             for f in model:
                 fp = f.get("content_fingerprint")
                 if fp and f.get("original_key") not in (None, fp):
@@ -2584,10 +2608,10 @@ class GeotagWorkflow:
                 kept = kept_times.get(f["relative_path"])
                 if kept and f.get("from_originals") and \
                         {k: held_values(f).get(k) for k in TIME_PAIR} == {k: kept.get(k) for k in TIME_PAIR}:
-                    # a time the user kept becomes the photo's own, before anything is written to it
-                    # (BLD-changed_time_kept_pinned): every later plan decides from it
-                    cache.originals_retime(fp, kept)
-                    cache.originals_retime(f["original_key"], kept)
+                    # a time the user kept as the photo's true one, recorded beside its pin before anything is
+                    # written to it (BLD-changed_time_kept_pinned): every later plan resolves the photo from it
+                    cache.originals_true_time(fp, kept)
+                    cache.originals_true_time(f["original_key"], kept)
                 if (fp and f["relative_path"] in by_file and not f.get("from_originals")
                         and geotag_marker(held_values(f).get("method")) is None):
                     cache.originals_pin(fp, f["relative_path"], f["own_values"], now_iso)
@@ -3002,9 +3026,9 @@ def _changed_time_answers(prior_time):
 
 
 def _changed_time_answer(ud, ch):
-    """The answer in effect for a time changed since geotag wrote it — "new" (kept as the photo's own) or "geotag"
-    (geotag's written back) — or None: an answer holds for the time it was given for (`answered_for`), and keeping needs
-    a time to keep (BLD-changed_time_question). Its values are checked where the cell is built."""
+    """The answer in effect for a time changed since geotag wrote it — "new" (kept as the photo's true local time) or
+    "geotag" (geotag's written back) — or None: an answer holds for the time it was given for (`answered_for`), and
+    keeping needs a time to keep (BLD-changed_time_question). Its values are checked where the cell is built."""
     keep, answered = ud.get("keep", ""), ud.get("answered_for")
     if keep not in CHANGED_TIME_ANSWERS or not isinstance(answered, dict):
         return None
@@ -3370,6 +3394,14 @@ def run(args):
                     break
                 reporter.warn(f"  Warning: {u['relative_path']}: its {u['field']} holds {u['value']!r}, which is no UTC "
                               "offset — it is read as no offset tag.")
+            # an offset tag beside a time asked whether to keep that the zone does not give
+            # (BLD-changed_time_kept_tag_noted)
+            for kd in wf.kept_tag_disagreements:
+                reporter.warn(f"  Warning: {kd['relative_path']}: its offset tag says "
+                              f"{utc_offset_text(kd['recorded_offset_seconds'])}, but {kd['timezone']} is "
+                              f"{' or '.join(utc_offset_text(o) for o in kd['timezone_offsets_seconds'])} at the time "
+                              "it holds. Kept as the true local time, it is read by the timezone, and the tag is "
+                              "written to match.")
             for cr in wf.country_removals:
                 reporter.warn(f"  Warning: {cr['destination']}: the country said there ({cr['country']}) was removed — "
                               f"{cr['because']}, which it lies in, is in {cr['country_there']}, and so is everything "
@@ -3384,8 +3416,8 @@ def run(args):
             if artifact["requires_user_input"]:
                 reporter.log(f"Wrote {TIME_DECISIONS_ARTIFACT}: status={artifact['status']} "
                       f"({need_tz} timezone + {need_off} clock-offset decision(s) need input"
-                      + (f"; {need_changed} photo(s) hold a time changed since geotag wrote it — keep it, or "
-                         "take back geotag's" if need_changed else "")
+                      + (f"; {need_changed} photo(s) hold a time changed since geotag wrote it — keep it as the "
+                         "true local time, or take back geotag's" if need_changed else "")
                       + "). Edit the user_decision fields and re-run.", stream="stdout")
             else:
                 reporter.log(f"Wrote {TIME_DECISIONS_ARTIFACT}: status=complete — all time decisions resolved.", stream="stdout")

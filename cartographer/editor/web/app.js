@@ -425,8 +425,8 @@ function previewEffective(ref) {
       ? `${fmtOffset(u.corrected_offset_seconds)} (corrected)` : "✗ invalid offset";
   }
   if (ref.kind === "changed") return !changedHolds(c) ? (u.keep ? "— (answered for another time — answer again)" : "— (needs input)")
-    : u.keep === "new" ? `keeps ${timePair(c.held_time)} as its own time — corrected like any photo's`
-      : `geotag's time written back${c.geotag_wrote ? ` (${timePair(c.geotag_wrote)}, from its own time)` : ""}`;
+    : u.keep === "new" ? `keeps ${timePair(c.held_time)} — the true local time, no clock offset applied`
+      : `geotag's time written back${c.geotag_wrote ? ` (${timePair(c.geotag_wrote)})` : ""}`;
   if (ref.kind === "camera") return u.device_class === "phones" ? "a phone — written into device_groups.phones"
     : u.device_class === "fixed_clock_cameras" ? "a camera with a hand-set clock — written into device_groups.fixed_clock_cameras"
       : "— (needs input: geotag stops until it is classed)";
@@ -1547,8 +1547,9 @@ function unidentifiedControls(ref) {
   return wrap;
 }
 // A photo's time changed since geotag wrote it (photos-21 changed_times, BLD-changed_time_question): keep the time it
-// holds — it becomes the photo's own, corrected like any — or take back geotag's. The answer names the time it was given
-// for (answered_for, a copy of held_time) and holds while the photo holds that time.
+// holds — the true local time, read by the destination's zone, no clock offset applied (BLD-changed_time_kept) — or take
+// back geotag's. The answer names the time it was given for (answered_for, a copy of held_time) and holds while the
+// photo holds that time. An offset tag beside it that the zone does not give then is shown (BLD-changed_time_kept_tag_noted).
 const CHANGED_ANSWERS = ["new", "geotag"];
 const timePair = (t) => !t || !t.DateTimeOriginal ? "no time" : `${t.DateTimeOriginal}${t.OffsetTimeOriginal ? " " + t.OffsetTimeOriginal : " (no offset)"}`;
 function changedHolds(c) {
@@ -1558,6 +1559,17 @@ function changedHolds(c) {
     && (u.keep !== "new" || !!h.DateTimeOriginal);
 }
 const changedFields = (c, keep) => ({ keep, answered_for: keep ? { ...(c.held_time || {}) } : "" });
+// "keep" says what the owner ruled it means: the true local time, never corrected by a clock offset.
+const changedKeepLabel = (c) => `keep ${timePair(c.held_time)} — this is the true local time: read by the ` +
+  "destination's timezone, no camera clock offset applied, now or on any later run";
+// The offset tag beside the time, where the destination's zone gives another then (offset_tag_disagrees), or "".
+function keptTagNote(c) {
+  const dis = c && c.offset_tag_disagrees;
+  if (!dis) return "";
+  return `Its offset tag says ${utcOff(dis.recorded_offset_seconds)}, but ${dis.timezone} is ` +
+    `${(dis.timezone_offsets_seconds || []).map(utcOff).join(" or ")} at that time. Kept, the time is read by the ` +
+    "timezone, not the tag, and the tag is written to match — a time set in another zone would be off by the difference.";
+}
 function changedControls(ref) {
   const c = workCell(ref), u = c.user_decision || {}, wrap = el("div", { class: "ctl-block" });
   wrap.append(el("div", { class: "hint warn" }, `${leaf(ref.key)} holds ${timePair(c.held_time)}, but geotag wrote ` +
@@ -1566,9 +1578,10 @@ function changedControls(ref) {
   const on = changedHolds(c) ? u.keep : "";
   const opt = (keep, label, disabled) => el("div", { class: "off-opt" + (on === keep ? " on" : "") + (disabled ? " disabled" : ""),
     onclick: disabled ? undefined : () => editMany(ref, changedFields(c, keep)) }, el("span", { class: "off-dot" }, on === keep ? "●" : "○"), el("span", {}, label));
-  wrap.append(opt("new", `keep ${timePair(c.held_time)} — it becomes the photo's own time, and is corrected by its camera's offset like any`,
-    !(c.held_time || {}).DateTimeOriginal));
-  wrap.append(opt("geotag", "take back geotag's time — written again from the photo's own time"));
+  wrap.append(opt("new", changedKeepLabel(c), !(c.held_time || {}).DateTimeOriginal));
+  wrap.append(opt("geotag", "take back geotag's time — written again as geotag decided it"));
+  const note = keptTagNote(c);
+  if (note) wrap.append(el("div", { class: "hint warn" }, note));
   if (u.keep && !changedHolds(c)) wrap.append(el("div", { class: "hint warn" },
     "Answered for another time than the one the photo holds now — answer again."));
   if (u.keep) wrap.append(el("button", { class: "mini", onclick: () => editMany(ref, changedFields(c, "")) }, "clear"));
@@ -1903,6 +1916,6 @@ export {
   zoneContradiction, offsetCellNotes, zoneSpokenFor, zoneDespiteFields, effectiveCountry, clearCountriesInside,
   scrubOffset, scrubSeedIndex, mapKeyFor, savePayload,
   ambiguousTimeNote, gpsTimeAsideNote, zoneOffer, validReading, keepHolds, keepFields, keepOffered, phoneNote,
-  trueInstant, parseUtcOff, mismatchAccepted, recordAbsentText, DEVICE_CLASSES, changedHolds, changedFields, unidentifiedHolds, unidentifiedFields, loadRefusal, hasUnsavedEdits, utcOff,
+  trueInstant, parseUtcOff, mismatchAccepted, recordAbsentText, DEVICE_CLASSES, changedHolds, changedFields, changedKeepLabel, keptTagNote, unidentifiedHolds, unidentifiedFields, loadRefusal, hasUnsavedEdits, utcOff,
   fmtSpan, utcToZonedWallMs, zonedWallToUtcMs, offsetFromTrueTime, trueTimeOf,
 };

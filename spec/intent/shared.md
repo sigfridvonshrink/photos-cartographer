@@ -1799,16 +1799,51 @@ Geotag SHALL ask the user, of each photo holding a time changed since geotag wro
 time it holds or takes back geotag's.
 :::
 
-:::{rul} A time the user keeps becomes the photo's own
-:id: RUL-changed_time_kept_is_own
+:::{rul} A time the user keeps is the photo's true local time
+:id: RUL-changed_time_kept_is_true
 :status: ruled
 :criticality: high
 :verify: required
 :refines: RUL-changed_time_asked
-:uses: DEF-recorded_time
+:uses: DEF-recorded_time, DEF-destination, DEF-clock_offset
 
-A time the user keeps SHALL become the photo's own time, from before geotag's first write: geotag decides about the
-photo from it, from then on, as about any photo from its own time.
+A time the user keeps SHALL be taken as the photo's true time, local to its destination: read by the destination's
+timezone, corrected by no camera's clock offset, and decided from as such on every later run.
+:::
+
+:::{rul} A kept time is no reading of the camera's clock
+:id: RUL-kept_time_not_clock_evidence
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+:refines: RUL-changed_time_kept_is_true
+:uses: DEF-camera_group, DEF-clock_offset
+
+Geotag SHALL NOT take a time the user kept as evidence of the clock offset of the photo's camera.
+:::
+
+:::{rul} A kept time's offset tag that its zone does not give is told
+:id: RUL-kept_time_tag_disagreement_told
+:status: ruled
+:criticality: med
+:verify: required
+:refines: RUL-changed_time_kept_is_true
+
+Geotag SHALL tell the user of each photo whose time it asks about whether to keep, and whose offset tag holds an offset
+its destination's timezone does not give at that time, naming the photo.
+:::
+
+:::{rul} A kept time's offset tag that its zone does not give is recorded
+:id: RUL-kept_time_tag_disagreement_recorded
+:status: ruled
+:criticality: med
+:verify: required
+:refines: RUL-changed_time_kept_is_true
+
+Each photo whose time geotag asks about whether to keep, and whose offset tag holds an offset its destination's
+timezone does not give at that time, SHALL be recorded in the time decisions as such, with the offset its tag holds and
+the timezone's.
 :::
 
 :::{rul} A time taken back is written again
@@ -1819,7 +1854,7 @@ photo from it, from then on, as about any photo from its own time.
 :refines: RUL-changed_time_asked
 
 Where the user takes back geotag's time, geotag SHALL plan to write its time again over the one the photo holds,
-decided from the photo's own time as before.
+decided as before the change: from the photo's own time, or from the true time the user kept for it.
 :::
 
 :::{rul} Geotag's gates are the present state, not its history

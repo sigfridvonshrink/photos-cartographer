@@ -379,7 +379,8 @@ offset ({need}`BLD-phone_offset_cell`); else a phone's by the offset recorded wi
 its time — one written within the time's own value, after the seconds and any fraction of them, else its field's:
 `OffsetTimeOriginal` for `DateTimeOriginal`, `OffsetTimeDigitized` for `CreateDate`, `OffsetTime`
 for `ModifyDate` (`smartphone_native_offset`) — else its destination's timezone (`destination_timezone`); and a time
-geotag already corrected by its own offset, else the timezone (`geotag_corrected`); every other photo `unresolved` —
+geotag already corrected by its own offset, else the timezone (`geotag_corrected`); a time the user kept as the
+photo's true time by the timezone (`kept_true_time`, {need}`BLD-changed_time_kept`); every other photo `unresolved` —
 one whose time its offset carries past the calendar's first or last year as `time_out_of_range`. An offset is `Z`, or a
 sign, two digits of hours up to 14 and two of minutes up to 59, with or without a colon between; anything else is none.
 `geotag plan` writes the rows — `relative_path`, `destination_path`, `destination_timezone`, `camera_group`,

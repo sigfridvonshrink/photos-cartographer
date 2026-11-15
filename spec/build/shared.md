@@ -737,7 +737,8 @@ so a write interrupted after it landed is known as geotag's own.
 :uses: BLD-time_written_recorded
 
 The executable plan SHALL be `blocked` by a file with pinned values whose `DateTimeOriginal` and `OffsetTimeOriginal`
-are neither the pinned pair nor one the ledger records geotag writing, and whose question photos-21 holds no answer to
+are neither the pinned pair — the true time the ledger keeps for it, where it keeps one
+({need}`BLD-changed_time_kept_pinned`) — nor one the ledger records geotag writing, and whose question photos-21 holds no answer to
 in effect ({need}`BLD-changed_time_question`), its blocker naming the file, the pair it holds, the last pair geotag wrote
 to it — or that geotag wrote it no time — and its pinned pair; a file with no pin is not checked, and only those two
 fields are compared.
@@ -751,32 +752,59 @@ fields are compared.
 
 Each file such a pair blocks SHALL be asked about in photos-21, in its destination's `changed_times` keyed by its path:
 the cell names its `content_fingerprint`, its `held_time`, the last pair geotag wrote (`geotag_wrote`, or null) and its
-pinned `own_time`, and asks `user_decision.keep` — `new`, keep the time it holds, or `geotag`, take back geotag's —
+`own_time` — the pinned pair, or the true time kept for it — and asks `user_decision.keep` — `new`, keep the time it holds, or `geotag`, take back geotag's —
 with `answered_for`, the `held_time` it is given for. The answer is found again by the file's fingerprint and is in
 effect (`effective_answer`) while `answered_for` is the pair the file holds, and, for `new`, while that pair holds a
 time; another `keep`, or an answer with no `answered_for`, is a blocker; one given for another pair is
 `stale_user_decision`. While a cell has no answer in effect it requires input, and photos-21 is not complete.
 :::
 
-:::{bld} A time kept is decided from as the photo's own
+:::{bld} A time kept is resolved by its destination's zone
 :id: BLD-changed_time_kept
 :status: ruled
-:realises: RUL-changed_time_kept_is_own
-:uses: BLD-changed_time_question, BLD-original_values_pinned
+:realises: RUL-changed_time_kept_is_true
+:uses: BLD-changed_time_question, BLD-resolved_utc, BLD-local_time_readings, BLD-other_time_fields_written
 
-A file whose answer in effect is `new` SHALL be decided from the pair it holds as its own — its recorded time read from
-its `DateTimeOriginal`, with `OffsetTimeOriginal` as its offset.
+A file whose answer in effect is `new`, or whose pin keeps a true time ({need}`BLD-changed_time_kept_pinned`), SHALL
+be resolved from that pair's `DateTimeOriginal`, its recorded time, read by its destination's timezone
+(`kept_true_time`) and by no cell's offset — a time the zone skips or repeats asked in `local_time_readings` as any
+time the zone reads — its time write, that time with the zone's offset and its other time fields, planned as any
+corrected time's.
 :::
 
-:::{bld} A time kept becomes the pin's at execution
+:::{bld} A time kept is left out of the clock's evidence
+:id: BLD-changed_time_kept_not_anchor
+:status: ruled
+:realises: RUL-kept_time_not_clock_evidence
+:uses: BLD-changed_time_kept, BLD-offset_buckets
+
+A file resolved from a kept true time SHALL be left out, as a time geotag corrected is, of the photos its camera
+group's offset cells are built from — anchors, fix times and recorded offsets — and of the drift check, of the photos
+set against its destination's timezone, of the unreadable offset tags and of the question of files naming no camera.
+:::
+
+:::{bld} A kept time's offset tag that its zone does not give
+:id: BLD-changed_time_kept_tag_noted
+:status: ruled
+:realises: RUL-kept_time_tag_disagreement_told, RUL-kept_time_tag_disagreement_recorded
+:uses: BLD-changed_time_question
+
+Each `changed_times` cell whose `held_time` holds a time and an `OffsetTimeOriginal` that is an offset, and whose
+destination's timezone gives another at that time — neither of its two, at a time it skips or repeats — SHALL hold
+`offset_tag_disagrees`: `recorded_offset_seconds`, `timezone` and `timezone_offsets_seconds`; `geotag plan` warns of
+each after writing photos-21. Kept, the time is read by the zone still.
+:::
+
+:::{bld} A time kept is recorded beside the pin at execution
 :id: BLD-changed_time_kept_pinned
 :status: ruled
-:realises: RUL-changed_time_kept_is_own
+:realises: RUL-changed_time_kept_is_true
 :uses: BLD-changed_time_kept, BLD-original_values_pinned
 
-The executable plan SHALL carry each kept pair, with the recorded time and tag it gives, under `own_times_kept` by the
-file's path, which execution writes into the file's pin in the original-values ledger before any write, while the
-file still holds that pair, every other pinned value staying — so every later plan decides from it.
+The executable plan SHALL carry each kept pair, with its file's `content_fingerprint`, under `true_times_kept` by the
+file's path, which execution writes into the file's pin in the original-values ledger as its `true_time` before any
+write, while the file still holds that pair, the pinned own values staying — so every later plan resolves the file
+from it, and asks nothing of the file holding it or a pair geotag wrote.
 :::
 
 :::{bld} A time taken back is planned like any other
@@ -785,8 +813,8 @@ file still holds that pair, every other pinned value staying — so every later 
 :realises: RUL-changed_time_restored
 :uses: BLD-changed_time_question, BLD-decided_from_own_values
 
-A file whose answer in effect is `geotag` SHALL be planned from its pinned values as before, its time write planned
-over the pair it holds as any write that differs from what a file holds.
+A file whose answer in effect is `geotag` SHALL be planned as before the change — from its pinned values, or the true
+time its pin keeps — its time write planned over the pair it holds as any write that differs from what a file holds.
 :::
 
 :::{bld} A re-run treats a marked file as geotag's work
@@ -1014,7 +1042,8 @@ by every prep run; `geotag_path`, by finalize, its by-dest folder under the name
 `from` and `to` — the first step's `from` being the photo's path in the dump — and, where a decision caused it, a
 `because` naming the decision exactly: a clock offset its `photos-21` cell, with its day where the camera's photos there
 span days (`camera_group_time_decisions.<group>@<date>`), or the `photos-22` drift confirmation whose validated offset
-replaced it; a timezone its destination's cell; a manual position the photo's pin among `photos-23`'s review items or
+replaced it; a time kept as the true time its entry of the destination's `changed_times`
+(`changed_times[<path>]`); a timezone its destination's cell; a manual position the photo's pin among `photos-23`'s review items or
 the destination's folder fallback, with the destination it was accepted from.
 :::
 
@@ -1025,7 +1054,8 @@ the destination's folder fallback, with the destination it was accepted from.
 
 Geotag's steps SHALL be `clock_offset_applied` (its `offset_seconds` with an `offset_description` in words, such as
 "camera clock 1 h 55 min ahead of UTC"), `resolved_utc`, `timezone_resolved`, `time_written` (with its `writes`, the
-`pre_state` it replaced — the value each field it writes held — the field `read_from` and the `rule`, from the plan), `gps_written` (with its
+`pre_state` it replaced — the value each field it writes held — the field `read_from` and the `rule`, from the plan),
+`true_time_kept` (the time the user kept as the photo's true time, its `value`, from the plan's `true_times_kept`), `gps_written` (with its
 origin, method and, for a manual position or one written over a position the device wrote that is none of the photo's
 own, the `pre_state` it replaced, from the plan), `gps_cleared` (a position geotag
 wrote and no longer places, or the latitude 0 and longitude 0 of a photo left unlocated, with that position, from the
