@@ -1658,7 +1658,7 @@
   },
   "depends_on": {
     "camera_group_key_version": 1,
-    "camera_time_policy_fingerprint": "c5ddb9a8cff5b9fab083365e33d50416226a3b21cb1301bee0ade319586c1e3d",
+    "camera_time_policy_fingerprint": "873d83905f81313b3fc1ee6a0eb16dee09f6a49995c9c14506eb9967cbcfc5d1",
     "gpx_fingerprint": "example-gpx-fingerprint",
     "handoff": {
       "artifact_name": "photos-11-handoff.json",

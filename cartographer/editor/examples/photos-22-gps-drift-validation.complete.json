@@ -4,9 +4,9 @@
   "decision_mode": "no_op_or_confirmed",
   "depends_on": {
     "camera_group_key_version": 1,
-    "camera_time_policy_fingerprint": "d73ae9e51b28fdb186e822031466c4969195f72a26b25032b3cfbaa7008c6d08",
+    "camera_time_policy_fingerprint": "fda11f7b35fa0d29615fce6d961473e0b0b2be7221ff30dbf3c9bf841f71999b",
     "gpx_fingerprint": "example-gpx-fingerprint",
-    "photos_21_sha256": "bbcdfc212c8dd17d9369b22b1045996a88acf036d20652aba89ea2413e51a6b8"
+    "photos_21_sha256": "0bd01b6d2352ee457b386ff94b0d2639d9892428c5ecbef02153eb046692d402"
   },
   "destinations": {
     "6-photos-by-dest/DriftTown": {
