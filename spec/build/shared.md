@@ -20,7 +20,9 @@ records, `photos-1-prep`, `photos-2-geotag` and `photos-3-merge`.
 :realises: RUL-exit_status_says_how_it_ended, RUL-blocked_plan_ends_refused
 
 Prep's plan, dry run, execute and `prune-quarantine`, and geotag's and merge's commands, SHALL exit 0 for a run that did what it was
-asked; 1 for a workspace or a library found locked; 2 for a refusal — no control directory, the seal, a precondition,
+asked; 1 for a workspace or a library found locked; 2 for a refusal — no control directory, the seal, a change in the
+workspace no command made and none a person is expected to make, a workspace whose state no execution recorded (geotag's
+and merge's), a record of accepted changes it cannot read, a precondition,
 a required tool absent, a plan missing, stale or failing its checks, a plan of prep's own it cannot read, a plan or
 journal of merge's own it cannot read, a workspace database of another schema, a required snapshot not taken, a
 prune's selection refused, and a plan, or a dry run, that reports a blocker; 3 for an execution that ended partial or failed — an operation failed, or
@@ -262,6 +264,7 @@ The control records SHALL be these files in `.photos-ingest/` ({need}`DEF-archiv
   photos-00-sealed.json            terminal/sealed marker, written by a successful merge ALONGSIDE the guard (a separate file, not a field inside the guard) — its presence seals the workspace (BLD-seal_marker)
   photos-00-ingest.db              SQLite identity/metadata cache + derived caches (live working DB, BLD-workspace_database)
   photos-00-plan-memo.db           prep-phase scratch: plan memo, what planning read of each media file (disposable, NOT part of the record)
+  photos-01-accepted-changes.json  the changes to the workspace the user accepted, each by its code (BLD-accept_changes); an earlier one kept under -NNN
   photos-15-prep-ingest.db         prep-phase artifact: DB backup snapshot, end of prep (BLD-database_images)
   journal-*.json                   execution journals
   photos-10-prep-plan.json         prep-phase artifact: prep plan (written by `plan`, consumed by `dry-run`/`execute`; see "Canonical plan persistence" below)
@@ -984,7 +987,9 @@ thread); geotag, of the resolved-UTC cache (`resolved_utc_cache`), the values ea
 to it and the times geotag wrote to it (`original_values`, {need}`BLD-original_values_pinned`,
 {need}`BLD-time_written_recorded`), and the catalogue of the tracks with the points kept and the tracks each executed plan
 used (`gpx_track_files`, `gpx_track_points`, `gpx_track_use`, {need}`BLD-track_catalogue`); merge, of the library-file fingerprint cache
-(`library_fingerprint_cache`, keyed by the library file's absolute path with its size and modification time). Where each
+(`library_fingerprint_cache`, keyed by the library file's absolute path with its size and modification time); and every
+execution, of the record of the state it leaves the workspace's files in (`workspace_record`, named by
+`meta.workspace_record_id`, {need}`BLD-workspace_record`). Where each
 photo landed is in merge's
 JSON records, not the database. The other database is scratch, re-derivable and deletable at any time: prep's
 plan memo, `photos-00-plan-memo.db` ({need}`BLD-plan_memo`).
@@ -1327,4 +1332,77 @@ failed write leaves the file as exiftool found it, a failed rename leaves it und
 :realises: RUL-failed_operation_clean, RUL-failure_recorded, RUL-failure_never_done
 
 Merge SHALL record a placement that raised as blocked, its photo left in photos by destination.
+:::
+
+
+## 17. The workspace as the last execution left it
+
+:::{bld} The record of the workspace's state
+:id: BLD-workspace_record
+:status: ruled
+:realises: RUL-execution_records_state, RUL-planning_leaves_record, RUL-check_covers_media_folders, RUL-quarantine_changed_only_by_prune
+
+The record SHALL be the table `workspace_record` of `photos-00-ingest.db` — each file's `relative_path`, `size`,
+`mtime_ns`, `inode` and `fingerprint` (prep's `file_cache.content_hash` where that row still has the file's size and
+time, else the earlier record's for the same file: at the path a run of the tool's own moved or rewrote it from, at its
+own path unchanged, or anywhere under the same size, time and inode) — named by `meta.workspace_record_id`, of every
+file `workspace_entries` finds: in each managed folder but the inbox, hidden entries left out as prep leaves them, and
+in `.photos-ingest-quarantine/` whole but the `.tmp-` files of a manifest's rewrite, a link an entry of its own.
+`write_workspace_record` rewrites it whole, in one transaction, with a new id: prep's execute after its handoff and
+before its database image, or in its `finally` once its operations have begun; geotag's `execute_plan` in a `finally`
+once it begins applying photos, each written or renamed photo's fingerprint carried from the path it was planned under;
+merge's `execute_plan` in a `finally` once its moves have begun, before its summary, database image and seal. A prune
+that deletes takes the run folders it removed out of the record (`forget_in_workspace_record`), the workspace not
+sealed. No plan, dry run or finalize writes it.
+:::
+
+:::{bld} The check every checking command makes first
+:id: BLD-workspace_check
+:status: ruled
+:realises: RUL-workspace_checked_first, RUL-change_told_by_entries, RUL-sorting_passes, RUL-culling_passes, RUL-moved_back_passes, RUL-hand_time_passes, RUL-copy_passes, RUL-unexpected_change_stops, RUL-record_needed, RUL-first_prep_compares_nothing, RUL-maintenance_unchecked
+
+`check_workspace` SHALL compare `workspace_entries` — each file's `lstat`, no file opened — with the record through
+`compare_workspace`, in this order: a file at its recorded path with its recorded size, time and inode is unchanged; one
+at a new path with a recorded file's size, time and inode is that file moved; at its own path, the same size and time
+under a new inode is `copied`, and a size or time changed is `time_given` in `2-missing-metadata`, `changed` elsewhere;
+one of a recorded file's size, time and name under a new inode, the only such pair, is that file moved; a recorded file
+left over is `deleted` in photos by date, photos by destination, videos by date and the redundant JPEGs, `removed`
+elsewhere; any file left over `appeared`. A move from photos by date into photos by destination, or within the latter,
+is `sorted` (`copied` under a new inode), one back from photos by destination into photos by date `moved_back`, any
+other `moved`. `changed`, `appeared`, `removed` and `moved` stop the command, exit 2; the others pass. Prep calls it in
+`_run_locked` for its plan, dry run and execute once its shape check has passed and the configuration loads, comparing
+nothing where there is no record; geotag in `run` for its plan, execute and finalize, before the automatic re-prep,
+where its preflight would find the workspace initialized and unsealed, the configuration readable, the top level as it
+should be and no link in photos by destination; merge in `_run_locked_workflow` for its plan, dry run and execute once
+its preflight has passed. Geotag and merge stop, exit 2, on a workspace with no record. `prune-quarantine`,
+`init-library` and the editor never call it.
+:::
+
+:::{bld} Accepting a list of changes by its code
+:id: BLD-accept_changes
+:status: ruled
+:realises: RUL-stop_gives_acceptance_code, RUL-code_accepts_only_its_list, RUL-acceptance_recorded, RUL-accepted_change_not_stopped_again
+
+A stop SHALL print `format_changes` of its changes — a line per kind and folder (`in <folder>`, `within <folder>`,
+`from <folder> to <folder>`), each file under it — then `photos-cartographer <phase> <command> --accept-changes <code>`,
+the code the first 12 hex digits of the SHA-256 of those lines joined by newlines, and emit both as a `ChangesEvent`.
+Every checking command takes `--accept-changes <code>`: where the code is that of the list the check would print, the
+check adds to `photos-01-accepted-changes.json`, through `write_versioned_json` — the earlier file kept under `-NNN` —
+an acceptance holding the code, phase, command, time, the record's id and each change with its entry as found, and the
+command goes on; with any other code it stops as without one. A change equal to one an acceptance holds for the current
+record's id stops nothing. A `photos-01-accepted-changes.json` that cannot be read stops the command, exit 2, and is
+never written over. It lies in the control directory, so the archival package carries it. The console's Accept button
+sends the same command with the code (`_accept_extra`), refusing a command that does not check.
+:::
+
+:::{bld} Where the changes by hand are named
+:id: BLD-workspace_changes_logged
+:status: ruled
+:realises: RUL-allowed_changes_named, RUL-accepted_changes_logged
+
+The check SHALL print the changes it passes, `sorted` aside, and those accepted, and return them — `kind`, `path`,
+`from`, the `accepted` code and, where the record holds one, the `content_fingerprint` — for the execution's record:
+prep's execute adds them, each with its `run`, to `workspace_changes` of `photos-15-prep-log.json`, after the earlier
+runs'; geotag's execute writes them as `workspace_changes` of `photos-25-execution-summary.json`, merge's as
+`workspace_changes` of `photos-31-merge-summary.json`. A plan, a dry run and finalize print them.
 :::

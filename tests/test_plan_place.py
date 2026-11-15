@@ -49,6 +49,11 @@ _KNOWN = {
     ("merge init-library", "path"),
     ("edit", "--demo"), ("edit", "--port"), ("edit", "--host"),
     ("console", "--port"), ("console", "--host"),
+    # the code that accepts the changes a stop listed (BLD-accept_changes) — a code, never a place
+    ("prep plan", "--accept-changes"), ("prep dry-run", "--accept-changes"), ("prep execute", "--accept-changes"),
+    ("geotag plan", "--accept-changes"), ("geotag execute", "--accept-changes"),
+    ("geotag finalize", "--accept-changes"),
+    ("merge plan", "--accept-changes"), ("merge dry-run", "--accept-changes"), ("merge execute", "--accept-changes"),
 }
 
 

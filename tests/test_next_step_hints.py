@@ -22,6 +22,7 @@ nothing-to-do outcomes; the geotag/merge equivalents are asserted in their own p
 import os
 import types
 
+from _handoff import recorded
 import photos_1_prep as prep
 import photos_utils as utils
 
@@ -102,6 +103,7 @@ def test_prep_nothing_to_do_hints_sort_then_geotag(tmp_path, monkeypatch):
     (ctl / "photos-15-prep-log.json").write_text('{"photos": {}}')
     (ctl / "photos-11-handoff.json").write_text(json.dumps(
         {"files": [], "depends_on": {"prep_log": {"sha256": utils.sha256_file(str(ctl / "photos-15-prep-log.json"))}}}))
+    recorded(ws)                                    # and the state its execution recorded
     blob = _run(monkeypatch, ws, "execute")
     bd = utils.folder_name("photos_by_dest")
     assert f"Next: sort photos into {bd}, then `geotag plan`" in blob

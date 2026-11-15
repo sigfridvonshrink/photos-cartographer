@@ -64,7 +64,7 @@ def test_each_end_of_a_geotag_execute_has_its_own_exit_status(tmp_path, monkeypa
                         lambda self, for_execute=False: ((["a precondition"] if end == "refused" else []), [], {}))
     monkeypatch.setattr(cal, "prep_log_blocker", lambda ws, handoff: None)     # the log vouched for
 
-    def execute_plan(self, jobs, now_iso, execution_id):
+    def execute_plan(self, jobs, now_iso, execution_id, workspace_changes=()):
         if end == "interrupted":
             raise KeyboardInterrupt
         if end == "stale":

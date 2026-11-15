@@ -28,6 +28,7 @@ let planId = null;         // plan_id being reviewed in the gate
 let gatePhase = "prep";    // the phase the open gate is for (tab could change underneath)
 let currentJobLabel = null;// label of the running job (e.g. "prep execute"), for the Stop confirm
 let prevRunning = false;   // last poll's running flag — to detect a job just finishing
+const phasePlanIds = {};   // phase -> its saved plan's id, from the last state poll
 
 // Reload the folded-in decision editor (Edit tab) so it re-reads the latest decision JSONs. Called
 // when a geotag plan finishes — the plan it just wrote is what the editor edits. No-op until the
@@ -125,6 +126,7 @@ function applySnapshot(s) {
   (s.log || []).forEach(addLog);
   (s.progress || []).forEach(upsertProgress);
   setIdleIfEmpty();
+  if (s.changes) showChanges(s.changes);       // a stop on changes is offered until the next run starts
 }
 
 // --- live connection + server-down detection ------------------------------
@@ -149,6 +151,7 @@ es.onmessage = (ev) => {
   if (m.kind === "snapshot") applySnapshot(m);
   else if (m.kind === "log") addLog(m);
   else if (m.kind === "progress") upsertProgress(m);
+  else if (m.kind === "changes") showChanges(m);
 };
 
 // --- phase tabs + actions -------------------------------------------------
@@ -219,6 +222,7 @@ async function refreshState() {
   if (s.sealed) { lock.textContent = "● sealed"; lock.style.color = "var(--muted)"; }
   else if (!running && s.lock_owner) { lock.textContent = "● locked (another run)"; lock.style.color = "var(--warn)"; }
 
+  for (const [p, v] of Object.entries(s.phases || {})) phasePlanIds[p] = v.plan_id || null;
   const ph = (s.phases && s.phases[currentPhase]) || {};
   // status chip for the current phase (plan-exists / blockers / staleness / ready)
   const ps = $("#phase-status");
@@ -265,17 +269,53 @@ async function stopRun() {
 }
 $("#stop-btn").onclick = stopRun;
 
-async function trigger(command) {
+// Start a checking command's run. The body is remembered per command, so that "Accept these" (below) sends the
+// same run again — an execute's confirmation and reviewed plan id included — with the code its stop printed.
+const lastRun = {};        // "phase/command" -> the body of its last run
+async function postRun(body) {
+  lastRun[`${body.phase}/${body.command}`] = body;
+  hideChanges();
   try {
     await fetch("/api/run", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ phase: currentPhase, command, jobs: jobsValue() }),
+      body: JSON.stringify(body),
     });
   } catch { /* state poll will reflect reality */ }
   await refreshState();
   pollWhileRunning();
 }
+
+async function trigger(command) {
+  await postRun({ phase: currentPhase, command, jobs: jobsValue() });
+}
+
+// --- a run stopped on changes to the workspace -----------------------------
+// Every checking command first compares the workspace with the state the last execution left it in, and stops on a
+// change nobody is expected to make (RUL-unexpected_change_stops), printing the list and the code that accepts it.
+// The console shows the same list, and "Accept these" sends that code through the same command — the phase's own
+// check accepts exactly the list it printed (docs/design/decisions.md). Nothing is decided here.
+const changesOverlay = $("#changes-overlay");
+let pendingChanges = null;   // the stop's event: { phase, command, code, lines }
+function showChanges(m) {
+  pendingChanges = m;
+  $("#changes-title").textContent = `${m.phase} ${m.command} stopped: the workspace is not as the last run left it`;
+  $("#changes-list").textContent = (m.lines || []).join("\n");
+  $("#changes-cmd").textContent = `Accept these runs: photos-cartographer ${m.phase} ${m.command} --accept-changes ${m.code}`;
+  changesOverlay.hidden = false;
+}
+function hideChanges() { pendingChanges = null; changesOverlay.hidden = true; }
+async function acceptChanges() {
+  const m = pendingChanges;
+  if (!m) return;
+  const prev = lastRun[`${m.phase}/${m.command}`]
+    || (m.command === "execute" ? { phase: m.phase, command: m.command, confirm: true,
+                                     plan_id: phasePlanIds[m.phase] || undefined, jobs: jobsValue() }
+                                : { phase: m.phase, command: m.command, jobs: jobsValue() });
+  await postRun({ ...prev, accept_changes: m.code });
+}
+$("#changes-close").onclick = hideChanges;
+$("#changes-accept").onclick = acceptChanges;
 
 // --- execute confirm gate (prep) ------------------------------------------
 const overlay = $("#gate-overlay");
@@ -298,15 +338,7 @@ function closeGate() { overlay.hidden = true; }
 
 async function confirmExecute() {
   closeGate();
-  try {
-    await fetch("/api/run", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ phase: gatePhase, command: "execute", confirm: true, plan_id: planId, jobs: jobsValue() }),
-    });
-  } catch { /* state poll reflects reality */ }
-  await refreshState();
-  pollWhileRunning();
+  await postRun({ phase: gatePhase, command: "execute", confirm: true, plan_id: planId, jobs: jobsValue() });
 }
 
 $("#gate-cancel").onclick = closeGate;

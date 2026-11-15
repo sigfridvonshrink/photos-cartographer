@@ -1076,6 +1076,358 @@ def quarantine_footprint(ws: str) -> dict:
         "newest_plan_id": plan_ids[-1] if plan_ids else None,
     }
 
+
+# --- The workspace as the last execution left it (RUL-workspace_checked_first, BLD-workspace_record) ------------
+# Every phase command but the maintenance ones compares the workspace's files with the state the last execution
+# recorded, by their file system entries alone — path, size, modification time and inode, no file read — and stops on
+# a change no command made and none a person is expected to make, naming each (RUL-unexpected_change_stops).
+
+# Every managed folder but the inbox, which is the user's to fill (RUL-check_covers_media_folders); the quarantine is
+# walked besides.
+WORKSPACE_RECORD_ROLES = ("strays", "missing_metadata", "redundant_jpgs", "videos_by_date", "photos_by_date",
+                          "photos_by_dest")
+ACCEPTED_CHANGES_ARTIFACT = "photos-01-accepted-changes.json"
+CHANGE_CODE_LENGTH = 12
+# The commands that check (RUL-workspace_checked_first) — the maintenance ones do not (RUL-maintenance_unchecked).
+CHECKING_COMMANDS = {"prep": ("plan", "dry-run", "execute"), "geotag": ("plan", "execute", "finalize"),
+                     "merge": ("plan", "dry-run", "execute")}
+# What a person may delete by hand — culling (RUL-culling_passes); anywhere else a file gone stops.
+_CULLED_ROLES = ("photos_by_date", "photos_by_dest", "videos_by_date", "redundant_jpgs")
+# The moves a person makes while sorting (RUL-sorting_passes); a photo moved back is RUL-moved_back_passes.
+_SORTING_MOVES = {("photos_by_date", "photos_by_dest"), ("photos_by_dest", "photos_by_dest")}
+# Kinds of change: allowed and named in the run's log, allowed silently, and those that stop the command.
+_LOGGED_KINDS = ("deleted", "moved_back", "time_given", "copied")
+_UNEXPECTED_KINDS = ("changed", "appeared", "removed", "moved")
+_CHANGE_TITLES = {"changed": "changed in place", "appeared": "appeared", "removed": "removed", "moved": "moved",
+                  "deleted": "deleted", "moved_back": "moved back", "time_given": "changed by hand",
+                  "copied": "the same size and time under a new inode (a copy)"}
+
+
+def add_accept_changes_argument(parser) -> None:
+    """`--accept-changes <code>` on every checking command (BLD-accept_changes): accept once the unexpected changes
+    the check listed, the code printed with them."""
+    parser.add_argument("--accept-changes", dest="accept_changes", metavar="CODE",
+                        help="accept once the changes to the workspace a stop listed, by the code it printed")
+
+
+def accepted_changes_path(ws: str) -> str:
+    """The kept record of the changes the user accepted (BLD-accept_changes); an earlier one is kept under `-NNN`."""
+    return os.path.join(ws, CONTROL_DIR, ACCEPTED_CHANGES_ARTIFACT)
+
+
+def workspace_entries(ws: str, cfg=None) -> dict:
+    """{relative path: (size, mtime_ns, inode)} of every file the check covers (BLD-workspace_record): each managed
+    folder but the inbox, hidden entries left out as prep leaves them, and the whole quarantine but the temporary
+    files of its manifest's rewrite. A link is an entry of its own, never followed. Entries only — no file is read."""
+    out = {}
+
+    def add(path):
+        try:
+            st = os.lstat(path)
+        except OSError:
+            return
+        out[os.path.relpath(path, ws).replace(os.sep, "/")] = (st.st_size, st.st_mtime_ns, st.st_ino)
+
+    def walk(base, hidden_too):
+        for root, dirs, files in os.walk(base):
+            keep = []
+            for d in sorted(dirs):
+                p = os.path.join(root, d)
+                if d.startswith('.') and not hidden_too:
+                    continue
+                if os.path.islink(p):
+                    add(p)
+                else:
+                    keep.append(d)
+            dirs[:] = keep
+            for f in files:
+                if f.startswith('.tmp-') or (f.startswith('.') and not hidden_too):
+                    continue
+                add(os.path.join(root, f))
+
+    for role in WORKSPACE_RECORD_ROLES:
+        base = os.path.join(ws, folder_name(role, cfg))
+        if os.path.isdir(base) and not os.path.islink(base):
+            walk(base, False)
+    q = os.path.join(ws, QUARANTINE_DIR)
+    if os.path.isdir(q) and not os.path.islink(q):
+        walk(q, True)
+    return out
+
+
+def read_workspace_record(ws: str):
+    """`(record_id, {path: {size, mtime_ns, inode, fingerprint}})` — the state the last execution left
+    (BLD-workspace_record) — or `(None, {})` where none was written. Read only."""
+    p = db_path(ws)
+    if not os.path.exists(p):
+        return None, {}
+    try:
+        conn = sqlite3.connect(f"file:{p}?mode=ro", uri=True)
+    except sqlite3.Error:
+        return None, {}
+    try:
+        row = conn.execute("SELECT value FROM meta WHERE key = 'workspace_record_id'").fetchone()
+        if not row:
+            return None, {}
+        rows = conn.execute("SELECT relative_path, size, mtime_ns, inode, fingerprint FROM workspace_record").fetchall()
+    except sqlite3.Error:
+        return None, {}
+    finally:
+        conn.close()
+    return row[0], {r[0]: {"size": r[1], "mtime_ns": r[2], "inode": r[3], "fingerprint": r[4]} for r in rows}
+
+
+def write_workspace_record(ws: str, cache_rows=None, carried=None) -> str:
+    """Rewrite the record with the state the workspace's files are in now (BLD-workspace_record) — every execution's
+    last step, prep's, geotag's and merge's alike, whether or not each of its operations succeeded: it is the state
+    the run leaves (RUL-execution_records_state). Each file's fingerprint is prep's database row for it where that row
+    still describes it (`cache_rows`), else the earlier record's for the same file: at the path it was recorded at
+    (`carried` maps a path to the one a run of the tool's own moved or rewrote it from), or anywhere under the same
+    size, time and inode. One transaction. Returns the new record's id."""
+    import uuid
+    _, prior = read_workspace_record(ws)
+    by_stat = {(r["size"], r["mtime_ns"], r["inode"]): r for r in prior.values()}
+    carried = carried or {}
+    rows = []
+    for rel, (size, mtime, ino) in sorted(workspace_entries(ws).items()):
+        fp = None
+        crow = (cache_rows or {}).get(rel)
+        if crow is not None and (crow.get("size"), crow.get("mtime_ns")) == (size, mtime):
+            fp = crow.get("content_hash")
+        if fp is None:
+            src = prior.get(carried.get(rel, rel))
+            if src is not None and (rel in carried or (src["size"], src["mtime_ns"], src["inode"]) == (size, mtime, ino)):
+                fp = src["fingerprint"]
+            elif (size, mtime, ino) in by_stat:
+                fp = by_stat[(size, mtime, ino)]["fingerprint"]
+        rows.append((rel, size, mtime, ino, fp))
+    record_id = uuid.uuid4().hex
+    WorkspaceCache(ws).close()          # the workspace database, its tables made where it has none yet
+    conn = sqlite3.connect(db_path(ws))
+    try:
+        with conn:
+            conn.execute("DELETE FROM workspace_record")
+            conn.executemany("INSERT INTO workspace_record (relative_path, size, mtime_ns, inode, fingerprint) "
+                             "VALUES (?, ?, ?, ?, ?)", rows)
+            conn.execute("INSERT OR REPLACE INTO meta (key, value) VALUES ('workspace_record_id', ?)", (record_id,))
+    finally:
+        conn.close()
+    return record_id
+
+
+def forget_in_workspace_record(ws: str, prefixes) -> None:
+    """Take out of the record every file under each folder in `prefixes` (workspace-relative) — what a quarantine prune
+    removes, so the next check does not take it for a change (RUL-quarantine_changed_only_by_prune). No record, no-op."""
+    if read_workspace_record(ws)[0] is None:
+        return
+    conn = sqlite3.connect(db_path(ws))
+    try:
+        with conn:
+            for pre in prefixes:
+                pre = pre.rstrip("/") + "/"
+                conn.execute("DELETE FROM workspace_record WHERE substr(relative_path, 1, ?) = ?", (len(pre), pre))
+    finally:
+        conn.close()
+
+
+def _change_role(rel: str, cfg=None):
+    top = rel.split('/', 1)[0]
+    return "quarantine" if top == QUARANTINE_DIR else folder_role(top, cfg)
+
+
+def compare_workspace(record: dict, current: dict, cfg=None) -> list:
+    """The changes between `record` (the state the last execution left) and `current` (`workspace_entries`), by their
+    entries alone (BLD-workspace_check), each `{kind, path, from?, now}` — `now` the entry as it is ([size, mtime_ns,
+    inode]), None for a file gone. A file where it was, as it was, is no change; one of the same size, time and inode at
+    a new path moved there; at its own path with its size or time changed, changed in place; one of the same size and
+    time under a new inode the same file (a copy, a restore), at its path or moved with its name; anything left over
+    is gone, or appeared. The kind says which of them a person is expected to make (`_LOGGED_KINDS`, `sorted`) and
+    which stop the command (`_UNEXPECTED_KINDS`)."""
+    import collections
+    rec = {p: (r["size"], r["mtime_ns"], r["inode"]) for p, r in record.items()}
+    cur = dict(current)
+    changes = []
+    for p in [p for p in cur if rec.get(p) == cur[p]]:
+        del rec[p], cur[p]
+
+    def moved(old, new, new_inode):
+        pair = (_change_role(old, cfg), _change_role(new, cfg))
+        if pair in _SORTING_MOVES:
+            kind = "copied" if new_inode else "sorted"
+        elif pair == ("photos_by_dest", "photos_by_date"):
+            kind = "moved_back"
+        else:
+            kind = "moved"
+        changes.append({"kind": kind, "path": new, "from": old, "now": list(cur.pop(new))})
+        del rec[old]
+
+    by_stat = collections.defaultdict(list)
+    for p in sorted(rec):
+        by_stat[rec[p]].append(p)
+    for p in sorted(cur):
+        olds = [o for o in by_stat.get(cur[p], []) if o in rec]
+        if olds:
+            moved(olds[0], p, False)
+    for p in sorted(set(rec) & set(cur)):
+        r, c = rec.pop(p), cur.pop(p)
+        if r[:2] == c[:2]:
+            kind = "copied"
+        elif _change_role(p, cfg) == "missing_metadata":
+            kind = "time_given"
+        else:
+            kind = "changed"
+        changes.append({"kind": kind, "path": p, "now": list(c)})
+    olds_by, news_by = collections.defaultdict(list), collections.defaultdict(list)
+    for p, s in rec.items():
+        olds_by[(s[0], s[1], p.rsplit('/', 1)[-1])].append(p)
+    for p, s in cur.items():
+        news_by[(s[0], s[1], p.rsplit('/', 1)[-1])].append(p)
+    for key, news in sorted(news_by.items()):
+        olds = olds_by.get(key, [])
+        if len(news) == 1 and len(olds) == 1:
+            moved(olds[0], news[0], True)
+    for p in sorted(rec):
+        changes.append({"kind": "deleted" if _change_role(p, cfg) in _CULLED_ROLES else "removed", "path": p,
+                        "now": None})
+    for p in sorted(cur):
+        changes.append({"kind": "appeared", "path": p, "now": list(cur[p])})
+    return sorted(changes, key=lambda c: (c["path"], c["kind"]))
+
+
+def format_changes(changes) -> list:
+    """The changes as printed: grouped by kind and by the folder they are in (or went from and to), each file named —
+    the lines a stop lists, and the code is made from (BLD-accept_changes)."""
+    def top(rel):
+        return rel.split('/', 1)[0]
+    groups = {}
+    for c in changes:
+        if c.get("from"):
+            where = (f"within {top(c['path'])}" if top(c["from"]) == top(c["path"])
+                     else f"from {top(c['from'])} to {top(c['path'])}")
+            entry = f"{c['from']} -> {c['path']}"
+        else:
+            where, entry = f"in {top(c['path'])}", c["path"]
+        groups.setdefault((_CHANGE_TITLES.get(c["kind"], c["kind"]), where), []).append(entry)
+    lines = []
+    for (title, where) in sorted(groups):
+        lines.append(f"  {title}, {where}:")
+        lines.extend(f"    {e}" for e in sorted(groups[(title, where)]))
+    return lines
+
+
+def change_code(lines) -> str:
+    """The code that accepts a list of changes: a short hash of the list exactly as printed (BLD-accept_changes)."""
+    return sha256_text("\n".join(lines))[:CHANGE_CODE_LENGTH]
+
+
+def _change_key(c) -> str:
+    return json.dumps({k: c.get(k) for k in ("kind", "path", "from", "now")}, sort_keys=True)
+
+
+def read_accepted_changes(ws: str) -> list:
+    """The acceptances `photos-01-accepted-changes.json` keeps, [] where there is none yet. One that exists and cannot
+    be read raises ValueError naming it: it is never taken for none, nor written over (BLD-accept_changes)."""
+    p = accepted_changes_path(ws)
+    if not os.path.exists(p):
+        return []
+    try:
+        with open(p) as f:
+            acc = json.load(f).get("acceptances")
+        if not isinstance(acc, list):
+            raise ValueError("it holds no list of acceptances")
+    except (OSError, ValueError, AttributeError) as e:
+        raise ValueError(f"{ACCEPTED_CHANGES_ARTIFACT} cannot be read ({e}); the changes accepted earlier would be "
+                         "asked again and the record of them written over. Restore it, or move it out of "
+                         f"{CONTROL_DIR}/ to start it afresh.")
+    return [a for a in acc if isinstance(a, dict)]
+
+
+def check_workspace(ws: str, phase: str, command: str, accept_code=None, record_required=True):
+    """The check every checking command makes first (RUL-workspace_checked_first, BLD-workspace_check), the workspace's
+    configuration already loaded. Compares the files with the record the last execution left, takes out what was
+    accepted against that record before, and, where changes remain that no person is expected to make, stops — unless
+    `accept_code` is the code of exactly the list it prints, which accepts them once, recorded (BLD-accept_changes).
+    Returns `(entries for the run's log, None)` to go on — the allowed changes the run names and the accepted ones
+    (BLD-workspace_changes_logged) — or `(None, 2)` once it has said why it stops. With no record, prep compares
+    nothing; geotag and merge stop."""
+    from .reporting import get_reporter, emit_next_step, ChangesEvent
+    reporter = get_reporter()
+    record_id, record = read_workspace_record(ws)
+    if record_id is None:
+        if not record_required:
+            return [], None             # prep's first run, which writes the first record (RUL-first_prep_compares_nothing)
+        reporter.error("\nThe workspace holds no record of the state its last execution left it in, so what has "
+                       "changed since cannot be told. Nothing was planned or changed.")
+        emit_next_step(reporter, "`prep plan` and `prep execute` — each execution records the state it leaves — "
+                                 f"then re-run `{phase} {command}`.")
+        return None, 2
+    changes = compare_workspace(record, workspace_entries(ws))
+    try:
+        acceptances = read_accepted_changes(ws)
+    except ValueError as e:
+        reporter.error(f"\n{e} Nothing was planned or changed.")
+        return None, 2
+    accepted_before = {}
+    for a in acceptances:
+        if a.get("record_id") == record_id:
+            for c in a.get("changes") or []:
+                accepted_before[_change_key(c)] = a.get("code")
+    unexpected = [c for c in changes if c["kind"] in _UNEXPECTED_KINDS and _change_key(c) not in accepted_before]
+    earlier = [dict(c, accepted=accepted_before[_change_key(c)]) for c in changes if _change_key(c) in accepted_before]
+    logged = [c for c in changes if c["kind"] in _LOGGED_KINDS and _change_key(c) not in accepted_before]
+    accepted_now = []
+    if unexpected:
+        lines = format_changes(unexpected)
+        code = change_code(lines)
+        if accept_code != code:
+            reporter.error(f"\nThe workspace is not as the last execution left it: {len(unexpected)} change(s) that "
+                           "no command made, and none a person is expected to make:")
+            for line in lines:
+                reporter.error(line)
+            if accept_code:
+                reporter.log(f"The code {accept_code} accepts another list: the changes are not those it was given "
+                             "for. They are listed anew above.")
+            reporter.log("Nothing was planned or changed. Undo them; or, if they are wanted, accept them once — the "
+                         f"acceptance is kept in {ACCEPTED_CHANGES_ARTIFACT}:")
+            reporter.log(f"  photos-cartographer {phase} {command} --accept-changes {code}")
+            reporter.emit(ChangesEvent(phase=phase, command=command, code=code, lines=lines))
+            emit_next_step(reporter, f"undo the change(s) above, or re-run `{phase} {command} --accept-changes "
+                                     f"{code}` to accept them.")
+            return None, 2
+        now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        entry = {"code": code, "phase": phase, "command": command, "accepted_at": now, "record_id": record_id,
+                 "changes": [{k: c[k] for k in ("kind", "path", "from", "now") if k in c} for c in unexpected]}
+        ensure_control_dir(ws)
+        _sha, _bak = write_versioned_json(accepted_changes_path(ws), {
+            "artifact_name": ACCEPTED_CHANGES_ARTIFACT, "schema_version": 1,
+            "acceptances": acceptances + [entry]})
+        reporter.warn(f"Accepted {len(unexpected)} change(s) (code {code}), recorded in {ACCEPTED_CHANGES_ARTIFACT}:")
+        for line in lines:
+            reporter.warn(line)
+        accepted_now = [dict(c, accepted=code) for c in unexpected]
+    elif accept_code:
+        reporter.log(f"Nothing to accept with the code {accept_code}: no change awaits acceptance.")
+    if earlier:
+        reporter.log(f"{len(earlier)} change(s) accepted earlier since the last execution "
+                     f"({ACCEPTED_CHANGES_ARTIFACT}).")
+    if logged:
+        reporter.log("Changed by hand since the last execution, as a workspace allows:")
+        for line in format_changes(logged):
+            reporter.log(line)
+    out = []
+    for c in logged + earlier + accepted_now:
+        e = {k: c[k] for k in ("kind", "path", "from", "accepted") if c.get(k) is not None}
+        fp = (record.get(c.get("from") or c["path"]) or {}).get("fingerprint")
+        try:
+            fpv = json.loads(fp).get("value") if fp else None
+        except (ValueError, AttributeError):
+            fpv = None
+        if fpv:
+            e["content_fingerprint"] = fpv
+        out.append(e)
+    return sorted(out, key=lambda e: (e["path"], e["kind"])), None
+
+
 def code_fingerprint() -> str:
     """SHA-256 of the cartographer package as loaded — from a zipapp or a checkout: every file the zipapp
     ships, its path and bytes, in path order. Every phase's plan records it, and dry run and execute
@@ -2880,6 +3232,20 @@ class WorkspaceCache:
                               ("cache_schema_version", str(CACHE_SCHEMA_VERSION)))
             self.conn.execute("INSERT OR IGNORE INTO meta (key, value) VALUES (?, ?)",
                               ("fingerprint_algorithm_version", FINGERPRINT_ALGORITHM_VERSION))
+
+            # The state the last execution left the workspace's files in (BLD-workspace_record): every execution
+            # rewrites it whole at its end, and every checking command compares the files with it first. Its own
+            # table, apart from file_cache: that one is prep's, of the files prep fingerprinted and as it found them;
+            # this one is of every file the check covers, as the last execution of any phase left it.
+            self.conn.execute("""
+                CREATE TABLE IF NOT EXISTS workspace_record (
+                    relative_path TEXT PRIMARY KEY,
+                    size INTEGER,
+                    mtime_ns INTEGER,
+                    inode INTEGER,
+                    fingerprint TEXT
+                )
+            """)
 
             # Library-file fingerprint cache (BLD-library_file_fingerprinted). The permanent
             # library has no database of its own; when merge fingerprints a resident library file to

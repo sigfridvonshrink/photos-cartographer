@@ -463,3 +463,32 @@ def test_edit_tab_refuses_an_uninitialized_workspace(tmp_path):
     ws = str(tmp_path)
     assert "initialized" in server._editor_refusal(ws)
     assert not os.path.exists(U.control_dir(ws))
+
+
+# --- a run stopped on changes to the workspace: the same list, accepted by the same command ----------------------
+
+@pytest.mark.spec("BLD-accept_changes", test="TST-console_server-a_stop_on_changes_is_offered_for_acceptance")
+def test_a_stop_on_changes_is_offered_for_acceptance():
+    """The stop's list reaches the console as an event the late-joining page sees too, until the next run starts; the
+    Accept button sends the code through the same command — `--accept-changes <code>` on its argv — and the server
+    refuses a code for a command that does not check, or anything that is not such a code."""
+    from cartographer.reporting import ChangesEvent, Reporter, WebSink
+    sink = WebSink()
+    Reporter([sink]).emit(ChangesEvent(phase="prep", command="plan", code="0123456789ab", lines=["  appeared, in x:"]))
+    _q, snap = sink.subscribe()
+    assert snap["changes"] == {"kind": "changes", "phase": "prep", "command": "plan", "code": "0123456789ab",
+                               "lines": ["  appeared, in x:"]}
+    sink.clear_changes()
+    assert sink.snapshot()["changes"] is None
+    assert server._accept_extra("prep", "plan", {"accept_changes": "0123456789ab"}) == (
+        ["--accept-changes", "0123456789ab"], None)
+    assert server._accept_extra("geotag", "finalize", {}) == ([], None)
+    assert server._accept_extra("prep", "prune-quarantine", {"accept_changes": "0123456789ab"})[1]
+    assert server._accept_extra("merge", "init-library", {"accept_changes": "0123456789ab"})[1]
+    assert server._accept_extra("prep", "plan", {"accept_changes": "; rm -rf /"})[1]
+    for phase, command in (("prep", "execute"), ("geotag", "finalize"), ("merge", "dry-run")):
+        assert callable(server._make_target(phase, command, ["--accept-changes", "0123456789ab"]))
+    js = server._asset("app.js").decode()
+    assert 'm.kind === "changes"' in js and "accept_changes: m.code" in js
+    html = server._asset("/").decode()
+    assert 'id="changes-overlay"' in html and 'id="changes-accept"' in html

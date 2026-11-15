@@ -40,6 +40,8 @@ import errno
 # CONFIGURATION BLOCK
 # ==============================================================================
 from .photos_utils import CONFIG, CAMERA_IDENTITY_FIELDS, folder_name, managed_folder_names, dedup_priority, is_track_file, missing_managed_folders, misplaced_top_level_entries, FOLDER_ROLES, UNTIMED_PREFIX, untimed_stem, carries_stem, filename_format_changed, code_fingerprint, hidden_folder_holds_files
+from .photos_utils import (add_accept_changes_argument, check_workspace, read_workspace_record, write_workspace_record,
+                          forget_in_workspace_record)
 from .reporting import get_reporter, emit_next_step
 from .photos_utils import (replace_durably, _move_no_clobber, _move_link_unlink, _get_renameat2,
                           WorkspaceCache, WorkspaceLock, ContentHasher, PlanFingerprintMemo,
@@ -159,7 +161,29 @@ def read_prior_prep_log(workspace_root):
     return photos
 
 
-def build_prep_log(prior_photos, operations, cache_files, quarantine_evidence, run_id):
+def read_prior_workspace_changes(workspace_root) -> list:
+    """The earlier prep log's `workspace_changes` — the changes by hand earlier runs named or accepted
+    (BLD-workspace_changes_logged) — [] where there is no log yet. Read after `read_prior_prep_log` has found the log
+    readable."""
+    from .photos_utils import prep_log_path
+    plp = prep_log_path(workspace_root)
+    if not os.path.exists(plp):
+        return []
+    with open(plp) as pf:
+        changes = json.load(pf).get("workspace_changes")
+    return [c for c in changes if isinstance(c, dict)] if isinstance(changes, list) else []
+
+
+def _fingerprint_method(content_hash_json):
+    """The method a recorded fingerprint was taken by — its strategy and engine version — or None."""
+    try:
+        ch = json.loads(content_hash_json)
+        return (ch.get("strategy"), ch.get("engine_version"))
+    except (TypeError, ValueError, AttributeError):
+        return None
+
+
+def build_prep_log(prior_photos, operations, cache_files, quarantine_evidence, run_id, prior_record=None):
     """Build the per-photo, content-fingerprint-keyed prep transformation log (BLD-prep_log_build).
 
     Pure and derived — it introduces no new authority, only consolidating records prep already
@@ -251,10 +275,24 @@ def build_prep_log(prior_photos, operations, cache_files, quarantine_evidence, r
     prior_photos = dict(prior_photos)
     _old_by_path = {e.get("prep_path"): old for old, e in prior_photos.items()
                     if old not in fp_to_current and e.get("prep_path")}
+
+    def _same_file_retaken(left_at, path):
+        # Only the file the earlier record describes, unchanged — the same size, modification time and inode — with
+        # its fingerprint taken by another method, is that photo; a different file at the path is a new photo, and the
+        # gone one's entry stays as it was (RUL-retake_only_unchanged_file).
+        rec, row = (prior_record or {}).get(left_at), cache_files.get(path) or {}
+        if rec is None or (rec["size"], rec["mtime_ns"], rec["inode"]) != (row.get("size"), row.get("mtime_ns"),
+                                                                           row.get("inode")):
+            return False
+        before, now = _fingerprint_method(rec.get("fingerprint")), _fingerprint_method(row.get("content_hash"))
+        return before is not None and now is not None and before != now
+
     for new_fp, path in fp_to_current.items():
-        old = _old_by_path.get(path) or _old_by_path.get(moved_from.get(path))
+        left_at = path if path in _old_by_path else moved_from.get(path)
+        old = _old_by_path.get(left_at)
         # A file this run moved or renamed is a photo of this run's own, never the old entry's (RUL-gone_photo_entry_carried).
-        if new_fp not in prior_photos and old in prior_photos and new_fp not in run_steps_by_fp:
+        if (new_fp not in prior_photos and old in prior_photos and new_fp not in run_steps_by_fp
+                and _same_file_retaken(left_at, path)):
             entry = prior_photos.pop(old)
             prior_photos[new_fp] = dict(entry, content_fingerprint=new_fp, journey=list(entry.get("journey", [])) + [
                 _step("fingerprint_retaken", **{"from": old, "to": new_fp})])
@@ -279,9 +317,11 @@ def build_prep_log(prior_photos, operations, cache_files, quarantine_evidence, r
         if prior:
             journey = list(prior.get("journey", [])) + run_steps
             if not run_steps and current and current != prior.get("prep_path"):
-                # Recognized by-date -> by-dest move (carried-forward identity, no plan op).
-                journey.append({"phase": "user", "action": "moved_to_by_dest", "from": prior.get("prep_path"),
-                                "to": current, "run": run_id})
+                # Recognized by-date -> by-dest move (carried-forward identity, no plan op) — or a photo moved back
+                # from photos by destination, which the user may do too (RUL-moved_back_passes).
+                back = not current.startswith(folder_name('photos_by_dest') + "/")
+                journey.append({"phase": "user", "action": "moved_to_by_date" if back else "moved_to_by_dest",
+                                "from": prior.get("prep_path"), "to": current, "run": run_id})
             entry = {**prior, "prep_path": current or prior.get("prep_path"), "journey": journey}
         else:
             entry = {"content_fingerprint": fp, "prep_path": current, "journey": run_steps}
@@ -522,8 +562,10 @@ class ExecuteFailed(RuntimeError):
 
 
 class PlanExecutor:
-    def __init__(self, workspace_root: str):
+    def __init__(self, workspace_root: str, workspace_changes=None):
         self.workspace_root = workspace_root
+        # The changes by hand the run's check named or accepted, for prep's log (BLD-workspace_changes_logged).
+        self.workspace_changes = list(workspace_changes or [])
         from .photos_utils import ProgressCoordinator
         self.coordinator = ProgressCoordinator()
 
@@ -548,6 +590,11 @@ class PlanExecutor:
         # The workspace lock is held for the whole run by main() (RUL-lock_through_the_run);
         # execute() does not acquire it (callers that bypass main() — e.g. tests — run lock-free).
         cache = None
+        # The state the last execution left, read before anything changes: the log tells a fingerprint taken again
+        # from a different file at the path by it (RUL-retake_only_unchanged_file), and this run rewrites it with the
+        # state it leaves, whether or not its operations all succeed (RUL-execution_records_state).
+        prior_record = read_workspace_record(self.workspace_root)[1]
+        self._changing, self._recorded = False, False
         try:
             # 1. Preflight validation
             self.coordinator.start_phase("executing - preflight validation")
@@ -584,6 +631,7 @@ class PlanExecutor:
             # 4. Execute Operations. The preflight above has refused a plan of another command, an operation of a
             #    kind prep does not carry out or one in photos by destination, and a plan holding a blocker.
             self.coordinator.start_phase("executing - applying operations", len(plan.operations))
+            self._changing = True
 
             # Apply all post-verification cache effects as one transaction (BLD-workspace_database): create the
             # cache up front and open a batch; commit once after the loop, roll back on failure
@@ -949,11 +997,15 @@ class PlanExecutor:
                         raise ExecuteFailed(str(e))
                     log_photos, log_warnings = build_prep_log(
                         prior_photos, plan.operations, cache.get_all_files(),
-                        quarantine_evidence, plan.plan_id)
+                        quarantine_evidence, plan.plan_id, prior_record)
                     # No per-run metadata at the top level: the log must be byte-identical on a
-                    # no-op run (RUL-no_op_run). Run attribution lives per-step (the "run" field).
+                    # no-op run (RUL-no_op_run). Run attribution lives per-step (the "run" field). The changes by
+                    # hand the run's check named or accepted are added after the earlier runs'
+                    # (BLD-workspace_changes_logged) — none on a no-op run.
                     log_obj = {"schema_version": PREP_LOG_SCHEMA_VERSION, "tool": "photos-1-prep",
-                               "photos": log_photos}
+                               "photos": log_photos,
+                               "workspace_changes": read_prior_workspace_changes(self.workspace_root)
+                               + [dict(c, run=plan.plan_id) for c in self.workspace_changes]}
                     lfd, ltmp = tempfile.mkstemp(dir=os.path.dirname(plp), prefix=".tmp-prep-log-", suffix=".json", text=True)
                     try:
                         with os.fdopen(lfd, 'w') as lf:
@@ -1072,6 +1124,10 @@ class PlanExecutor:
                 # handoff and written atomically over the earlier one — VACUUM INTO a temp name, then atomic
                 # rename. A failed/interrupted capture leaves the prior snapshot intact. This
                 # refreshes prep's OWN snapshot only (never another phase's).
+                # The state this run leaves, recorded before the database's image is taken (BLD-workspace_record).
+                write_workspace_record(self.workspace_root,
+                                       cache_rows=cache.get_all_files() if cache is not None else None)
+                self._recorded = True
                 if cache is not None:
                     from .photos_utils import prep_db_snapshot_path, write_db_snapshot
                     write_db_snapshot(cache.conn, prep_db_snapshot_path(self.workspace_root))
@@ -1098,6 +1154,12 @@ class PlanExecutor:
                 # cache effects (the filesystem is the source of truth; the next run re-plans).
                 if getattr(cache, "_batch_depth", 0) > 0:
                     cache.rollback_batch()
+            if self._changing and not self._recorded:
+                # A run that changed something and ended short of its end still leaves a state: recorded, so the
+                # next run's check does not take this run's own work for a change by hand (RUL-execution_records_state).
+                write_workspace_record(self.workspace_root,
+                                       cache_rows=cache.get_all_files() if cache is not None else None)
+            if cache is not None:
                 cache.close()
 
 class JournalWriter:
@@ -2920,6 +2982,11 @@ def prune_quarantine(workspace_root, plan_ids=None, older_than_days=None, do_del
         if do_delete:
             safe = RootGuard.resolve_and_check_path(base, d)  # containment within quarantine
             shutil.rmtree(safe)
+            # What prune removes is no change to the next check (RUL-quarantine_changed_only_by_prune): out of the
+            # record too. A sealed workspace is checked no more, and its database is left as merge sealed it.
+            from .photos_utils import QUARANTINE_DIR, is_sealed
+            if not is_sealed(workspace_root):
+                forget_in_workspace_record(workspace_root, [f"{QUARANTINE_DIR}/{d}"])
     reporter.log(f"{'Removed' if do_delete else 'Would remove'} total: "
                  f"{len(selected)} plan(s), {total_files} files, {total_bytes} bytes", stream="stdout")
     if not do_delete:
@@ -2973,11 +3040,11 @@ def add_arguments(parser):
     # prep command. plan/dry-run/execute all use the canonical control-dir plan path
     # (photos_utils.prep_plan_path) — `plan` writes it, `dry-run`/`execute` read it — so there are no
     # --output/--plan flags: the phase always knows where its plan lives (RUL-plan_at_fixed_place).
-    subparsers.add_parser("plan", help="Generate the prep plan (saved to .photos-ingest/photos-10-prep-plan.json)")
-
-    subparsers.add_parser("dry-run", help="Validate and display the saved prep plan")
-
-    subparsers.add_parser("execute", help="Execute the saved prep plan")
+    checking = [subparsers.add_parser("plan", help="Generate the prep plan (saved to .photos-ingest/photos-10-prep-plan.json)"),
+                subparsers.add_parser("dry-run", help="Validate and display the saved prep plan"),
+                subparsers.add_parser("execute", help="Execute the saved prep plan")]
+    for p in checking:
+        add_accept_changes_argument(p)
 
     prune_parser = subparsers.add_parser("prune-quarantine", help="Delete recoverable quarantine (dry-run by default).")
     prune_parser.add_argument("--plan-id", action="append", dest="plan_ids", help="Quarantine <plan_id> directory to prune (repeatable).")
@@ -2988,7 +3055,7 @@ def add_arguments(parser):
     parser.set_defaults(_run=run, _parser=parser)
 
 
-def _prep_nothing_to_do(workspace_root, reporter) -> bool:
+def _prep_nothing_to_do(workspace_root, reporter, workspace_changes=()) -> bool:
     """True (after logging a friendly notice) when this workspace is already prepped AND there is
     genuinely nothing to apply — initialized (guard present), `0-sources` holding nothing at all (the
     steady end-state, RUL-prepped_nothing_to_do: an empty folder left there is work, a planned removal), AND no pending by-date→by-dest move the handoff hasn't recorded yet. Both
@@ -3013,6 +3080,10 @@ def _prep_nothing_to_do(workspace_root, reporter) -> bool:
         return False                    # a by-dest move still needs recording — not nothing-to-do
     if prep_log_blocker(workspace_root, _handoff) is not None:
         return False                    # the log is not the one the handoff vouches for — rewrite both
+    if workspace_changes or read_workspace_record(workspace_root)[0] is None:
+        return False                    # a change by hand since the last execution — a time given in missing
+                                        # metadata, a deletion, an acceptance — is this run's to apply and record,
+                                        # and so is the first record of the workspace's state (BLD-hand_change_is_work)
     name = folder_name('sources')
     reporter.log(f"Nothing to do: {name} is empty — this workspace is already prepped.", stream="stdout")
     emit_next_step(reporter, f"sort photos into {folder_name('photos_by_dest')}, then `geotag plan` — or "
@@ -3122,6 +3193,25 @@ def _shape_blockers(workspace_root) -> list:
     return out
 
 
+def _check_workspace(args, workspace_root) -> list:
+    """Prep's check of the workspace against the state its last execution left (BLD-workspace_check): on an
+    initialized workspace whose configuration loads — the folders are known by it — and where a record was written; a
+    first run, with none, compares nothing (RUL-first_prep_compares_nothing), and a configuration that cannot be read is
+    the plan's to report. Returns the changes this run names in its log; exits 2 on a stop."""
+    from .photos_utils import guard_path, load_config
+    if not os.path.exists(guard_path(workspace_root)):
+        return []
+    try:
+        load_config(workspace_root)
+    except Exception:
+        return []
+    changes, stop = check_workspace(workspace_root, "prep", args.command, getattr(args, "accept_changes", None),
+                                    record_required=False)
+    if stop:
+        sys.exit(stop)
+    return changes
+
+
 def _run_locked(args, workspace_root, reporter):
     """Prep's command, its workspace lock already held: by `run` above, or by geotag's run when it
     records a sort itself (BLD-geotag_auto_reprep) — one lock for the whole run, taken before anything is read
@@ -3159,6 +3249,12 @@ def _run_locked(args, workspace_root, reporter):
                 reporter.error(f"  - {b}")
             reporter.log("Nothing was scanned, planned or changed.")
             sys.exit(2)
+
+    # The workspace as the last execution left it (RUL-workspace_checked_first): compared before anything is
+    # scanned, planned or changed, dry runs included; a change no person is expected to make stops the command.
+    workspace_changes = []
+    if args.command in ("plan", "dry-run", "execute"):
+        workspace_changes = _check_workspace(args, workspace_root)
 
     if args.command == "plan":
         # External-tool preflight (shared contract: decline cleanly, don't crash mid-scan).
@@ -3238,7 +3334,7 @@ def _run_locked(args, workspace_root, reporter):
             sys.exit(2)
         # Same fast, friendly stop as execute: an already-prepped workspace with an empty 0-sources
         # has nothing to validate — the saved plan is stale (its moves are already applied).
-        if _prep_nothing_to_do(workspace_root, reporter):
+        if _prep_nothing_to_do(workspace_root, reporter, workspace_changes):
             sys.exit(0)
         plan = _read_saved_plan(pp, reporter)
 
@@ -3287,11 +3383,11 @@ def _run_locked(args, workspace_root, reporter):
             sys.exit(2)
         # Fast, friendly stop on an already-prepped workspace (empty 0-sources) — shared with
         # dry-run, gated on a plan existing so a missing plan still takes the "run plan first" path.
-        if _prep_nothing_to_do(workspace_root, reporter):
+        if _prep_nothing_to_do(workspace_root, reporter, workspace_changes):
             sys.exit(0)
         plan = _read_saved_plan(pp, reporter)
 
-        executor = PlanExecutor(workspace_root)
+        executor = PlanExecutor(workspace_root, workspace_changes=workspace_changes)
 
         # How execute ended decides its exit status (BLD-exit_statuses): refused before anything changed, 2; an
         # operation failed or the run's closing records could not be written, 3; an error not foreseen, 1.

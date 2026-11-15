@@ -138,6 +138,16 @@ Geotag's finalize SHALL copy prep's log only when its bytes hash to the value {n
 stop otherwise — the log missing or unreadable, or the handoff recording no hash, among the cases.
 :::
 
+:::{bld} A change by hand is not "nothing to do"
+:id: BLD-hand_change_is_work
+:status: ruled
+:realises: RUL-prepped_nothing_to_do, RUL-allowed_changes_named
+
+Prep's stop on an already-prepped workspace SHALL not apply while the run's check of the workspace
+({need}`BLD-workspace_check`) named or accepted a change since the last execution, or no execution has recorded the
+workspace's state yet ({need}`BLD-workspace_record`), so that prep's execute records it.
+:::
+
 :::{bld} A log not vouched for is not "nothing to do"
 :id: BLD-prep_fast_stop_checks_log
 :status: ruled
@@ -517,12 +527,23 @@ rather than read it as empty; with no such file, the earlier log is empty.
 Prep's execute SHALL build `photos-15-prep-log.json` from the plan's moves and renames replayed per file, the
 quarantine evidence and the final database rows, merged onto the prior log by fingerprint: an entry whose old value is
 nowhere in the workspace and whose `prep_path` holds a file of a new value that this run's plan gives no step moves to
-it with a `fingerprint_retaken` step; an entry whose file is elsewhere with no step of this run gains a `user` step `moved_to_by_dest`; and a file in
+it with a `fingerprint_retaken` step, the same file unchanged ({need}`BLD-retake_same_file`); an entry whose file is elsewhere with no step of this run gains a `user` step `moved_to_by_dest` — `moved_to_by_date` where the file is not in photos by destination; and a file in
 a prep-organized folder with no recorded history gets an entry marked `partial`, with a warning.
 :::
 
 
 ## 15. Concurrency, determinism, and what a run shows
+
+:::{bld} A retaken fingerprint is the same file's
+:id: BLD-retake_same_file
+:status: ruled
+:realises: RUL-retake_only_unchanged_file
+
+A `fingerprint_retaken` step SHALL be given only where the record of the workspace's state ({need}`BLD-workspace_record`)
+read as the execute begins has, at the path the entry was left at — or the path the user moved the file from — the size,
+`mtime_ns` and inode of the file's new database row, and a fingerprint whose strategy or engine version is not the new
+one's.
+:::
 
 :::{bld} A gone photo's entry is copied unchanged
 :id: BLD-gone_photo_entry

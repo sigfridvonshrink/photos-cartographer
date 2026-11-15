@@ -57,8 +57,11 @@ before; see [ranking your devices](concepts.md#placing-each-photo) for what to p
 nothing read them, and every run now refuses a setting it does not know.
 
 Then run `prep plan` and `prep execute` again: prep now reads more of each photo's time fields, and geotag refuses
-a workspace prepped without them. A drift check you confirmed under 3.0.0 is asked again, since a confirmation now
-names the tracks it was made against.
+a workspace prepped without them. That execute also writes the first record of the workspace's state, which every
+command now checks the files against before it does anything ([what you may change by
+hand](concepts.md#what-you-may-change-by-hand)); geotag and merge refuse a workspace without one, and prep's
+first run under this version compares nothing. A drift check you confirmed under 3.0.0 is asked again, since a
+confirmation now names the tracks it was made against.
 
 Geotag now keeps the tracks it decides by in the workspace database, in place of the scratch memo
 `.photos-ingest/photos-00-track-memo.db`: delete that file, or it is carried into the archive at finalize. The

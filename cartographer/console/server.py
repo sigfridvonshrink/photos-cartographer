@@ -21,6 +21,7 @@ import errno
 import importlib.resources as _res
 import json
 import os
+import re
 import socket
 import sys
 import threading
@@ -108,6 +109,8 @@ def _make_target(phase, command, extra=None, pre=None):
     args = parser.parse_args([*(pre or []), command, *(extra or [])])
 
     def target():
+        # A stop's list of changes is offered for acceptance only until the next run starts (BLD-accept_changes).
+        WEB.clear_changes()
         try:
             mod.run(args)
         finally:
@@ -330,6 +333,24 @@ def _prune_guard(payload):
     if not (pr.get("plan_ids") or pr.get("all") or pr.get("older_than_days") is not None):
         return "select what to prune (a plan id, all, or older-than-days) before deleting"
     return None
+
+
+_CHANGE_CODE_RE = re.compile(r"[0-9a-f]{%d}" % U.CHANGE_CODE_LENGTH)
+
+
+def _accept_extra(phase, command, payload):
+    """`(argv, error)`: `['--accept-changes', code]` for a run the client sends with the code a stop printed — the
+    console's Accept button sends the same code through the same command, the phase's own check then accepting
+    exactly the list it gave for (BLD-accept_changes; the affordance is in docs/design/decisions.md). No code, `[]`; a
+    command that does not check, or a value that is not such a code, is refused."""
+    code = payload.get("accept_changes")
+    if code is None:
+        return [], None
+    if command not in U.CHECKING_COMMANDS.get(phase, ()):
+        return None, f"{phase} {command} does not check the workspace, so it accepts no changes"
+    if not isinstance(code, str) or not _CHANGE_CODE_RE.fullmatch(code):
+        return None, "not a code a stop printed"
+    return ["--accept-changes", code], None
 
 
 def _library_blessed(workspace):
@@ -617,6 +638,10 @@ class Handler(BaseHTTPRequestHandler):
             if err:
                 return self._send(409, {"ok": False, "error": err})
             extra = _prune_extra(payload)
+        accept, err = _accept_extra(phase, command, payload)
+        if err:
+            return self._send(400, {"ok": False, "error": err})
+        extra = extra + accept
         # Parallelism: -j lives on each phase's PARENT parser, so it must precede the subcommand — pass
         # it as `pre`, not in `extra`. Sent whenever the client supplies a valid count (clamped); phases
         # that don't parallelize accept-and-ignore it.

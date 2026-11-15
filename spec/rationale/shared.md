@@ -1684,3 +1684,96 @@ The journal is the history of a run: what it changed, in what order, and how eac
 it and the archival package keeps it, so a change missing from it is a change no record explains — the one thing the
 record exists to prevent.
 :::
+
+
+## 17. The workspace as the last execution left it
+
+:::{rat} The only hand changes are the expected ones
+:id: RAT-workspace_as_last_left
+:status: ruled
+:forced: no
+:follows_from: RAT-no_mutation_outside_plan, CHC-photos_matter
+:justifies: RUL-workspace_checked_first, RUL-check_covers_media_folders, RUL-unexpected_change_stops
+
+The owner: *"I wonder if before each run, as a rule, there should be a quick check to see if anything unexpected
+happened. The only manual moves in a workspace should be the moves to by-dest. This should also make the processing
+safer."* Each phase plans from the files as it finds them, and a scatter of particular checks — a time changed by hand,
+a fingerprint changed after the plan, a hidden folder, a stale plan — catches only what one of them happens to look
+at: a photo replaced, changed or put in by hand outside the inbox passes the rest, and is planned on as if the tool had
+left it there. Once found, a different photo at the path a removed one freed took that photo's history. One comparison
+with the state the last execution left closes the gap for every phase alike, before anything is built on what changed.
+The inbox is where the user puts things, so it is never compared; the control records are compared by their own
+checks, which know what each may hold.
+:::
+
+:::{rat} A person sorts, culls and fixes by hand
+:id: RAT-expected_hand_work
+:status: ruled
+:forced: no
+:follows_from: RAT-workspace_as_last_left, RAT-piggyback_on_the_destination_sort
+:justifies: RUL-sorting_passes, RUL-culling_passes, RUL-moved_back_passes, RUL-hand_time_passes, RUL-maintenance_unchecked
+
+The work a workspace waits on is a person's: sorting photos into destinations, moving them between destinations and
+renaming them, throwing out the poor ones, putting back one sorted wrongly, giving a photo with no recorded time one by
+hand. Each is expected, so none stops a run. A deletion in missing metadata, the strays or the quarantine is not: those
+hold what prep set aside, and the quarantine changes only by prune. The maintenance commands are not runs on the photos
+— prune changes the quarantine itself, the library's setup touches no file of the workspace, the editor writes only
+decisions — so they compare nothing.
+:::
+
+:::{rat} The entries tell a moved, changed or copied file
+:id: RAT-entries_tell_enough
+:status: ruled
+:forced: no
+:follows_from: RAT-workspace_as_last_left, RAT-decoded_pixel_identity
+:justifies: RUL-change_told_by_entries, RUL-copy_passes
+
+A check every run makes has to be quick, so it reads no file: a file's path, size, modification time and identity on
+its filesystem are enough. The owner: *"a replaced file would also typically have a different inode."* An untouched
+file keeps all three, a replacement keeps none of them reliably, and a move keeps them under a new path. A file of the
+same size and modification time under a new inode is a copy, or a restore from a snapshot: a replacement almost never
+keeps the modification time to the nanosecond, and the fingerprint read again would prove nothing, since it covers the
+pixels and a time changed by hand passes it.
+:::
+
+:::{rat} What a person changed is part of the account
+:id: RAT-hand_changes_named
+:status: ruled
+:forced: yes
+:follows_from: RAT-consolidated_log, RAT-durable_record
+:justifies: RUL-allowed_changes_named, RUL-accepted_changes_logged
+
+A photo deleted, moved back or given a time by hand is gone or changed by no command, and the record of what was done
+would not otherwise say so; a change accepted is one the user chose to keep. The log of the run that finds each names
+it, so the account of the workspace stays whole.
+:::
+
+:::{rat} Each execution records the state it leaves
+:id: RAT-tool_leaves_its_state
+:status: ruled
+:forced: yes
+:follows_from: RAT-workspace_as_last_left, RAT-idempotent_reruns
+:justifies: RUL-execution_records_state, RUL-planning_leaves_record, RUL-record_needed, RUL-first_prep_compares_nothing, RUL-quarantine_changed_only_by_prune
+
+The tool's own work changes the entries too: prep moves and renames, geotag writes an original through a file renamed
+over it — a new inode, size and time, its fingerprint the same — and renames it, merge moves photos out. Unless each
+execution records the state it leaves, a failed one included, every run after it would stop on the tool's own work. A
+plan changes no file, so it leaves the record as it was. Prep can begin from the files alone, so a first run compares
+nothing; geotag and merge build on what prep recorded, and without a record a change since could not be told. A prune
+is the one way the quarantine changes, so what it removes is taken out of the record with it.
+:::
+
+:::{rat} Accepted once, by the code of the list
+:id: RAT-accept_once_by_code
+:status: ruled
+:forced: no
+:follows_from: RAT-workspace_as_last_left, RAT-durable_record
+:justifies: RUL-stop_gives_acceptance_code, RUL-code_accepts_only_its_list, RUL-acceptance_recorded, RUL-accepted_change_not_stopped_again
+
+A change the check did not expect may still be wanted — a photo edited on purpose, a file restored. Writing an
+acceptance into a file by hand was rejected — the owner: *"hand accepting these is tedious"* — so the stop prints the
+command to run again with a code made from the list as printed. The code accepts that list and no other: a change made
+since the list was printed — one more file — is not what the user saw, so the command stops again and lists them anew.
+An acceptance is recorded, kept and archived like the other records, so it can be read later why a run went on; and an
+accepted change is part of the state from then on, so it stops nothing again.
+:::

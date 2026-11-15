@@ -1033,6 +1033,20 @@ copy's entry.
 A photo whose fingerprint is taken again with a new value SHALL keep its history in the log, under the new value.
 :::
 
+:::{rul} Only the same file, unchanged, has its fingerprint taken again
+:id: RUL-retake_only_unchanged_file
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+:refines: RUL-log_follows_retaken_fingerprint
+:uses: DEF-transformation_log
+
+A fingerprint SHALL count as taken again only for a file unchanged since the last execution — its size, modification
+time and file identity those recorded — whose fingerprint was taken by another method; a different file at the path is
+a new photo, and the gone photo's entry stays as it was.
+:::
+
 :::{rul} A fingerprint taken again is a step in the log
 :id: RUL-retaken_fingerprint_step_logged
 :status: ruled

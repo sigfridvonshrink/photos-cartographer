@@ -1,0 +1,579 @@
+# Copyright 2026 sigfridvonshrink
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+"""Every run checks the workspace is as the last execution left it (BACKLOG 50).
+
+Each checking command first compares the files with the record the last execution wrote — by their entries alone —
+and passes what a person is expected to do (a dump in the inbox, sorting, culling, a photo moved back, a time given by
+hand in missing metadata, a copy), naming the ones the log should know of; anything else stops the command, naming
+each file, until it is undone or accepted once by the code the stop printed. Prep runs for real here, its fingerprint
+and metadata reading stood in for, as in test_prep_log."""
+import glob
+import json
+import os
+import shutil
+import types
+
+import pytest
+
+import photos_1_prep as prep
+import photos_2_geotag as cal
+import photos_3_merge as merge
+import photos_utils as utils
+from cartographer.reporting import CaptureSink, ChangesEvent, Reporter, use_reporter
+
+MANAGED = ["0-sources", "1-strays", "2-missing-metadata", "3-redundant-jpgs",
+           "4-videos-by-date", "5-photos-by-date", "6-photos-by-dest"]
+BY_DATE, BY_DEST = "5-photos-by-date", "6-photos-by-dest"
+
+
+def _install(monkeypatch):
+    prep.CONFIG["zfs"] = {"enabled": False}
+    prep.CONFIG["jobs"] = 1
+
+    def hsh(p):
+        with open(p, "rb") as f:
+            return {"status": "valid", "strategy": "image-content-hash-v2",
+                    "value": "sig-" + f.read().hex()[:24], "engine_version": "t"}
+    monkeypatch.setattr(prep.ContentHasher, "fingerprint_image", hsh)
+
+    def meta(folders, max_workers=4, progress_coordinator=None):
+        res = {}
+        for fo in folders:
+            for fn in os.listdir(fo):
+                p = os.path.join(fo, fn)
+                if not os.path.isfile(p):
+                    continue
+                timed = not open(p, "rb").read().startswith(b"NOTIME")     # a photo with no recorded time
+                res[p] = {"extraction_status": "extracted_ok",
+                          **({"DateTimeOriginal": "2023:01:02 03:04:05"} if timed else {})}
+        return res, set()
+    monkeypatch.setattr(utils.MetadataReader, "read_metadata_concurrently", meta)
+
+
+def _ws(tmp_path):
+    ws = tmp_path / "ws"
+    ws.mkdir()
+    for d in MANAGED:
+        (ws / d).mkdir()
+    (ws / ".photos-ingest").mkdir()
+    (ws / ".photos-ingest" / "photos-00-workspace-guard").touch()
+    return ws
+
+
+def _prep(monkeypatch, ws, command, code=None):
+    """Run a prep command as the command line does; (exit status, everything it said, the stop's event or None)."""
+    sink = CaptureSink()
+    monkeypatch.chdir(ws)
+    with use_reporter(Reporter([sink])):
+        try:
+            prep.run(types.SimpleNamespace(command=command, jobs=1, accept_changes=code))
+            rc = 0
+        except SystemExit as e:
+            rc = e.code or 0
+    stops = [e for e in sink.events if isinstance(e, ChangesEvent)]
+    return rc, "\n".join(e.msg for e in sink.logs()), (stops[-1] if stops else None)
+
+
+def _ingest(monkeypatch, ws):
+    for cmd in ("plan", "execute"):
+        rc, said, _ = _prep(monkeypatch, ws, cmd)
+        assert rc == 0, said
+
+
+def _by_date(ws):
+    return sorted(glob.glob(str(ws / BY_DATE / "**" / "*.jpg"), recursive=True))
+
+
+def _log(ws):
+    with open(utils.prep_log_path(str(ws))) as f:
+        return json.load(f)
+
+
+def _fresh(monkeypatch, tmp_path, photos=(b"AAAA", b"BBBB", b"CCCC")):
+    _install(monkeypatch)
+    ws = _ws(tmp_path)
+    for i, content in enumerate(photos):
+        (ws / "0-sources" / f"p{i}.jpg").write_bytes(content)
+    _ingest(monkeypatch, ws)
+    return ws
+
+
+def _sort(ws, src, dest):
+    d = ws / BY_DEST / dest
+    d.mkdir(parents=True, exist_ok=True)
+    to = d / os.path.basename(src)
+    os.rename(src, to)
+    return to
+
+
+# --- what a person is expected to do passes --------------------------------
+
+@pytest.mark.spec("RUL-workspace_checked_first", "RUL-check_covers_media_folders", "RUL-sorting_passes",
+                  "BLD-workspace_check", test="TST-workspace_check-what_a_person_is_expected_to_do_passes")
+def test_what_a_person_is_expected_to_do_passes(tmp_path, monkeypatch):
+    """A dump put into the inbox, photos sorted from photos by date into destinations and moved, a destination's
+    folder renamed, the configuration and a decision record edited: the plan goes on, naming none of it."""
+    ws = _fresh(monkeypatch, tmp_path)
+    p0, p1, _ = _by_date(ws)
+    (ws / "0-sources" / "new.jpg").write_bytes(b"DDDD")
+    _sort(ws, p0, "Rome")
+    moved = _sort(ws, p1, "Paris")
+    os.rename(moved, ws / BY_DEST / "Rome" / moved.name)                        # moved within photos by destination
+    os.rename(ws / BY_DEST / "Rome", ws / BY_DEST / "Roma")                     # a destination's folder renamed
+    cfg = utils.config_path(str(ws))
+    with open(cfg) as f:
+        c = json.load(f)
+    with open(cfg, "w") as f:
+        json.dump(c, f, indent=4)                                               # the configuration edited
+    (ws / ".photos-ingest" / "photos-21-time-decisions.json").write_text("{}")  # a decision record edited
+    rc, said, stop = _prep(monkeypatch, ws, "plan")
+    assert rc == 0 and stop is None, said
+    assert "Changed by hand" not in said and "--accept-changes" not in said
+
+
+@pytest.mark.spec("RUL-culling_passes", "RUL-allowed_changes_named", "BLD-workspace_changes_logged",
+                  test="TST-workspace_check-a_culled_photo_passes_and_is_named_in_the_log")
+def test_a_culled_photo_passes_and_is_named_in_the_log(tmp_path, monkeypatch):
+    """Photos deleted by hand in photos by date and in photos by destination: the plan goes on, naming them; the
+    execution writes them into prep's log, with the photos' fingerprints; the next run, the record rewritten, names
+    them no more."""
+    ws = _fresh(monkeypatch, tmp_path)
+    p0, p1, _ = _by_date(ws)
+    sorted_one = _sort(ws, p1, "Rome")
+    _ingest(monkeypatch, ws)                                                    # the sort recorded
+    os.remove(p0)
+    os.remove(sorted_one)
+    gone = sorted(os.path.relpath(p, ws) for p in (p0, sorted_one))
+    rc, said, stop = _prep(monkeypatch, ws, "plan")
+    assert rc == 0 and stop is None, said
+    assert "deleted" in said and all(g in said for g in gone), said
+    rc, said, _ = _prep(monkeypatch, ws, "execute")
+    assert rc == 0, said
+    plan_id = json.load(open(utils.prep_plan_path(str(ws))))["plan_id"]
+    named = [c for c in _log(ws)["workspace_changes"] if c["run"] == plan_id]
+    assert sorted(c["path"] for c in named) == gone and {c["kind"] for c in named} == {"deleted"}
+    assert all(c["content_fingerprint"].startswith("sig-") for c in named)
+    rc, said, _ = _prep(monkeypatch, ws, "plan")
+    assert rc == 0 and "deleted" not in said, said
+
+
+@pytest.mark.parametrize("folder, kind", [
+    ("5-photos-by-date", "deleted"), ("6-photos-by-dest", "deleted"), ("4-videos-by-date", "deleted"),
+    ("3-redundant-jpgs", "deleted"), ("2-missing-metadata", "removed"), ("1-strays", "removed"),
+    (".photos-ingest-quarantine/run-1", "removed")])
+@pytest.mark.spec("RUL-culling_passes", "RUL-unexpected_change_stops", "RUL-change_told_by_entries",
+                  "BLD-workspace_check", test="TST-workspace_check-a_deletion_is_culling_only_where_a_person_culls")
+def test_a_deletion_is_culling_only_where_a_person_culls(tmp_path, folder, kind):
+    """A file gone from photos by date or by destination, videos by date or the redundant JPEGs is culling, allowed;
+    gone from missing metadata, the strays or the quarantine it is a change no person is expected to make."""
+    ws = _ws(tmp_path)
+    (ws / folder).mkdir(parents=True, exist_ok=True)
+    f = ws / folder / "x.jpg"
+    f.write_bytes(b"XXXX")
+    utils.write_workspace_record(str(ws))
+    f.unlink()
+    _id, record = utils.read_workspace_record(str(ws))
+    assert utils.compare_workspace(record, utils.workspace_entries(str(ws))) == [
+        {"kind": kind, "path": f"{folder}/x.jpg", "now": None}]
+
+
+@pytest.mark.spec("RUL-moved_back_passes", "RUL-allowed_changes_named", "BLD-workspace_changes_logged",
+                  "BLD-prep_log_build", test="TST-workspace_check-a_photo_moved_back_passes_and_is_named")
+def test_a_photo_moved_back_passes_and_is_named(tmp_path, monkeypatch):
+    """A photo moved back from photos by destination to photos by date: the plan goes on, naming it; the execution
+    names it in prep's log, and the photo's journey says where it went."""
+    ws = _fresh(monkeypatch, tmp_path)
+    p0 = _by_date(ws)[0]
+    sorted_one = _sort(ws, p0, "Rome")
+    _ingest(monkeypatch, ws)
+    os.rename(sorted_one, p0)
+    rc, said, stop = _prep(monkeypatch, ws, "plan")
+    assert rc == 0 and stop is None and "moved back" in said, said
+    rc, said, _ = _prep(monkeypatch, ws, "execute")
+    assert rc == 0, said
+    log = _log(ws)
+    assert [(c["kind"], c["from"], c["path"]) for c in log["workspace_changes"]] == [
+        ("moved_back", os.path.relpath(sorted_one, ws), os.path.relpath(p0, ws))]
+    entry = next(e for e in log["photos"].values() if e["prep_path"] == os.path.relpath(p0, ws))
+    assert entry["journey"][-1]["action"] == "moved_to_by_date"
+
+
+@pytest.mark.spec("RUL-hand_time_passes", "RUL-allowed_changes_named", "BLD-hand_change_is_work",
+                  "RUL-prepped_nothing_to_do", test="TST-workspace_check-a_time_given_by_hand_in_missing_metadata_passes")
+def test_a_time_given_by_hand_in_missing_metadata_passes(tmp_path, monkeypatch):
+    """A photo prep set aside for want of a time, given one by hand where it lies: the plan goes on, naming it, and
+    the execution — a change by hand is work for it, never nothing to do — names it in prep's log."""
+    ws = _fresh(monkeypatch, tmp_path, photos=(b"NOTIME-1",))
+    (left,) = glob.glob(str(ws / "2-missing-metadata" / "**" / "*.jpg"), recursive=True)
+    with open(left, "wb") as f:
+        f.write(b"TIMED-1, its time written by hand")
+    rc, said, stop = _prep(monkeypatch, ws, "plan")
+    assert rc == 0 and stop is None and "changed by hand" in said and os.path.relpath(left, ws) in said, said
+    rc, said, _ = _prep(monkeypatch, ws, "execute")
+    assert rc == 0, said
+    assert [c["kind"] for c in _log(ws)["workspace_changes"]] == ["time_given"]
+    rc, said, stop = _prep(monkeypatch, ws, "plan")                             # recorded: named no more
+    assert rc == 0 and stop is None and "changed by hand" not in said, said
+
+
+@pytest.mark.spec("RUL-copy_passes", "RUL-change_told_by_entries", "RUL-allowed_changes_named",
+                  test="TST-workspace_check-a_copy_with_new_inodes_passes_and_is_named")
+def test_a_copy_with_new_inodes_passes_and_is_named(tmp_path, monkeypatch):
+    """A photo restored where it was from a copy, and another sorted by copying it and removing the original: each
+    has a new inode but its size and modification time, so each is the same file — the plan goes on, naming both."""
+    ws = _fresh(monkeypatch, tmp_path)
+    p0, p1, _ = _by_date(ws)
+    tmp = str(ws / "restore.tmp")
+    shutil.copy2(p0, tmp)
+    os.replace(tmp, p0)                                                          # restored in place
+    (ws / BY_DEST / "Rome").mkdir()
+    copied = ws / BY_DEST / "Rome" / os.path.basename(p1)
+    shutil.copy2(p1, copied)
+    os.remove(p1)                                                                # sorted by a copy
+    _id, record = utils.read_workspace_record(str(ws))
+    changes = utils.compare_workspace(record, utils.workspace_entries(str(ws)))
+    assert sorted((c["kind"], c["path"]) for c in changes) == sorted(
+        [("copied", os.path.relpath(p0, ws)), ("copied", os.path.relpath(copied, ws))])
+    rc, said, stop = _prep(monkeypatch, ws, "plan")
+    assert rc == 0 and stop is None and "a new inode" in said, said
+
+
+# --- anything else stops -----------------------------------------------------
+
+def _with_quarantine(monkeypatch, tmp_path):
+    """A workspace prep has set a duplicate aside in, and a photo with no time left in missing metadata."""
+    ws = _fresh(monkeypatch, tmp_path, photos=(b"AAAA", b"AAAA", b"BBBB", b"NOTIME-1"))
+    (q,) = [p for p in glob.glob(str(ws / ".photos-ingest-quarantine" / "**" / "*"), recursive=True)
+            if os.path.isfile(p) and not p.endswith("manifest.json")]
+    return ws, q
+
+
+def _change(ws, q, how):
+    """Make the change `how`; return the path the stop must name."""
+    p0 = _by_date(ws)[0]
+    if how == "changed":
+        with open(p0, "ab") as f:
+            f.write(b" edited")
+        return p0
+    if how == "replaced":
+        os.remove(p0)
+        with open(p0, "wb") as f:
+            f.write(b"another photo altogether")
+        return p0
+    if how == "appeared":
+        p = os.path.join(os.path.dirname(p0), "put-here.jpg")
+        open(p, "wb").write(b"EEEE")
+        return p
+    if how == "missing_metadata_removed":
+        (p,) = glob.glob(str(ws / "2-missing-metadata" / "**" / "*.jpg"), recursive=True)
+        os.remove(p)
+        return p
+    if how == "stray_appeared":
+        p = str(ws / "1-strays" / "notes.txt")
+        open(p, "w").write("x")
+        return p
+    if how == "quarantine_changed":
+        with open(q, "ab") as f:
+            f.write(b"!")
+        return q
+    if how == "quarantine_removed":
+        os.remove(q)
+        return q
+    if how == "moved_between_folders":
+        p = str(ws / "2-missing-metadata" / os.path.basename(p0))
+        os.rename(p0, p)
+        return p
+    raise AssertionError(how)
+
+
+_UNEXPECTED = ["changed", "replaced", "appeared", "missing_metadata_removed", "stray_appeared", "quarantine_changed",
+               "quarantine_removed", "moved_between_folders"]
+
+
+@pytest.mark.parametrize("how", _UNEXPECTED)
+@pytest.mark.spec("RUL-unexpected_change_stops", "RUL-workspace_checked_first", "RUL-change_told_by_entries",
+                  "BLD-workspace_check", "BLD-exit_statuses",
+                  test="TST-workspace_check-an_unexpected_change_stops_naming_the_file")
+def test_an_unexpected_change_stops_naming_the_file(tmp_path, monkeypatch, how):
+    """A photo changed in place, or another put at its path; a file appearing outside the inbox; one gone from
+    missing metadata; anything in the strays or the quarantine changed; a photo moved where nobody sorts to: the plan
+    stops, a refusal, naming the file, having planned nothing."""
+    ws, q = _with_quarantine(monkeypatch, tmp_path)
+    plan_before = open(utils.prep_plan_path(str(ws)), "rb").read()
+    named = os.path.relpath(_change(ws, q, how), ws)
+    rc, said, stop = _prep(monkeypatch, ws, "plan")
+    assert rc == 2 and stop is not None, said
+    assert named in said and "--accept-changes" in said, said
+    assert open(utils.prep_plan_path(str(ws)), "rb").read() == plan_before        # nothing planned
+
+
+@pytest.mark.no_hand_built_record
+@pytest.mark.spec("RUL-workspace_checked_first", "BLD-workspace_check",
+                  test="TST-workspace_check-every_checking_command_checks")
+def test_every_checking_command_checks(tmp_path, monkeypatch):
+    """Prep's plan, dry run and execute; geotag's plan, execute and finalize; merge's plan, dry run and execute —
+    each stops on the same change before it does anything else."""
+    import test_merge_execute as mx
+    ws = _fresh(monkeypatch, tmp_path)
+    named = os.path.relpath(_change(ws, None, "appeared"), ws)
+    for command in ("plan", "dry-run", "execute"):
+        rc, said, stop = _prep(monkeypatch, ws, command)
+        assert rc == 2 and stop is not None and named in said, (command, said)
+    for command in ("plan", "execute", "finalize"):
+        sink = CaptureSink()
+        with use_reporter(Reporter([sink])), pytest.raises(SystemExit) as ei:
+            cal.run(types.SimpleNamespace(command=command, jobs=1, accept_changes=None))
+        assert ei.value.code == 2 and any(isinstance(e, ChangesEvent) for e in sink.events), command
+    (tmp_path / "m").mkdir()
+    mws, _lib = mx._ws(tmp_path / "m", [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"}])
+    utils.write_workspace_record(str(mws))
+    (mws / "1-strays" / "notes.txt").write_text("x")                           # past merge's own preflight
+    for command in ("plan", "dry-run", "execute"):
+        sink = CaptureSink()
+        with use_reporter(Reporter([sink])):
+            assert merge._run_locked_workflow(command, str(mws)) == 2
+        assert any(isinstance(e, ChangesEvent) for e in sink.events), command
+
+
+# --- accepting once, by the code -----------------------------------------
+
+@pytest.mark.spec("RUL-stop_gives_acceptance_code", "RUL-code_accepts_only_its_list", "BLD-accept_changes",
+                  test="TST-workspace_check-the_code_accepts_only_the_list_it_was_printed_for")
+def test_the_code_accepts_only_the_list_it_was_printed_for(tmp_path, monkeypatch):
+    """The stop prints the list and the command to run again with its code — a hash of the list as printed. One more
+    change since, the old code no longer matches: the command stops again, listing them anew under a new code, which
+    then accepts them."""
+    ws, q = _with_quarantine(monkeypatch, tmp_path)
+    _change(ws, q, "changed")
+    rc, said, stop = _prep(monkeypatch, ws, "plan")
+    assert rc == 2
+    assert stop.code == utils.change_code(stop.lines) and "\n".join(stop.lines) in said
+    assert f"photos-cartographer prep plan --accept-changes {stop.code}" in said
+    _change(ws, q, "stray_appeared")                                             # one more file since
+    rc, said, again = _prep(monkeypatch, ws, "plan", stop.code)
+    assert rc == 2 and again.code != stop.code and "accepts another list" in said, said
+    assert not os.path.exists(utils.accepted_changes_path(str(ws)))
+    rc, said, _ = _prep(monkeypatch, ws, "plan", again.code)
+    assert rc == 0, said
+
+
+@pytest.mark.spec("RUL-acceptance_recorded", "RUL-accepted_change_not_stopped_again", "RUL-accepted_changes_logged",
+                  "BLD-accept_changes", "BLD-workspace_changes_logged",
+                  test="TST-workspace_check-accepted_changes_are_recorded_and_stop_no_later_run")
+def test_accepted_changes_are_recorded_and_stop_no_later_run(tmp_path, monkeypatch):
+    """Changes accepted once are recorded with their code, and stop no later command; a second acceptance keeps the
+    first record under -001; the execution names every accepted change in prep's log, with its code; the record of
+    acceptances goes into the archive with the rest of the control records."""
+    ws, q = _with_quarantine(monkeypatch, tmp_path)
+    first = os.path.relpath(_change(ws, q, "stray_appeared"), ws)
+    _rc, _said, stop = _prep(monkeypatch, ws, "plan")
+    rc, said, _ = _prep(monkeypatch, ws, "plan", stop.code)
+    assert rc == 0, said
+    acc = json.load(open(utils.accepted_changes_path(str(ws))))["acceptances"]
+    assert [(a["code"], a["command"], [c["path"] for c in a["changes"]]) for a in acc] == [(stop.code, "plan", [first])]
+    rc, said, stop2 = _prep(monkeypatch, ws, "dry-run")
+    assert rc == 0 and stop2 is None and "accepted earlier" in said, said
+    second = os.path.relpath(_change(ws, q, "quarantine_changed"), ws)
+    rc, said, stop3 = _prep(monkeypatch, ws, "execute")
+    assert rc == 2 and second in said and first not in "\n".join(stop3.lines), said
+    rc, said, _ = _prep(monkeypatch, ws, "execute", stop3.code)
+    assert rc == 0, said
+    ctl = ws / ".photos-ingest"
+    assert len(json.load(open(utils.accepted_changes_path(str(ws))))["acceptances"]) == 2
+    assert len(json.load(open(ctl / "photos-01-accepted-changes-001.json"))["acceptances"]) == 1
+    logged = {c["path"]: c.get("accepted") for c in _log(ws)["workspace_changes"]}
+    assert logged == {first: stop.code, second: stop3.code}
+    assert ".photos-ingest/photos-01-accepted-changes.json" in utils.control_archive_members(str(ws))
+    rc, said, _ = _prep(monkeypatch, ws, "plan")
+    assert rc == 0 and "accepted earlier" not in said, said                     # part of the record now
+
+
+# --- the record each execution leaves ------------------------------------
+
+@pytest.mark.spec("RUL-execution_records_state", "RUL-planning_leaves_record", "BLD-workspace_record",
+                  test="TST-workspace_check-an_execution_records_the_state_it_leaves")
+def test_an_execution_records_the_state_it_leaves(tmp_path, monkeypatch):
+    """Prep's execution records the state it leaves — and so does one that failed partway, so the next run does not
+    take its own moves for changes by hand; a plan leaves the record as it was."""
+    ws = _fresh(monkeypatch, tmp_path)
+    rid, record = utils.read_workspace_record(str(ws))
+    assert utils.compare_workspace(record, utils.workspace_entries(str(ws))) == []
+    assert {r.split("/")[0] for r in record} == {BY_DATE}
+    (ws / "0-sources" / "d.jpg").write_bytes(b"DDDD")
+    (ws / "0-sources" / "e.jpg").write_bytes(b"EEEE")
+    rc, said, _ = _prep(monkeypatch, ws, "plan")
+    assert rc == 0 and utils.read_workspace_record(str(ws))[0] == rid              # planning does not change it
+    real_move, moves = prep._move_no_clobber, []
+
+    def second_move_fails(src, dst):
+        moves.append(src)
+        if len(moves) == 2:
+            raise OSError("the second move fails")
+        return real_move(src, dst)
+    monkeypatch.setattr(prep, "_move_no_clobber", second_move_fails)
+    rc, said, _ = _prep(monkeypatch, ws, "execute")
+    assert rc == 3 and len(moves) == 2, said
+    rid2, record = utils.read_workspace_record(str(ws))
+    assert rid2 != rid and utils.compare_workspace(record, utils.workspace_entries(str(ws))) == []
+    monkeypatch.setattr(prep, "_move_no_clobber", real_move)
+    rc, said, stop = _prep(monkeypatch, ws, "plan")
+    assert rc == 0 and stop is None, said
+
+
+@pytest.mark.spec("RUL-execution_records_state", "BLD-workspace_record",
+                  test="TST-workspace_check-geotags_own_writes_never_trip_the_check")
+def test_geotags_own_writes_never_trip_the_check(tmp_path, monkeypatch):
+    """Geotag writes a photo through a temporary file renamed over it — a new inode, size and time — and renames it:
+    its execution records the state it leaves, so the next command finds nothing changed, and each photo keeps its
+    fingerprint in the record under its new name."""
+    import test_geotag_execution as gx
+    ws, ctl = gx._ready_ws(tmp_path, monkeypatch)
+    gx._mock_tools(monkeypatch, ws)
+    real_write = cal.GeotagWorkflow._exiftool_write
+
+    def rewrite(self, p, tags):                       # as exiftool -o and the rename over the photo do
+        tmp = p + "_exiftool_tmp"
+        with open(p, "rb") as src, open(tmp, "wb") as dst:
+            dst.write(src.read() + b" tagged")
+        os.replace(tmp, p)
+        return real_write(self, p, tags)
+    monkeypatch.setattr(cal.GeotagWorkflow, "_exiftool_write", rewrite)
+    handoff = json.load(open(ctl / "photos-11-handoff.json"))
+    utils.write_workspace_record(str(ws), cache_rows={f["relative_path"]: f for f in handoff["files"]})   # as prep's
+    before = dict(utils.read_workspace_record(str(ws))[1])
+    assert all(r["fingerprint"] for p, r in before.items() if p.startswith(BY_DEST))
+    assert gx._execute(monkeypatch, ws) == 0
+    _rid, record = utils.read_workspace_record(str(ws))
+    assert utils.compare_workspace(record, utils.workspace_entries(str(ws))) == []
+    renamed = sorted(p for p in record if p.startswith(BY_DEST))
+    assert renamed and renamed != sorted(p for p in before if p.startswith(BY_DEST))
+    assert {record[p]["fingerprint"] for p in renamed} == {before[p]["fingerprint"] for p in before
+                                                           if p.startswith(BY_DEST)}
+    sink = CaptureSink()
+    with use_reporter(Reporter([sink])):
+        assert utils.check_workspace(str(ws), "geotag", "finalize") == ([], None)
+
+
+@pytest.mark.spec("RUL-execution_records_state", "BLD-workspace_record",
+                  test="TST-workspace_check-merges_own_moves_never_trip_the_check")
+def test_merges_own_moves_never_trip_the_check(tmp_path, monkeypatch):
+    """Merge moves photos out of the workspace, one left behind blocked: its execution records the state it leaves, so
+    the next merge finds nothing changed."""
+    import test_merge_execute as mx
+
+    def fake(self, abs_path):
+        v = mx._parse_fp(abs_path)
+        if v and v != "FAIL":
+            return {"status": "valid", "value": v, "strategy": "image-content-hash-v2", "engine_version": "test"}
+        return {"status": "failed", "value": None, "error": "unreadable", "engine_version": "test"}
+    monkeypatch.setattr(merge.MergeWorkflow, "_fingerprint_library_file", fake)
+    ws, _lib = mx._ws(tmp_path, [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"},
+                                 {"fp": "B", "dest": "Trip", "final_name": "b.jpg"}],
+                      library_files=[{"fp": "FAIL", "dest": "Trip", "name": "a.jpg"}])
+    merge._run_locked_workflow("plan", str(ws))
+    assert merge._run_locked_workflow("execute", str(ws)) == 3
+    assert not (ws / BY_DEST / "Trip" / "b.jpg").exists() and (ws / BY_DEST / "Trip" / "a.jpg").exists()
+    _rid, record = utils.read_workspace_record(str(ws))
+    assert sorted(record) == [f"{BY_DEST}/Trip/a.jpg"]
+    sink = CaptureSink()
+    with use_reporter(Reporter([sink])):
+        assert utils.check_workspace(str(ws), "merge", "plan") == ([], None)
+
+
+@pytest.mark.no_hand_built_record
+@pytest.mark.spec("RUL-record_needed", "BLD-workspace_check", "BLD-exit_statuses",
+                  test="TST-workspace_check-geotag_and_merge_refuse_a_workspace_with_no_record")
+def test_geotag_and_merge_refuse_a_workspace_with_no_record(tmp_path, monkeypatch):
+    """A workspace whose state no execution recorded: geotag and merge refuse it, a refusal, pointing to prep."""
+    import test_merge_execute as mx
+    ws, _lib = mx._ws(tmp_path, [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"}])
+    monkeypatch.chdir(ws)
+    for command in ("plan", "execute", "finalize"):
+        sink = CaptureSink()
+        with use_reporter(Reporter([sink])), pytest.raises(SystemExit) as ei:
+            cal.run(types.SimpleNamespace(command=command, jobs=1, accept_changes=None))
+        said = "\n".join(e.msg for e in sink.logs())
+        assert ei.value.code == 2 and "no record" in said and "prep execute" in said, said
+    for command in ("plan", "dry-run", "execute"):
+        sink = CaptureSink()
+        with use_reporter(Reporter([sink])):
+            assert merge._run_locked_workflow(command, str(ws)) == 2
+        assert "no record" in "\n".join(e.msg for e in sink.logs())
+
+
+@pytest.mark.no_hand_built_record
+@pytest.mark.spec("RUL-first_prep_compares_nothing", "BLD-workspace_check",
+                  test="TST-workspace_check-prep_with_no_record_compares_nothing")
+def test_prep_with_no_record_compares_nothing(tmp_path, monkeypatch):
+    """Prep's first run — no record yet — compares nothing, whatever the folders hold; its execution writes the
+    first record."""
+    _install(monkeypatch)
+    ws = _ws(tmp_path)
+    (ws / BY_DATE / "2023-01-02").mkdir()
+    (ws / BY_DATE / "2023-01-02" / "2023-01-02--03-04-05.jpg").write_bytes(b"AAAA")
+    (ws / "0-sources" / "b.jpg").write_bytes(b"BBBB")
+    assert utils.read_workspace_record(str(ws))[0] is None
+    _ingest(monkeypatch, ws)
+    assert utils.read_workspace_record(str(ws))[0] is not None
+
+
+@pytest.mark.spec("RUL-maintenance_unchecked", "RUL-quarantine_changed_only_by_prune", "BLD-workspace_record",
+                  test="TST-workspace_check-maintenance_commands_do_not_check")
+def test_maintenance_commands_do_not_check(tmp_path, monkeypatch):
+    """Pruning the quarantine, setting up the library and the editor run whatever the files show; what a prune
+    removes from the quarantine is no change to the next run."""
+    from cartographer.editor import server as editor
+    ws, q = _with_quarantine(monkeypatch, tmp_path)
+    put = _change(ws, q, "appeared")                                 # a change that would stop a checking command
+
+    def no_check(*a, **kw):
+        raise AssertionError("checked")
+    for mod in (utils, prep, cal, merge):
+        monkeypatch.setattr(mod, "check_workspace", no_check)
+    rc, said, _ = _prep(monkeypatch, ws, "prune-quarantine")
+    assert rc == 0, said
+    lib = tmp_path / "lib"
+    lib.mkdir()
+    sink = CaptureSink()
+    with use_reporter(Reporter([sink])):
+        assert merge.do_init_library(str(lib), str(ws)) == 0
+    assert isinstance(editor._load_artifacts(str(ws)), dict)
+    monkeypatch.undo()
+    _install(monkeypatch)
+    os.remove(put)
+    monkeypatch.chdir(ws)
+    sink = CaptureSink()
+    with use_reporter(Reporter([sink])):
+        prep.prune_quarantine(str(ws), do_delete=True, prune_all=True)
+    assert not os.path.exists(q)
+    rc, said, stop = _prep(monkeypatch, ws, "plan")
+    assert rc == 0 and stop is None, said
+
+
+@pytest.mark.no_hand_built_record
+@pytest.mark.spec("BLD-hand_change_is_work", "RUL-prepped_nothing_to_do",
+                  test="TST-workspace_check-a_workspace_with_no_record_is_work_for_prep")
+def test_a_workspace_with_no_record_is_work_for_prep(tmp_path):
+    """A prepped workspace whose state no execution recorded — one begun under an earlier version — is not "nothing
+    to do": prep's execute runs, and writes the first record."""
+    ws = _ws(tmp_path)
+    ctl = ws / ".photos-ingest"
+    (ctl / "photos-15-prep-log.json").write_text('{"photos": {}}')
+    (ctl / "photos-11-handoff.json").write_text(json.dumps(
+        {"files": [], "depends_on": {"prep_log": {"sha256": utils.sha256_file(str(ctl / "photos-15-prep-log.json"))}}}))
+    rep = Reporter([CaptureSink()])
+    assert not prep._prep_nothing_to_do(str(ws), rep)
+    utils.write_workspace_record(str(ws))
+    assert prep._prep_nothing_to_do(str(ws), rep)
