@@ -122,6 +122,21 @@ test("groupChoice: the recommended group accepts the proposal, another sets its 
   assert.equal(app.chosenOffset(p, { accept_proposal: false, manual_offset_seconds: "" }), null);
 });
 
+// --- a same-day conflict (conflicts_with): the proposal taken is the user's own offset ---
+test("groupChoice / proposalTaken: in a same-day conflict the proposal is taken as the user's own offset", () => {
+  const p = { proposal_source: "gpx_self_anchor", proposed_offset_seconds: -7200,
+    groups: [{ offset_seconds: -7200, count: 3 }, { offset_seconds: -93600, count: 1 }] };
+  // an acceptance there counts as what the GPS gave by itself and is withheld again: the offset is written instead
+  assert.deepEqual(app.groupChoice(p, p.groups[0], true), { accept_proposal: false, accepted_offset_seconds: "", manual_offset_seconds: -7200 });
+  assert.deepEqual(app.groupChoice(p, p.groups[1], true), { accept_proposal: false, accepted_offset_seconds: "", manual_offset_seconds: -93600 });
+  const k = [{ destination: "6-photos-by-dest/Other", bucket: "K", offset_seconds: -3600, chosen: false }];
+  assert.equal(app.inConflict({ conflicts_with: k }), true);
+  assert.equal(app.inConflict({ conflicts_with: [] }), false);
+  assert.equal(app.inConflict({}), false);
+  assert.deepEqual(app.proposalTaken({ proposal: p, conflicts_with: k }), { accept_proposal: false, accepted_offset_seconds: "", manual_offset_seconds: -7200 });
+  assert.deepEqual(app.proposalTaken({ proposal: p }), { accept_proposal: true, accepted_offset_seconds: -7200, manual_offset_seconds: "" });
+});
+
 test("proposalNotes: a tie asks for the day; disagreeing photos are named, five at most", () => {
   const tied = { tied: true, groups: [{ offset_seconds: -7200, count: 3 }, { offset_seconds: -93600, count: 3 }, { offset_seconds: 0, count: 1 }] };
   assert.deepEqual(app.proposalNotes(tied), ["These photos lie on 2 visits of the tracks equally — pick the day you were there."]);

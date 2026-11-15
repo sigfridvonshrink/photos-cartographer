@@ -78,12 +78,17 @@ function cellAt(arts, ref) {
     const d = arts.time?.destinations?.[ref.dest]; if (!d) return null;
     if (ref.kind === "reading") return d.local_time_readings?.[ref.key];
     if (ref.kind === "unidentified") return d.unidentified_files;
+    if (ref.kind === "changed") return d.changed_times?.[ref.key];
     return ref.kind === "timezone" ? d.destination_timezone : d.camera_group_time_decisions?.[ref.key];
   }
   if (ref.file === "drift") {
     const d = arts.drift?.destinations?.[ref.dest]; if (!d) return null;
     return d.drift_decisions?.[ref.key];
   }
+  if (ref.file === "cameras")                  // a camera group the configuration does not class, by its key
+    return arts.cameras?.groups?.[ref.key] || null;
+  if (ref.file === "execution")                // photos-25: a photo whose content changed after a write, by its path
+    return (arts.execution?.fingerprint_mismatches || []).find((m) => m && m.relative_path === ref.path) || null;
   const d = arts.gps?.destinations?.[ref.dest]; if (!d) return null;
   if (ref.kind === "fallback") return d.folder_fallback;
   return (d.gps_decisions?.review_items || []).find((r) => r.relative_path === ref.path);
@@ -93,10 +98,12 @@ const baseCell = (ref) => cellAt(state.base, ref);
 
 function allRefs() {
   const out = [];
+  for (const key of Object.keys(state.work.cameras?.groups || {})) out.push({ file: "cameras", kind: "camera", key });
   for (const [dest, d] of Object.entries(state.work.time?.destinations || {})) {
     out.push({ file: "time", dest, kind: "timezone" });
     for (const key of Object.keys(d.camera_group_time_decisions || {})) out.push({ file: "time", dest, kind: "offset", key });
     for (const key of Object.keys(d.local_time_readings || {})) out.push({ file: "time", dest, kind: "reading", key });
+    for (const key of Object.keys(d.changed_times || {})) out.push({ file: "time", dest, kind: "changed", key });
     if (d.unidentified_files) out.push({ file: "time", dest, kind: "unidentified" });
   }
   for (const [dest, d] of Object.entries(state.work.drift?.destinations || {})) {
@@ -106,6 +113,8 @@ function allRefs() {
     out.push({ file: "gps", dest, kind: "fallback" });
     for (const ri of d.gps_decisions?.review_items || []) out.push({ file: "gps", dest, kind: "review", path: ri.relative_path });
   }
+  for (const m of state.work.execution?.fingerprint_mismatches || [])
+    if (m && m.relative_path) out.push({ file: "execution", kind: "fingerprint", path: m.relative_path });
   return out;
 }
 function isDirty(ref) {
@@ -121,6 +130,9 @@ function refInvalid(ref) {
   if (ref.kind === "offset") return !validOffset(u.manual_offset_seconds);
   if (ref.kind === "reading") return !validReading(c, u.utc_offset_seconds);
   if (ref.kind === "drift") return !validOffset(u.corrected_offset_seconds);
+  if (ref.kind === "fingerprint") return typeof u.accept_fingerprint_change !== "boolean";
+  if (ref.kind === "camera") return !["", ...DEVICE_CLASSES].includes(u.device_class ?? "");
+  if (ref.kind === "changed") return !["", ...CHANGED_ANSWERS].includes(u.keep ?? "");
   if (ref.kind === "fallback") return !validLat(u.fallback_lat) || !validLon(u.fallback_lon) || !bothOrNeither(u.fallback_lat, u.fallback_lon);
   return !validLat(u.manual_lat) || !validLon(u.manual_lon) || !bothOrNeither(u.manual_lat, u.manual_lon);
 }
@@ -212,6 +224,8 @@ function resetRef(ref) {
 
 function cellStatus(cell) {
   if (!cell) return null;
+  // a photos-25 fingerprint mismatch carries no flags: it asks until its changed content is accepted
+  if ("actual_fingerprint" in cell) return mismatchAccepted(cell) ? ["ok", "accepted"] : ["needs", "needs input"];
   if (cell.requires_user_input) return ["needs", "needs input"];
   if (cell.stale_user_decision) return ["stale", "stale"];
   if (cell.decision_mode === "auto_resolved") return ["auto", "auto"];
@@ -234,10 +248,14 @@ function wouldResolve(ref) {
   if (ref.kind === "offset")
     return (u.manual_offset_seconds !== "" && u.manual_offset_seconds != null && validOffset(u.manual_offset_seconds))
       || keepHolds(c)                                           // a phone kept as it records itself
-      || (acceptHolds(c) && !p.far_from_evidence);              // far from all evidence: acceptance is not enough
+      || (acceptHolds(c) && !p.far_from_evidence && !inConflict(c));   // far from all evidence, or one clock read two
+                                                                // ways the same day: an acceptance is withheld again
   if (ref.kind === "reading")
     return u.utc_offset_seconds !== "" && u.utc_offset_seconds != null && validReading(c, u.utc_offset_seconds);
   if (ref.kind === "unidentified") return unidentifiedHolds(ref.dest, c);
+  if (ref.kind === "fingerprint") return mismatchAccepted(c);
+  if (ref.kind === "camera") return DEVICE_CLASSES.includes(u.device_class);
+  if (ref.kind === "changed") return changedHolds(c);
   if (ref.kind === "drift")                       // confirmed for this offset (zero-scrub or a valid correction)
     return driftConfirmHolds(c) && validOffset(u.corrected_offset_seconds);
   if (ref.kind === "fallback")
@@ -381,6 +399,7 @@ function previewEffective(ref) {
     }
     if (keepHolds(c)) return "as the phone records itself (its own GPS set aside)";
     if (acceptHolds(c) && p.far_from_evidence) return "— (accepting is not enough here — set the offset)";
+    if (acceptHolds(c) && inConflict(c)) return "— (an acceptance is withheld here — take the offset as your own)";
     if (acceptHolds(c)) return `${fmtOffset(p.proposed_offset_seconds)} (accept proposal)`;
     if (u.accept_proposal) return "— (accepted another proposal — accept again)";
     return "— (GPX auto-resolves on re-run, else needs input)";
@@ -405,6 +424,15 @@ function previewEffective(ref) {
     return validOffset(u.corrected_offset_seconds)
       ? `${fmtOffset(u.corrected_offset_seconds)} (corrected)` : "✗ invalid offset";
   }
+  if (ref.kind === "changed") return !changedHolds(c) ? (u.keep ? "— (answered for another time — answer again)" : "— (needs input)")
+    : u.keep === "new" ? `keeps ${timePair(c.held_time)} as its own time — corrected like any photo's`
+      : `geotag's time written back${c.geotag_wrote ? ` (${timePair(c.geotag_wrote)}, from its own time)` : ""}`;
+  if (ref.kind === "camera") return u.device_class === "phones" ? "a phone — written into device_groups.phones"
+    : u.device_class === "fixed_clock_cameras" ? "a camera with a hand-set clock — written into device_groups.fixed_clock_cameras"
+      : "— (needs input: geotag stops until it is classed)";
+  if (ref.kind === "fingerprint") return mismatchAccepted(c)
+    ? "accepted — the next `geotag execute` takes this content as the photo's, and goes on with it"
+    : "— (held: its writes and rename wait for an answer)";
   if (ref.kind === "fallback") {
     if (u.fallback_lat !== "" && u.fallback_lon !== "") return `${u.fallback_lat}, ${u.fallback_lon}`;
     if (u.accept_proposal && p.proposed_fallback) return `${p.proposed_fallback.lat}, ${p.proposed_fallback.lon} (inherited)`;
@@ -559,6 +587,8 @@ function renderTreeNode(node, box) {
       n.append(row({ file: "time", dest: node.path, kind: "unidentified" }, "Files naming no camera",
         `${q.files} file${q.files === 1 ? "" : "s"}`, q.effective_iana_timezone ? leaf(q.effective_iana_timezone) : "—"));
     }
+    for (const [key, cc] of Object.entries(node.dest.changed_times || {}))
+      n.append(row({ file: "time", dest: node.path, kind: "changed", key }, "Time changed since geotag", leaf(key), timePair(cc.held_time)));
     for (const [key, rc] of Object.entries(node.dest.local_time_readings || {}))
       n.append(row({ file: "time", dest: node.path, kind: "reading", key }, "Time at a clock change", leaf(key),
         rc.effective_utc_offset_seconds === "" || rc.effective_utc_offset_seconds == null ? "—" : utcOff(rc.effective_utc_offset_seconds)));
@@ -606,9 +636,20 @@ function renderOffsetRows(dest, destCell, n) {
     }
   }
 }
+// What a view shows of a record it has nothing to list from: the record absent, or — a record that is there but cannot
+// be read (the server's `_error`) — that, said as it is, never as "no file": a record a hand broke is still the answers.
+function recordAbsentText(art, name) {
+  if (art && art._error) return `${art._error} — repair it by hand (or restore it from a -NNN backup), then reload; ` +
+    "geotag stops on it too, and leaves it as it is.";
+  return `No ${name}.`;
+}
+function recordAbsent(art, name) {
+  return art && art._error ? el("div", { class: "gate warn" }, el("div", { class: "gate-title" }, `${name} cannot be read`),
+    recordAbsentText(art, name)) : el("div", { class: "empty" }, recordAbsentText(art, name));
+}
 function renderTime(list) {
   const t = state.work.time;
-  if (!t?.destinations) return list.append(el("div", { class: "empty" }, "No photos-21-time-decisions.json."));
+  if (!t?.destinations) return list.append(recordAbsent(t, "photos-21-time-decisions.json"));
   if (!state.base.demo && state.timeChangedSinceRerun)
     list.append(el("div", { class: "gate warn" }, "Time decisions changed — re-run `photos-cartographer geotag plan` (in a terminal), then reload, so GPS is recomputed from the new times."));
   const root = buildTree(t.destinations);
@@ -651,7 +692,7 @@ function renderGps(list) {
       "A manual or timezone-derived clock offset with no native-GPS anchor must be confirmed against the GPX "
       + "track before placement, or it could silently mis-place the whole batch. Confirm each bucket in the "
       + "Drift view, then re-run `photos-cartographer geotag plan` and reload."));
-  if (!g?.destinations) return list.append(el("div", { class: "empty" }, "No photos-23-gps-decisions.json."));
+  if (!g?.destinations) return list.append(recordAbsent(g, "photos-23-gps-decisions.json"));
   if (!state.base.demo && (state.timeChangedSinceRerun || state.driftChangedSinceRerun))
     list.append(el("div", { class: "gate warn" }, "Time or drift decisions changed since the last geotag run — re-run `photos-cartographer geotag plan` and reload to recompute GPS. The decisions below are stale until you do."));
   for (const dest of Object.keys(g.destinations).sort()) {
@@ -681,7 +722,7 @@ function renderDrift(list) {
       el("div", { class: "gate-title" }, "Drift validation is waiting on the time decisions"),
       "The GPS-drift check validates each bucket's clock offset against the GPX track, so it is generated "
       + "only once every timezone and clock-offset decision is resolved. Finish them in the Time view, then re-run `photos-cartographer geotag plan` and reload."));
-  if (!dr?.destinations) return list.append(el("div", { class: "empty" }, "No photos-22-gps-drift-validation.json."));
+  if (!dr?.destinations) return list.append(recordAbsent(dr, "photos-22-gps-drift-validation.json"));
   if (!state.base.demo && state.timeChangedSinceRerun)
     list.append(el("div", { class: "gate warn" }, "Time decisions changed since the last geotag run — re-run `photos-cartographer geotag plan` and reload so the drift buckets (and their track segments) are re-extracted. The buckets below are stale until you do."));
   const dests = Object.keys(dr.destinations);
@@ -696,6 +737,74 @@ function renderDrift(list) {
       list.append(row(ref, `Drift · ${cell.camera_group || key}`, sub, null));
     }
   }
+}
+
+// A camera group the configuration does not class — geotag stops on it before it writes any decision
+// (BLD-known_camera_group). Its answer is the array of camera_time_and_timezone_policy.device_groups the group is written
+// into (BLD-editor_writes_device_groups); the snippet geotag prints, to paste by hand, says the same.
+const DEVICE_CLASSES = ["phones", "fixed_clock_cameras"];
+function renderCameras(list) {
+  const cams = state.work.cameras;
+  if (!cams || cams._error) return list.append(recordAbsent(cams, "photos-00-config.json"));
+  const keys = Object.keys(cams.groups || {}).sort();
+  if (!keys.length) return list.append(el("div", { class: "empty" }, "Every camera group of the photos is classed in photos-00-config.json."));
+  list.append(el("div", { class: "hint" }, "Geotag stops on a camera it has not met: say whether each is a phone (its clock set by the " +
+    "network, its offset recorded with each photo) or a camera with a clock set by hand. Saving writes it into " +
+    "photos-00-config.json (camera_time_and_timezone_policy.device_groups), as pasting geotag's lists would; then re-run `geotag plan`."));
+  for (const key of keys) {
+    const g = cams.groups[key], ref = { file: "cameras", kind: "camera", key };
+    const who = Object.values(g.identity || {}).join(" ");
+    list.append(el("div", { class: "row" + (isSel(ref) ? " sel" : ""), onclick: () => { state.selected = ref; render(); },
+        onmouseenter: (ev) => showHoverPreview((g.examples || [])[0], ev), onmousemove: moveHoverPreview, onmouseleave: hideHoverPreview },
+      el("span", { class: "label" }, who || key, el("span", { class: "sub" }, `  ${g.files} photo${g.files === 1 ? "" : "s"}`)),
+      ...tags(ref), statusChip(ref)));
+  }
+}
+function cameraControls(ref) {
+  const c = workCell(ref), u = c.user_decision || {}, wrap = el("div", { class: "ctl-block" });
+  wrap.append(el("div", { class: "hint" }, `${c.files} photo${c.files === 1 ? "" : "s"} under photos by destination, e.g. ` +
+    `${(c.examples || []).map(leaf).join(", ")}.`));
+  const opt = (cls, label) => el("div", { class: "off-opt" + (u.device_class === cls ? " on" : ""), onclick: () => edit(ref, "device_class", cls) },
+    el("span", { class: "off-dot" }, u.device_class === cls ? "●" : "○"), el("span", {}, label));
+  wrap.append(opt("phones", "a phone — its clock is the network's, its offset recorded with each photo"));
+  wrap.append(opt("fixed_clock_cameras", "a camera with a clock set by hand — its offset found per day"));
+  return wrap;
+}
+
+// photos-25's fingerprint mismatches: a photo whose decoded content was not what the plan expected once geotag wrote to
+// it, its writes unconfirmed and its rename held back until the user accepts the content as it now is
+// (user_decision.accept_fingerprint_change, BLD-execution_summary). The next `geotag execute` of the same plan reads it.
+function mismatchAccepted(c) {
+  return !!c && (c.user_decision || {}).accept_fingerprint_change === true && !!c.actual_fingerprint;
+}
+function renderExecution(list) {
+  const x = state.work.execution;
+  if (!x) return list.append(el("div", { class: "empty" }, "No photos-25-execution-summary.json — geotag has not executed here yet."));
+  if (x._error) return list.append(recordAbsent(x, "photos-25-execution-summary.json"));
+  const ms = (x.fingerprint_mismatches || []).filter((m) => m && m.relative_path);
+  if (!ms.length) return list.append(el("div", { class: "empty" }, "No photo's content changed when geotag wrote to it."));
+  list.append(el("div", { class: "hint" }, `The last \`geotag execute\` (plan ${x.plan_id || "?"}) found these photos' content ` +
+    "changed when it wrote to them: their writes are not confirmed and their rename waits. Accept each whose content is " +
+    "right as it is now, save, and run `geotag execute` again."));
+  for (const m of ms) {
+    const ref = { file: "execution", kind: "fingerprint", path: m.relative_path };
+    list.append(el("div", { class: "row" + (isSel(ref) ? " sel" : ""), onclick: () => { state.selected = ref; render(); },
+        onmouseenter: (ev) => showHoverPreview(m.relative_path, ev), onmousemove: moveHoverPreview, onmouseleave: hideHoverPreview },
+      el("span", { class: "label" }, leaf(m.relative_path), el("span", { class: "sub" }, "  " + m.relative_path.split("/").slice(0, -1).join("/"))),
+      ...tags(ref), statusChip(ref)));
+  }
+}
+function mismatchControls(ref) {
+  const c = workCell(ref), u = c.user_decision || {}, wrap = el("div", { class: "ctl-block" });
+  const fp = (v) => (v ? String(v).slice(0, 16) + "…" : "none");
+  wrap.append(el("div", { class: "hint warn" }, `Expected fingerprint ${fp(c.expected_fingerprint)}; after geotag wrote to it, ` +
+    `${c.actual_fingerprint ? fp(c.actual_fingerprint) : "none could be taken"}. The photo's pixels are not what the plan pinned: ` +
+    "look at it — if it is right as it is, accept it."));
+  if (!c.actual_fingerprint) wrap.append(el("div", { class: "hint" }, "With no fingerprint taken there is nothing to accept: " +
+    "put the photo right, then run `geotag execute` again."));
+  else wrap.append(checkbox("accept this photo's content as it is now", u.accept_fingerprint_change === true,
+    (v) => edit(ref, "accept_fingerprint_change", v)));
+  return wrap;
 }
 
 // --- editing controls --------------------------------------------------------
@@ -740,7 +849,8 @@ function offsetEditor(ref) {
   const repCamMs = camMs != null ? camMs
     : (hasProp && p.proposed_real_utc != null && utcStrToMs(p.proposed_real_utc) != null
       ? utcStrToMs(p.proposed_real_utc) - p.proposed_offset_seconds * 1000 : null);
-  const accepted = acceptHolds(c);
+  const conflict = inConflict(c);                     // one clock read two ways: the proposal is taken as the user's own
+  const accepted = acceptHolds(c) && !conflict;
   const manualOff = u.manual_offset_seconds;          // the one stored value of a self-set offset
   const manualSet = manualOff !== "" && manualOff != null;
   const selKey = `${ref.dest}|${ref.key}`;
@@ -752,7 +862,9 @@ function offsetEditor(ref) {
   const view = mine ? mine.view : "offset";
   // A proposal accepting which is not enough (far from all evidence) is never the value shown, nor seeded into an
   // offset of the user's own: a click on a view opens it empty, and only a value typed there is written.
-  const active = accepted && !far ? "accept" : manualSet ? view : far && mine && mine.open ? view : "";
+  // In a same-day conflict the proposal taken is the user's own offset: shown as the proposal taken until a view is opened.
+  const ownTaken = conflict && manualSet && Number(manualOff) === p.proposed_offset_seconds && !mine;
+  const active = (accepted && !far) || ownTaken ? "accept" : manualSet ? view : far && mine && mine.open ? view : "";
   const eff = accepted && !far ? p.proposed_offset_seconds : manualSet ? Number(manualOff)
     : (hasProp && !far ? p.proposed_offset_seconds : null);
   const cur = Number(eff) || 0, abs = Math.abs(cur);
@@ -762,7 +874,7 @@ function offsetEditor(ref) {
     state._focusOffset = v;
     if (manualSet || far) { state.offsetEdit = { key: selKey, view: v, open: true }; render(); } else setManual(eff ?? 0, v);
   };
-  const accept = () => { state.offsetEdit = null; editMany(ref, { ...acceptFields(p, true), manual_offset_seconds: "", ...unkept(c) }); };
+  const accept = () => { state.offsetEdit = null; editMany(ref, { ...proposalTaken(c), ...unkept(c) }); };
   const opt = (on, body, onclick, cls = "") => el("div", { class: "off-opt" + (on ? " on" : "") + cls, onclick },
     el("span", { class: "off-dot" }, on ? "●" : "○"), body);
 
@@ -777,7 +889,8 @@ function offsetEditor(ref) {
   wrap.append(opt(active === "accept",
     el("span", {}, !hasProp ? "accept proposal — none to accept"
       : far ? `accept proposal (${fmtOffset(p.proposed_offset_seconds)}) — not enough here: set the offset`
-        : `accept proposal (${fmtOffset(p.proposed_offset_seconds)})${src}`),
+        : conflict ? `use the proposal (${fmtOffset(p.proposed_offset_seconds)}) as your own offset${src}`
+          : `accept proposal (${fmtOffset(p.proposed_offset_seconds)})${src}`),
     canAccept ? accept : undefined, canAccept ? "" : " disabled"));
 
   if (u.accept_proposal && !accepted && hasProp) wrap.append(el("div", { class: "hint warn" },
@@ -926,6 +1039,12 @@ function controls(ref) {
     wrap.append(unidentifiedControls(ref));
   } else if (ref.kind === "drift") {
     wrap.append(driftControls(ref));
+  } else if (ref.kind === "fingerprint") {
+    wrap.append(mismatchControls(ref));
+  } else if (ref.kind === "camera") {
+    wrap.append(cameraControls(ref));
+  } else if (ref.kind === "changed") {
+    wrap.append(changedControls(ref));
   } else if (ref.kind === "fallback") {
     const hasProp = p.proposal_source === "inherited";
     const cb = checkbox(hasProp ? `accept inherited (${p.proposed_fallback.lat}, ${p.proposed_fallback.lon})` : "accept inherited — none",
@@ -1000,7 +1119,7 @@ function driftStaleReason(c) {
 function driftControls(ref) {
   const c = workCell(ref), u = c.user_decision || {}, p = c.proposal || {}, wrap = el("div", { class: "ctl-block" });
   wrap.append(el("div", { class: "hint" },
-    `Current offset ${fmtOffset(p.current_offset_seconds)} (${p.proposal_source || "?"}). Scroll the photo along the track below to correct it, or confirm it as-is.`));
+    `Current offset ${fmtOffset(p.current_offset_seconds)} (${p.proposal_source || "?"}). Scroll the photo along the track below to correct it, type the correction, or confirm it as-is.`));
   const holds = driftConfirmHolds(c);
   if (u.confirmed && !holds) wrap.append(el("div", { class: "hint warn" }, driftStaleReason(c) === "tracks"
     ? "Confirmed against tracks since removed or changed — check it on the track as it is now and confirm again."
@@ -1014,7 +1133,40 @@ function driftControls(ref) {
       el("button", { class: "mini", onclick: () => editMany(ref, { corrected_offset_seconds: "" }) }, "clear — offset was right")));
   }
   if (!validOffset(corr)) wrap.append(el("div", { class: "err" }, "the correction must be a whole number of seconds"));
+  wrap.append(driftTyped(ref));
   return wrap;
+}
+// What a correction writes, scrubbed or typed: the bucket confirmed against the offset and tracks shown, and corrected.
+const driftCorrectionFields = (c, v) => ({ ...driftConfirmFields(c, true), corrected_offset_seconds: v });
+// A drift correction typed rather than scrubbed: the offset known, or the true time of one of the bucket's photos — the
+// only way to give one where no track lies by the photos. Written as a scrub is: confirmed, with the offset and tracks
+// shown, and the corrected offset (photos-22 corrected_offset_seconds).
+function driftTyped(ref) {
+  const c = workCell(ref), u = c.user_decision || {}, p = c.proposal || {}, frames = p.frames || [];
+  const box = el("div", { class: "ctl-block" });
+  const set = (v) => editMany(ref, driftCorrectionFields(c, v));
+  const corr = u.corrected_offset_seconds, typed = corr !== "" && corr != null;
+  const offI = el("input", { type: "number", step: "1", class: "spin-num", placeholder: String(p.current_offset_seconds ?? ""),
+    value: typed ? corr : "", title: "the corrected clock offset in seconds: camera time + this = UTC" });
+  offI.addEventListener("change", () => set(offI.value === "" ? "" : Number(offI.value)));
+  box.append(el("label", { class: "ctl-field" }, el("span", {}, "corrected offset (seconds)"), offI));
+  const frame = frames[Math.min(_driftFrame, Math.max(0, frames.length - 1))];
+  if (frame && camNaiveMs(frame.camera_naive) != null) {
+    const zone = previewTz(ref.dest)?.tz || "";
+    const shown = typed && validOffset(corr) ? corr : p.current_offset_seconds;
+    const tI = el("input", { type: "datetime-local", step: "1", class: "spin-num utc-pick",
+      value: trueTimeOf(frame.camera_naive, shown, zone) || "",
+      title: `the true time of ${leaf(frame.source_file)}, in ${zone || "UTC"}; offset = that − its camera time` });
+    tI.addEventListener("change", () => {
+      const o = offsetFromTrueTime(frame.camera_naive, tI.value, zone);
+      if (o == null) { state.message = `${(tI.value || "").replace("T", " ")} names no one instant in ${zone || "UTC"} — type another time, or the offset`; render(); return; }
+      set(o);
+    });
+    box.append(el("label", { class: "ctl-field" }, el("span", {}, `true time of ${leaf(frame.source_file)}`), tI));
+    box.append(el("div", { class: "hint" }, `its camera says ${frame.camera_naive}; type when it was really taken` +
+      (zone ? `, ${zone} time` : ", in UTC") + " — or the offset above. Either confirms the bucket with that correction."));
+  }
+  return box;
 }
 
 // The "lat, lon" input lives in the pinned top box; as the map pans below, the live map center is
@@ -1126,7 +1278,7 @@ function mapBlock(ref) {
 function scrubBlock(ref) {
   const c = workCell(ref), p = c.proposal || {}, frames = p.frames || [], track = p.track_segment || [];
   const wrap = el("div", { class: "pblock" });
-  if (!frames.length || !track.length) { teardownMap(); wrap.append(el("div", { class: "placeholder" }, "no frames or track to scrub")); return wrap; }
+  if (!frames.length || !track.length) { teardownMap(); wrap.append(el("div", { class: "placeholder" }, "no track to scrub along — type the correction above, or confirm the offset as it is")); return wrap; }
   const fi = Math.min(_driftFrame, frames.length - 1), frame = frames[fi];
   const tabBtn = (id, label) => el("button", { class: _driftTab === id ? "on" : null, onclick: () => { _driftTab = id; render(); } }, label);
   wrap.append(el("div", { class: "seg subtab" }, tabBtn("photo", "Photo"), tabBtn("map", "Track")));
@@ -1162,7 +1314,7 @@ function driftMap(ref, frame, fi) {
     const p = workCell(ref).proposal || {}, track = p.track_segment || [];
     _map = mapPicker({ track, scrubIndex: scrubSeedIndex(track, frame, p.current_offset_seconds),
       onScrub: (i, pt) => { const off = scrubOffset(pt, frame);
-        if (off != null) editMany(ref, { ...driftConfirmFields(workCell(ref), true), corrected_offset_seconds: off }); } });
+        if (off != null) editMany(ref, driftCorrectionFields(workCell(ref), off)); } });
     _mapKey = key;
   }
   setTimeout(() => _map && _map.refresh(), 0);
@@ -1172,8 +1324,8 @@ function driftMap(ref, frame, fi) {
 // decision" box for a GPS review item (the big map gets the rest of the panel). Null in demo mode or
 // for non-photo cells; for a multi-photo run, `ref.path` is the first photo.
 function decisionThumb(ref) {
-  const photo = ref.kind === "reading" ? ref.key : ref.path;
-  if (state.base.demo || (ref.kind !== "review" && ref.kind !== "reading") || !photo) return null;
+  const photo = ref.kind === "reading" || ref.kind === "changed" ? ref.key : ref.kind === "camera" ? (workCell(ref)?.examples || [])[0] : ref.path;
+  if (state.base.demo || !["review", "reading", "fingerprint", "camera", "changed"].includes(ref.kind) || !photo) return null;
   const img = el("img", { class: "decision-thumb", alt: photo, title: photo.split("/").pop(),
     src: "/api/photo?path=" + encodeURIComponent(photo) });
   img.addEventListener("error", () => img.remove());
@@ -1213,10 +1365,23 @@ function jsonBlock(title, obj) { return obj === undefined ? null : el("div", { c
 // Picking a correction group of a GPX self-anchor proposal (BLD-anchor_matching): the recommended one is
 // accepting the proposal; any other sets its offset — which geotag counts as anchored by the GPS
 // (gpx_anchor_chosen), so no drift check follows. One click, for every day bundled with this proposal.
-function groupChoice(p, g) {
-  return g.offset_seconds === p.proposed_offset_seconds
+// In a same-day conflict (`conflict`) the recommended one is taken as the user's own offset too: an acceptance there is
+// withheld again.
+function groupChoice(p, g, conflict = false) {
+  return g.offset_seconds === p.proposed_offset_seconds && !conflict
     ? { ...acceptFields(p, true), manual_offset_seconds: "" }
     : { ...acceptFields(p, false), manual_offset_seconds: g.offset_seconds };
+}
+// A cell geotag found in a same-day conflict (`conflicts_with`, BLD-offset_shared_within_day): one clock read two ways in
+// two destinations. An acceptance there counts as what the camera's GPS gave by itself, and is withheld again; the user's
+// own offset keeps its effect (RUL-chosen_offset_not_withheld). So the proposal is taken there as manual_offset_seconds.
+const inConflict = (c) => ((c && c.conflicts_with) || []).length > 0;
+// What taking a cell's proposal writes: an acceptance naming its offset, or — in a same-day conflict — the offset as the
+// user's own (BLD-editor_answers_every_question).
+function proposalTaken(c) {
+  const p = (c && c.proposal) || {};
+  return inConflict(c) ? { ...acceptFields(p, false), manual_offset_seconds: p.proposed_offset_seconds }
+    : { ...acceptFields(p, true), manual_offset_seconds: "" };
 }
 // An acceptance names the offset it accepts (accepted_offset_seconds) and holds only while that is what is
 // proposed — within the proposal's own agreement spread for one found from GPS. Mirrors BLD-offset_acceptance: a
@@ -1305,7 +1470,7 @@ function offsetCellNotes(c) {
         "you chose here — one clock, two readings. Your choice stands; that cell waits for you: set its offset by hand, or change yours.");
     else
       out.push(`The camera's GPS gives ${fmtOffset(k.offset_seconds)} the same day in ${k.destination} — one clock, two readings. ` +
-        "Set the right offset by hand in the one that is wrong.");
+        "Set the right offset by hand in the one that is wrong — taking a proposal here takes it as your own offset.");
   }
   return out;
 }
@@ -1379,6 +1544,34 @@ function unidentifiedControls(ref) {
     (v) => editMany(ref, unidentifiedFields(zone, v))));
   if (u.accept_proposal && !unidentifiedHolds(ref.dest, c)) wrap.append(el("div", { class: "hint warn" },
     `Accepted for ${u.accepted_timezone || "no timezone"}; the timezone here is now ${zone || "none"} — accept again, or move the files out.`));
+  return wrap;
+}
+// A photo's time changed since geotag wrote it (photos-21 changed_times, BLD-changed_time_question): keep the time it
+// holds — it becomes the photo's own, corrected like any — or take back geotag's. The answer names the time it was given
+// for (answered_for, a copy of held_time) and holds while the photo holds that time.
+const CHANGED_ANSWERS = ["new", "geotag"];
+const timePair = (t) => !t || !t.DateTimeOriginal ? "no time" : `${t.DateTimeOriginal}${t.OffsetTimeOriginal ? " " + t.OffsetTimeOriginal : " (no offset)"}`;
+function changedHolds(c) {
+  const u = (c && c.user_decision) || {}, a = u.answered_for, h = (c && c.held_time) || {};
+  return CHANGED_ANSWERS.includes(u.keep) && !!a && typeof a === "object"
+    && a.DateTimeOriginal === h.DateTimeOriginal && (a.OffsetTimeOriginal ?? null) === (h.OffsetTimeOriginal ?? null)
+    && (u.keep !== "new" || !!h.DateTimeOriginal);
+}
+const changedFields = (c, keep) => ({ keep, answered_for: keep ? { ...(c.held_time || {}) } : "" });
+function changedControls(ref) {
+  const c = workCell(ref), u = c.user_decision || {}, wrap = el("div", { class: "ctl-block" });
+  wrap.append(el("div", { class: "hint warn" }, `${leaf(ref.key)} holds ${timePair(c.held_time)}, but geotag wrote ` +
+    `${c.geotag_wrote ? timePair(c.geotag_wrote) : "no time"} to it, and its own time before geotag was ${timePair(c.own_time)}. ` +
+    "Its time was changed since — in another tool, or by a slip. Only you know which it is."));
+  const on = changedHolds(c) ? u.keep : "";
+  const opt = (keep, label, disabled) => el("div", { class: "off-opt" + (on === keep ? " on" : "") + (disabled ? " disabled" : ""),
+    onclick: disabled ? undefined : () => editMany(ref, changedFields(c, keep)) }, el("span", { class: "off-dot" }, on === keep ? "●" : "○"), el("span", {}, label));
+  wrap.append(opt("new", `keep ${timePair(c.held_time)} — it becomes the photo's own time, and is corrected by its camera's offset like any`,
+    !(c.held_time || {}).DateTimeOriginal));
+  wrap.append(opt("geotag", "take back geotag's time — written again from the photo's own time"));
+  if (u.keep && !changedHolds(c)) wrap.append(el("div", { class: "hint warn" },
+    "Answered for another time than the one the photo holds now — answer again."));
+  if (u.keep) wrap.append(el("button", { class: "mini", onclick: () => editMany(ref, changedFields(c, "")) }, "clear"));
   return wrap;
 }
 // A photo's time at a daylight-saving change (photos-21 local_time_readings): pick one of its readings — for a time
@@ -1520,8 +1713,8 @@ function offsetProposalBlock(ref, p) {
     wrap.append(el("div", { class: "prop-group" + (on ? " on" : "") },
       el("div", { class: "prop-group-h" }, `${g.count} photo${g.count === 1 ? "" : "s"} → ${fmtOffset(g.offset_seconds)}`,
         on ? el("span", { class: "muted" }, " ✓ chosen")
-          : el("button", { class: "mini", onclick: () => { state.offsetEdit = null; editMany(ref, groupChoice(p, g)); } },
-            g.offset_seconds === p.proposed_offset_seconds ? "accept" : "use this")),
+          : el("button", { class: "mini", onclick: () => { state.offsetEdit = null; editMany(ref, groupChoice(p, g, inConflict(workCell(ref)))); } },
+            g.offset_seconds === p.proposed_offset_seconds && !inConflict(workCell(ref)) ? "accept" : "use this")),
       el("div", { class: "hint" }, `e.g. ${g.representative.source_file}` +
         (g.representative.gpx_file ? ` · track ${g.representative.gpx_file}` : "")),
       el("div", { class: "hint" }, line)));
@@ -1546,11 +1739,14 @@ function renderPanel() {
   const multi = ref.peers && ref.peers.length > 1;
   const title = ref.kind === "offset" ? `Offset · ${c.camera_group || ref.key}${c.phone ? " (phone)" : ""}`
     : ref.kind === "reading" ? "Time at a daylight-saving change"
+    : ref.kind === "changed" ? "Time changed since geotag wrote it"
     : ref.kind === "unidentified" ? "Files naming no camera"
     : ref.kind === "drift" ? `Drift · ${c.camera_group || ref.key}`
+    : ref.kind === "fingerprint" ? "Content changed after a write"
+    : ref.kind === "camera" ? "A new camera group"
     : ref.kind === "review" ? (multi ? `GPS review · ${ref.peers.length} photos` : "GPS review item")
       : ref.kind === "fallback" ? "Folder fallback" : "Timezone";
-  p.append(el("h2", {}, title), el("div", { class: "path" }, ref.path || (ref.kind === "reading" ? ref.key : ref.dest)));
+  p.append(el("h2", {}, title), el("div", { class: "path" }, ref.path || (["reading", "camera", "changed"].includes(ref.kind) ? ref.key : ref.dest)));
   const head = el("div", { class: "pblock" }, ...(statusChip(ref) ? [statusChip(ref)] : []), ...tags(ref));
   // A multi-cell ref edits several siblings at once — say so. Offset cluster → which days; review run → how many.
   if (ref.kind === "offset" && multi) {
@@ -1568,7 +1764,7 @@ function renderPanel() {
   if (isDirty(ref)) head.append(el("button", { class: "mini", onclick: () => resetRef(ref) }, "reset"));
   // Fixed top: title + status + the decision controls + the effective preview — always visible, no scroll.
   const top = el("div", { class: "panel-top" },
-    el("h2", {}, title), el("div", { class: "path" }, ref.path || (ref.kind === "reading" ? ref.key : ref.dest)), head,
+    el("h2", {}, title), el("div", { class: "path" }, ref.path || (["reading", "camera", "changed"].includes(ref.kind) ? ref.key : ref.dest)), head,
     el("div", { class: "pblock" }, el("h3", {}, "Your decision"), decisionThumb(ref), controls(ref)),
     el("div", { class: "pblock eff" }, el("h3", {}, "Effective (advisory — re-run to apply)"), el("div", { class: "eff-val" }, previewEffective(ref))));
   // Scroll area, the only thing that scrolls. For a GPS coord cell the MAP comes first — directly under
@@ -1579,7 +1775,7 @@ function renderPanel() {
   if (isGpsCoord) scroll.append(mapBlock(ref));   // the review photo is now a thumbnail in "Your decision" + a hover preview in the worklist
   // No raw "Proposal" JSON box for fallback — the inherited proposal is already shown in the
   // "accept inherited (lat, lon)" checkbox label, so the JSON dump was redundant clutter.
-  if (c.proposal && ref.kind !== "drift" && ref.kind !== "fallback" && ref.kind !== "reading")
+  if (c.proposal && ref.kind !== "drift" && ref.kind !== "fallback" && ref.kind !== "reading" && ref.kind !== "fingerprint" && ref.kind !== "camera")
     scroll.append(ref.kind === "offset" ? offsetProposalBlock(ref, c.proposal) : jsonBlock("Proposal", c.proposal));
   p.replaceChildren(top, scroll);
 }
@@ -1589,9 +1785,9 @@ function renderPanel() {
 // refuses the save when a record on disk is not the one loaded (RUL-save_only_what_was_shown), and its refusal
 // shows through the save-error message below.
 function savePayload(refs, cellOf, hashes) {
-  const payload = { time: [], drift: [], gps: [], hashes: { ...(hashes || {}) } };
+  const payload = { time: [], drift: [], gps: [], execution: [], cameras: [], hashes: { ...(hashes || {}) } };
   for (const ref of refs)
-    payload[ref.file].push({ dest: ref.dest, kind: ref.kind, key: ref.key, path: ref.path, user_decision: cellOf(ref).user_decision });
+    (payload[ref.file] = payload[ref.file] || []).push({ dest: ref.dest, kind: ref.kind, key: ref.key, path: ref.path, user_decision: cellOf(ref).user_decision });
   return payload;
 }
 
@@ -1602,7 +1798,12 @@ async function save() {
   try {
     const r = await (await fetch("/api/save", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) })).json();
     // The records now hold what was saved: their new hashes are what the next save is made from.
-    if (r.ok) { state.work.hashes = r.hashes; state.base = clone(state.work); state.message = `saved ${r.written.join(", ")} — run \`photos-cartographer geotag plan\` then reload to apply`; }
+    if (r.ok) {
+      state.work.hashes = r.hashes; state.base = clone(state.work);
+      // an answer in photos-25 is read by the next execution; every other, by the next plan
+      const next = r.written.length && r.written.every((n) => n.startsWith("photos-25")) ? "geotag execute" : "geotag plan";
+      state.message = `saved ${r.written.join(", ")} — run \`photos-cartographer ${next}\` then reload to apply`;
+    }
     else state.message = "save failed: " + (r.error || "unknown");
   } catch (e) { state.message = "save failed: " + e; }
   state.saving = false; render();
@@ -1623,7 +1824,7 @@ function render() {
   save.title = a.demo ? "demo mode is read-only — run `photos-cartographer edit` from inside a workspace to save" : invalid ? "fix invalid fields first" : "";
   $("#reset").disabled = dirty === 0 || busy;
   const list = $("#list"); list.replaceChildren();
-  (state.view === "time" ? renderTime : state.view === "drift" ? renderDrift : renderGps)(list);
+  ({ cameras: renderCameras, time: renderTime, drift: renderDrift, gps: renderGps, execution: renderExecution }[state.view] || renderTime)(list);
   renderPanel();
 }
 
@@ -1686,6 +1887,7 @@ async function main() {
   if (refusal) return showRefusal(refusal);
   setHostZones(body.zones);
   state.base = body; state.work = clone(state.base);
+  if (Object.keys(body.cameras?.groups || {}).length) state.view = "cameras";   // geotag waits on these first
   render();
 }
 // Auto-start in the browser only; importing this module in Node (for the unit tests) must not run it
@@ -1697,10 +1899,10 @@ export {
   fmtOffset, camNaiveMs, dtLocalToMs, msToDtLocal, utcStrToMs, fmtLocal, fmtDT, offsetImpact,
   cellAt, cellStatus, wouldResolve, previewTz, previewFallback, refInvalid, isDirty, state,
   offsetGroups, dateRange, fmtDate, peerKeys, parseLatLon, coordText, contiguousRange,
-  groupChoice, chosenOffset, proposalNotes, driftConfirmHolds, driftConfirmFields, driftTracksHold, driftStaleReason, acceptFields, acceptHolds, tracksNote,
+  groupChoice, chosenOffset, inConflict, proposalTaken, proposalNotes, driftConfirmHolds, driftConfirmFields, driftCorrectionFields, driftTracksHold, driftStaleReason, acceptFields, acceptHolds, tracksNote,
   zoneContradiction, offsetCellNotes, zoneSpokenFor, zoneDespiteFields, effectiveCountry, clearCountriesInside,
   scrubOffset, scrubSeedIndex, mapKeyFor, savePayload,
   ambiguousTimeNote, gpsTimeAsideNote, zoneOffer, validReading, keepHolds, keepFields, keepOffered, phoneNote,
-  trueInstant, parseUtcOff, unidentifiedHolds, unidentifiedFields, loadRefusal, hasUnsavedEdits, utcOff,
+  trueInstant, parseUtcOff, mismatchAccepted, recordAbsentText, DEVICE_CLASSES, changedHolds, changedFields, unidentifiedHolds, unidentifiedFields, loadRefusal, hasUnsavedEdits, utcOff,
   fmtSpan, utcToZonedWallMs, zonedWallToUtcMs, offsetFromTrueTime, trueTimeOf,
 };

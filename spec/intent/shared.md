@@ -398,8 +398,9 @@ become — the defaults serving only to seed a new workspace.
 :anti: yes
 :verify: required
 
-The configuration SHALL be written only when prep seeds it, when the user edits it by hand, and by the library setup
-below — never by geotag, and never by merge's planning, dry run or execution.
+The configuration SHALL be written only when prep seeds it, when the user edits it by hand, by the library setup and by
+the decision editor's classing of a camera group, below — never by geotag, and never by merge's planning, dry run or
+execution.
 :::
 
 :::{rul} The library setup records one setting
@@ -412,6 +413,19 @@ below — never by geotag, and never by merge's planning, dry run or execution.
 
 Merge's one-time library setup, run inside a workspace and given a library, MAY record in the configuration which
 library this workspace merges into — that setting, and no other.
+:::
+
+:::{rul} The decision editor records a camera group's class, and nothing else
+:id: RUL-editor_classes_camera_group
+:status: ruled
+:criticality: med
+:anti: yes
+:verify: required
+:refines: RUL-config_writers
+:uses: DEF-camera_group, RUL-known_when_classified
+
+The decision editor, given by the user the class of a camera group the configuration does not class — a phone, or a
+camera with a fixed clock — MAY record that class in the configuration: that setting, and no other.
 :::
 
 :::{rul} The configuration is a dependency of what is made under it
@@ -1769,8 +1783,43 @@ A geotag re-run SHALL derive again and replace a position geotag wrote, never ke
 :uses: DEF-geotag, DEF-recorded_time
 
 Geotag SHALL NOT plan while a photo it has written to holds a time that is neither the photo's own from before
-geotag's first write nor one geotag wrote, neither writing its own time back over it nor taking it as the photo's
-recorded time.
+geotag's first write nor one geotag wrote, and the user has not said which the photo keeps — neither writing its own
+time back over it nor taking it as the photo's recorded time unasked.
+:::
+
+:::{rul} Geotag asks which time a changed photo keeps
+:id: RUL-changed_time_asked
+:status: ruled
+:criticality: high
+:verify: required
+:refines: RUL-changed_time_stops_plan
+:uses: DEF-decision
+
+Geotag SHALL ask the user, of each photo holding a time changed since geotag wrote it, whether the photo keeps the
+time it holds or takes back geotag's.
+:::
+
+:::{rul} A time the user keeps becomes the photo's own
+:id: RUL-changed_time_kept_is_own
+:status: ruled
+:criticality: high
+:verify: required
+:refines: RUL-changed_time_asked
+:uses: DEF-recorded_time
+
+A time the user keeps SHALL become the photo's own time, from before geotag's first write: geotag decides about the
+photo from it, from then on, as about any photo from its own time.
+:::
+
+:::{rul} A time taken back is written again
+:id: RUL-changed_time_restored
+:status: ruled
+:criticality: high
+:verify: required
+:refines: RUL-changed_time_asked
+
+Where the user takes back geotag's time, geotag SHALL plan to write its time again over the one the photo holds,
+decided from the photo's own time as before.
 :::
 
 :::{rul} Geotag's gates are the present state, not its history
@@ -3093,7 +3142,8 @@ Every question geotag asks of the user SHALL be answerable in the decision edito
 :verify: required
 :uses: DEF-decision
 
-Every question geotag asks of the user SHALL be answerable by hand, in a field of its decision record.
+Every question geotag asks of the user SHALL be answerable by hand, in a field of the record it is asked in — a camera
+group's class, in the configuration.
 :::
 
 :::{rul} The decision editor saves nothing into a sealed workspace

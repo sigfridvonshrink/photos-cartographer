@@ -186,10 +186,11 @@ archived, and from then on the copy governs, not the program.
 :status: ruled
 :forced: yes
 :follows_from: RAT-why_did_this_change, RAT-idempotent_reruns
-:justifies: RUL-config_writers, RUL-library_setup_writes_one_setting
+:justifies: RUL-config_writers, RUL-library_setup_writes_one_setting, RUL-editor_classes_camera_group
 
 Prep's seeding happens once, before anything is made under the configuration; the user's own edits are the intended way
-to change it; the library setup records only the one answer it was asked for. A phase that rewrote the configuration on
+to change it; the library setup records only the one answer it was asked for, and the decision editor only the class
+the user gave a camera group geotag stopped on — the answer the user would otherwise paste in by hand. A phase that rewrote the configuration on
 its own would change what governs the workspace with nobody having decided it, and restale every plan with no cause the
 user can find.
 :::
@@ -892,14 +893,20 @@ recognised as corrected whichever workspace it is in.
 :id: RAT-changed_time_is_asked
 :status: ruled
 :forced: no
-:follows_from: RAT-rerun_is_safe, CHC-ask_only_what_data_cannot_settle
-:justifies: RUL-changed_time_stops_plan
+:follows_from: RAT-rerun_is_safe, CHC-ask_only_what_data_cannot_settle, RAT-every_question_answerable
+:justifies: RUL-changed_time_stops_plan, RUL-changed_time_asked, RUL-changed_time_kept_is_own, RUL-changed_time_restored
 
 Geotag decides from what a photo held before it first wrote to it. A time the photo holds that is neither that nor
 what geotag wrote was put there since, by someone: a correction made in another tool, or a slip. Geotag cannot tell
 which. Writing its own time back would undo a correction without a word; taking the new time as the photo's recorded
 time would turn a camera's clock offset onto a time already corrected, or build on the slip. Only the person who made
-the change knows, so geotag stops and shows both times.
+the change knows, so geotag does neither unasked: it shows the times and asks which the photo keeps — a question like
+any other the tool asks, and the owner ruled *"the user should be able to answer all questions in the editor"*, so it is
+a decision, answered there or by hand, rather than a stop to be cleared outside the tool. The answer is one of the two
+the user has. A slip, or a change to undo: geotag's time, written again from the photo's own. A time to keep: it
+becomes the photo's own, as though the device had recorded it, and is decided from as every photo's own time is — a
+camera's clock offset applied to it as to its siblings — since one own time per photo, not two, is what keeps every
+later run deciding the same way.
 :::
 
 :::{rat} An empty inbox means nothing is waiting
@@ -1128,8 +1135,9 @@ A question the tool asks and the editor cannot answer sends the user to a text e
 find the field — the work the editor exists to spare — and a question answered only outside the tool is not one the
 tool keeps track of. The owner ruled *"the user should be able to answer all questions in the editor"*, so each
 question gets its view as it is built. The editor is the easier way, never the only one: *"the editor is not the only
-possibility to answer, I need to keep the option to manually give answers"* — every answer is a field of a decision
-record, written there by hand as well, and documented.
+possibility to answer, I need to keep the option to manually give answers, so the snippet added for a new camera needs
+to stay"* — every answer is a field of a record, written there by hand as well, and documented; a new camera's class is
+the one answer kept in the configuration, where geotag's printed lists are pasted and where the editor writes it.
 :::
 
 

@@ -59,6 +59,13 @@ affordance.
 - **GPS panel**: a single lat/lon field, Google-Maps paste that commits + jumps the map, multi-select,
   seed-the-next-photo-from-the-last-pick, map placed above the photo (#117–#122, #132).
 - **Drift validation = a scrub-on-track view**, Photo / Track sub-tabs (#124, #129, #131).
+- **A drift correction can be typed as well as scrubbed**: beside the confirm box, a corrected offset in seconds, or
+  the true time of the bucket's photo shown on the Photo tab (in the destination's zone, UTC with none; a time the
+  zone skips or repeats is refused). Both write what a scrub writes — confirmed against the offset and tracks shown,
+  with `corrected_offset_seconds` — so a known offset needs no scrubbing, and a bucket with no track to scrub along
+  (an unconfirmed offset is listed with or without one) can still be corrected, not only confirmed. Why: the owner
+  ruled every question answerable in the editor (BACKLOG 52); a scrub alone left a trackless bucket's correction to
+  the hand. Code site `driftTyped` / `driftCorrectionFields` in `web/app.js`, tested in `app_drift.test.mjs`.
 - **Timezones are the host's, never the browser's**: the zone drop-down offers, and the editor checks a
   zone against, the list of zones geotag's plan accepts on the machine it runs on — sent by the server with
   the decisions (`zones`, every zone of the host's database that `valid_iana_timezone` takes) — not the browser's
@@ -66,6 +73,11 @@ affordance.
   on a host without the legacy names) would be saved by the editor and then refused by the plan, the user finding
   out a run later. Code site `setHostZones` / `validTz` in `web/app.js` and `_host_zones` in `server.py`, tested
   in `app_validation.test.mjs` and `test_serve.py`.
+- **A record that does not parse is shown as its error, not as no file**: where photos-21, -22, -23 or -25 is there
+  but cannot be read (the server's `_error`, with where parsing failed), its view says so — a warning naming the error
+  and how to repair it — in place of "No photos-2x". Why: a record a hand broke still holds the user's answers; "no
+  file" sends them to re-plan, and geotag stops on the same record anyway, leaving it as it is. Saving into it stays
+  refused. Code site `recordAbsent` / `recordAbsentText` in `web/app.js`, tested in `app_save.test.mjs` (BACKLOG 52).
 - **Folder GPS fallback modelled as presence/absence** — no enum; an unset fallback reads `none`, not
   `resolved`, so it cannot falsely propagate; a **Clear** button resets to none (#241–#243).
 - Served as **package data via importlib.resources, no bundler**; folded into the package as the `edit`

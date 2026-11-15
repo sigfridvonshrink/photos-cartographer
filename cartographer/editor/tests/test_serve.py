@@ -305,6 +305,21 @@ def test_apply_edits_saves_the_questions_of_a_phone_and_of_a_time_at_a_clock_cha
     assert d["local_time_readings"][rel]["offsets_seconds"] == before["destinations"][dest]["local_time_readings"][rel]["offsets_seconds"]
 
 
+@pytest.mark.spec("RUL-every_question_in_editor", "BLD-editor_answers_every_question", "RUL-changed_time_asked",
+                  test="TST-serve-saves_a_changed_time_s_answer")
+def test_apply_edits_saves_the_answer_for_a_time_changed_since_geotag_wrote_it():
+    """A photo's time changed since geotag wrote it: the answer saved into its entry of photos-21's changed_times, by its
+    photo's path, nothing else of the record touched."""
+    dest, rel = "6-photos-by-dest/T", "6-photos-by-dest/T/a.arw"
+    held = {"DateTimeOriginal": "2024:07:03 14:45:00", "OffsetTimeOriginal": "+02:00"}
+    art = {"destinations": {dest: {"changed_times": {rel: {"held_time": held, "content_fingerprint": "fp",
+                                                           "user_decision": {"keep": "", "answered_for": ""}}}}}}
+    edits = [{"dest": dest, "kind": "changed", "key": rel, "user_decision": {"keep": "new", "answered_for": held}}]
+    assert serve._unapplicable_edits(art, edits) == [] and serve._apply_edits(art, edits) == 1
+    c = art["destinations"][dest]["changed_times"][rel]
+    assert c["user_decision"] == {"keep": "new", "answered_for": held} and c["held_time"] == held
+
+
 @pytest.mark.spec("RUL-every_question_in_editor", "BLD-editor_answers_every_question",
                   test="TST-serve-saves_the_camera_less_files_answer")
 def test_apply_edits_saves_the_answer_for_a_destination_s_files_naming_no_camera():
@@ -316,6 +331,120 @@ def test_apply_edits_saves_the_answer_for_a_destination_s_files_naming_no_camera
     assert serve._unapplicable_edits(art, edits) == [] and serve._apply_edits(art, edits) == 1
     q = art["destinations"][dest]["unidentified_files"]
     assert q["user_decision"] == {"accept_proposal": True, "accepted_timezone": "Europe/Brussels"} and q["files"] == 2
+
+
+@pytest.mark.spec("RUL-every_question_in_editor", "RUL-every_question_answerable_by_hand",
+                  "BLD-editor_answers_every_question", "BLD-editor_save_locks",
+                  test="TST-serve-saves_a_fingerprint_change_s_answer_into_photos_25")
+def test_save_answers_a_fingerprint_mismatch_in_photos_25(tmp_path):
+    """photos-25's fingerprint mismatches each ask whether the photo's changed content stands: the editor loads the
+    summary with its hash, saves the answer into `user_decision.accept_fingerprint_change` of the mismatch named by its
+    photo's path — nothing else of the summary touched — and refuses, like any record, when the summary changed since."""
+    ws = _workspace_with_fixtures(tmp_path)
+    rel = "6-photos-by-dest/Japan/IMG_1.jpg"
+    summary = {"plan_id": "p1", "status": "partial", "totals": {"renames": 0},
+               "fingerprint_mismatches": [{"relative_path": rel, "expected_fingerprint": "a" * 64,
+                                           "actual_fingerprint": "b" * 64,
+                                           "user_decision": {"accept_fingerprint_change": False}}]}
+    path = os.path.join(ws, serve.CONTROL, serve.EXECUTION_NAME)
+    serve._write_json(path, summary)
+    loaded = serve._load_artifacts(ws)
+    assert loaded["execution"]["fingerprint_mismatches"][0]["relative_path"] == rel
+    edit = {"kind": "fingerprint", "path": rel, "user_decision": {"accept_fingerprint_change": True}}
+    # an edit naming a photo the summary holds no mismatch for is refused, nothing written
+    res = serve._save(ws, {"execution": [dict(edit, path="6-photos-by-dest/Japan/other.jpg")], "hashes": loaded["hashes"]})
+    assert res["ok"] is False and "fingerprint mismatch" in res["error"]
+    res = serve._save(ws, {"execution": [edit], "hashes": loaded["hashes"]})
+    assert res["ok"] is True and res["written"] == [serve.EXECUTION_NAME]
+    after = json.load(open(path))
+    assert after["fingerprint_mismatches"][0]["user_decision"] == {"accept_fingerprint_change": True}
+    assert {k: v for k, v in after.items() if k != "fingerprint_mismatches"} == \
+        {k: v for k, v in summary.items() if k != "fingerprint_mismatches"}
+    # a summary rewritten since the editor loaded it (another execution) is not saved over
+    serve._write_json(path, dict(summary, plan_id="p2"))
+    res = serve._save(ws, {"execution": [edit], "hashes": res["hashes"]})
+    assert res["ok"] is False and serve.EXECUTION_NAME in res["error"]
+
+
+def _camera_workspace(tmp_path):
+    """A workspace with the default configuration (`Canon|EOS` classed a fixed-clock camera) and a handoff whose photos
+    under photos by destination name one new camera group, `Apple|iPhone 15` — and a video of another, not asked."""
+    from cartographer import photos_utils as utils
+    ws = _workspace_with_fixtures(tmp_path)
+    cfg = copy.deepcopy(utils.DEFAULT_CONFIG)
+    cfg["camera_time_and_timezone_policy"]["device_groups"] = {"phones": [], "fixed_clock_cameras": ["Canon|EOS"]}
+    utils.write_json_artifact(os.path.join(ws, serve.CONTROL, serve.CONFIG_NAME), cfg)
+
+    def rec(rel, key, media="image"):
+        return {"relative_path": rel, "folder_class": "6-photos-by-dest", "media_class": media,
+                "metadata_status": {"camera_group_key": key,
+                                    "parsed_json": json.dumps({"selected_source_timestamp_tag": "EXIF:DateTimeOriginal"})}}
+    handoff = {"files": [rec("6-photos-by-dest/A/2.heic", "Apple|iPhone 15"), rec("6-photos-by-dest/A/1.heic", "Apple|iPhone 15"),
+                         rec("6-photos-by-dest/A/c.cr2", "Canon|EOS", "raw"), rec("6-photos-by-dest/A/v.mov", "GoPro|7", "video")],
+               "camera_groups": [{"group_key": "Apple|iPhone 15", "contributing_identity_fields": {"Make": "Apple"}}]}
+    utils.write_json_artifact(os.path.join(ws, serve.CONTROL, serve.HANDOFF_NAME), handoff)
+    return ws, cfg
+
+
+@pytest.mark.spec("RUL-every_question_in_editor", "RUL-editor_classes_camera_group", "BLD-editor_writes_device_groups", "BLD-editor_lists_new_camera_groups",
+                  "BLD-editor_answers_every_question",
+                  test="TST-serve-classes_a_new_camera_group_into_device_groups")
+def test_save_classes_a_new_camera_group_into_the_configuration(tmp_path):
+    """The editor lists each camera group geotag would stop on — the photos' groups the configuration classes as
+    neither phone nor fixed-clock camera — with a photo of it, and its save writes the class the user gives into
+    `camera_time_and_timezone_policy.device_groups`, under the lock, over the configuration it loaded, every other
+    setting kept."""
+    ws, cfg = _camera_workspace(tmp_path)
+    loaded = serve._load_artifacts(ws)
+    groups = loaded["cameras"]["groups"]
+    assert list(groups) == ["Apple|iPhone 15"]                      # a classed camera and a video's group are not asked
+    g = groups["Apple|iPhone 15"]
+    assert g["files"] == 2 and g["examples"][0] == "6-photos-by-dest/A/1.heic" and g["identity"] == {"Make": "Apple"}
+    assert g["user_decision"] == {"device_class": ""} and g["requires_user_input"] is True
+    edit = {"kind": "camera", "key": "Apple|iPhone 15", "user_decision": {"device_class": "phones"}}
+    # not one of the two arrays: refused, nothing written
+    res = serve._save(ws, {"cameras": [dict(edit, user_decision={"device_class": "phone"})], "hashes": loaded["hashes"]})
+    assert res["ok"] is False
+    res = serve._save(ws, {"cameras": [edit], "hashes": loaded["hashes"]})
+    assert res["ok"] is True and res["written"] == [serve.CONFIG_NAME]
+    after = json.load(open(os.path.join(ws, serve.CONTROL, serve.CONFIG_NAME)))
+    assert after["camera_time_and_timezone_policy"]["device_groups"] == {"phones": ["Apple|iPhone 15"],
+                                                                         "fixed_clock_cameras": ["Canon|EOS"]}
+    after["camera_time_and_timezone_policy"]["device_groups"] = cfg["camera_time_and_timezone_policy"]["device_groups"]
+    assert after == cfg                                                # that setting, and no other
+    assert serve._load_artifacts(ws)["cameras"]["groups"] == {}        # nothing left to ask
+    # a group classed meanwhile is no question to answer; and a configuration changed since is not written over
+    res2 = serve._save(ws, {"cameras": [edit], "hashes": res["hashes"]})
+    assert res2["ok"] is False and "classes no new camera group" in res2["error"]
+    res3 = serve._save(ws, {"cameras": [edit], "hashes": loaded["hashes"]})
+    assert res3["ok"] is False and serve.CONFIG_NAME in res3["error"]
+
+
+@pytest.mark.spec("RUL-editor_classes_camera_group", "BLD-editor_writes_device_groups",
+                  test="TST-serve-a_class_given_moves_a_group_listed_twice_and_is_checked")
+def test_a_class_given_moves_a_group_listed_in_both_arrays_and_the_result_is_checked(tmp_path):
+    """Geotag's snippet lists a new group in both arrays; one left in both is still unclassed, and asked. Answered, it is
+    taken out of the other; a configuration that `load_config` would refuse is not written."""
+    ws, cfg = _camera_workspace(tmp_path)
+    path = os.path.join(ws, serve.CONTROL, serve.CONFIG_NAME)
+    cfg["camera_time_and_timezone_policy"]["device_groups"] = {"phones": ["Apple|iPhone 15"],
+                                                               "fixed_clock_cameras": ["Canon|EOS", "Apple|iPhone 15"]}
+    serve._write_json(path, cfg)
+    loaded = serve._load_artifacts(ws)
+    assert list(loaded["cameras"]["groups"]) == ["Apple|iPhone 15"]
+    edit = {"kind": "camera", "key": "Apple|iPhone 15", "user_decision": {"device_class": "fixed_clock_cameras"}}
+    res = serve._save(ws, {"cameras": [edit], "hashes": loaded["hashes"]})
+    assert res["ok"] is True
+    assert json.load(open(path))["camera_time_and_timezone_policy"]["device_groups"] == {
+        "phones": [], "fixed_clock_cameras": ["Canon|EOS", "Apple|iPhone 15"]}
+    # a configuration lacking a setting is refused as load_config refuses it, and left as it is
+    broken = copy.deepcopy(cfg)
+    del broken["gpx_root"]
+    serve._write_json(path, broken)
+    before = open(path).read()
+    loaded = serve._load_artifacts(ws)
+    res = serve._save(ws, {"cameras": [edit], "hashes": loaded["hashes"]})
+    assert res["ok"] is False and "gpx_root" in res["error"] and open(path).read() == before
 
 
 def test_apply_edits_ignores_unknown_targets():

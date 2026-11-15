@@ -65,7 +65,7 @@ with exit status 2, having created nothing.
 :realises: RUL-every_command_locks, RUL-save_only_what_was_shown
 
 The decision editor's save SHALL take the workspace lock for the time it writes, refusing at once while a run holds it;
-the editor's display reads take none, each record being replaced whole. The editor is given, with each record it loads, the SHA-256 of its bytes, and sends them back with a save; under the lock the save compares them with the records on disk and checks that every edit names a decision its record holds, writing none of the three otherwise, and returns the hashes of what it leaves.
+the editor's display reads take none, each record being replaced whole. The editor is given, with each record it loads, the SHA-256 of its bytes, and sends them back with a save; under the lock the save compares them with the records on disk and checks that every edit names a decision its record holds, writing none of the records otherwise, and returns the hashes of what it leaves.
 :::
 
 :::{bld} Every question is a decision field the editor answers
@@ -73,11 +73,17 @@ the editor's display reads take none, each record being replaced whole. The edit
 :status: ruled
 :realises: RUL-every_question_in_editor, RUL-every_question_answerable_by_hand
 
-Each question geotag asks SHALL be a `user_decision` of a cell of its decision record, its fields documented in
-`cartographer/editor/decision-json-reference.md`, which `geotag plan` reads whether the editor or a hand wrote it. The
+Each question geotag asks SHALL be a `user_decision` of a cell of its record, its fields documented in
+`cartographer/editor/decision-json-reference.md`, which geotag reads whether the editor or a hand wrote it. The
 editor loads and saves each by its kind: in photos-21, `timezone` (`destination_timezone`), `offset` (a cell of
 `camera_group_time_decisions`, a phone's among them, by its key), `reading` (an entry of `local_time_readings`, by
-its photo's path) and `unidentified` (`unidentified_files`); in photos-22, `drift`; in photos-23, `fallback` and `review`.
+its photo's path), `changed` (an entry of `changed_times`, by its photo's path) and `unidentified`
+(`unidentified_files`); in photos-22, `drift`; in photos-23, `fallback` and `review`;
+in `photos-25-execution-summary.json`, which `geotag execute` reads, `fingerprint` (an entry of `fingerprint_mismatches`,
+by its photo's path); and a camera group's class, `camera`, in the configuration ({need}`BLD-editor_lists_new_camera_groups`).
+The editor writes each answer as geotag takes it: where an offset cell lists `conflicts_with`, a proposal the user takes
+there is written as `manual_offset_seconds`, the user's own offset, which keeps its effect
+({need}`RUL-chosen_offset_not_withheld`) — never as an acceptance, which geotag withholds there again.
 :::
 
 :::{bld} The editor's own lock, held for its session
@@ -183,6 +189,32 @@ MAY write the `library_root` key into the configuration, and only that key, writ
 indentation, characters beyond ASCII written as escapes — becomes that of the control records. It is not part of
 merge's data path.
 :::
+
+:::{bld} The editor lists the camera groups geotag stops on
+:id: BLD-editor_lists_new_camera_groups
+:status: ruled
+:realises: RUL-every_question_in_editor
+:uses: BLD-known_camera_group
+
+The decision editor SHALL list, as `cameras`, each camera group of the handoff's photos under photos by destination that
+`camera_time_and_timezone_policy.device_groups` lists in neither `phones` nor `fixed_clock_cameras`, or in both — the
+groups geotag stops on, keyed as geotag keys them (`unclassified_camera_groups`) — with its photos' count and three of
+their paths, and a `user_decision.device_class` it answers: `phones` or `fixed_clock_cameras`. Geotag's stop on such a
+group still prints the two arrays, to paste in by hand.
+:::
+
+:::{bld} The editor writes a new camera group's class into `device_groups`
+:id: BLD-editor_writes_device_groups
+:status: ruled
+:realises: RUL-editor_classes_camera_group, RUL-every_question_answerable_by_hand
+:uses: BLD-editor_lists_new_camera_groups, BLD-editor_save_locks
+
+The decision editor's save of a camera group's class SHALL, under the workspace lock and only while the configuration
+is the one it loaded, by its SHA-256, put the group in the array named and take it out of the other, refusing unless the
+group is still unclassed and the configuration then passes the checks `load_config` makes, and write the file again
+whole through `write_json_artifact`, every other setting keeping its value.
+:::
+
 
 :::{bld} Field-scoped fingerprints, and one whole-file SHA-256
 :id: BLD-config_fingerprints
@@ -705,9 +737,56 @@ so a write interrupted after it landed is known as geotag's own.
 :uses: BLD-time_written_recorded
 
 The executable plan SHALL be `blocked` by a file with pinned values whose `DateTimeOriginal` and `OffsetTimeOriginal`
-are neither the pinned pair nor one the ledger records geotag writing, its blocker naming the file, the pair it holds,
-the last pair geotag wrote to it — or that geotag wrote it no time — and its pinned pair; a file with no pin is not
-checked, and only those two fields are compared.
+are neither the pinned pair nor one the ledger records geotag writing, and whose question photos-21 holds no answer to
+in effect ({need}`BLD-changed_time_question`), its blocker naming the file, the pair it holds, the last pair geotag wrote
+to it — or that geotag wrote it no time — and its pinned pair; a file with no pin is not checked, and only those two
+fields are compared.
+:::
+
+:::{bld} photos-21 asks of each changed time, by its photo
+:id: BLD-changed_time_question
+:status: ruled
+:realises: RUL-changed_time_asked, RUL-every_question_answerable_by_hand
+:uses: BLD-changed_time_blocks
+
+Each file such a pair blocks SHALL be asked about in photos-21, in its destination's `changed_times` keyed by its path:
+the cell names its `content_fingerprint`, its `held_time`, the last pair geotag wrote (`geotag_wrote`, or null) and its
+pinned `own_time`, and asks `user_decision.keep` — `new`, keep the time it holds, or `geotag`, take back geotag's —
+with `answered_for`, the `held_time` it is given for. The answer is found again by the file's fingerprint and is in
+effect (`effective_answer`) while `answered_for` is the pair the file holds, and, for `new`, while that pair holds a
+time; another `keep`, or an answer with no `answered_for`, is a blocker; one given for another pair is
+`stale_user_decision`. While a cell has no answer in effect it requires input, and photos-21 is not complete.
+:::
+
+:::{bld} A time kept is decided from as the photo's own
+:id: BLD-changed_time_kept
+:status: ruled
+:realises: RUL-changed_time_kept_is_own
+:uses: BLD-changed_time_question, BLD-original_values_pinned
+
+A file whose answer in effect is `new` SHALL be decided from the pair it holds as its own — its recorded time read from
+its `DateTimeOriginal`, with `OffsetTimeOriginal` as its offset.
+:::
+
+:::{bld} A time kept becomes the pin's at execution
+:id: BLD-changed_time_kept_pinned
+:status: ruled
+:realises: RUL-changed_time_kept_is_own
+:uses: BLD-changed_time_kept, BLD-original_values_pinned
+
+The executable plan SHALL carry each kept pair, with the recorded time and tag it gives, under `own_times_kept` by the
+file's path, which execution writes into the file's pin in the original-values ledger before any write, while the
+file still holds that pair, every other pinned value staying — so every later plan decides from it.
+:::
+
+:::{bld} A time taken back is planned like any other
+:id: BLD-changed_time_restored_written
+:status: ruled
+:realises: RUL-changed_time_restored
+:uses: BLD-changed_time_question, BLD-decided_from_own_values
+
+A file whose answer in effect is `geotag` SHALL be planned from its pinned values as before, its time write planned
+over the pair it holds as any write that differs from what a file holds.
 :::
 
 :::{bld} A re-run treats a marked file as geotag's work
@@ -889,7 +968,8 @@ A phase SHALL write only records in its own number band of the numbering scheme:
 merge `photos-3X`, and on success the seal, `photos-00-sealed.json`, which merge alone writes. The configuration and
 the database are phase-neutral, each with its own writers' rule: prep seeds
 the configuration, which `init-library` may later extend by `library_root` alone
-({need}`BLD-init_library_writes_library_root`), and prep writes the database's cache and identity rows while geotag and
+({need}`BLD-init_library_writes_library_root`) and the decision editor by a camera group's class alone
+({need}`BLD-editor_writes_device_groups`), and prep writes the database's cache and identity rows while geotag and
 merge write only their own regions of it ({need}`BLD-workspace_database`). Bundling copies of every phase's records into
 the archival package reads them, and is no write.
 :::

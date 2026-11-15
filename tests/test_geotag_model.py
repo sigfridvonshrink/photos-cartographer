@@ -211,6 +211,25 @@ def test_camera_group_classification(tmp_path, monkeypatch):
     assert unknown == ["CANON|R5|999"]
 
 
+@pytest.mark.spec("BLD-editor_lists_new_camera_groups", "BLD-known_camera_group",
+                  test="TST-geotag_model-the_editor_s_camera_groups_are_those_geotag_stops_on")
+def test_the_editor_s_camera_groups_are_those_geotag_stops_on(tmp_path, monkeypatch):
+    """What the decision editor asks the class of, found from the handoff and the configuration, is what geotag stops
+    on: a group listed in neither array, or in both; never one classed, nor files naming no camera."""
+    dg = {"phones": ["APPLE|iPhone|p1", "GOOGLE|Pixel|9"], "fixed_clock_cameras": ["SONY|ILCE-6400|123", "GOOGLE|Pixel|9"]}
+    monkeypatch.setitem(utils.CONFIG["camera_time_and_timezone_policy"], "device_groups", dg)
+    recs = [_hfile("6-photos-by-dest/A/a.arw", key="SONY|ILCE-6400|123"),
+            _hfile("6-photos-by-dest/B/p.jpg", key="APPLE|iPhone|p1"),
+            _hfile("6-photos-by-dest/A/u.jpg", key="CANON|R5|999"),
+            _hfile("6-photos-by-dest/A/g.jpg", key="GOOGLE|Pixel|9"),
+            _hfile("6-photos-by-dest/A/n.jpg", key=utils.NO_IDENTITY_KEY)]
+    wf = _wf(tmp_path, recs)
+    _groups, unknown = wf.recognize_camera_groups(wf.build_file_model())
+    asked = cal.unclassified_camera_groups(wf.handoff, utils.CONFIG)
+    assert sorted(asked) == sorted(unknown) == ["CANON|R5|999", "GOOGLE|Pixel|9"]
+    assert asked["CANON|R5|999"] == ["6-photos-by-dest/A/u.jpg"]
+
+
 @pytest.mark.spec("RUL-geotag_reuses_camera_group", test="TST-geotag_model-geotag_reuses_handoff_camera_group_key_never_recomputes")
 def test_geotag_reuses_handoff_camera_group_key_never_recomputes(tmp_path):
     """RUL-geotag_reuses_camera_group: geotag reuses prep's camera_group_key from the handoff and never recomputes

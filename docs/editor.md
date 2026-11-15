@@ -87,9 +87,11 @@ accept it again (or set the offset yourself), save, and re-plan.
 
 ---
 
-## The three views, and why they're gated
+## The views, and why they're gated
 
-The header toggles between **Time → Drift → GPS**, in that order — and the order is enforced:
+The header toggles between **Time → Drift → GPS**, in that order — and the order is enforced — with
+**Cameras** before them, for a camera geotag has not met ([below](#cameras-view)), and **Execute** after,
+for what `geotag execute` asks ([below](#execute-view)):
 
 - **Time gates Drift** — the Drift view waits until every time decision is answered and geotag has been
   re-run (drift checks offsets that must already exist).
@@ -103,6 +105,19 @@ In every view each decision carries a status: **needs input**, **resolved**, **a
 itself), **stale** (your earlier answer no longer fits — see [How edits reset
 things](#how-edits-reset-things)), or **none** (an optional folder fallback left unset). An edit you
 haven't saved is badged **edited**, an invalid one **✗ invalid**.
+
+---
+
+## Cameras view
+
+The first time `geotag plan` meets a camera it stops, before it writes any decision, and prints the two
+`device_groups` lists to paste into `photos-00-config.json`. The editor opens on the **Cameras** view
+while there is such a camera: one row per camera group (its make and model, how many photos, a preview
+on hover), and two choices — **a phone** (its clock is the network's, and it records its offset with each
+photo) or **a camera with a clock set by hand** (its offset is found per day). Save writes your answer
+into `camera_time_and_timezone_policy.device_groups` in `photos-00-config.json` — the same as pasting
+the printed lists, every other setting left as it is — then re-run `geotag plan`. Pasting by hand still
+works as before.
 
 ---
 
@@ -203,7 +218,9 @@ What the proposal panel shows depends on where the offset came from:
   you picked there. Where it applied itself there it applies here too; otherwise accept it here or set
   another. If the camera's GPS gives two different offsets on one day in
   two destinations, neither takes effect: both are shown, and you set the right offset by hand in the
-  one that is wrong. A group you picked from the camera's GPS is held against an offset its GPS fixed by
+  one that is wrong. There, **accept** reads **use the proposal as your own offset**: an acceptance would
+  be withheld again, so the editor writes the proposal as your own offset (`manual_offset_seconds`) —
+  by hand, write the same. A group you picked from the camera's GPS is held against an offset its GPS fixed by
   itself elsewhere that day the same way: if they differ, both are shown and the one fixed by itself
   waits for you, while your pick keeps its effect.
 - **The offset the photos record** — no GPS evidence, but the camera wrote, with each photo's time, the
@@ -258,6 +275,24 @@ was (each shown with its UTC instant); for a time that never happened you may ty
 `utc_offset_seconds` in the photo's entry of `local_time_readings` (see the
 [decision-JSON reference](../cartographer/editor/decision-json-reference.md)).
 
+### A time changed since geotag wrote it
+
+A photo geotag has written to whose time (`DateTimeOriginal` or its offset) was changed afterwards — in
+another tool, or by a slip — gets a row of its own, **Time changed since geotag**, under its destination,
+with its thumbnail. The panel names the time it holds, the one geotag wrote and the photo's own from
+before geotag. Choose:
+
+- **keep the time it holds** — it becomes the photo's own time, as though the camera had recorded it, and
+  is corrected like any photo's own time (its camera's clock offset applied to it). A time you already
+  corrected to the true time elsewhere would be corrected again: take back geotag's instead, or fix the
+  camera's offset;
+- **take back geotag's time** — geotag writes its time again, from the photo's own time.
+
+The answer is for the time the photo holds now: change the photo's time again and it asks again. Until
+answered, the time decisions are not complete. By hand: `keep` (`"new"` or `"geotag"`) and `answered_for`
+(a copy of `held_time`) in the photo's entry of `changed_times` (see the
+[decision-JSON reference](../cartographer/editor/decision-json-reference.md)).
+
 ---
 
 ## Drift view
@@ -274,6 +309,12 @@ Each row shows the camera group, where its offset came from, the offset and the 
   **scroll the wheel** over the map to step one track point per notch, or press **`[` / `]`** (one point)
   and **`{` / `}`** (ten). Each step sets the corrected offset for every photo in the bucket and
   confirms it; **clear — offset was right** takes the correction back.
+- **corrected offset (seconds)**, or the **true time** of the bucket's photo (the one the Photo tab
+  shows, typed in the destination's local time, UTC while it has none) — the correction typed rather than
+  scrubbed: an offset you know, or the only way to give one where no track lies by the photos. Either
+  confirms the bucket with that correction, as a scrub does. By hand: `corrected_offset_seconds` in the
+  bucket's `user_decision`, with `confirmed`, `confirmed_offset_seconds` and `confirmed_against_tracks`
+  (see the [decision-JSON reference](../cartographer/editor/decision-json-reference.md)).
 - **confirm this bucket (offset is right as shown)** — the "don't move" answer. You **must** actively
   tick it: an untouched bucket **blocks** the run; inaction is never read as "no change."
 
@@ -347,6 +388,20 @@ name in the worklist for a larger preview):
 **shift-click** another *in the same destination* to select the contiguous run between them. One
 location you set then applies to every photo in the run. (Shift-clicking into a different destination
 starts a fresh selection — runs never cross destinations.)
+
+---
+
+## Execute view
+
+When `geotag execute` writes a photo's tags it takes the photo's content fingerprint again. If the pixels
+are no longer what the plan pinned — or no fingerprint can be taken — the photo's writes are not
+confirmed, its rename waits, and the run ends **partial**. The Execute view lists each such photo from
+`photos-25-execution-summary.json`, with its preview (hover a row, or open it) and the two fingerprints.
+Look at it: if it is right as it is, tick **accept this photo's content as it is now**, save, and run
+`geotag execute` again — that run takes the new content as the photo's and goes on with it. An acceptance
+holds for the content you saw: if the photo changes again, it asks again. By hand, the same answer is
+`"accept_fingerprint_change": true` in the photo's entry of `fingerprint_mismatches` (see the
+[decision-JSON reference](../cartographer/editor/decision-json-reference.md)).
 
 ---
 

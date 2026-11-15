@@ -856,27 +856,119 @@ def _plan_record(ws):
     return json.loads((ws / ".photos-ingest" / "photos-24-executable-plan.json").read_text())
 
 
+def _changed_cell(ws, rel=None):
+    a = json.loads((ws / ".photos-ingest" / cal.TIME_DECISIONS_ARTIFACT).read_text())
+    cells = a["destinations"][T].get("changed_times") or {}
+    return a, (cells[rel] if rel else next(iter(cells.values()), None))
+
+
+def _answer_changed(ws, keep, answered_for=None):
+    """The user's answer to a time changed since geotag wrote it, as the editor writes it in photos-21."""
+    p = ws / ".photos-ingest" / cal.TIME_DECISIONS_ARTIFACT
+    a = json.loads(p.read_text())
+    (cell,) = a["destinations"][T]["changed_times"].values()
+    cell["user_decision"] = {"keep": keep, "answered_for": cell["held_time"] if answered_for is None else answered_for}
+    p.write_text(json.dumps(a))
+
+
+WROTE = "2024-07-03--14-30-00.arw"       # the name geotag gave the photo, from the time it wrote
+
+
 @pytest.mark.parametrize("dto, off", [("2024:07:03 14:45:00", "+02:00"),      # the time put right by hand
                                       ("2024:07:03 14:30:00", "+01:00")])     # or only its offset
-@pytest.mark.spec("RUL-changed_time_stops_plan", "BLD-changed_time_blocks",
+@pytest.mark.spec("RUL-changed_time_stops_plan", "RUL-changed_time_asked", "BLD-changed_time_blocks",
+                  "BLD-changed_time_question",
                   test="TST-geotag_rerun_markers-a_time_changed_since_geotag_wrote_it_stops_the_plan")
 def test_a_time_changed_since_geotag_wrote_it_stops_the_plan(tmp_path, monkeypatch, dto, off):
-    """A photo geotag corrected to 14:30 +02:00 from its own 14:20, then changed in another tool: the plan is
-    blocked on it, naming the photo, the time it holds, the time geotag wrote and its own — neither writing geotag's
-    time back nor deciding from the new one."""
+    """A photo geotag corrected to 14:30 +02:00 from its own 14:20, then changed in another tool: photos-21 asks about
+    it — naming the time it holds, the time geotag wrote and its own — and nothing is planned past it: geotag neither
+    writes its time back nor decides from the new one unasked."""
     ws = _executed_round(tmp_path, monkeypatch)
+    plan_before = _plan_record(ws)
     _hand_set_time(ws, dto, off)
     _plan(monkeypatch, ws)
-    plan = _plan_record(ws)
-    assert plan["status"] == "blocked" and not plan["executable"]
-    (b,) = [b for b in plan["blockers"] if "2024-07-03--14-30-00.arw" in b]
-    assert f"{dto} {off}" in b and "2024:07:03 14:30:00 +02:00" in b and "2024:07:03 14:20:00 with no offset" in b
+    art, cell = _changed_cell(ws, f"{T}/{WROTE}")
+    assert art["requires_user_input"] and cell["requires_user_input"]
+    assert cell["held_time"] == {"DateTimeOriginal": dto, "OffsetTimeOriginal": off}
+    assert cell["geotag_wrote"] == {"DateTimeOriginal": "2024:07:03 14:30:00", "OffsetTimeOriginal": "+02:00"}
+    assert cell["own_time"] == {"DateTimeOriginal": "2024:07:03 14:20:00", "OffsetTimeOriginal": None}
+    assert cell["user_decision"] == {"keep": "", "answered_for": ""} and cell["content_fingerprint"] == "fp-a.arw"
+    assert _plan_record(ws)["plan_id"] == plan_before["plan_id"]       # no plan made past the question
     rows = cal.GeotagCache(str(ws))
     try:
         (row,) = rows.get_rows()
     finally:
         rows.close()
     assert row["source_naive_time"] == "2024:07:03 14:20:00"          # still decided from its own time
+
+
+@pytest.mark.spec("RUL-changed_time_restored", "BLD-changed_time_restored_written", "BLD-changed_time_question",
+                  "RUL-every_question_answerable_by_hand",
+                  test="TST-geotag_rerun_markers-a_changed_time_restored_has_geotag_s_written_back")
+def test_a_changed_time_restored_has_geotag_s_written_back(tmp_path, monkeypatch):
+    """Answered `geotag`, the photo is planned as any photo whose time is not the one geotag decides: geotag's time is
+    written back over the one it holds, decided from its own time as before."""
+    ws = _executed_round(tmp_path, monkeypatch)
+    _hand_set_time(ws, "2024:07:03 14:45:00", "+02:00")
+    _plan(monkeypatch, ws)
+    _answer_changed(ws, "geotag")
+    _plan(monkeypatch, ws)
+    _, cell = _changed_cell(ws)
+    assert cell["effective_answer"] == "geotag" and not cell["requires_user_input"]
+    plan = _plan_record(ws)
+    assert plan["status"] == "ready" and plan["own_times_kept"] == {}
+    w = _ops(ws)[f"{T}/{WROTE}"]["writes"]
+    assert (w["DateTimeOriginal"], w["OffsetTimeOriginal"]) == ("2024:07:03 14:30:00", "+02:00")
+
+
+@pytest.mark.spec("RUL-changed_time_kept_is_own", "BLD-changed_time_kept", "BLD-changed_time_kept_pinned",
+                  "BLD-changed_time_question",
+                  test="TST-geotag_rerun_markers-a_changed_time_kept_becomes_the_photo_s_own")
+def test_a_changed_time_kept_becomes_the_photo_s_own(tmp_path, monkeypatch):
+    """Answered `new`, the time the photo holds is its own: the plan decides from it as from any photo's own time — the
+    camera's ten minutes slow corrected on it — the executable plan names it, and execution makes it the pin's, so the
+    next plan finds nothing changed and nothing to ask."""
+    ws = _executed_round(tmp_path, monkeypatch)
+    _hand_set_time(ws, "2024:07:03 14:45:00", "+02:00")
+    _plan(monkeypatch, ws)
+    _answer_changed(ws, "new")
+    _plan(monkeypatch, ws)
+    _plan(monkeypatch, ws)                              # the drift check sees the new time; its confirmation holds
+    _, cell = _changed_cell(ws)
+    assert cell["effective_answer"] == "new" and not cell["requires_user_input"]
+    plan = _plan_record(ws)
+    assert plan["status"] == "ready", plan["blockers"]
+    assert plan["own_times_kept"] == {f"{T}/{WROTE}": {
+        "DateTimeOriginal": "2024:07:03 14:45:00", "OffsetTimeOriginal": "+02:00",
+        "selected_source_naive_timestamp": "2024:07:03 14:45:00", "selected_source_timestamp_tag": "DateTimeOriginal"}}
+    w = _ops(ws)[f"{T}/{WROTE}"]["writes"]
+    assert w["DateTimeOriginal"] == "2024:07:03 14:55:00"            # 14:45 on the camera's clock, ten minutes slow
+    _execute(monkeypatch, ws)
+    (pin,) = _originals(ws).values()
+    assert (pin["DateTimeOriginal"], pin["OffsetTimeOriginal"], pin["selected_source_naive_timestamp"]) == \
+        ("2024:07:03 14:45:00", "+02:00", "2024:07:03 14:45:00")
+    _plan(monkeypatch, ws)
+    art, cell = _changed_cell(ws)
+    assert cell is None and _ops(ws) == {}                           # its own now: nothing asked, nothing to write
+
+
+@pytest.mark.spec("RUL-changed_time_asked", "BLD-changed_time_question",
+                  test="TST-geotag_rerun_markers-a_changed_time_s_answer_holds_for_the_time_it_was_given_for")
+def test_a_changed_time_s_answer_holds_for_the_time_it_was_given_for(tmp_path, monkeypatch):
+    """An answer names the time it was given for: the photo's time changed again, it is stale and asks again; a value
+    that is no answer is a blocker naming the field, the record left as it is."""
+    ws = _executed_round(tmp_path, monkeypatch)
+    _hand_set_time(ws, "2024:07:03 14:45:00", "+02:00")
+    _plan(monkeypatch, ws)
+    _answer_changed(ws, "new", {"DateTimeOriginal": "2024:07:03 14:40:00", "OffsetTimeOriginal": "+02:00"})
+    _plan(monkeypatch, ws)
+    _, cell = _changed_cell(ws)
+    assert cell["stale_user_decision"] and cell["requires_user_input"] and cell["effective_answer"] == ""
+    assert cell["user_decision"]["keep"] == "new"                       # kept as written
+    _answer_changed(ws, "both")
+    before = (ws / ".photos-ingest" / cal.TIME_DECISIONS_ARTIFACT).read_text()
+    _plan(monkeypatch, ws)
+    assert (ws / ".photos-ingest" / cal.TIME_DECISIONS_ARTIFACT).read_text() == before
 
 
 @pytest.mark.spec("RUL-changed_time_stops_plan", "BLD-time_written_recorded", "BLD-changed_time_blocks",

@@ -30,6 +30,8 @@ All live in the workspace control directory `.photos-ingest/`:
 | `photos-21-time-decisions.json` | `time_decisions` | Per-destination **country** and **civil timezone**, and per-(camera group, destination, day) **clock offset** for fixed-clock cameras. |
 | `photos-22-gps-drift-validation.json` | `gps_drift_validation` | Per at-risk bucket, **confirm or correct** a clock offset that no photo's own GPS pins (a manual, timezone-derived or imprecise-anchor offset) against the GPX track before it is used to place photos (§5a below). |
 | `photos-23-gps-decisions.json`  | `gps_decisions`  | Per-destination **GPS fallback** coordinate, and per-file **GPS** decisions for files an automatic source could not place. |
+| `photos-00-config.json` (`camera_time_and_timezone_policy.device_groups`) | — | Not a decision record but the workspace's configuration: the **class** of each new camera group — phone or fixed-clock camera — that geotag stops on before it writes any decision (§5c below). |
+| `photos-25-execution-summary.json` | `execution_summary` | Not a decision record but `geotag execute`'s summary: per photo whose content changed when geotag wrote to it, whether that content **stands** (§5b below). |
 
 The editor opens one of these, presents the open decisions, lets the human resolve them, and writes the
 file back. (`photos-22` is produced by the pipeline today and resolvable by hand-editing its
@@ -161,6 +163,9 @@ with its English `name` and its `zones` (sorted).
   "local_time_readings": {                                // optional: a photo's time its zone skips or repeats (§4.6)
     "<relative_path>": { /* §4.6 */ }
   },
+  "changed_times": {                                      // optional: a photo's time changed since geotag wrote it (§4.8)
+    "<relative_path>": { /* §4.8 */ }
+  },
   "unidentified_files": { /* §4.7 */ },                   // optional: its files naming no camera, one question
   "unreadable_offset_tags": [                             // SYSTEM, optional: photos whose offset tag holds no offset
     { "relative_path": "…", "field": "OffsetTimeOriginal", "value": "local" }   // read as no tag; warned of
@@ -237,7 +242,7 @@ destinations or buckets.
 | **`user_decision.manual_offset_seconds`** | number \| `""` | **yes** | A manual clock offset, seconds (camera_time + offset = real UTC). |
 | **`user_decision.keep_as_recorded`** | bool | **yes** | On a phone's cell only (§4.5): keep the phone's photos read as they record themselves — their own offset tag, else the zone — its GPS's finding set aside (the track was someone else's). |
 | `effective_time_anchor` | `""` \| object | no | `""` if unresolved; else `{ "offset_seconds": int, "source": … }` where source ∈ `manual` (a manual offset) \| `gpx_anchor_chosen` (a manual offset within `gpx_anchor_offset_spread_max_seconds` of one of a precise GPX proposal's `groups`) \| `gpx_anchor_accepted` \| `gpx_anchor_imprecise` (an accepted GPX proposal with `imprecise_seconds > 0`) \| `recorded_offset_accepted` \| `timezone_accepted` \| `same_day_accepted` (an accepted proposal of that kind) \| `gpx_anchor_auto` (a GPX proposal applied by itself, or kept from earlier) \| `as_recorded` (a phone's cell kept as its photos record themselves; no `offset_seconds`) \| `gps_time_auto` (two GPS fix times or more, applied by themselves) \| `gps_time_accepted` (an accepted GPS-time proposal) \| `same_day_auto` \| `recorded_offset_unconfirmed` \| `timezone_unconfirmed` (an offset from the photos' recorded offset, or from the timezone, sent to photos-22 to be confirmed). |
-| `conflicts_with` | array | no | Present when the camera's own GPS gave another offset the same day in another destination, farther off than `clock_offset_same_day_max_difference_seconds`, or where one of the two is a group of the camera's GPS the user picked (`gpx_anchor_chosen`): `[{ "destination", "bucket", "offset_seconds", "chosen" }]` — `chosen` is `true` where that other offset is one the user picked (`gpx_anchor_chosen`). An offset the GPS gave by itself (`gpx_anchor_auto`, `gpx_anchor_accepted`) takes no effect and the cell asks; a `gpx_anchor_chosen` one keeps its effect. Write `manual_offset_seconds` in the cell that is wrong. Two `gpx_anchor_chosen` offsets are never held against each other. |
+| `conflicts_with` | array | no | Present when the camera's own GPS gave another offset the same day in another destination, farther off than `clock_offset_same_day_max_difference_seconds`, or where one of the two is a group of the camera's GPS the user picked (`gpx_anchor_chosen`): `[{ "destination", "bucket", "offset_seconds", "chosen" }]` — `chosen` is `true` where that other offset is one the user picked (`gpx_anchor_chosen`). An offset the GPS gave by itself (`gpx_anchor_auto`, `gpx_anchor_accepted`) takes no effect and the cell asks; a `gpx_anchor_chosen` one keeps its effect. Write `manual_offset_seconds` in the cell that is wrong — to take a cell's own proposal there, write its `proposed_offset_seconds` as `manual_offset_seconds` (the editor does so): `accept_proposal` there counts as what the GPS gave by itself and is withheld again. Two `gpx_anchor_chosen` offsets are never held against each other. |
 | `anchored_by` | list | no | On a cell whose offset applied itself from GPS: the track files it was found from, each `{ "gpx_file", "sha256" }`. The offset is kept for later photos of the day (`decision_mode: "kept_from_earlier"`) only while each is under `gpx_root` unchanged and no newer GPS proposal says otherwise. |
 | `requires_user_input` | bool | no | `true` ⇔ `effective_time_anchor == ""`. (Containers carry no offset cells, so this is never softened here.) |
 | `stale_user_decision` | bool | no | `accept_proposal` is set but `accepted_offset_seconds` is no longer the offset proposed (another offset beyond the tolerance, or none proposed): kept as written, it takes no effect, nothing applies itself in its place, and the cell asks. |
@@ -410,6 +415,30 @@ so: move them out of `6-photos-by-dest/`, or give them their offset (`OffsetTime
 
 ---
 
+### 4.8 `changed_times[<relative_path>]` — a time changed since geotag wrote the photo
+
+Geotag decides about a photo it has written to from what it held before the first write (its pinned own values). A
+photo that now holds a `DateTimeOriginal` / `OffsetTimeOriginal` pair that is neither that nor one geotag wrote had its
+time changed since — in another tool, or by a slip. Geotag neither writes its time back over it nor takes it as the
+photo's unasked: it asks here, alone, which the photo keeps. Until answered, photos-21 is not complete.
+
+| Field | Type | Editable | Meaning |
+|-------|------|----------|---------|
+| `content_fingerprint` | string | no | The photo's fingerprint: its answer is found again by it. |
+| `held_time` | `{ "DateTimeOriginal", "OffsetTimeOriginal" }` | no | The pair the photo holds now (either may be `null`). |
+| `geotag_wrote` | object \| `null` | no | The last pair geotag wrote to it (`null`: geotag wrote it no time). |
+| `own_time` | object | no | Its own pair from before geotag's first write. |
+| **`user_decision.keep`** | `"new"` \| `"geotag"` \| `""` | **yes** | `"new"`: keep the time it holds — it becomes the photo's own time, its recorded time read from that `DateTimeOriginal` with that offset, and is corrected as any photo's own time is (its camera's clock offset applied to it); the next `geotag execute` makes it the pinned own time, so later runs decide from it. `"geotag"`: take back geotag's — the plan writes geotag's time again, from the photo's own time as before. `""`: not answered. |
+| **`user_decision.answered_for`** | object \| `""` | **yes** | The `held_time` the answer is given for — written with `keep`, a copy of `held_time`. The answer holds while the photo holds that pair; changed again, the cell is `stale_user_decision` and asks. |
+| `effective_answer` | `"new"` \| `"geotag"` \| `""` | no | The answer in effect. |
+| `requires_user_input` / `stale_user_decision` | bool | no | As elsewhere. |
+
+**By hand:** `"user_decision": { "keep": "geotag", "answered_for": { "DateTimeOriginal": "2024:07:03 14:45:00",
+"OffsetTimeOriginal": "+02:00" } }` — `answered_for` copied from `held_time`. `"new"` needs a time to keep: a
+`held_time` with no `DateTimeOriginal` can only be answered `"geotag"`.
+
+---
+
 ## 5. `photos-23-gps-decisions.json` (GPS)
 
 ### 5.1 Top level
@@ -575,7 +604,9 @@ appear. The `<bucket_key>` matches the photos-21 offset cell it refines — bare
   the segment already, without a re-run to fetch more track.
 - `proposal.frames` is read-only — every photo in the bucket as `{source_file, camera_naive}`,
   earliest first. The editor scrubs one (default the earliest) along the track and **computes** the
-  decision: `corrected_offset_seconds = (chosen track point's time_utc) − (that frame's camera_naive)`.
+  decision: `corrected_offset_seconds = (chosen track point's time_utc) − (that frame's camera_naive)` — or takes
+  it typed: the offset itself, or a frame's true time (true time − its `camera_naive`), the one way where
+  `track_segment` is empty.
   Both `track_segment` and `frames` are re-extracted by the script on every re-run, so a changed
   photos-21 time decision shifts them automatically.
 - `proposal.tracks` is read-only — the track files `track_segment` is drawn from, by their path under
@@ -614,6 +645,68 @@ readable date, whatever its key.
 
 ---
 
+## 5b. `photos-25-execution-summary.json` — a photo whose content changed when written
+
+`geotag execute` takes each photo's content fingerprint again after it writes the photo's tags. One that is not the
+fingerprint the plan pinned — the decoded pixels changed, or none could be taken — is a **mismatch**: the photo's
+writes are not confirmed, its rename is held back, and the execution ends `partial`. Each is listed in the summary's
+`fingerprint_mismatches`, and asks one question: does the photo's content, as it is now, stand?
+
+```jsonc
+"fingerprint_mismatches": [
+  { "relative_path": "6-photos-by-dest/Japan/Kyoto/IMG_1234.jpg",
+    "expected_fingerprint": "3a52…",            // the one the plan pinned
+    "actual_fingerprint": "9c1d…",              // the one taken after the write (null: none could be taken)
+    "user_decision": { "accept_fingerprint_change": false } } ]
+```
+
+| Field | Type | Editable | Meaning |
+|-------|------|----------|---------|
+| `relative_path` | string | no | The photo, at the path it was planned under (its rename held back). |
+| `expected_fingerprint` / `actual_fingerprint` | string / string \| `null` | no | The fingerprint the plan pinned, and the one the photo has now. |
+| **`user_decision.accept_fingerprint_change`** | bool | **yes** | `true`: the content as it is now is the photo's — the next `geotag execute` of the **same plan** (`plan_id`) takes `actual_fingerprint` as the expected one and goes on with the photo (its rename and journal). The acceptance holds for that `actual_fingerprint` only: content that changed again asks again. A mismatch with no `actual_fingerprint` cannot be accepted. |
+
+The summary is otherwise geotag's own record; nothing else in it is yours to write, and a later execution reads only
+these answers, only from the summary of the plan it executes. A mismatch whose photo is still held is carried into the
+next summary with its answer.
+
+**By hand:** set `"accept_fingerprint_change": true` in the photo's entry, then run `geotag execute` again. In the
+editor: the **Execute** view lists each, with a preview of the photo.
+
+---
+
+## 5c. A new camera group's class — `photos-00-config.json`
+
+Geotag classes each camera group of the photos under `6-photos-by-dest/` by the configuration's
+`camera_time_and_timezone_policy.device_groups`: a key listed in `phones` is a phone (its clock the network's, its
+offset recorded with each photo, solved photo by photo), one in `fixed_clock_cameras` a camera with a clock set by
+hand (an offset per day). A group listed in **neither, or in both**, stops `geotag plan` before it writes any decision:
+it prints the two arrays — your groups plus the new one(s), each new one under both — ready to paste. Files naming no
+camera are never asked.
+
+```jsonc
+"camera_time_and_timezone_policy": {
+  "device_groups": {
+    "fixed_clock_cameras": [ "Canon|EOS R5|0123" ],
+    "phones": [ "Apple|iPhone 15 Pro|" ]
+  },
+  …
+}
+```
+
+**By hand:** paste the printed arrays over the two in `photos-00-config.json`, keeping each new group in the one array
+it belongs to and deleting it from the other, then re-run `geotag plan`.
+
+**In the editor:** the **Cameras** view lists each such group (its identity as prep found it, how many photos, a preview
+of one) with two choices. The editor's server shows the group as a cell `cameras.groups[<key>]` with
+`user_decision.device_class` — `"phones"` or `"fixed_clock_cameras"`, the array it is written into — found from the
+handoff's photos as geotag finds them. Saving puts the key in that array and takes it out of the other, under the
+workspace lock, only while `photos-00-config.json` is the file the editor loaded (by its SHA-256), and only if the
+configuration then passes every check `load_config` makes; the file is written again whole (sorted keys, two-space
+indent), every other setting keeping its value.
+
+---
+
 ## 6. Within-cell precedence (which `user_decision` field wins)
 
 A cell can carry more than one decision field; geotag applies them in a fixed order. The editor's
@@ -640,6 +733,7 @@ UI should make the *effective* choice obvious and ideally offer them as mutually
 - **A phone's day (§4.5):** `manual_offset_seconds` → `keep_as_recorded` → `accept_proposal` → two or more photos
   applying their offset themselves; one photo's never applies itself.
 - **A time at a daylight-saving change (§4.6):** `utc_offset_seconds`, one of the two readings for a repeated time.
+- **A time changed since geotag wrote it (§4.8):** `keep`, while `answered_for` is the pair the photo holds.
 - **Drift:** `confirmed` holding for the current offset (`confirmed_offset_seconds` equal to it) and for the
   tracks (`confirmed_against_tracks` each unchanged under `gpx_root`, or `[]` with no track shown) →
   `corrected_offset_seconds` if given, else the current offset; otherwise nothing.
@@ -665,6 +759,7 @@ Mirror these client-side; a value that fails makes geotag reject the whole artif
 | `confirmed_despite_recorded_offsets` | A list of whole numbers of seconds; `[]` (or `null`, or the field absent) = not given. |
 | `keep_as_recorded` | `true` or `false` on a phone's cell (absent or `null` reads as `false`); anything else a blocker. |
 | `accepted_timezone` (`unidentified_files`) | Text; required, the zone accepted, whenever `accept_proposal` is `true`. |
+| `keep` / `answered_for` (`changed_times`) | `keep` is `""`, `"new"` or `"geotag"`; with an answer, `answered_for` must be an object of exactly `DateTimeOriginal` and `OffsetTimeOriginal` (one for another pair than `held_time` is `stale_user_decision`, not a blocker); `"new"` for a `held_time` with no time is a blocker. |
 | `utc_offset_seconds` (`local_time_readings`) | `""`, or a whole number of seconds within ±14 hours (not a boolean, not a string such as `"+01:00"`); for a `repeated` time, one of `offsets_seconds` (another is `stale_user_decision`, not a blocker). |
 | `manual_offset_seconds` | A whole number of seconds (an integer, or a float with no fraction), of any size (a clock reset to its factory date is years out). Not a boolean, not a string. `""` allowed. |
 | `accepted_offset_seconds` | Required, as a whole number of seconds, whenever `accept_proposal` is `true` (and no manual offset is set): the `proposed_offset_seconds` accepted. `""` with `accept_proposal: false`. |
@@ -691,8 +786,10 @@ A natural shape that satisfies the contract:
    which regenerates the artifact, reads back the `user_decision` values, recomputes everything, and validates.
 
 **The save contract (this editor's server).** `GET /api/artifacts` returns `{ "workspace", "demo", "time",
-"drift", "gps", "hashes" }` — the three records as loaded, and in `hashes` (`{ "time", "drift", "gps" }`) the
-SHA-256 of each record's bytes as read (`null` for a record that is absent). `POST /api/save` takes:
+"drift", "gps", "execution", "cameras", "hashes" }` — the three decision records and photos-25 (`execution`) as
+loaded, the new camera groups (`cameras`, §5c), and in `hashes` (`{ "time", "drift", "gps", "execution", "cameras" }`)
+the SHA-256 of each record's bytes as read — `cameras` the configuration's — (`null` for a record that is absent).
+`POST /api/save` takes:
 
 ```jsonc
 {
@@ -701,15 +798,17 @@ SHA-256 of each record's bytes as read (`null` for a record that is absent). `PO
   "drift": [ { "dest": "…", "kind": "drift", "key": "<bucket key>", "user_decision": { … } } ],
   "gps":   [ { "dest": "…", "kind": "fallback" | "review", "path": "<relative_path, for review>",
                "user_decision": { … } } ],
-  "hashes": { "time": "…", "drift": "…", "gps": "…" }   // as the editor loaded them
+  "execution": [ { "kind": "fingerprint", "path": "<relative_path of the mismatch>", "user_decision": { … } } ],
+  "cameras": [ { "kind": "camera", "key": "<camera group key>", "user_decision": { "device_class": "phones" } } ],
+  "hashes": { "time": "…", "drift": "…", "gps": "…", "execution": "…", "cameras": "…" }   // as the editor loaded them
 }
 ```
 
 The save takes the workspace lock for the time it writes and is refused at once while a run holds it, or
-when the workspace is sealed. Under the lock it is refused — **nothing written, none of the three** — when:
+when the workspace is sealed. Under the lock it is refused — **nothing written, none of the records** — when:
 `hashes` is missing; any record on disk is not the one the editor loaded (its hash differs: a geotag plan
 may have rewritten it — reload and edit again); or an edit names a decision its record does not hold (no such
-destination, cell, bucket key or review item) or carries no `user_decision` object. Otherwise each named
+destination, cell, bucket key, review item or mismatch) or carries no `user_decision` object. Otherwise each named
 cell's `user_decision` is **replaced whole** by the one sent (nothing else in the record is touched), each
 edited record is written atomically (sorted keys, two-space indent), and the reply is
 `{ "ok": true, "written": [<record names>], "hashes": { … } }` — the records' new hashes, which the next save

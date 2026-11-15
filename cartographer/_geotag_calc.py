@@ -62,6 +62,9 @@ __all__ = [
     'TIME_PAIR',
     'held_other_times',
     'changed_time_blocker',
+    'changed_time',
+    'keep_changed_time',
+    'CHANGED_TIME_ANSWERS',
     'POSITION_MARKERS',
     'TIME_FIXED_SUFFIX',
     'geotag_marker',
@@ -1779,23 +1782,62 @@ def _time_text(pair):
     return f"{pair['DateTimeOriginal']} {off}" if off else f"{pair['DateTimeOriginal']} with no offset"
 
 
-def changed_time_blocker(file):
-    """Why the plan stops on `file`, or None (BLD-changed_time_blocks): a photo geotag wrote to — its own values
-    pinned — that holds a time and offset which are neither its own from before geotag's first write nor one geotag
-    wrote: put there since by something else. Geotag neither writes its own time back over it nor takes it as the
-    photo's recorded time. A photo with no pin was never written by geotag here, and is not concerned."""
+# The answers to a time changed since geotag wrote it (BLD-changed_time_question): keep the time the photo holds — it
+# becomes the photo's own — or take back geotag's.
+CHANGED_TIME_ANSWERS = ("new", "geotag")
+
+
+def changed_time(file):
+    """What `file` holds of a time changed since geotag wrote it, or None (BLD-changed_time_blocks): a photo geotag wrote
+    to — its own values pinned — holding a time and offset which are neither its own from before geotag's first write
+    nor one geotag wrote. {"held_time", "geotag_wrote" (the last pair geotag wrote, or None), "own_time"}, each a
+    {DateTimeOriginal, OffsetTimeOriginal}. A photo with no pin was never written by geotag here, and is not concerned."""
     if not file.get("from_originals"):
         return None
     h = held_values(file)
     held = {k: h.get(k) for k in TIME_PAIR}
     written = file.get("times_written") or []
-    if held == {k: (file.get("own_time") or {}).get(k) for k in TIME_PAIR} or held in written:
+    own = {k: (file.get("own_time") or {}).get(k) for k in TIME_PAIR}
+    if held == own or held in written:
         return None
+    return {"held_time": held, "geotag_wrote": dict(written[-1]) if written else None, "own_time": own}
+
+
+def keep_changed_time(file):
+    """`file` decided from the time it holds, kept by the user as its own (BLD-changed_time_kept): its own
+    DateTimeOriginal and OffsetTimeOriginal become the ones it holds, its recorded time read from DateTimeOriginal —
+    so it is corrected like any photo's own time. `time_kept` carries the values the ledger's pin takes at execution.
+    Pure; returns a new dict."""
+    h = held_values(file)
+    held = {k: h.get(k) for k in TIME_PAIR}
+    tag = file.get("source_time_tag") or ""
+    tag = tag if tag.rsplit(":", 1)[-1] == "DateTimeOriginal" else "EXIF:DateTimeOriginal"
+    rt = dict(file.get("raw_times") or {}, **{k: v for k, v in held.items() if v is not None})
+    if held.get("OffsetTimeOriginal") is None:
+        rt.pop("OffsetTimeOriginal", None)
+    return dict(file, own_time=held, raw_times=rt, source_naive_time=held["DateTimeOriginal"], source_time_tag=tag,
+                has_timestamp=_parse_camera_naive(held["DateTimeOriginal"]) is not None,
+                time_kept={**held, "selected_source_naive_timestamp": held["DateTimeOriginal"],
+                           "selected_source_timestamp_tag": tag})
+
+
+def changed_time_blocker(file):
+    """Why the plan stops on `file`, or None (BLD-changed_time_blocks): a photo holding a time changed since geotag wrote
+    it (`changed_time`) that the user has not answered for in photos-21 (BLD-changed_time_question). Geotag neither
+    writes its own time back over it nor takes it as the photo's recorded time unasked. One kept is decided from its
+    new time and holds it as its own; one whose answer is geotag's time is planned to have it written back."""
+    if (file.get("changed_time") or {}).get("answer") in CHANGED_TIME_ANSWERS:
+        return None
+    ch = changed_time(file)
+    if ch is None:
+        return None
+    held, written = ch["held_time"], file.get("times_written") or []
     wrote = _time_text(written[-1]) if written else "no time"
     return (f"{file['relative_path']}: holds the time {_time_text(held)}, but geotag wrote {wrote} to it, and its "
             f"own time before geotag was {_time_text(file.get('own_time'))}. Its time was changed since geotag "
-            "wrote to it: geotag neither writes its time back nor takes this one as the photo's. Put one of those "
-            "back into the photo, then run `prep plan`, `prep execute` and `geotag plan` again.")
+            "wrote to it: geotag neither writes its time back nor takes this one as the photo's unasked. Say which "
+            "it keeps in photos-21 (changed_times, or the decision editor) and run `geotag plan` again — or put "
+            "one of those back into the photo, then run `prep plan`, `prep execute` and `geotag plan` again.")
 
 
 def _local_time_and_offset(resolved_utc, tz):

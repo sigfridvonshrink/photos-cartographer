@@ -34,6 +34,72 @@ test("savePayload groups the edits by record and carries the loaded hashes", () 
   assert.equal(p.gps[0].path, "6-photos-by-dest/Japan/x.arw");
 });
 
+test("a photos-25 fingerprint mismatch: asked until accepted, saved into photos-25 by its photo's path", () => {
+  const rel = "6-photos-by-dest/Japan/x.arw", ref = { file: "execution", kind: "fingerprint", path: rel };
+  const m = (ud, actual = "b".repeat(64)) => ({ relative_path: rel, expected_fingerprint: "a".repeat(64), actual_fingerprint: actual, user_decision: ud });
+  const work = { execution: { plan_id: "p1", fingerprint_mismatches: [m({ accept_fingerprint_change: false })] } };
+  app.state.work = work; app.state.base = JSON.parse(JSON.stringify(work));
+  assert.equal(app.cellAt(work, ref).actual_fingerprint, "b".repeat(64));
+  assert.deepEqual(app.cellStatus(app.cellAt(work, ref)), ["needs", "needs input"]);
+  assert.equal(app.wouldResolve(ref), false);
+  work.execution.fingerprint_mismatches[0].user_decision.accept_fingerprint_change = true;
+  assert.equal(app.wouldResolve(ref), true);
+  assert.equal(app.isDirty(ref), true);
+  assert.equal(app.refInvalid(ref), false);
+  assert.equal(app.mismatchAccepted(m({ accept_fingerprint_change: true }, null)), false);   // no fingerprint taken: nothing to accept
+  const p = app.savePayload([ref], (r) => app.cellAt(app.state.work, r), { execution: "e1" });
+  assert.deepEqual(p.execution, [{ dest: undefined, kind: "fingerprint", key: undefined, path: rel,
+    user_decision: { accept_fingerprint_change: true } }]);
+});
+
+test("a new camera group: asked until classed as one of the two device_groups arrays, saved under cameras by its key", () => {
+  const key = "Apple|iPhone 15", ref = { file: "cameras", kind: "camera", key };
+  const work = { cameras: { groups: { [key]: { files: 3, examples: ["6-photos-by-dest/A/1.heic"], identity: { Make: "Apple" },
+    user_decision: { device_class: "" }, requires_user_input: true } } } };
+  app.state.work = work; app.state.base = JSON.parse(JSON.stringify(work));
+  assert.deepEqual(app.cellStatus(app.cellAt(work, ref)), ["needs", "needs input"]);
+  assert.equal(app.wouldResolve(ref), false);
+  assert.equal(app.refInvalid(ref), false);
+  work.cameras.groups[key].user_decision.device_class = "phones";
+  assert.equal(app.wouldResolve(ref), true);
+  work.cameras.groups[key].user_decision.device_class = "phone";
+  assert.equal(app.refInvalid(ref), true);                          // only the two arrays' names
+  work.cameras.groups[key].user_decision.device_class = "fixed_clock_cameras";
+  assert.deepEqual(app.DEVICE_CLASSES, ["phones", "fixed_clock_cameras"]);
+  const p = app.savePayload([ref], (r) => app.cellAt(app.state.work, r), { cameras: "c1" });
+  assert.deepEqual(p.cameras, [{ dest: undefined, kind: "camera", key, path: undefined, user_decision: { device_class: "fixed_clock_cameras" } }]);
+});
+
+test("a time changed since geotag wrote it: keep it or take back geotag's, the answer naming the time it is for", () => {
+  const dest = "6-photos-by-dest/T", key = `${dest}/a.arw`, ref = { file: "time", dest, kind: "changed", key };
+  const held = { DateTimeOriginal: "2024:07:03 14:45:00", OffsetTimeOriginal: "+02:00" };
+  const cell = (ud, h = held) => ({ held_time: h, geotag_wrote: { DateTimeOriginal: "2024:07:03 14:30:00", OffsetTimeOriginal: "+02:00" },
+    own_time: { DateTimeOriginal: "2024:07:03 14:20:00", OffsetTimeOriginal: null }, user_decision: ud, requires_user_input: true });
+  const mk = (c) => { app.state.work = { time: { destinations: { [dest]: { changed_times: { [key]: c } } } } }; app.state.base = app.state.work; };
+  mk(cell({ keep: "", answered_for: "" }));
+  assert.equal(app.wouldResolve(ref), false);
+  assert.deepEqual(app.changedFields(cell({}), "new"), { keep: "new", answered_for: held });
+  mk(cell(app.changedFields(cell({}), "new")));                 assert.equal(app.wouldResolve(ref), true);
+  mk(cell(app.changedFields(cell({}), "geotag")));              assert.equal(app.wouldResolve(ref), true);
+  mk(cell({ keep: "new", answered_for: { ...held, DateTimeOriginal: "2024:07:03 14:40:00" } }));
+  assert.equal(app.wouldResolve(ref), false);                                       // answered for another time
+  mk(cell({ keep: "new", answered_for: { DateTimeOriginal: null, OffsetTimeOriginal: null } }, { DateTimeOriginal: null, OffsetTimeOriginal: null }));
+  assert.equal(app.wouldResolve(ref), false);                                       // no time to keep
+  mk(cell({ keep: "both", answered_for: held }));               assert.equal(app.refInvalid(ref), true);
+  const p = app.savePayload([ref], (r) => app.cellAt(app.state.work, r), { time: "h" });
+  assert.equal(p.time[0].kind, "changed");
+  assert.equal(p.time[0].key, key);
+});
+
+test("recordAbsentText: a record that does not parse is shown as that error, never as no file", () => {
+  const err = { _error: "could not read photos-21-time-decisions.json: Expecting value: line 3 column 1 (char 7)" };
+  const said = app.recordAbsentText(err, "photos-21-time-decisions.json");
+  assert.match(said, /Expecting value: line 3 column 1/);
+  assert.doesNotMatch(said, /^No /);
+  assert.equal(app.recordAbsentText(null, "photos-21-time-decisions.json"), "No photos-21-time-decisions.json.");
+  assert.equal(app.recordAbsentText({}, "photos-22-gps-drift-validation.json"), "No photos-22-gps-drift-validation.json.");
+});
+
 test("savePayload with no hashes loaded sends none, which the server refuses", () => {
   assert.deepEqual(app.savePayload([], () => ({}), undefined).hashes, {});
 });
