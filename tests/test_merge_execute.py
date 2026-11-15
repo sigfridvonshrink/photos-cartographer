@@ -1945,6 +1945,28 @@ def test_a_run_that_never_executes_or_is_interrupted_writes_no_summary(tmp_path,
     assert open(merge.merge_summary_path(str(ws)), "rb").read() == earlier
 
 
+@pytest.mark.spec("BLD-merge_journal_resume", "BLD-history_kept", "RUL-history_retained",
+                  test="TST-merge_execute-one_journal_per_plan_keeps_every_executes_confirmations")
+def test_one_journal_per_plan_keeps_every_executes_confirmations(tmp_path):
+    """Merge's journal is its plan's, not its run's: a second execute of the same plan writes the same
+    `journal-<plan id>.json`, carrying the first's confirmations into it with its own."""
+    ws, lib = _ws(tmp_path, [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"},
+                             {"fp": "B", "dest": "Trip", "final_name": "b.jpg"}])
+    assert merge._run_locked_workflow("plan", str(ws)) == 0
+    plan_id = json.load(open(merge.merge_plan_path(str(ws))))["plan_id"]
+    (lib / "Trip").mkdir()
+    (lib / "Trip" / "b.jpg").write_bytes(_fp_bytes("OTHER"))               # b.jpg's place taken after the plan
+    assert merge._run_locked_workflow("execute", str(ws)) == 3              # a.jpg placed, b.jpg blocked
+    jpath = merge.journal_path(str(ws), plan_id)
+    assert json.load(open(jpath))["operations"] == {"6-photos-by-dest/Trip/a.jpg": "confirmed"}
+    os.remove(lib / "Trip" / "b.jpg")                                       # the place free again
+    assert merge._run_locked_workflow("execute", str(ws)) == 0              # the same plan, run again
+    journals = sorted(n for n in os.listdir(ws / ".photos-ingest") if n.startswith("journal-"))
+    assert journals == [os.path.basename(jpath)]
+    assert json.load(open(jpath))["operations"] == {"6-photos-by-dest/Trip/a.jpg": "confirmed",
+                                                    "6-photos-by-dest/Trip/b.jpg": "confirmed"}
+
+
 @pytest.mark.spec("RUL-empty_merge_seals", "BLD-merge_success_sequence",
                   test="TST-merge_execute-a_merge_of_no_photos_seals")
 def test_a_merge_of_no_photos_seals(tmp_path):

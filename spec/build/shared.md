@@ -893,7 +893,7 @@ ran, oldest first, matched by fingerprint — before the current plan's, from th
 :status: ruled
 :realises: RUL-history_retained, RUL-log_cites_decisions
 
-Each run's journal SHALL be kept as its own `journal-<run>.json`, each geotag execution keeping the decision records its
+Each plan's journal SHALL be kept as its own `journal-<plan id>.json`, each geotag execution keeping the decision records its
 plan depended on, verified by hash, in `executed/<plan id>/`, which a step's `because_record` and
 `because_record_sha256` name.
 :::
@@ -1026,10 +1026,12 @@ blocks the photo — the plan's alternative name used only where the plan record
 :status: ruled
 :realises: RUL-merge_resumable, RUL-resume_rechecks_library
 
-The journal SHALL record each confirmed photo, a re-run taking a place already holding the planned content,
-fingerprinted again, as done, and removing the workspace copy if it remains; a photo whose workspace copy is gone
-counts as done only once its place is fingerprinted again and found to hold it, and is blocked otherwise — the journal
-is the run's record, never what decides it.
+The journal — one per plan, `journal-<plan id>.json`, a later execute of the same plan carrying the earlier's
+confirmations into it and writing it again whole with each of its own, `updated_at` that execute's start — SHALL record
+each confirmed photo, a re-run taking a place already holding the planned content, fingerprinted again, as done, and
+removing the workspace copy if it remains; a photo whose workspace copy is gone counts as done only once its place is
+fingerprinted again and found to hold it, and is blocked otherwise — the journal is the record of what ran, never what
+decides it.
 :::
 
 :::{bld} A photo already present is removed once the library's copy is checked
