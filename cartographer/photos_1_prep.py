@@ -115,10 +115,14 @@ def _append_quarantine_manifest(manifest_dir, entry):
                       f"-{uuid.uuid4().hex[:6]}")
             try:
                 replace_durably(manifest_path, backup)
-                get_reporter().warn(f"Warning: quarantine manifest {manifest_path} was unreadable ({e}); preserved "
-                                    f"it as {os.path.basename(backup)} and started a fresh manifest.")
-            except OSError:
-                pass
+            except OSError as set_aside_error:
+                # A manifest that can be neither read nor set aside is never written over: it is the only record
+                # of why the files already here were quarantined (RUL-unreadable_manifest_kept). The move fails
+                # before the file is touched.
+                raise RuntimeError(f"quarantine manifest {manifest_path} is unreadable ({e}) and could not be set "
+                                   f"aside ({set_aside_error}); nothing was written over it") from set_aside_error
+            get_reporter().warn(f"Warning: quarantine manifest {manifest_path} was unreadable ({e}); preserved "
+                                f"it as {os.path.basename(backup)} and started a fresh manifest.")
             existing = []
     existing.append(entry)
     fd, tmp = tempfile.mkstemp(dir=manifest_dir, prefix=".tmp-manifest-", suffix=".json")
@@ -133,6 +137,26 @@ def _append_quarantine_manifest(manifest_dir, entry):
             except OSError:
                 pass
         raise
+
+
+def read_prior_prep_log(workspace_root):
+    """The earlier prep log's `photos`, {} where there is no log yet. A log that exists and cannot be read — not
+    readable, not JSON, or no `photos` object — is never taken for an empty one (RUL-unreadable_prep_log_stops): it
+    raises ValueError naming the file, which the plan records as a blocker and execute refuses on."""
+    from .photos_utils import prep_log_path
+    plp = prep_log_path(workspace_root)
+    if not os.path.exists(plp):
+        return {}
+    try:
+        with open(plp) as pf:
+            photos = json.load(pf).get("photos")
+        if not isinstance(photos, dict):
+            raise ValueError("it holds no photos record")
+    except (OSError, ValueError, AttributeError) as e:
+        raise ValueError(f"Prep's log {os.path.relpath(plp, workspace_root)} cannot be read ({e}); prep will not "
+                         "take it for an empty log and rewrite it from this run alone. Restore it, or remove it "
+                         "to start the log afresh, then plan again.")
+    return photos
 
 
 def build_prep_log(prior_photos, operations, cache_files, quarantine_evidence, run_id):
@@ -229,7 +253,8 @@ def build_prep_log(prior_photos, operations, cache_files, quarantine_evidence, r
                     if old not in fp_to_current and e.get("prep_path")}
     for new_fp, path in fp_to_current.items():
         old = _old_by_path.get(path) or _old_by_path.get(moved_from.get(path))
-        if new_fp not in prior_photos and old in prior_photos:
+        # A file this run moved or renamed is a photo of this run's own, never the old entry's (RUL-gone_photo_entry_carried).
+        if new_fp not in prior_photos and old in prior_photos and new_fp not in run_steps_by_fp:
             entry = prior_photos.pop(old)
             prior_photos[new_fp] = dict(entry, content_fingerprint=new_fp, journey=list(entry.get("journey", [])) + [
                 _step("fingerprint_retaken", **{"from": old, "to": new_fp})])
@@ -338,6 +363,10 @@ class PlanValidator:
 
         if plan.blockers:
             raise ValueError(f"Plan contains blockers and cannot be executed: {', '.join(plan.blockers)}")
+
+        # The earlier log, which execute's log is merged onto, must be readable now as it was at planning
+        # (RUL-unreadable_prep_log_stops): refused before any change, never read as empty at the end.
+        read_prior_prep_log(current_workspace)
 
         # Metadata dependencies: an absent or empty record is unverifiable, hence stale — never skipped.
         current_md_deps = current_metadata_dependencies()
@@ -840,9 +869,16 @@ class PlanExecutor:
                         })
 
                     # Real duplicate/conflict evidence from the quarantine ops (BLD-handoff_grouping_facts).
+                    # Only a duplicate is recorded as one; a file set aside for another reason is listed apart, with
+                    # its kind (RUL-only_duplicates_recorded_as_duplicates).
                     quarantine_evidence = []
+                    quarantined_other = []
                     for op in plan.operations:
-                        if op.type == "quarantine_move":
+                        if op.type == "quarantine_move" and (op.verification or {}).get("kind") != "duplicate":
+                            v = op.verification or {}
+                            quarantined_other.append({"kind": v.get("kind"), "original_path": v.get("original_path"),
+                                                      "quarantine_path": v.get("quarantine_path")})
+                        elif op.type == "quarantine_move":
                             v = op.verification or {}
                             ev = v.get("duplicate_evidence") or {}
                             retained = v.get("retained_counterpart", "") or ""
@@ -898,13 +934,10 @@ class PlanExecutor:
                     # finalize refuses it and prep's next run rewrites both.
                     from .photos_utils import prep_log_path
                     plp = prep_log_path(self.workspace_root)
-                    prior_photos = {}
-                    if os.path.exists(plp):
-                        try:
-                            with open(plp) as pf:
-                                prior_photos = (json.load(pf) or {}).get("photos", {}) or {}
-                        except Exception:
-                            prior_photos = {}
+                    try:
+                        prior_photos = read_prior_prep_log(self.workspace_root)
+                    except ValueError as e:
+                        raise RuntimeError(str(e))
                     log_photos, log_warnings = build_prep_log(
                         prior_photos, plan.operations, cache.get_all_files(),
                         quarantine_evidence, plan.plan_id)
@@ -959,6 +992,7 @@ class PlanExecutor:
                         "destination_folders": destination_folders,
                         "diagnostics": {
                             "duplicates_or_conflicts": quarantine_evidence,
+                            "quarantined_not_duplicates": quarantined_other,
                             "blockers": plan.blockers,
                             "warnings": plan.warnings,
                             "quarantine_footprint": plan.summary.get("quarantine_footprint"),
@@ -1409,7 +1443,11 @@ class WorkspacePrepWorkflow:
         import collections as _collections
         _media_op_types = {"mkdir", "move_no_clobber", "rename_no_clobber", "quarantine_move"}
         _q_ops = [op for op in operations if op.type == "quarantine_move"]
-        _dup_by_dest = sum(1 for op in _q_ops
+        # Each quarantine move is counted by its reason; only a duplicate counts as one (RUL-set_aside_counted_by_reason,
+        # RUL-only_duplicates_recorded_as_duplicates).
+        _by_reason = _collections.Counter((op.verification or {}).get("kind") for op in _q_ops)
+        _dup_ops = [op for op in _q_ops if (op.verification or {}).get("kind") == "duplicate"]
+        _dup_by_dest = sum(1 for op in _dup_ops
                            if str((op.verification or {}).get("retained_counterpart", "")).startswith(folder_name('photos_by_dest') + "/"))
         _md_counts = _collections.Counter(metadata_plan_status.values())
         _cg_keys = set()
@@ -1431,7 +1469,8 @@ class WorkspacePrepWorkflow:
             "recognized_moves": len(recognized_moves),
             "by_dest_files_scanned_read_only": len(by_dest_files),
             "duplicates_against_by_dest": _dup_by_dest,
-            "duplicates_against_mutable": len(_q_ops) - _dup_by_dest,
+            "duplicates_against_mutable": len(_dup_ops) - _dup_by_dest,
+            "quarantined_by_reason": {k: _by_reason.get(k, 0) for k in QUARANTINE_KINDS},
             "metadata_reused": _md_counts.get("reused_from_cache", 0),
             "metadata_extracted": _md_counts.get("extracted_ok", 0),
             "metadata_carried_forward": _md_counts.get("carried_forward", 0),
@@ -2107,6 +2146,7 @@ class WorkspacePrepWorkflow:
                         "retained_counterpart": st.current_paths.get(retained['relative_path'], retained['relative_path']),
                         "duplicate_evidence": json.loads(ch_str),
                         "plan_id": plan_id_for_quarantine,
+                        "kind": "duplicate",
                     }
                     st.media_mutated_originals.add(dup["relative_path"])
 
@@ -2473,6 +2513,12 @@ class WorkspacePrepWorkflow:
                     "move the remaining media into a fresh workspace) before running — prep will not "
                     "recreate them.")
 
+        # An earlier log that cannot be read stops the plan, naming it (RUL-unreadable_prep_log_stops).
+        try:
+            read_prior_prep_log(self.workspace_root)
+        except ValueError as e:
+            blockers.append(str(e))
+
         self.coordinator.start_phase("planning - scanning inventory")
         self._scan_inventory(files, blockers)
 
@@ -2781,12 +2827,47 @@ def _quarantine_dir_footprint(dpath: str):
     return files_n, bytes_n
 
 
+def _prune_record(base, run_dirs, plan_ids, older_than_days, prune_all):
+    """The record of a prune that deletes (BLD-prune_record): when, by which selectors, and for each quarantine run
+    folder it removes, every file in it with its bytes and what the folder's manifest said (None where it cannot be
+    read)."""
+    removed = []
+    for d in run_dirs:
+        dpath = os.path.join(base, d)
+        files = []
+        for root, dirs, fnames in os.walk(dpath):
+            dirs.sort()
+            for fn in sorted(fnames):
+                rel = os.path.relpath(os.path.join(root, fn), dpath)
+                if rel == "manifest.json":
+                    continue
+                try:
+                    size = os.path.getsize(os.path.join(root, fn))
+                except OSError:
+                    size = None
+                files.append({"path": rel, "bytes": size})
+        try:
+            with open(os.path.join(dpath, "manifest.json")) as mf:
+                manifest = json.load(mf)
+        except (OSError, ValueError):
+            manifest = None
+        removed.append({"quarantine_run": d, "files": files, "manifest": manifest})
+    return {
+        "schema_version": 1,
+        "tool": "photos-1-prep",
+        "pruned_at": datetime.now(timezone.utc).isoformat(),
+        "selectors": {"plan_ids": sorted(plan_ids or []), "older_than_days": older_than_days, "all": bool(prune_all)},
+        "removed": removed,
+    }
+
+
 def prune_quarantine(workspace_root, plan_ids=None, older_than_days=None, do_delete=False, prune_all=False):
     """Delete recoverable quarantine — the ONLY operation that ever removes quarantine
     content (RUL-prune_explicit). Default is a non-destructive dry-run; `do_delete`
     (--yes) actually deletes. Selectable by exact plan-id and/or age; deleting with no
     selector requires `prune_all` (--all). Runs under the workspace lock and only ever
-    touches `.photos-ingest-quarantine/`."""
+    touches `.photos-ingest-quarantine/`, but for the record of what a deleting prune removes
+    (`photos-16-prune-record.json`, RUL-prune_recorded)."""
     import shutil
     from datetime import timedelta
     from .photos_utils import quarantine_dir
@@ -2829,6 +2910,15 @@ def prune_quarantine(workspace_root, plan_ids=None, older_than_days=None, do_del
                            "Pass --plan-id / --older-than-days, or --all to confirm.")
 
     # The workspace lock is held for the whole run by main() (RUL-lock_through_the_run).
+    if do_delete and selected:
+        # What is about to be deleted, and when, is recorded before anything goes (RUL-prune_recorded); an earlier
+        # prune's record is set aside under -NNN, never written over (RUL-prune_record_kept).
+        from .photos_utils import prune_record_path, write_versioned_json
+        record = _prune_record(base, sorted(selected), plan_ids, older_than_days, prune_all)
+        _sha, _prior = write_versioned_json(prune_record_path(workspace_root), record)
+        reporter.log(f"Recorded what this prune removes in {os.path.basename(prune_record_path(workspace_root))}"
+                     + (f" (the earlier record kept as {os.path.basename(_prior)})" if _prior else "") + ".",
+                     stream="stdout")
     total_files = 0
     total_bytes = 0
     for d in sorted(selected):

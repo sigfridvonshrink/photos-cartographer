@@ -82,7 +82,10 @@ by date, videos by date, redundant JPEGs, missing metadata, the inbox. Hidden fi
 No run ever deletes from the quarantine. To get a file back, move it from the quarantine into
 `0-sources/`; prep treats it as a new file. To free the space, use `prep prune-quarantine`: without
 `--yes` it only lists what it would delete. Choose what to delete with `--plan-id <id>` (repeatable),
-`--older-than-days N` (at least 1), or `--all`. Each prep plan reports how big the quarantine is.
+`--older-than-days N` (at least 1), or `--all`. Before a prune with `--yes` deletes anything, it writes
+`.photos-ingest/photos-16-prune-record.json`: when it ran, and every file it removes with what its run's
+`manifest.json` said. A later prune keeps the earlier record as `photos-16-prune-record-001.json` and so on.
+Each prep plan reports how big the quarantine is.
 
 ---
 

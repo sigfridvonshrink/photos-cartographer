@@ -51,6 +51,18 @@ The decision editor's save SHALL take the workspace lock for the time it writes,
 the editor's display reads take none, each record being replaced whole. The editor is given, with each record it loads, the SHA-256 of its bytes, and sends them back with a save; under the lock the save compares them with the records on disk and checks that every edit names a decision its record holds, writing none of the three otherwise, and returns the hashes of what it leaves.
 :::
 
+:::{bld} The editor's own lock, held for its session
+:id: BLD-editor_session_lock
+:status: ruled
+:realises: RUL-one_editor_at_a_time, RUL-editor_kept_until_stopped
+
+The decision editor SHALL take `photos-00-decision-editor.lock`, an exclusive lock taken without waiting that records
+its owner, as `edit` opens a workspace, holding it until `edit` stops; the console's Edit tab takes it on its first
+request for a workspace and holds it until the console stops. While another holds it, `edit` refuses to start and the
+tab refuses to read or save. It is the editor's alone, apart from the workspace lock its saves take
+({need}`BLD-editor_save_locks`).
+:::
+
 :::{bld} The lock records its owner
 :id: BLD-lock_owner_record
 :status: ruled
@@ -238,6 +250,7 @@ The control records SHALL be these files in `.photos-ingest/` ({need}`DEF-archiv
   photos-10-prep-plan.json         prep-phase artifact: prep plan (written by `plan`, consumed by `dry-run`/`execute`; see "Canonical plan persistence" below)
   photos-11-handoff.json           prep-phase artifact: handoff manifest
   photos-15-prep-log.json          prep-phase artifact: end-of-prep audit log (BLD-prep_log_build)
+  photos-16-prune-record.json      prep-phase artifact: what the latest deleting quarantine prune removed, and when (BLD-prune_record)
   photos-21-time-decisions.json    geotag-phase artifact
   photos-22-gps-drift-validation.json  geotag-phase artifact: GPS-drift validation gate (BLD-drift_validation)
   photos-23-gps-decisions.json     geotag-phase artifact
@@ -271,7 +284,7 @@ The numbered artifacts SHALL follow this scheme:
 
 ```text
 0X  workspace infrastructure (phase-neutral): config, guard, live database
-1X  prep-phase artifacts        (currently: 10 = prep plan, 11 = handoff, 15 = prep audit log + prep DB snapshot)
+1X  prep-phase artifacts        (currently: 10 = prep plan, 11 = handoff, 15 = prep audit log + prep DB snapshot, 16 = prune record)
 2X  geotag-phase artifacts        (currently: 21–26; 26 = complete log + geotag DB snapshot + archive manifest)
 3X  merge-phase artifacts        (currently: 30 = merge plan, 31 = merge summary, 35 = merge log + merge DB snapshot + archive manifest)
 ```

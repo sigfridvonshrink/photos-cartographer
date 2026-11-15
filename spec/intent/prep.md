@@ -63,6 +63,20 @@ Initializing, prep SHALL take a folder at the top level named as a managed folde
 it into the inbox.
 :::
 
+:::{rul} A dump file whose place in the inbox is taken is suffixed
+:id: RUL-init_taken_place_suffixed
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+:refines: RUL-init_moves_dump_to_inbox
+:uses: RUL-suffix_no_clobber
+
+Initializing, prep SHALL move a dump file whose place in the inbox is already taken — by a file there or one planned
+there, ignoring case — into the same folder of the inbox under its name with a differentiating suffix, never over the
+file holding that place.
+:::
+
 :::{rul} A workspace is marked initialized last
 :id: RUL-initialized_marked_last
 :status: ruled
@@ -91,10 +105,11 @@ already did: the folders it made, and the dump already in the inbox.
 :criticality: med
 :anti: yes
 :verify: required
-:uses: DEF-strays_folder
+:uses: DEF-strays_folder, DEF-archival_package
 
-A file prep moves to the strays folder SHALL be recorded nowhere but in the journal of that move: no fingerprint, no row
-in the workspace database, no entry in any log, no place in the archival package.
+A file prep moves to the strays folder SHALL be recorded nowhere but in the plan that moves it and the journal of that
+move — no fingerprint, no row in the workspace database, no entry in the handoff or any log — the archival package
+holding it only as it holds that plan.
 :::
 
 ## 5. What prep refuses to work on
@@ -599,6 +614,17 @@ A media file outside photos by destination whose fingerprint failed SHALL block 
 Prep SHALL take a media file's fingerprint again at every run while it has failed.
 :::
 
+:::{rul} Metadata that could not be read blocks, in photos by destination too
+:id: RUL-metadata_failure_blocks
+:status: ruled
+:criticality: high
+:verify: required
+:uses: DEF-workspace_database, DEF-managed_folders
+
+A media file whose metadata prep could not read, and of which it keeps no record still valid, SHALL block prep's plan
+wherever it lies, photos by destination included.
+:::
+
 :::{rul} A duplicate is recorded with the copy kept
 :id: RUL-duplicate_recorded_with_kept
 :status: ruled
@@ -607,6 +633,18 @@ Prep SHALL take a media file's fingerprint again at every run while it has faile
 :refines: RUL-duplicates_quarantined
 
 Prep SHALL record each duplicate it quarantines with the copy it kept, in the handoff.
+:::
+
+:::{rul} Only a duplicate is recorded as one
+:id: RUL-only_duplicates_recorded_as_duplicates
+:status: ruled
+:criticality: med
+:anti: yes
+:verify: required
+:refines: RUL-duplicate_recorded_with_kept
+
+A file prep quarantines for another reason than being a copy — a leftover of an interrupted write, a hidden file of a
+dump — SHALL be recorded as no duplicate: neither in its summary, nor its handoff, nor its log.
 :::
 
 :::{rul} The quarantine manifest records a duplicate with the copy kept
@@ -768,6 +806,18 @@ Prep SHALL record why it quarantines a file — its path, the copy kept and the 
 file into the quarantine.
 :::
 
+:::{rul} An unreadable quarantine record is never written over
+:id: RUL-unreadable_manifest_kept
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+:refines: RUL-evidence_before_quarantine
+
+Prep SHALL stop rather than write over a quarantine record it cannot read and cannot set aside, the file it was to
+quarantine left where it was.
+:::
+
 :::{rul} No run deletes from the quarantine
 :id: RUL-quarantine_never_auto_deleted
 :status: ruled
@@ -815,7 +865,31 @@ Pruning the quarantine by age SHALL refuse an age of less than one day.
 :verify: required
 :refines: RUL-prune_explicit
 
-Prep's prune command SHALL touch nothing outside the quarantine.
+Prep's prune command SHALL touch nothing outside the quarantine but its own record of what it deletes
+({need}`RUL-prune_recorded`).
+:::
+
+:::{rul} A prune that deletes is recorded
+:id: RUL-prune_recorded
+:status: ruled
+:criticality: high
+:verify: required
+:refines: RUL-prune_explicit
+:uses: DEF-control_records
+
+Prep's prune command, told to delete, SHALL record among the control records what it deletes and when, before it
+deletes it.
+:::
+
+:::{rul} An earlier prune's record is kept
+:id: RUL-prune_record_kept
+:status: ruled
+:criticality: med
+:anti: yes
+:verify: required
+:refines: RUL-prune_recorded
+
+A prune's record SHALL never be written over by a later prune's: the earlier is set aside, recoverably.
 :::
 
 :::{rul} A file restored from the quarantine is a new file
@@ -910,6 +984,32 @@ fingerprint the handoff records.
 
 Prep's log SHALL be made from prep's plans, journals, quarantine evidence and database alone, holding nothing they do
 not.
+:::
+
+:::{rul} An unreadable log stops prep
+:id: RUL-unreadable_prep_log_stops
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+:refines: RUL-partial_history_shown
+:uses: DEF-transformation_log
+
+Prep SHALL stop, before any change and naming the file, where its earlier log exists and cannot be read — never taking
+it for an empty log.
+:::
+
+:::{rul} A photo gone from the workspace keeps its entry as it was
+:id: RUL-gone_photo_entry_carried
+:status: ruled
+:criticality: med
+:verify: required
+:refines: RUL-log_entry_append_only
+:uses: DEF-transformation_log
+
+An entry of prep's log whose photo is no longer anywhere in the workspace, and which no photo takes up as its own
+under a fingerprint taken again ({need}`RUL-log_follows_retaken_fingerprint`), SHALL be carried into each later log as
+it was — its steps, and the place prep last left it — neither dropped nor given a step of its going.
 :::
 
 :::{rul} Prep's log names what it set aside
@@ -1019,4 +1119,15 @@ what it only reads: its media
 operations, the files already in place, the moves it recognized, the files of photos by destination it read, the
 duplicates of files it may change apart from those of photos by destination, the metadata reused, extracted, carried
 and failed, the blockers and warnings, and which records it wrote.
+:::
+
+:::{rul} What prep quarantines is counted by why
+:id: RUL-set_aside_counted_by_reason
+:status: ruled
+:criticality: low
+:verify: required
+:refines: RUL-prep_run_summarised
+
+Prep's summary SHALL count the files it quarantines by the reason for each — duplicates, leftovers of an interrupted
+write, hidden files of a dump — apart.
 :::

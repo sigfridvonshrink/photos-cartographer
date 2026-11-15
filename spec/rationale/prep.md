@@ -55,6 +55,19 @@ the structure around the dump and moves it into the inbox whole, its folders kep
 meaning — a trip, a day, a card. Afterwards the workspace has an inbox, and the top level is no place for a dump.
 :::
 
+:::{rat} A taken place keeps both files
+:id: RAT-init_taken_place_keeps_both
+:status: ruled
+:forced: yes
+:follows_from: RAT-names_never_collide, RAT-bootstrap_once
+:justifies: RUL-init_taken_place_suffixed
+
+The inbox can already hold a file at the place a dump file is bound for: an interrupted first run moved part of the
+dump, or two of its files differ only by case. Moving over it would lose an original; leaving the file out of the
+inbox would leave the top level unclean and the dump half taken in. Its folder is kept, for the folders are what a
+dump says of itself, so only its name can change — by the suffix every phase uses, which the file then carries on.
+:::
+
 :::{rat} The structure's names are reserved
 :id: RAT-structure_names_reserved
 :status: ruled
@@ -87,7 +100,9 @@ and the next simply initializes again.
 
 A stray is a file cartographer does not understand — a document, a sidecar it has no use for. Recorded beside the media,
 it would make cartographer answer for what it cannot reason about; parked whole, it waits for the user to keep or clear
-it, and clearing it costs the record nothing.
+it, and clearing it costs the record nothing. Moving it is a change like any other, planned and journaled, so the plan
+names it, where it was and where it goes, and that plan is kept with the workspace's records; it is named nowhere it
+would be taken for a photo.
 :::
 
 ## 5. What prep refuses to work on
@@ -465,6 +480,20 @@ fixes the machine, not the file, so its size and time do not change; a failure k
 gone. Taking it again costs one attempt per run for a file that still fails.
 :::
 
+:::{rat} Geotag has nothing else to read a photo's metadata from
+:id: RAT-metadata_failure_stops_everywhere
+:status: ruled
+:forced: yes
+:follows_from: RAT-geotag_reads_the_handoff, RAT-crash_not_a_verdict
+:justifies: RUL-metadata_failure_blocks
+
+A failed fingerprint in photos by destination decides nothing there, for prep never sets a file there aside. Its
+metadata is another matter: geotag reads no photo, and takes each one's camera, times and position from what prep kept.
+A photo of photos by destination handed on with none would reach geotag as one with no time and no camera — renamed,
+grouped and placed on what is only a failed read. So prep stops and names it there as anywhere, and the next run reads
+it again.
+:::
+
 :::{rat} A duplicate's record points at its twin
 :id: RAT-duplicate_points_at_twin
 :status: ruled
@@ -474,6 +503,19 @@ gone. Taking it again costs one attempt per run for a file that still fails.
 
 A file set aside as a copy is recoverable only if one can tell which file it copies. Recorded with the copy kept, the
 user can check the pair, and a photo already sorted into a destination is seen to have had its copy set aside.
+:::
+
+:::{rat} A file set aside is not a copy unless it has a twin
+:id: RAT-set_aside_not_a_copy
+:status: ruled
+:forced: no
+:follows_from: RAT-duplicate_points_at_twin, RAT-reviewer_sees_what_was_touched
+:justifies: RUL-only_duplicates_recorded_as_duplicates, RUL-set_aside_counted_by_reason
+
+The quarantine takes more than copies: what an interrupted write left beside a photo, and the hidden files a dump
+brings. These have no twin. Recorded as duplicates, they would read as copies whose kept file is missing, and a count of
+duplicates would report copies never found — the reviewer checking the dedup against what they dumped would find it
+wrong. Counted apart by why each went, each figure means what it says.
 :::
 
 
@@ -618,6 +660,19 @@ reason lost. Written first, the record survives a crash before the move; the fil
 run sets it aside again under a new record — the old one at worst a record of a move that did not happen.
 :::
 
+:::{rat} The record of the set-aside files is not traded for a fresh one
+:id: RAT-manifest_not_traded
+:status: ruled
+:forced: yes
+:follows_from: RAT-reason_first, RAT-no_automatic_deletion
+:justifies: RUL-unreadable_manifest_kept
+
+A quarantine record found unreadable may still be read by hand, so it is set aside, kept, and a new one begun. Where
+it cannot even be set aside, a new one written in its place would be the end of it: the files already quarantined
+would lie there with nothing saying why. Stopping keeps the record and the file not yet moved; the user mends the
+folder, and the next run quarantines it again.
+:::
+
 :::{rat} The safety net stays until the user lifts it
 :id: RAT-safety_net_stays
 :status: ruled
@@ -651,6 +706,20 @@ keeping in step with the first ({need}`RAT-fix_through_inbox`). The old record s
 
 A quarantine that only grows costs space without a word. Reporting its size every run lets the user decide when to
 prune, knowing what it holds.
+:::
+
+:::{rat} The one deletion leaves a record
+:id: RAT-deletion_recorded
+:status: ruled
+:forced: no
+:follows_from: RAT-safety_net_stays, RAT-durable_record
+:justifies: RUL-prune_recorded, RUL-prune_record_kept
+
+Pruning is the one change cartographer makes that nothing can undo, and it removes the quarantine's own manifests with
+the files. Unrecorded, the copies would be gone with no trace that they were ever kept, and the log and handoff would
+name quarantine paths that simply no longer exist. A record of what went, and when — each file, and what its run's
+manifest said of it — written before anything goes, answers for the gap; and as each prune is its own deletion, a
+later one never writes over an earlier's.
 :::
 
 :::{rat} The one command that deletes asks for a real age
@@ -712,6 +781,33 @@ real change — a file filed, sorted or changed — restales geotag.
 The log is for reading, not deciding: it gathers what prep's own records already say into one account per photo. Made
 from them alone, it can be checked against them and never contradicts them; and a set-aside copy appears beside the
 photo it copies, so the account of that photo is whole.
+:::
+
+:::{rat} A log that cannot be read is not an empty one
+:id: RAT-unreadable_log_not_empty
+:status: ruled
+:forced: yes
+:follows_from: RAT-log_adds_no_authority, RAT-durable_record
+:justifies: RUL-unreadable_prep_log_stops
+
+Each run's log is the earlier one with this run's steps added. Read as empty, the rewrite would drop every earlier
+step: the photos already filed would start again marked partial, and those sorted into destinations would have no
+entry at all — a log that looks whole and holds one run. Whatever made the file unreadable, a disk, a hand edit, the
+history in it is not prep's to throw away; stopping before any change names it, and the user restores it, or removes it
+knowing the history goes with it.
+:::
+
+:::{rat} Prep records what it did, not what became of a photo
+:id: RAT-gone_photo_history_kept
+:status: ruled
+:forced: no
+:follows_from: RAT-log_adds_no_authority, RAT-durable_record
+:justifies: RUL-gone_photo_entry_carried
+
+A photo that is nowhere in the workspace any more was deleted by the user, or taken out for a while; prep did neither,
+and cannot tell them apart. What it did do to the photo stays true, so its entry stays, its last place the one prep
+left it at. A step saying it went would be one no record of prep's holds, a guess at why the file is missing; the
+absence itself is what a reader of the log and the workspace together can see.
 :::
 
 :::{rat} A new fingerprint is not a new photo

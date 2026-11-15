@@ -125,6 +125,35 @@ def test_stray_not_fingerprinted_and_not_cached(tmp_path, monkeypatch):
     assert "notes.txt" not in log                                # in no log
 
 
+@pytest.mark.spec("RUL-strays_leave_no_trace", "BLD-stray_records", test="TST-strays-a_stray_is_named_only_in_the_plan_that_moves_it")
+def test_a_stray_is_named_only_in_the_plan_that_moves_it(tmp_path, monkeypatch):
+    """The plan names the stray — it moves it — and nothing else does: not the journal beyond the move's id, not the
+    database, the plan memo, the handoff or the log."""
+    _install(monkeypatch)
+    ws = _ws(tmp_path)
+    (ws / "0-sources" / "notes-stray.txt").write_bytes(b"hello")
+    (ws / "0-sources" / "real.jpg").write_bytes(b"img")
+    plan = _plan(ws)
+    assert "0-sources/notes-stray.txt" in plan.inventory
+    (move,) = [op for op in plan.operations if op.source == "0-sources/notes-stray.txt"]
+    prep.PlanExecutor(str(ws)).execute(plan)
+    ctl = ws / ".photos-ingest"
+    (journal,) = glob.glob(str(ctl / "journal-*.json"))
+    for record in (journal, utils.handoff_path(str(ws)), utils.prep_log_path(str(ws))):
+        assert "notes-stray" not in open(record).read(), record
+    assert move.operation_id in open(journal).read()
+    assert not any("notes-stray" in p for p in _cached_paths(ws))
+    memo = utils.plan_memo_db_path(str(ws))
+    if os.path.exists(memo):
+        conn = sqlite3.connect(memo)
+        try:
+            assert "notes-stray" not in " ".join(str(r) for r in conn.execute("SELECT * FROM sqlite_master"))
+            for (table,) in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall():
+                assert not any("notes-stray" in str(r) for r in conn.execute(f"SELECT * FROM {table}"))
+        finally:
+            conn.close()
+
+
 @pytest.mark.spec("RUL-not_inventoried", "RUL-strays_never_processed")
 def test_strays_scan_skipped_on_next_run(tmp_path, monkeypatch):
     _install(monkeypatch)

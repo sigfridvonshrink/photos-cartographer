@@ -1074,6 +1074,20 @@ geotag's; a prep that asked would hold up the inbox on questions it does not nee
 A decision is the user's answer to a proposal they were shown. A plan run since the editor loaded may have changed the proposal; a save laid over it would record an acceptance of something the user never saw, or drop an answer whose question is gone and report success.
 :::
 
+:::{rat} One editing session answers the decisions
+:id: RAT-one_editing_session
+:status: ruled
+:forced: no
+:follows_from: RAT-save_what_was_seen
+:justifies: RUL-one_editor_at_a_time, RUL-editor_kept_until_stopped
+
+Two editors open on one workspace would each show the decisions as they loaded them, and the first to save would make
+the other's next save one over records it never showed — refused, with whatever the user had answered there since. One
+editor at a time keeps the answers in one place. An editor cannot tell when its user is done: a page left open is still
+the session, and a browser closed tells it nothing. Giving the workspace up between requests would let a second editor
+in between two saves of the first, so it is kept until the editor itself is stopped.
+:::
+
 
 ## 12. The record of what was done, kept beyond the workspace
 
@@ -1385,8 +1399,9 @@ automated move inside a finished workspace.
 :justifies: RUL-sealed_prune_allowed
 
 The quarantine holds only spare copies of duplicates, which a sealed workspace still keeps. Deleting them, with the
-manifests that list them, touches no photo, library file, control record or row of the database; what each manifest
-said is kept in the transformation log and the package. It neither reprocesses the workspace nor adds a batch to it,
+manifests that list them, touches no photo, library file, earlier control record or row of the database, adding
+only its own record of what it removed; what each manifest said is kept in that record, and in the transformation log
+and the package. It neither reprocesses the workspace nor adds a batch to it,
 so the seal's reasons do not reach it, and the space can be reclaimed.
 :::
 
