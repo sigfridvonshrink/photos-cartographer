@@ -53,7 +53,8 @@ Everything the editor must guarantee, in five rules:
    under the key's other form naming the same `day`, since a camera's only day in a destination is
    keyed `<group>` and becomes `<group>@<day>` once a second day arrives (§4.4); a review item by the
    photo's `content_fingerprint` (which follows the photo through geotag's own renames), and by
-   `relative_path` only for an item recorded without one. A decision whose target is gone (no such
+   `relative_path` only for an item recorded without one — within the photo's own destination only: a
+   photo moved to another folder, or whose folder was renamed, is asked its position again. A decision whose target is gone (no such
    destination, day or photo, or a photo that no longer needs one) is not carried over. So:
    - You may **round-trip the whole file** (load, change `user_decision` in place, save). The
      system-owned fields you carry along are ignored and overwritten next run — they exist only so the
@@ -376,7 +377,7 @@ One entry per file that needs the human (or that the human already locked/accept
 | Field | Type | Editable | Meaning |
 |-------|------|----------|---------|
 | `relative_path` | string | no | Workspace-relative path of the photo (e.g. `6-photos-by-dest/Japan/IMG_1.arw`). The editor's save names a review item by it. |
-| `content_fingerprint` | string \| null | no | The photo's identity. A decision is found again by it — through geotag's own rename of the photo — not by the path. |
+| `content_fingerprint` | string \| null | no | The photo's identity. A decision is found again by it — through geotag's own rename of the photo — not by the path, within the photo's destination: moved to another folder (or its folder renamed), the photo is asked again. |
 | `tracks` | object | no | On a `no_reliable_gps_source` or `accepted_unlocated` photo that has a resolved time and that the tracks did not place: why. `reason` with its evidence: `no_tracks` (no track at all); `outside_track` + `seconds_from_track`; `track_gap` + `seconds_from_track` + `gap_seconds`, and `segment_break: true` when the gap is a break between two `<trkseg>` of the track (never bridged, however short); `track_jump` + `seconds_from_track` + `jump_meters`; `tracks_disagree` + `gpx_files` (the two tracks — each a file name, or `"<file> (track N)"` when both are tracks of one file) + `apart_meters`. Where several tracks miss, the one nearest in time speaks. |
 | `reason` | `"no_reliable_gps_source"` \| `"manual_locked"` \| `"accepted_unlocated"` | no | Why it's here (see below). |
 | **`user_decision.manual_lat`** | number \| `""` | **yes** | Human-entered latitude (set both). |

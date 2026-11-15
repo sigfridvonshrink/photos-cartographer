@@ -488,6 +488,20 @@ there. A photo is moved to fix a mis-sort; carrying its old destination's answer
 its time and its name, now hidden under the right folder.
 :::
 
+:::{rat} A photo's position was answered where it lay
+:id: RAT-position_answered_for_its_destination
+:status: ruled
+:forced: no
+:follows_from: RAT-destination_is_an_input, RAT-decisions_cascade
+:justifies: RUL-moved_photo_position_decided_anew
+
+A position typed for a photo, or the answer to leave it unlocated, is given looking at the photo where it lies: the
+place its folder names, the fallback that folder has or lacks, the tracks that covered it there. Any of these may have
+been part of the answer. Moved, the photo stands among another folder's answers — a fallback that would place it now,
+a place it was not — and the old one, carried, could keep it unlocated beside a fallback or pinned where the folder
+says it was not. Asked again, it costs one answer.
+:::
+
 
 ## 11. Clock offsets from the camera's own GPS
 

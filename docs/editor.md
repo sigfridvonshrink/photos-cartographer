@@ -327,7 +327,8 @@ Two reset behaviors worth knowing (both take effect on the next run):
   computed from it (the corrected times, the GPS decisions, the executable plan) out of date;
   `geotag plan` recomputes it. Your decisions are **kept** while what they decide about is unchanged:
   a day's offset is found again by its day, a photo's coordinate by the photo itself, even after geotag
-  renamed it. An answer whose question has changed is never silently applied to the new one — it is
+  renamed it. A photo you move to another folder (or whose folder you rename) is asked again: its
+  coordinate, or its leave-unlocated, was given for the folder it was in. An answer whose question has changed is never silently applied to the new one — it is
   marked **stale** and asked again: an acceptance of an offset no longer proposed, a confirmation of an
   offset no longer in effect or made on a track since taken out or changed, an inherited fallback that no longer exists, a zone kept for photos when
   one arrives recording yet another offset.

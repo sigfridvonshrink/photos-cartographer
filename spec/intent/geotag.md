@@ -821,6 +821,20 @@ A photo moved to another destination SHALL be decided under that destination's t
 its old destination carried with it.
 :::
 
+:::{rul} A moved photo's position is decided anew
+:id: RUL-moved_photo_position_decided_anew
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+:uses: DEF-destination
+:refines: RUL-moved_photo_decided_anew
+
+A photo moved to another destination — its folder renamed among the ways — SHALL be placed with no position decision
+made for it in its old destination carried with it: neither a position written for it nor the answer to leave it
+unlocated.
+:::
+
 
 ## 11. Clock offsets from the camera's own GPS
 
