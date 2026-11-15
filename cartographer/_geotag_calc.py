@@ -97,6 +97,9 @@ __all__ = [
     'clock_group_key',
     '_own_offset',
     'recorded_offset_proposal',
+    'gps_fix_utc',
+    'gps_time_proposal',
+    'GPS_TIMES_SHOWN',
     'far_from_evidence',
     'compute_resolved_utc',
     'resolved_utc_fingerprint',
@@ -1120,6 +1123,73 @@ def recorded_offset_proposal(photos, rep_naive):
         except OverflowError:
             pass                                # a time at the calendar's edge: no instant to name
     return proposal, None
+
+
+_GPS_TIME_RE = re.compile(r"^(\d{4}:\d\d:\d\d \d\d:\d\d:\d\d)(?:\.\d+)?(Z|[+-]\d\d:?\d\d)?$")
+_GPS_CLOCK_RE = re.compile(r"^(\d{1,2}):(\d{1,2}):(\d{1,2})(?:\.\d+)?$")
+
+
+def gps_fix_utc(parsed):
+    """The UTC time the photo's GPS fix recorded (BLD-gps_time_proposal), as 'YYYY-MM-DDTHH:MM:SSZ', or None: its
+    `GPSDateTime` (exiftool's composite of the two fields below, or XMP's own), else `GPSDateStamp` with
+    `GPSTimeStamp`. A fix's time is UTC; a fraction of a second is dropped. A value that is no time is none."""
+    v = parsed.get("GPSDateTime")
+    if isinstance(v, str) and (m := _GPS_TIME_RE.match(v.strip())):
+        t = parse_naive_time(m.group(1))
+        off = _parse_iso_offset(m.group(2)) if m.group(2) else 0
+        if t is not None and off is not None:
+            try:
+                return (t - timedelta(seconds=off)).strftime("%Y-%m-%dT%H:%M:%SZ")
+            except OverflowError:
+                return None
+    d, c = parsed.get("GPSDateStamp"), parsed.get("GPSTimeStamp")
+    if isinstance(d, str) and isinstance(c, str) and (m := _GPS_CLOCK_RE.match(c.strip())):
+        h, mi, s = (int(x) for x in m.groups())
+        t = parse_naive_time(f"{d.strip()[:10]} {h:02d}:{mi:02d}:{s:02d}")
+        if t is not None:
+            return t.strftime("%Y-%m-%dT%H:%M:%SZ")
+    return None
+
+
+def gps_time_proposal(frames, cfg):
+    """A clock offset from the times the frames' own GPS fixes recorded (BLD-gps_time_proposal), as (proposal,
+    set_aside). Each frame holding its own position and a fix time gives the fix's UTC less its camera time; frames
+    giving the same fix time and the same camera time are one reading (a burst). The readings count only while
+    their fix times all differ — a stale fix repeats its time while the camera's moves on — and their offsets agree
+    within `gpx_anchor_offset_spread_max_seconds`: then the proposal is the earliest reading's offset (`gps_time`);
+    else nothing is proposed, `set_aside` saying why. No frame with a fix time: (None, None)."""
+    readings = {}
+    for f in sorted(frames, key=lambda x: x["relative_path"]):
+        gps, naive = _parse_utc(f.get("gps_utc")), _parse_camera_naive(f.get("source_naive_time"))
+        if not f.get("has_native_gps") or gps is None or naive is None:
+            continue
+        readings.setdefault((gps, naive), f)
+    if not readings:
+        return None, None
+    ordered = sorted(readings.items(), key=lambda kv: (kv[0][1], kv[1]["relative_path"]))
+    rows = [{"source_file": f["relative_path"], "camera_source_naive_time": f.get("source_naive_time"),
+             "gps_utc": gps.strftime("%Y-%m-%dT%H:%M:%SZ"),
+             "offset_seconds": int(round((gps.replace(tzinfo=None) - naive).total_seconds()))}
+            for (gps, naive), f in ordered]
+    fix_times = [r["gps_utc"] for r in rows]
+    offs = [r["offset_seconds"] for r in rows]
+    if len(set(fix_times)) < len(fix_times):
+        twice = next(r for r in rows if fix_times.count(r["gps_utc"]) > 1)
+        return None, {"reason": "repeated_gps_time", "gps_time_count": len(rows), "example": twice["source_file"]}
+    if max(offs) - min(offs) > cfg["gpx_anchor_offset_spread_max_seconds"]:
+        far = max(rows, key=lambda r: abs(r["offset_seconds"] - offs[0]))
+        return None, {"reason": "offsets_disagree", "gps_time_count": len(rows), "example": far["source_file"],
+                      "offsets_seconds": [min(offs), max(offs)]}
+    rep = rows[0]
+    return {"proposal_source": "gps_time", "proposed_offset_seconds": rep["offset_seconds"],
+            "proposed_real_utc": rep["gps_utc"], "gps_time_count": len(rows),
+            "confidence": "high" if len(rows) > 1 else "review_required",
+            "acceptance_tolerance_seconds": cfg["gpx_anchor_decision_tolerance_seconds"],
+            "gps_times": rows[:GPS_TIMES_SHOWN]}, None
+
+
+# How many of a GPS-time proposal's readings its record lists (the count says how many there are).
+GPS_TIMES_SHOWN = 20
 
 
 def far_from_evidence(times, others, track_times, bound):

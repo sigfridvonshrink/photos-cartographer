@@ -541,7 +541,8 @@ function offsetRow(dest, keys, sub, cell, pr, indent) {
   const eff = e && typeof e === "object" ? fmtOffset(e.offset_seconds)
     : "proposed_offset_seconds" in (cell.proposal || {}) ? `${fmtOffset(cell.proposal.proposed_offset_seconds)} proposed` : "—";
   const s = pr && pr.source === "timezone_naive" && pr.tz ? `${sub} · from ${leaf(pr.tz)}`
-    : pr && pr.source === "recorded_offset" ? `${sub} · as recorded` : sub;
+    : pr && pr.source === "recorded_offset" ? `${sub} · as recorded`
+      : pr && pr.source === "gps_time" ? `${sub} · from GPS time` : sub;
   const r = row(ref, "Offset", s, eff);
   if (indent) r.classList.add("off-sub");
   return r;
@@ -733,7 +734,8 @@ function offsetEditor(ref) {
 
   // choice 1 — accept the proposal (automatic; its value is never edited)
   const src = p.proposal_source === "timezone_naive" ? ` from timezone ${p.proposed_from_timezone}`
-    : p.proposal_source === "recorded_offset" ? " as the photos record it" : "";
+    : p.proposal_source === "recorded_offset" ? " as the photos record it"
+      : p.proposal_source === "gps_time" ? " from the GPS fixes' own times" : "";
   const canAccept = hasProp && !far;
   wrap.append(opt(active === "accept",
     el("span", {}, !hasProp ? "accept proposal — none to accept"
@@ -1180,7 +1182,8 @@ function acceptHolds(c) {
   const u = c.user_decision || {}, p = c.proposal || {};
   if (!u.accept_proposal || !("proposed_offset_seconds" in p)) return false;
   if (u.accepted_offset_seconds === "" || u.accepted_offset_seconds == null) return false;
-  const slack = p.proposal_source === "gpx_self_anchor" ? (p.acceptance_tolerance_seconds || 0) : 0;
+  // an offset from the camera's own GPS — its positions on the tracks or its fixes' times — holds within the tolerance
+  const slack = p.proposal_source === "gpx_self_anchor" || p.proposal_source === "gps_time" ? (p.acceptance_tolerance_seconds || 0) : 0;
   return Math.abs(Number(u.accepted_offset_seconds) - p.proposed_offset_seconds) <= slack;
 }
 // The working decision's offset, to mark the group it picks (null while nothing is chosen).
@@ -1235,6 +1238,8 @@ function offsetCellNotes(c) {
     out.push(`These photos record different offsets with their times — ${differ.map((d) => `${utcOff(d.recorded_offset_seconds)} ` +
       `(${d.photos} photo${d.photos === 1 ? "" : "s"}, e.g. ${leaf(d.example)})`).join(", ")} — so none is proposed from them. ` +
       "The camera's zone setting changed that day, or the tag is wrong: set the offset, or move the photos of each setting into a sub-folder and re-run.");
+  const aside = c && c.gps_time_set_aside;
+  if (aside) out.push(gpsTimeAsideNote(aside));
   const far = p.far_from_evidence;
   if (far) out.push(`This offset puts these photos ${fmtSpan(far.nearest_other_photo_seconds)} from the nearest photo another ` +
     `device took here (${leaf(far.nearest_other_photo)})` +
@@ -1255,6 +1260,17 @@ function offsetCellNotes(c) {
         "Set the right offset by hand in the one that is wrong.");
   }
   return out;
+}
+// Why the times the photos' own GPS fixes recorded say nothing of the clock here (gps_time_set_aside,
+// BLD-gps_time_proposal): a stale fix repeating its time, or readings that disagree.
+function gpsTimeAsideNote(a) {
+  const n = `${a.gps_time_count} photo${a.gps_time_count === 1 ? "" : "s"}`;
+  if (a.reason === "repeated_gps_time")
+    return `${n} here hold a GPS fix time, but two record the same one at different camera times (e.g. ${leaf(a.example)}) — ` +
+      "a stale fix — so the fixes' times are not read as the clock.";
+  const [lo, hi] = a.offsets_seconds || [];
+  return `${n} here hold a GPS fix time, but they give offsets from ${fmtOffset(lo)} to ${fmtOffset(hi)} (e.g. ${leaf(a.example)}) — ` +
+    "too far apart to be one clock — so the fixes' times are not read as the clock.";
 }
 // A span of seconds in the unit a reader takes in at once: years, days, hours or minutes.
 function fmtSpan(s) {
@@ -1322,6 +1338,19 @@ function offsetProposalBlock(ref, p) {
       el("div", { class: "prop-head" }, fmtOffset(p.proposed_offset_seconds),
         el("span", { class: "muted" }, ` (assuming the camera was on ${p.proposed_from_timezone} time)`)),
       el("div", { class: "hint" }, `real UTC ${p.proposed_real_utc} — confirm only if the camera really tracked local time (a camera left on home time would be wrong).`));
+  }
+  if (p.proposal_source === "gps_time") {
+    // No GPX anchor, but the photos' own GPS fixes recorded their UTC: each, less the camera time, is a reading of the
+    // clock (BLD-gps_time_proposal). Two or more agreeing applied themselves; one is offered.
+    const rows = (p.gps_times || []).slice(0, 3).map((r) => el("div", { class: "hint" },
+      `${leaf(r.source_file)}: camera ${r.camera_source_naive_time} · fix ${r.gps_utc} → ${fmtOffset(r.offset_seconds)}`));
+    return el("div", { class: "pblock" }, el("h3", {}, "Proposal — the times the GPS fixes recorded"),
+      el("div", { class: "prop-head" }, fmtOffset(p.proposed_offset_seconds),
+        el("span", { class: "muted" }, ` (${p.gps_time_count} fix${p.gps_time_count === 1 ? "" : "es"}, ${p.confidence})`)),
+      ...rows,
+      el("div", { class: "hint" }, p.gps_time_count === 1
+        ? "one fix only: a stale one repeats an earlier time — accept it if the photo's corrected time is right."
+        : "the fixes' times all differ and agree: applied by itself."));
   }
   if (p.proposal_source !== "gpx_self_anchor") return jsonBlock("Proposal", p);
   const tz = previewTz(ref.dest)?.tz;
@@ -1524,6 +1553,6 @@ export {
   groupChoice, chosenOffset, proposalNotes, driftConfirmHolds, driftConfirmFields, driftTracksHold, driftStaleReason, acceptFields, acceptHolds, tracksNote,
   zoneContradiction, offsetCellNotes, zoneSpokenFor, zoneDespiteFields, effectiveCountry, clearCountriesInside,
   scrubOffset, scrubSeedIndex, mapKeyFor, savePayload,
-  ambiguousTimeNote, zoneOffer, loadRefusal, hasUnsavedEdits, utcOff,
+  ambiguousTimeNote, gpsTimeAsideNote, zoneOffer, loadRefusal, hasUnsavedEdits, utcOff,
   fmtSpan, utcToZonedWallMs, zonedWallToUtcMs, offsetFromTrueTime, trueTimeOf,
 };

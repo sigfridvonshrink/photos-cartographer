@@ -688,6 +688,23 @@ needed them.
 An anchor reads the time off the track where the photo's own position lies on it. That works while the track moves: it passes the place once, at one moment. Where it stood still — a museum, a lunch, a viewpoint — every minute of the stay is at that place, and the nearest point is whichever the receiver's jitter happened to put closest. Two photos taken there agree with each other perfectly and say nothing: the offset they yield can be wrong by the length of the stay, and would then slide every untagged photo of the day along the track by as much. Such evidence narrows the offset without fixing it, so it is offered, checked against the track, and never applied by itself.
 :::
 
+:::{rat} A fix's time is a measurement of the clock, unless the fix is stale
+:id: RAT-gps_time_measures_the_clock
+:status: ruled
+:forced: no
+:follows_from: RAT-anchor_agreement, RAT-camera_records_its_clock_zone
+:justifies: RUL-gps_time_is_clock_evidence, RUL-repeated_gps_time_not_counted, RUL-gps_times_agreeing_apply, RUL-single_gps_time_proposed, RUL-gps_time_far_from_evidence_withheld
+
+A camera with its own GPS writes, beside the position, the UTC its fix was taken at. Less the camera's own time, that
+is the clock offset itself — measured, where the offset the camera records only states what its clock was set to and
+the zone's guess assumes it. With no track by the photo's place it was all the photo said of its clock, and was not
+read. A track anchor still comes first: a fix's time can be stale — the owner's ruling: *"a stale fix repeats its time
+while the camera's moves on"* — so readings count only where their GPS times all differ and their offsets agree, and
+then, two or more, they apply themselves as several anchors do; one is a single chance of a stale fix, and is offered.
+A camera writing local time into the GPS field shows a whole-hour difference: a track catches it where there is one,
+and so does the check against the destination's other devices that holds back a guess far from all of them.
+:::
+
 :::{rat} A kept offset is only as good as what it stood on
 :id: RAT-kept_offset_needs_its_evidence
 :status: ruled

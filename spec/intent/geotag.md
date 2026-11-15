@@ -1065,6 +1065,71 @@ An offset fixed only to within a stay of the tracks SHALL NOT count as anchored 
 A clock offset proposed from a camera's own GPS SHALL be recorded with the photos that support it, the photos that do not, and the track each was matched to.
 :::
 
+:::{rul} The time a photo's GPS fix recorded is evidence of its clock
+:id: RUL-gps_time_is_clock_evidence
+:status: ruled
+:criticality: high
+:verify: required
+:refines: RUL-offset_from_own_evidence
+:uses: DEF-clock_offset
+
+The time a photo's own GPS fix recorded, less the photo's camera time, SHALL be evidence of its clock's offset: below
+the offset its positions on the tracks give, and above the offset its photos record with their times and the
+destination's timezone.
+:::
+
+:::{rul} A GPS time that repeats, or that disagrees, is not counted
+:id: RUL-repeated_gps_time_not_counted
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+:refines: RUL-gps_time_is_clock_evidence
+
+The GPS times of a camera's photos of a day in a destination SHALL NOT be counted as evidence of its clock where two of
+them record the same GPS time at different camera times, or where their differences from the camera times lie farther
+apart than the configuration lets anchors agree.
+:::
+
+:::{rul} GPS times that agree apply themselves as several anchors do
+:id: RUL-gps_times_agreeing_apply
+:status: ruled
+:criticality: high
+:verify: required
+:refines: RUL-gps_time_is_clock_evidence
+:uses: DEF-decision
+
+An offset the GPS times of two or more photos agree on SHALL take effect without the user's answer as the
+configuration's setting for several anchors allows.
+:::
+
+:::{rul} One GPS time is a proposal
+:id: RUL-single_gps_time_proposed
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+:refines: RUL-gps_time_is_clock_evidence
+:uses: DEF-decision
+
+An offset the GPS time of one photo gives SHALL NOT take effect until the user accepts it.
+:::
+
+:::{rul} An offset from GPS times far from all evidence is not applied
+:id: RUL-gps_time_far_from_evidence_withheld
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+:refines: RUL-gps_time_is_clock_evidence
+:uses: DEF-clock_offset, DEF-tracks
+
+A clock offset from the GPS times of a camera's photos SHALL NOT take effect without an offset the user writes where it
+would put every photo of its day farther than the largest clock error the configuration allows from every track point
+and from the true time of every photo of the destination taken by another device whose true time is known, at least
+one such photo being there.
+:::
+
 
 ## 13. Resolved UTC
 

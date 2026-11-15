@@ -192,6 +192,12 @@ What the proposal panel shows depends on where the offset came from:
     of the day: the camera's clock changed — move them into a sub-folder and re-run.
 
   Photos skipped for having a track only outside the plausible time window, or none nearby, are counted.
+- **From the GPS fixes' own times** — no track passes the photos' places, but their GPS fixes recorded
+  the UTC they were taken at: each, less the camera time, is a reading of the offset. The panel lists a few
+  ("camera 10:00:00 · fix 00:59:30Z → −9h 00m 30s"). Two or more that agree applied themselves (status
+  **auto**); a single one waits for **accept proposal** — a stale fix repeats an old time. Where two fixes
+  recorded the same time at different camera times (a stale fix), or their offsets lie too far apart, the
+  fixes are not read, and a note says so.
 - **Shared from the same day elsewhere** — no photo here has its own position, but the camera's GPS fixed
   its clock that day in another destination — by itself, by your acceptance, or as the group of its GPS
   you picked there. Where it applied itself there it applies here too; otherwise accept it here or set
@@ -212,7 +218,7 @@ What the proposal panel shows depends on where the offset came from:
   the camera really tracked local time — a camera left on home time would be wrong. Where GPX tracks
   cover these photos, there is **nothing to accept here**: the decision says to confirm it in the Drift
   view, against the tracks, once.
-- **Too far from everything** — a local-time or recorded-offset proposal that would put every photo of the
+- **Too far from everything** — a local-time, recorded-offset or GPS-fix-time proposal that would put every photo of the
   day farther than a clock may be wrong (`gpx_anchor_max_clock_error_seconds`, two days by default) from
   every track point and from every photo another device took in this destination. The note says how far
   (e.g. "26.3 years from the nearest photo another device took here"): most likely the camera's clock

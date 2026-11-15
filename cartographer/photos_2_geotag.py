@@ -759,6 +759,8 @@ class GeotagWorkflow:
                 # A position geotag wrote is not the file's own: a re-run places the file again.
                 "has_native_gps": own_gps
                                   and geotag_marker(parsed.get("GPSProcessingMethod")) not in POSITION_MARKERS,
+                # the UTC its own GPS fix recorded: evidence of the clock (BLD-gps_time_proposal)
+                "gps_utc": gps_fix_utc(parsed) if own_gps else None,
                 "geotag_marker": geotag_marker(parsed.get("GPSProcessingMethod")),
                 "processing_method": parsed.get("GPSProcessingMethod"),   # the value a time mark extends
                 "other_times": held_other_times(parsed),     # what a time write rewrites (BLD-other_time_fields_written)
@@ -1106,6 +1108,10 @@ class GeotagWorkflow:
     # What a guessed offset takes effect as, without or with the user's acceptance.
     _GUESSED_SOURCES = ("recorded_offset_unconfirmed", "recorded_offset_accepted",
                         "timezone_unconfirmed", "timezone_accepted")
+    # The offset the fixes' own times give, and what it takes effect as: set against the same evidence, for a fix
+    # that wrote local time is hours out (RUL-gps_time_far_from_evidence_withheld).
+    _FAR_CHECKED_PROPOSALS = _GUESSED_PROPOSALS + ("gps_time",)
+    _FAR_CHECKED_SOURCES = _GUESSED_SOURCES + ("gps_time_auto", "gps_time_accepted")
 
     def _withhold_far_offsets(self, destinations, recall, by_dest, groups, gpx):
         """A guessed offset that puts a cell's photos where nothing else was does not take effect by acceptance
@@ -1119,7 +1125,7 @@ class GeotagWorkflow:
         for (dest, bucket), (group, _g, _p, _a, _rep, _date, _day, sel, _tz) in sorted(recall.items()):
             cell = destinations[dest]["camera_group_time_decisions"].get(bucket) or {}
             proposal = cell.get("proposal") or {}
-            if proposal.get("proposal_source") not in self._GUESSED_PROPOSALS:
+            if proposal.get("proposal_source") not in self._FAR_CHECKED_PROPOSALS:
                 continue
             if dest not in known:
                 rows = compute_resolved_utc(by_dest[dest], groups, {"destinations": {dest: destinations[dest]}})
@@ -1150,7 +1156,7 @@ class GeotagWorkflow:
                 continue
             proposal["far_from_evidence"] = why
             eff = cell.get("effective_time_anchor")
-            if isinstance(eff, dict) and eff.get("source") in self._GUESSED_SOURCES:
+            if isinstance(eff, dict) and eff.get("source") in self._FAR_CHECKED_SOURCES:
                 cell["effective_time_anchor"], cell["requires_user_input"] = "", True
                 cell.pop("decision_mode", None)
 
@@ -1257,12 +1263,18 @@ class GeotagWorkflow:
     def _offset_cell(self, dest, key, g, prior_cell, frames, gpx, blockers, tz=None, rep_naive=None, date=None,
                      day=None, photos=(), shared=None):
         # One (camera group, destination[, date]) clock-offset bucket. Proposal precedence (BLD-offset_buckets):
-        # GPX self-anchor → the same day's elsewhere → the offset its photos record (BLD-recorded_offset_proposal) →
+        # GPX self-anchor → the times the photos' own fixes recorded (BLD-gps_time_proposal) → the same day's
+        # elsewhere → the offset its photos record (BLD-recorded_offset_proposal) →
         # timezone-derived (camera assumed on local time; DST-aware, BLD-timezone_naive_offset) → manual. Clock
         # offsets do not inherit from the destination above. `date` (YYYY-MM-DD) is set when the group spans >1
         # naive day here; the bucket key is `<key>@<date>` and is the blocker location.
         loc = key if date is None else f"{key}@{date}"
         proposal = infer_anchor_proposal(frames, gpx, CONFIG)
+        set_aside = None
+        if proposal is None:
+            # no track by the photos' own positions: the UTC their own fixes recorded, below a track's anchor and
+            # above the offset the photos record and the zone's guess (RUL-gps_time_is_clock_evidence)
+            proposal, set_aside = gps_time_proposal(frames, CONFIG)
         if proposal is None and shared is not None:
             # no GPS evidence here, and the camera's own GPS fixed its clock that day in another destination
             proposal = {"proposal_source": "same_day_elsewhere", "proposed_offset_seconds": shared["offset_seconds"],
@@ -1287,6 +1299,7 @@ class GeotagWorkflow:
         is_gpx = proposal.get("proposal_source") == "gpx_self_anchor"
         is_shared = proposal.get("proposal_source") == "same_day_elsewhere"
         is_recorded = proposal.get("proposal_source") == "recorded_offset"
+        is_gps_time = proposal.get("proposal_source") == "gps_time"
         has_offset = "proposed_offset_seconds" in proposal
         conflicting = proposal.get("conflicting_count", 0) > 0 or bool(proposal.get("tied"))   # anchors disagree
         imprecise = bool(proposal.get("imprecise_seconds"))    # the tracks stood still: no photo says when
@@ -1322,7 +1335,8 @@ class GeotagWorkflow:
                                    else "; nothing is proposed now, so clear accept_proposal."))
             elif not _valid_offset(accepted_off):
                 blockers.append(f"{where} must be a whole number of seconds.")
-            elif not has_offset or abs(int(accepted_off) - proposal["proposed_offset_seconds"]) > (tolerance if is_gpx else 0):
+            elif not has_offset or abs(int(accepted_off) - proposal["proposed_offset_seconds"]) > \
+                    (tolerance if is_gpx or is_gps_time else 0):
                 stale = True                       # accepted a proposal that is no longer the one made
             else:
                 # An offset no photo pins within the tracks' stay is supported by the camera's GPS, not
@@ -1332,7 +1346,13 @@ class GeotagWorkflow:
                 effective = {"offset_seconds": int(accepted_off),
                              "source": ("gpx_anchor_imprecise" if imprecise else "gpx_anchor_accepted") if is_gpx
                              else "same_day_accepted" if is_shared
+                             else "gps_time_accepted" if is_gps_time
                              else "recorded_offset_accepted" if is_recorded else "timezone_accepted"}
+        elif is_gps_time and proposal["gps_time_count"] >= 2 and policy["multi_anchor_auto_apply"]:
+            # two fixes or more, their times all different and their offsets agreeing, apply themselves as several
+            # anchors do; one is a proposal to accept (RUL-gps_times_agreeing_apply, RUL-single_gps_time_proposed)
+            effective = {"offset_seconds": proposal["proposed_offset_seconds"], "source": "gps_time_auto"}
+            decision_mode = "auto_resolved"
         elif is_gpx and not conflicting and not imprecise:
             # auto-resolution under the config flags (RUL-anchor_offset_auto_as_configured) — GPX-self-anchor only; a
             # timezone-derived proposal is confirmable, never auto-applied (the local-clock assumption can be wrong).
@@ -1394,6 +1414,8 @@ class GeotagWorkflow:
             cell["anchored_by"] = anchored_by
         if differ:
             cell["recorded_offsets_differ"] = differ   # the photos record more than one: none is proposed from them
+        if set_aside and not is_gpx:
+            cell["gps_time_set_aside"] = set_aside     # the fixes' times, and why they say nothing of the clock
         rep = min(((f.get("source_naive_time"), f["relative_path"]) for f in photos
                    if _parse_camera_naive(f.get("source_naive_time"))), default=None)
         if rep:
