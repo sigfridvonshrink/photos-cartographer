@@ -7,7 +7,7 @@ This pipeline mutates irreplaceable originals, so coverage is tracked on **two a
    build by `tools/spec-build`. Line/branch can't tell you whether a *must-refuse / no-clobber /
    leaves-untouched* obligation is actually asserted; this can.
 
-Figures below are a snapshot; regenerate with the commands shown. The suite has **1531 tests**.
+Figures below are a snapshot; regenerate with the commands shown. The suite has **1538 tests**.
 
 ## Line / branch coverage
 
@@ -17,17 +17,17 @@ same plan/validate/execute core the phases provide, neither of which writes meta
 
 | Component | Line | Branch |
 |---|---:|---:|
-| prep (`photos_1_prep`) | 93.0% | 87.2% |
+| prep (`photos_1_prep`) | 94.2% | 88.7% |
 | prep models (`_prep_models`) | 100.0% | 100.0% |
-| geotag (`photos_2_geotag`) | 95.8% | 95.0% |
-| geotag calc (`_geotag_calc`) | 98.0% | 96.2% |
-| merge (`photos_3_merge`) | 92.5% | 92.0% |
-| shared (`photos_utils`) | 90.7% | 87.7% |
+| geotag (`photos_2_geotag`) | 96.0% | 95.4% |
+| geotag calc (`_geotag_calc`) | 98.1% | 96.7% |
+| merge (`photos_3_merge`) | 94.0% | 94.2% |
+| shared (`photos_utils`) | 91.2% | 88.5% |
 | reporting (`reporting`) | 93.6% | 74.3% |
 | cli | 90.9% | 83.3% |
-| console server | 58.2% | 47.0% |
-| editor server | 78.6% | 77.1% |
-| **Total** | **91.3%** | **88.2%** |
+| console server | 66.5% | 56.8% |
+| editor server | 81.9% | 81.7% |
+| **Total** | **92.4%** | **89.7%** |
 
 Regenerate (branch coverage; report scoped to the production code via `.coveragerc`):
 
@@ -38,7 +38,7 @@ tools/coverage          # bootstraps a local .venv, runs the suite, writes htmlc
 ## Spec coverage
 
 The specification is one corpus of typed items (`spec/`; see `spec/README.md`): 521 rules and invariants, 290
-rationales, 191 build items, 32 definitions, the philosophy's 3 facts and 4 choices — and the 707 tests that name the
+rationales, 191 build items, 32 definitions, the philosophy's 3 facts and 4 choices — and the 708 tests that name the
 items they verify, made items of the corpus from their `@pytest.mark.spec(…, test="TST-…")` marks. 1040 items are
 ruled; one is at seed: `RUL-disagreeing_tracks_place_nothing`, held for BACKLOG 29.
 

@@ -4,7 +4,7 @@
 
 - **What this is:** [`README.md`](README.md). **The record:** [`HISTORY.md`](HISTORY.md).
 
-*Open items: **40** — 2 to 7, 11 to 32, 35 to 40 and 42 to 47 (33, 34 and 41 ruled and built 2026-11-14).* 🛑 Numbers are never reused; the next is **48**.
+*Open items: **37** — 2, 6 to 7, 11, 13 to 16, 18 to 32, 35 to 40, 42 to 49.* 🛑 Numbers are never reused; the next is **50**.
 
 ---
 
@@ -74,6 +74,19 @@ saves only over what it loaded; tracks none of which can be read stop geotag.
   filesystem; a redundant JPEG paired with case; an uppercase extension left in photos by destination; and the
   exit statuses (1 locked, 2 refused, 3 partial or failed, 130 interrupted; merge's plan and dry run exit 0 with
   blockers).
+
+**Found while the user guides were redone (2026-11-15), to be ruled or fixed:**
+- the editor checks a timezone with the browser's zone list and geotag with the host's: a name one knows and the
+  other does not (`US/Eastern` on a host without the legacy names) is saved by the editor and refused by the plan;
+- a drift cell's `corrected_offset_seconds` that is not a number is named only once the cell is confirmed, and a
+  `confirmed_offset_seconds` beside `confirmed: false` is never checked;
+- `confirmed_despite_recorded_offsets: null` is a blocker, where `null` reads as "no answer" in every other field;
+- when `geotag plan` runs prep itself, prep's own closing "Next:" lines print as well as geotag's — three of them,
+  disagreeing, where geotag then stops;
+- `BLD-offset_shared_within_day` names an offset the user chose from a group among those shared within a day, and
+  also requires that no offset was written by hand — the code never shares such a one;
+- `phone_gpx_agreement_tolerance_seconds`, `phone_gpx_conflict_threshold_seconds`, `phone_gpx_max_distance_meters`
+  and `dst_conflict_tolerance_seconds` are still settings nothing reads, kept for item 6.
 
 ---
 
@@ -230,31 +243,6 @@ be replaced this way, on the user's answer only — today it never is (`RUL-own_
 interim advice once both items are built.
 
 **When:** any time — the conversion is done; with or after item 15.
-
-### 17. Redo the user docs
-
-**Why:** the conversion changed what the user sees and does, and the user docs (`docs/`) were left as they were until it finished — the owner: *"I'd just leave it and redo everything that needs
-changes when I finish the conversion."* Among the changes: geotag stops on an untimed photo in photos by destination,
-and runs prep itself when the inbox is empty; a trip's timezone is answered once, the configured default only offered;
-`accept_proposed_timezone` and `manual_real_utc` are gone; a tie between visits, a picked GPS group and a drift
-confirmation that holds only for its offset show in the editor; track positions are marked `matched`, `interpolated`
-or `extrapolated`; execute stops on a photo edited since the plan, and finalize on a plan no longer current. The
-walkthrough's "Geotag won't proceed" step predates geotag running prep itself. From the review of 2026-11-14: an
-accepted offset names the offset it accepted and asks again when the proposal changes; a stay of the tracks is said
-to fix no time, and its offset goes through the drift check; a photo the tracks did not place says why; tracks that
-disagree are warned of; a tracks folder that is not there stops `geotag plan`; finalize prints how every photo was
-placed and refuses photos changed since execute.
-
-**Also since (2026-11-14):** a destination is said to be in a country, which gives its timezone; a destination has one
-timezone, and one written against its photos' recorded offsets needs the user's word; an offset the camera's own
-positions gave is shared across the destinations of a day; a timezone's offset is asked about once, at the tracks;
-geotag stops on a link among the photos; prep stops on a disturbed workspace before it scans; settings of one
-purpose each replaced the shared ones, and a configuration lacking them does not load.
-
-**What to do:** walk `README.md`, `docs/quickstart.md`, `concepts.md`, `editor.md` and `who-is-this-for.md` against
-the corpus and the code, and rewrite what no longer holds. The walkthrough and every screenshot are item 49.
-
-**When:** now — the conversion is done.
 
 ### 18. Merge: check the free space before moving into another filesystem
 

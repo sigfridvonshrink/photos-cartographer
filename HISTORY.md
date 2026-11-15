@@ -107,8 +107,16 @@ decision fields are removed — `accept_proposed_timezone`, `manual_real_utc` �
 (`placement`, `left_unlocated`, `media_after`). Replace a deployed `photos-config-defaults.json` with this release's.
 The library itself needs nothing.
 
-**Not yet caught up:** the walkthrough and its screenshots show v2.0.0 and say so; the user guides are to be redone
-against this version (BACKLOG 17, 49).
+**The user guides are redone against this version** — the README, the quick start, concepts, the editor guide and
+the decision-file reference: how a timezone and a clock offset are settled, what applies itself and what is asked,
+what stops a run and what to do about it, and what a 2.0.0 workspace needs. Redoing them found the editor telling the
+user wrong things, fixed with them: a refused load showed an empty editor instead of its reason; the console
+reloaded the Edit tab over unsaved edits; a time at a daylight-saving change was explained nowhere; a zone the
+photos contradict offered a button that resolved nothing; and a country written as anything but text ended the plan
+in an error rather than a blocker.
+
+**Not yet caught up:** the walkthrough and its screenshots show v2.0.0; it is marked obsolete until it is retaken
+(BACKLOG 49).
 
 ## 2026-11-13 — v2.0.0
 
