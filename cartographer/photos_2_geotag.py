@@ -74,6 +74,8 @@ COMPLETE_LOG_ARTIFACT = "photos-26-complete-log.json"
 GEOTAG_DB_SNAPSHOT = "photos-26-geotag-ingest.db"
 ARCHIVE_MANIFEST_ARTIFACT = "photos-26-archive-manifest.json"
 ARCHIVE_ARTIFACT = "photos-26-archive.tar.gz"
+# The fields of a day's offset cell that answer a proposed change of the camera's clock (BLD-clock_change_split).
+CLOCK_CHANGE_FIELDS = ("accept_clock_change", "accepted_change_offsets_seconds", "first_after_change")
 EXECUTED_DIR = "executed"            # executed/<plan id>/: the decision records each executed plan ran against
 GPX_WARNINGS_SHOWN = 10     # geotag plan prints at most this many GPX load warnings, then a count
 UNREADABLE_TAGS_SHOWN = 20  # geotag plan names at most this many photos whose offset tag holds no offset, then a count
@@ -1044,6 +1046,15 @@ class GeotagWorkflow:
                                                       anchor_frames, gpx, blockers, tz=tz, rep_naive=rep_naive,
                                                       date=date, day=day, photos=sel)
                     recall[(dest, bucket)] = (group, g, prior_cell, anchor_frames, rep_naive, date, day, sel, tz)
+                    # A camera's clock changed during the day (BLD-clock_change_split): proposed from its own GPS, and,
+                    # accepted, the day split at the change into parts — never for a group of several bodies, whose
+                    # bodies are told apart by their destinations (RUL-several_bodies_no_clock_change_split).
+                    if not g.get("several_bodies"):
+                        parts = self._clock_change(dest, group, g, bucket, cells[bucket], prior_cell, anchor_frames,
+                                                   sel, gpx, blockers, tz, date, day)
+                        if parts:
+                            cells.update(parts)
+                            recall.pop((dest, bucket), None)     # decided by its parts: shared with no other day
             destinations[dest] = {
                 "destination_path": dest,
                 "destination_timezone": tz_block,
@@ -1098,6 +1109,84 @@ class GeotagWorkflow:
         if not requires:
             artifact["decision_mode"] = "no_op_or_auto_resolved"
         return artifact, blockers
+
+    def _clock_change(self, dest, group, g, bucket, cell, prior_cell, frames, sel, gpx, blockers, tz, date, day):
+        """A change of the camera's clock during its day here (BLD-clock_change_split), on the day's cell `cell`: the
+        proposal `clock_change_proposal` makes from the photos' own GPS, recorded as `clock_change`, and the user's
+        answer — `accept_clock_change`, `accepted_change_offsets_seconds` (the two offsets accepted, in order) and, where
+        photos lie between the runs, `first_after_change` (the camera time of the first after the change). Accepted
+        while the two runs' offsets are those accepted, within `gpx_anchor_decision_tolerance_seconds`, and the change
+        placed, the day is split into its parts, returned as {key: cell} — `<bucket>#1` before the change and
+        `<bucket>#2` from it — each built from its own photos, its offset the one accepted for its run; the day's cell
+        asking nothing, its photos read by the parts (`offset_cell_key`). Else None, the day's cell as built — asking
+        which photo was the first after the change where it is not said, or said outside the runs."""
+        change = clock_change_proposal(frames, sel, gpx, CONFIG)
+        ud = prior_cell.get("user_decision") if isinstance(prior_cell.get("user_decision"), dict) else {}
+        if change is None and not any(k in ud for k in CLOCK_CHANGE_FIELDS):
+            return None
+        where = f"{dest}: camera_group_time_decisions[{bucket}].user_decision"
+        accept = _decision_flag(ud, "accept_clock_change", where, blockers)
+        offs = ud.get("accepted_change_offsets_seconds", "")
+        offs = "" if offs is None else offs
+        first = ud.get("first_after_change", "")
+        first = "" if first is None else first
+        now = (" — the ones now proposed are " + " and ".join(str(r["offset_seconds"]) for r in change["runs"]) + "."
+               if change else "; no change is proposed now, so clear accept_clock_change.")
+        if offs != "" and not (isinstance(offs, list) and len(offs) == 2
+                               and all(_valid_offset(o) and not isinstance(o, bool) for o in offs)):
+            blockers.append(f"{where}.accepted_change_offsets_seconds must be the two offsets accepted, in order, as "
+                            "whole numbers of seconds" + now)
+            offs = ""
+        elif accept and offs == "":
+            blockers.append(f"{where}.accepted_change_offsets_seconds must be the two offsets accepted" + now)
+        if first != "" and (not isinstance(first, str) or _parse_camera_naive(first) is None):
+            blockers.append(f"{where}.first_after_change must be the camera time of the first photo after the change, "
+                            "written YYYY:MM:DD HH:MM:SS.")
+            first = ""
+        cell["user_decision"].update(accept_clock_change=accept, accepted_change_offsets_seconds=offs,
+                                     first_after_change=first)
+        if change is not None:
+            cell["clock_change"] = change
+        if not accept or offs == "":
+            return None
+        tolerance = CONFIG["gpx_anchor_decision_tolerance_seconds"]
+        if change is None or any(abs(int(o) - r["offset_seconds"]) > tolerance for o, r in zip(offs, change["runs"])):
+            cell["stale_user_decision"] = True      # accepted a change that is no longer the one proposed
+            return None
+        if ud.get("manual_offset_seconds") not in ("", None):
+            return None                             # one offset written for the whole day outranks the change
+        last = _parse_camera_naive(change["runs"][0]["last"]["camera_source_naive_time"])
+        split_at = change["runs"][1]["first"]["camera_source_naive_time"]
+        if change["between"]:
+            # photos with no evidence of their own lie between the runs: which was the first after the change is the
+            # user's to say (RUL-clock_change_first_after_asked)
+            at = _parse_camera_naive(first) if first else None
+            if at is None or not (last < at <= _parse_camera_naive(split_at)):
+                cell["stale_user_decision"] = bool(first)       # said for a time that is not between the runs now
+                cell["effective_time_anchor"], cell["requires_user_input"] = "", True
+                cell.pop("decision_mode", None)
+                return None
+            split_at = first
+        at = _parse_camera_naive(split_at)
+        keys = [f"{bucket}#1", f"{bucket}#2"]
+        parts = {}
+        for i, key in enumerate(keys):
+            psel = [f for f in sel if (t := _parse_camera_naive(f.get("source_naive_time"))) is not None
+                    and (t >= at) == bool(i)]
+            rep = min((f.get("source_naive_time") for f in psel), default=None)
+            accepted = {"user_decision": {"accept_proposal": True, "accepted_offset_seconds": int(offs[i]),
+                                          "manual_offset_seconds": ""}}
+            part = self._offset_cell(dest, group, g, accepted, [f for f in psel if f.get("has_native_gps")], gpx,
+                                     blockers, tz=tz, rep_naive=rep, date=date, day=day, photos=psel)
+            # a part of the day, its offset its own photos' (RUL-clock_change_parts_own_evidence), answered by the
+            # acceptance on the day's cell
+            part["clock_change_part"] = {"of": bucket, "part": i + 1, "from": split_at if i else "",
+                                         "until": "" if i else split_at}
+            parts[key] = part
+        cell["clock_change"]["effective_split"] = {"first_after_change": split_at, "parts": keys}
+        cell["effective_time_anchor"], cell["requires_user_input"], cell["stale_user_decision"] = "", False, False
+        cell.pop("decision_mode", None)
+        return parts
 
     def _phone_cell(self, dest, key, g, prior_cell, sel, gpx, blockers, tz, date, day):
         """A phone's clock for one destination and day (BLD-phone_offset_cell), as (cell, recall entry), or None
@@ -1306,9 +1395,11 @@ class GeotagWorkflow:
         for dest, d in destinations.items():
             for bucket, cell in d["camera_group_time_decisions"].items():
                 # a phone's day is read in each destination on its own: its clock is the network's, set again
-                # wherever it went (BLD-phone_offset_cell)
+                # wherever it went (BLD-phone_offset_cell); a day split at a clock change has two offsets, and
+                # neither is the day's (BLD-clock_change_split)
                 if cell.get("day") and cell.get("camera_group_class") == "camera" \
-                        and cell.get("camera_group") not in several:
+                        and cell.get("camera_group") not in several and "clock_change_part" not in cell \
+                        and not (cell.get("clock_change") or {}).get("effective_split"):
                     by_day.setdefault((cell["camera_group"], cell["day"]), []).append((dest, bucket, cell))
         for (_group, _day), members in sorted(by_day.items()):
             if len(members) < 2:

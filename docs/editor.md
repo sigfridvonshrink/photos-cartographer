@@ -216,6 +216,13 @@ What the proposal panel shows depends on where the offset came from:
     of the day: the camera's clock changed — move them into a sub-folder and re-run.
 
   Photos skipped for having a track only outside the plausible time window, or none nearby, are counted.
+- **The camera's clock changed this day** — the camera's GPS (on the tracks, or its fixes' times) shows two runs of
+  photos, one after the other, each agreeing on an offset of its own: the clock was set between them (to local time
+  at lunch, say). The panel names both runs and offers **split the day where the clock changed** — one tick settles
+  the day, each part corrected by its own photos. Where photos without GPS lie between the two runs, pick which was
+  the first after the change (or "none of them"). If the clock did not change, answer the day's offset as usual
+  instead. By hand: `accept_clock_change`, `accepted_change_offsets_seconds` and `first_after_change` in the day's
+  cell.
 - **From the GPS fixes' own times** — no track passes the photos' places, but their GPS fixes recorded
   the UTC they were taken at: each, less the camera time, is a reading of the offset. The panel lists a few
   ("camera 10:00:00 · fix 00:59:30Z → −9h 00m 30s"). Two or more that agree applied themselves (status

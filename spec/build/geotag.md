@@ -107,7 +107,39 @@ destinations are processed parents first.
 :status: ruled
 :realises: RUL-offset_per_camera_destination_day, RUL-offset_from_own_evidence, RUL-answer_follows_its_day
 
-Each destination's `camera_group_time_decisions` SHALL hold one cell per camera group present, keyed by its `camera_group_key`, or — when the group's photos there span more than one naive date — one per date, keyed `<camera_group_key>@<YYYY-MM-DD>` with a `date` field, the date taken from `source_naive_time`; every cell names the day its photos are of in `day`, whatever its key. A cell's earlier answer is the cell under its key when that names the same `day`, else the one under the key's other form whose `day` is the same; a drift cell's likewise. A cell's proposal is the GPX self-anchor of that group's native-GPS frames of that date there; else the offset their fixes' times give ({need}`BLD-gps_time_proposal`); else the offset shared from the same day elsewhere ({need}`BLD-offset_shared_within_day`); else `recorded_offset` ({need}`BLD-recorded_offset_proposal`); else, with the destination's timezone resolved, `timezone_naive` at the cell's earliest naive time, DST-aware; else `manual_required`. A cell with photos not yet corrected names the earliest of them in `representative` (`source_file`, `camera_source_naive_time`). No cell reads the destination above it for an offset; the one case of a cell taking another destination's is {need}`BLD-offset_shared_within_day`.
+Each destination's `camera_group_time_decisions` SHALL hold one cell per camera group present, keyed by its `camera_group_key`, or — when the group's photos there span more than one naive date — one per date, keyed `<camera_group_key>@<YYYY-MM-DD>` with a `date` field, the date taken from `source_naive_time`; every cell names the day its photos are of in `day`, whatever its key. A cell's earlier answer is the cell under its key when that names the same `day`, else the one under the key's other form whose `day` is the same; a drift cell's likewise. A cell's proposal is the GPX self-anchor of that group's native-GPS frames of that date there; else the offset their fixes' times give ({need}`BLD-gps_time_proposal`); else the offset shared from the same day elsewhere ({need}`BLD-offset_shared_within_day`); else `recorded_offset` ({need}`BLD-recorded_offset_proposal`); else, with the destination's timezone resolved, `timezone_naive` at the cell's earliest naive time, DST-aware; else `manual_required`. A cell with photos not yet corrected names the earliest of them in `representative` (`source_file`, `camera_source_naive_time`). No cell reads the destination above it for an offset; the one case of a cell taking another destination's is {need}`BLD-offset_shared_within_day`. A day split at a change of the clock adds its parts beside its cell, keyed `<key>#1` and `<key>#2` ({need}`BLD-clock_change_split`).
+:::
+
+:::{bld} A day split where the camera's clock changed
+:id: BLD-clock_change_split
+:status: ruled
+:realises: RUL-day_split_into_parts, RUL-clock_change_split_proposed, RUL-clock_change_needs_gps, RUL-alternating_runs_no_clock_change, RUL-clock_change_needs_acceptance, RUL-clock_change_accepted_once, RUL-clock_change_parts_own_evidence, RUL-clock_change_first_after_asked, RUL-clock_change_first_after_not_asked, RUL-several_bodies_no_clock_change_split
+:uses: BLD-offset_buckets, BLD-anchor_matching, BLD-gps_time_proposal
+
+For each `camera` day cell of photos not yet corrected, of a group not named in `several_bodies_groups`,
+`clock_change_proposal` SHALL take the photos its GPX self-anchor anchors — else, with none, the readings of their
+fixes' times — in camera-time order, where those photos do not already agree (the anchors conflict or tie; the
+readings' offsets lie farther apart than `gpx_anchor_offset_spread_max_seconds`, their fix times all different), and
+try each place to cut them in two: a cut whose earlier and later photos each agree — a GPX consensus over them with no
+conflicting photo, no tie and no stay; readings within the spread of their first, whose offset it is — on offsets
+farther apart than the spread. Exactly one such cut, its two sides a second or more apart, is recorded on the day's
+cell as `clock_change`: `evidence` (`gpx_self_anchor` or `gps_time`), `runs` — each `offset_seconds`, `photos`, and
+`first` and `last` (`source_file`, `camera_source_naive_time`) — `between`, each photo of the day that is no run's,
+taken after the first run's last and before the second's first (`source_file`, `camera_source_naive_time`), and
+`acceptance_tolerance_seconds`. The answer is the day cell's `user_decision.accept_clock_change`,
+`accepted_change_offsets_seconds` (the runs' two offsets, in order) and `first_after_change` (a camera time,
+`YYYY:MM:DD HH:MM:SS`), written on the cell only where a change is proposed or answered; not a boolean, not two whole
+numbers, or not such a time, a blocker, as is an acceptance naming no offsets. Accepted while each offset is within
+`gpx_anchor_decision_tolerance_seconds` of its run's, a `manual_offset_seconds` on the cell coming first, and — where
+`between` holds a photo — `first_after_change` lies after the first run's last photo and no later than the second's
+first (else the cell asks, `stale_user_decision` where it was written), the day is split at `first_after_change`, or at
+the second run's first photo with none between: the cell holds `clock_change.effective_split` (`first_after_change`,
+`parts`), its `effective_time_anchor` empty and asking nothing, and beside it the parts `<key>#1`, the photos before
+that time, and `<key>#2`, those from it, each an offset cell built from its own photos as an acceptance of its run's
+offset builds one — `gpx_anchor_accepted`, or `gps_time_accepted` — holding `clock_change_part` (`of`, `part`, `from`,
+`until`). An acceptance whose offsets are no longer the runs', or with no change proposed, is `stale_user_decision`
+and splits nothing. A split day and its parts take no part in the offsets shared within a day
+({need}`BLD-offset_shared_within_day`); `offset_cell_key` gives each photo of a split day its part.
 :::
 
 :::{bld} Geotag's records are grouped by destination
@@ -386,7 +418,8 @@ and `handoff`, the handoff's content fingerprint ({need}`BLD-handoff_content_fin
 :realises: RUL-phone_time_from_own_offset, RUL-offset_within_time_value, RUL-offset_per_camera_destination_day, RUL-time_before_gps, RUL-ambiguous_local_time_never_guessed, RUL-unreadable_offset_tag_is_none
 
 `compute_resolved_utc` SHALL resolve each photo of photos by destination to UTC: a camera's photo by the offset of its
-cell — `<group>@<date>` where the destination has one for its date, else `<group>` — a corrected offset from
+cell — `<group>@<date>` where the destination has one for its date, else `<group>`, and of that day split at a change
+of the clock the part its camera time falls in ({need}`BLD-clock_change_split`) — a corrected offset from
 `photos-22-gps-drift-validation.json` taking its place (`camera_group_offset`); a phone's, where its day there has a
 cell whose `phone.applies_to` is `every_photo` and whose effective source is not `as_recorded`, likewise by that cell's
 offset ({need}`BLD-phone_offset_cell`); else a phone's by the offset recorded with

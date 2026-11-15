@@ -42,6 +42,12 @@ affordance.
   day, the camera's clock changed. Code site `offsetProposalBlock` / `groupChoice` / `proposalNotes` in
   `web/app.js`, tested in `app_offset_buckets.test.mjs`.
 - **Per-date offset buckets**: grouped, collapsible, fan-out edit (#115).
+- **A clock changed during the day is one tick on the day's row**: the offset panel names both runs and offers
+  "split the day where the clock changed"; where photos without GPS lie between the runs, a choice of which was the
+  first after the change (or none of them). The parts the split makes are never rows of their own — they are
+  geotag's, answered by the day's tick — and a day with a proposed change is never collapsed with other days. Code
+  site `clockChangeControls` / `clockChangeHolds` / `offsetGroups` in `web/app.js`, tested in
+  `app_clock_change.test.mjs` (BACKLOG 15).
 - **One camera or several bodies, in the Cameras view**: under the new groups, every fixed-clock camera group of the
   photos is listed with two choices — one camera (the default), several bodies — saved into
   `several_bodies_groups` like a new group's class, never a question that waits or opens the view. Why: the owner

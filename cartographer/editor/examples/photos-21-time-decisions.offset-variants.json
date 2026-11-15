@@ -1659,7 +1659,7 @@
   "decision_mode": "no_op_or_auto_resolved",
   "depends_on": {
     "camera_group_key_version": 1,
-    "camera_time_policy_fingerprint": "3aa0a6df3c01e0f5bab6c6b214eea828fe6d5ca7cf175cae406e4d20f98b8277",
+    "camera_time_policy_fingerprint": "9b24ea72b2b7545630cb0104e61188cce2626f54f34cd205cd51930c6c40e55a",
     "gpx_fingerprint": "example-gpx-fingerprint",
     "handoff": {
       "artifact_name": "photos-11-handoff.json",
@@ -1685,6 +1685,406 @@
         }
       },
       "file_less": true
+    },
+    "6-photos-by-dest/ClockChange": {
+      "camera_group_time_decisions": {
+        "FUJIFILM|X-T5|K": {
+          "camera_group": "FUJIFILM|X-T5|K",
+          "camera_group_class": "camera",
+          "clock_change": {
+            "acceptance_tolerance_seconds": 120.0,
+            "between": [
+              {
+                "camera_source_naive_time": "2024:07:03 11:30:00",
+                "source_file": "6-photos-by-dest/ClockChange/k-between.raf"
+              }
+            ],
+            "effective_split": {
+              "first_after_change": "2024:07:03 11:30:00",
+              "parts": [
+                "FUJIFILM|X-T5|K#1",
+                "FUJIFILM|X-T5|K#2"
+              ]
+            },
+            "evidence": "gpx_self_anchor",
+            "runs": [
+              {
+                "first": {
+                  "camera_source_naive_time": "2024:07:03 10:00:00",
+                  "source_file": "6-photos-by-dest/ClockChange/k1.raf"
+                },
+                "last": {
+                  "camera_source_naive_time": "2024:07:03 10:30:00",
+                  "source_file": "6-photos-by-dest/ClockChange/k2.raf"
+                },
+                "offset_seconds": -7200,
+                "photos": 2
+              },
+              {
+                "first": {
+                  "camera_source_naive_time": "2024:07:03 13:00:00",
+                  "source_file": "6-photos-by-dest/ClockChange/k3.raf"
+                },
+                "last": {
+                  "camera_source_naive_time": "2024:07:03 13:30:00",
+                  "source_file": "6-photos-by-dest/ClockChange/k4.raf"
+                },
+                "offset_seconds": -3600,
+                "photos": 2
+              }
+            ]
+          },
+          "day": "2024-07-03",
+          "effective_time_anchor": "",
+          "proposal": {
+            "acceptance_tolerance_seconds": 120.0,
+            "anchor_count": 4,
+            "anchors": [
+              {
+                "camera_source_naive_time": "2024:07:03 13:00:00",
+                "gpx_match": {
+                  "distance_m": 0.0,
+                  "gpx_file": "clock.gpx",
+                  "match_type": "gpx_point_match",
+                  "segment_duration_seconds": null
+                },
+                "native_gps": {
+                  "lat": 57.02,
+                  "lon": 11.0
+                },
+                "proposal_id": "anchor-001",
+                "proposed_offset_seconds": -3600,
+                "source_file": "6-photos-by-dest/ClockChange/k3.raf"
+              },
+              {
+                "camera_source_naive_time": "2024:07:03 10:00:00",
+                "gpx_match": {
+                  "distance_m": 0.0,
+                  "gpx_file": "clock.gpx",
+                  "match_type": "gpx_point_match",
+                  "segment_duration_seconds": null
+                },
+                "native_gps": {
+                  "lat": 57.0,
+                  "lon": 11.0
+                },
+                "proposal_id": "anchor-002",
+                "proposed_offset_seconds": -7200,
+                "source_file": "6-photos-by-dest/ClockChange/k1.raf"
+              },
+              {
+                "camera_source_naive_time": "2024:07:03 10:30:00",
+                "gpx_match": {
+                  "distance_m": 0.0,
+                  "gpx_file": "clock.gpx",
+                  "match_type": "gpx_point_match",
+                  "segment_duration_seconds": null
+                },
+                "native_gps": {
+                  "lat": 57.01,
+                  "lon": 11.0
+                },
+                "proposal_id": "anchor-003",
+                "proposed_offset_seconds": -7200,
+                "source_file": "6-photos-by-dest/ClockChange/k2.raf"
+              },
+              {
+                "camera_source_naive_time": "2024:07:03 13:30:00",
+                "gpx_match": {
+                  "distance_m": 0.0,
+                  "gpx_file": "clock.gpx",
+                  "match_type": "gpx_point_match",
+                  "segment_duration_seconds": null
+                },
+                "native_gps": {
+                  "lat": 57.03,
+                  "lon": 11.0
+                },
+                "proposal_id": "anchor-004",
+                "proposed_offset_seconds": -3600,
+                "source_file": "6-photos-by-dest/ClockChange/k4.raf"
+              }
+            ],
+            "confidence": "review_required",
+            "conflicting_count": 2,
+            "conflicting_files": [
+              "6-photos-by-dest/ClockChange/k1.raf",
+              "6-photos-by-dest/ClockChange/k2.raf"
+            ],
+            "groups": [
+              {
+                "count": 2,
+                "offset_seconds": -3600,
+                "representative": {
+                  "camera_source_naive_time": "2024:07:03 13:00:00",
+                  "distance_m": 0.0,
+                  "gpx_file": "clock.gpx",
+                  "match_type": "gpx_point_match",
+                  "real_utc": "2024-07-03T12:00:00Z",
+                  "source_file": "6-photos-by-dest/ClockChange/k3.raf"
+                }
+              },
+              {
+                "count": 2,
+                "offset_seconds": -7200,
+                "representative": {
+                  "camera_source_naive_time": "2024:07:03 10:00:00",
+                  "distance_m": 0.0,
+                  "gpx_file": "clock.gpx",
+                  "match_type": "gpx_point_match",
+                  "real_utc": "2024-07-03T08:00:00Z",
+                  "source_file": "6-photos-by-dest/ClockChange/k1.raf"
+                }
+              }
+            ],
+            "imprecise_seconds": 0,
+            "proposal_source": "gpx_self_anchor",
+            "proposed_offset_seconds": -3600,
+            "proposed_real_utc": "2024-07-03T12:00:00Z",
+            "recommended_gpx_match": {
+              "distance_m": 0.0,
+              "gpx_file": "clock.gpx",
+              "match_type": "gpx_point_match",
+              "segment_duration_seconds": null
+            },
+            "skipped": {
+              "examples": [],
+              "no_nearby_track": 0,
+              "outside_time_window": 0
+            },
+            "supporting_count": 1,
+            "tied": true
+          },
+          "representative": {
+            "camera_source_naive_time": "2024:07:03 10:00:00",
+            "source_file": "6-photos-by-dest/ClockChange/k1.raf"
+          },
+          "requires_user_input": false,
+          "stale_user_decision": false,
+          "user_decision": {
+            "accept_clock_change": true,
+            "accept_proposal": false,
+            "accepted_change_offsets_seconds": [
+              -7200,
+              -3600
+            ],
+            "accepted_offset_seconds": "",
+            "first_after_change": "2024:07:03 11:30:00",
+            "manual_offset_seconds": ""
+          }
+        },
+        "FUJIFILM|X-T5|K#1": {
+          "camera_group": "FUJIFILM|X-T5|K",
+          "camera_group_class": "camera",
+          "clock_change_part": {
+            "from": "",
+            "of": "FUJIFILM|X-T5|K",
+            "part": 1,
+            "until": "2024:07:03 11:30:00"
+          },
+          "day": "2024-07-03",
+          "effective_time_anchor": {
+            "offset_seconds": -7200,
+            "source": "gpx_anchor_accepted"
+          },
+          "proposal": {
+            "acceptance_tolerance_seconds": 120.0,
+            "anchor_count": 2,
+            "anchors": [
+              {
+                "camera_source_naive_time": "2024:07:03 10:00:00",
+                "gpx_match": {
+                  "distance_m": 0.0,
+                  "gpx_file": "clock.gpx",
+                  "match_type": "gpx_point_match",
+                  "segment_duration_seconds": null
+                },
+                "native_gps": {
+                  "lat": 57.0,
+                  "lon": 11.0
+                },
+                "proposal_id": "anchor-001",
+                "proposed_offset_seconds": -7200,
+                "source_file": "6-photos-by-dest/ClockChange/k1.raf"
+              },
+              {
+                "camera_source_naive_time": "2024:07:03 10:30:00",
+                "gpx_match": {
+                  "distance_m": 0.0,
+                  "gpx_file": "clock.gpx",
+                  "match_type": "gpx_point_match",
+                  "segment_duration_seconds": null
+                },
+                "native_gps": {
+                  "lat": 57.01,
+                  "lon": 11.0
+                },
+                "proposal_id": "anchor-002",
+                "proposed_offset_seconds": -7200,
+                "source_file": "6-photos-by-dest/ClockChange/k2.raf"
+              }
+            ],
+            "confidence": "high",
+            "conflicting_count": 0,
+            "conflicting_files": [],
+            "groups": [
+              {
+                "count": 2,
+                "offset_seconds": -7200,
+                "representative": {
+                  "camera_source_naive_time": "2024:07:03 10:00:00",
+                  "distance_m": 0.0,
+                  "gpx_file": "clock.gpx",
+                  "match_type": "gpx_point_match",
+                  "real_utc": "2024-07-03T08:00:00Z",
+                  "source_file": "6-photos-by-dest/ClockChange/k1.raf"
+                }
+              }
+            ],
+            "imprecise_seconds": 0,
+            "proposal_source": "gpx_self_anchor",
+            "proposed_offset_seconds": -7200,
+            "proposed_real_utc": "2024-07-03T08:00:00Z",
+            "recommended_gpx_match": {
+              "distance_m": 0.0,
+              "gpx_file": "clock.gpx",
+              "match_type": "gpx_point_match",
+              "segment_duration_seconds": null
+            },
+            "skipped": {
+              "examples": [],
+              "no_nearby_track": 0,
+              "outside_time_window": 0
+            },
+            "supporting_count": 1,
+            "tied": false
+          },
+          "representative": {
+            "camera_source_naive_time": "2024:07:03 10:00:00",
+            "source_file": "6-photos-by-dest/ClockChange/k1.raf"
+          },
+          "requires_user_input": false,
+          "stale_user_decision": false,
+          "user_decision": {
+            "accept_proposal": true,
+            "accepted_offset_seconds": -7200,
+            "manual_offset_seconds": ""
+          }
+        },
+        "FUJIFILM|X-T5|K#2": {
+          "camera_group": "FUJIFILM|X-T5|K",
+          "camera_group_class": "camera",
+          "clock_change_part": {
+            "from": "2024:07:03 11:30:00",
+            "of": "FUJIFILM|X-T5|K",
+            "part": 2,
+            "until": ""
+          },
+          "day": "2024-07-03",
+          "effective_time_anchor": {
+            "offset_seconds": -3600,
+            "source": "gpx_anchor_accepted"
+          },
+          "proposal": {
+            "acceptance_tolerance_seconds": 120.0,
+            "anchor_count": 2,
+            "anchors": [
+              {
+                "camera_source_naive_time": "2024:07:03 13:00:00",
+                "gpx_match": {
+                  "distance_m": 0.0,
+                  "gpx_file": "clock.gpx",
+                  "match_type": "gpx_point_match",
+                  "segment_duration_seconds": null
+                },
+                "native_gps": {
+                  "lat": 57.02,
+                  "lon": 11.0
+                },
+                "proposal_id": "anchor-001",
+                "proposed_offset_seconds": -3600,
+                "source_file": "6-photos-by-dest/ClockChange/k3.raf"
+              },
+              {
+                "camera_source_naive_time": "2024:07:03 13:30:00",
+                "gpx_match": {
+                  "distance_m": 0.0,
+                  "gpx_file": "clock.gpx",
+                  "match_type": "gpx_point_match",
+                  "segment_duration_seconds": null
+                },
+                "native_gps": {
+                  "lat": 57.03,
+                  "lon": 11.0
+                },
+                "proposal_id": "anchor-002",
+                "proposed_offset_seconds": -3600,
+                "source_file": "6-photos-by-dest/ClockChange/k4.raf"
+              }
+            ],
+            "confidence": "high",
+            "conflicting_count": 0,
+            "conflicting_files": [],
+            "groups": [
+              {
+                "count": 2,
+                "offset_seconds": -3600,
+                "representative": {
+                  "camera_source_naive_time": "2024:07:03 13:00:00",
+                  "distance_m": 0.0,
+                  "gpx_file": "clock.gpx",
+                  "match_type": "gpx_point_match",
+                  "real_utc": "2024-07-03T12:00:00Z",
+                  "source_file": "6-photos-by-dest/ClockChange/k3.raf"
+                }
+              }
+            ],
+            "imprecise_seconds": 0,
+            "proposal_source": "gpx_self_anchor",
+            "proposed_offset_seconds": -3600,
+            "proposed_real_utc": "2024-07-03T12:00:00Z",
+            "recommended_gpx_match": {
+              "distance_m": 0.0,
+              "gpx_file": "clock.gpx",
+              "match_type": "gpx_point_match",
+              "segment_duration_seconds": null
+            },
+            "skipped": {
+              "examples": [],
+              "no_nearby_track": 0,
+              "outside_time_window": 0
+            },
+            "supporting_count": 1,
+            "tied": false
+          },
+          "representative": {
+            "camera_source_naive_time": "2024:07:03 11:30:00",
+            "source_file": "6-photos-by-dest/ClockChange/k-between.raf"
+          },
+          "requires_user_input": false,
+          "stale_user_decision": false,
+          "user_decision": {
+            "accept_proposal": true,
+            "accepted_offset_seconds": -3600,
+            "manual_offset_seconds": ""
+          }
+        }
+      },
+      "destination_path": "6-photos-by-dest/ClockChange",
+      "destination_timezone": {
+        "decision_mode": "auto_resolved",
+        "effective_iana_timezone": "Europe/Brussels",
+        "inherited_from": "6-photos-by-dest",
+        "proposal_source": "inherited",
+        "proposed_iana_timezone": "Europe/Brussels",
+        "requires_user_input": false,
+        "stale_user_decision": false,
+        "user_decision": {
+          "confirmed_despite_recorded_offsets": [],
+          "country": "",
+          "manual_iana_timezone": ""
+        }
+      }
     },
     "6-photos-by-dest/Conflict": {
       "camera_group_time_decisions": {

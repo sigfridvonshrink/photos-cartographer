@@ -1,0 +1,66 @@
+// Copyright 2026 sigfridvonshrink
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+// Front-end unit tests for the questions of a camera's clock changed during the day (photos-21 clock_change), each
+// answerable here, writing the decision field the record documents (decision-json-reference §4.4).
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import * as app from "../web/app.js";
+
+const setWork = (work) => { app.state.work = work; app.state.base = JSON.parse(JSON.stringify(work)); };
+const DEST = "6-photos-by-dest/Kyoto";
+
+const runs = [{ offset_seconds: -3600, photos: 3, first: { source_file: `${DEST}/a.arw`, camera_source_naive_time: "2024:07:03 09:00:00" },
+  last: { source_file: `${DEST}/c.arw`, camera_source_naive_time: "2024:07:03 10:00:00" } },
+{ offset_seconds: -32400, photos: 3, first: { source_file: `${DEST}/d.arw`, camera_source_naive_time: "2024:07:03 21:30:00" },
+  last: { source_file: `${DEST}/f.arw`, camera_source_naive_time: "2024:07:03 22:30:00" } }];
+const change = { evidence: "gpx_self_anchor", runs, acceptance_tolerance_seconds: 120,
+  between: [{ source_file: `${DEST}/q.arw`, camera_source_naive_time: "2024:07:03 11:30:00" }] };
+const dayCell = () => ({ camera_group: "C", clock_change: JSON.parse(JSON.stringify(change)),
+  proposal: { proposal_source: "gpx_self_anchor", proposed_offset_seconds: -3600 },
+  user_decision: { accept_proposal: false, accepted_offset_seconds: "", manual_offset_seconds: "", accept_clock_change: false,
+    accepted_change_offsets_seconds: "", first_after_change: "" }, requires_user_input: true });
+
+test("a clock changed during the day: the split is accepted once, naming its offsets and, where asked, the first photo after", () => {
+  const cell = dayCell();
+  assert.equal(app.clockChangeHolds(cell), false);
+  const on = { ...cell, user_decision: { ...cell.user_decision, ...app.clockChangeFields(cell, true) } };
+  assert.deepEqual(on.user_decision.accepted_change_offsets_seconds, [-3600, -32400]);
+  assert.equal(app.clockChangeHolds(on), false);                       // a photo lies between: which was first after?
+  on.user_decision.first_after_change = "2024:07:03 11:30:00";
+  assert.equal(app.clockChangeHolds(on), true);
+  on.user_decision.first_after_change = "2024:07:03 21:30:00";         // none of them: the second run's first
+  assert.equal(app.clockChangeAt(on), "2024:07:03 21:30:00");
+  on.user_decision.first_after_change = "2024:07:03 08:00:00";         // not between the runs
+  assert.equal(app.clockChangeHolds(on), false);
+  const none = { ...on, clock_change: { ...change, between: [] }, user_decision: { ...on.user_decision, first_after_change: "" } };
+  assert.equal(app.clockChangeHolds(none), true);                      // nothing to ask
+  none.user_decision.accepted_change_offsets_seconds = [-3600, -36000];
+  assert.equal(app.clockChangeHolds(none), false);                     // accepted for other offsets
+  none.user_decision.accepted_change_offsets_seconds = [-3600, -32400];
+  none.user_decision.manual_offset_seconds = -3600;                     // one offset written for the whole day outranks
+  assert.equal(app.clockChangeHolds(none), false);
+  assert.deepEqual(app.clockChangeFields(cell, false), { accept_clock_change: false, accepted_change_offsets_seconds: "", first_after_change: "" });
+});
+
+test("the split resolves the day's offset cell, and its parts are shown on their day, never as rows of their own", () => {
+  const cell = dayCell();
+  Object.assign(cell.user_decision, app.clockChangeFields(cell, true, "2024:07:03 11:30:00"));
+  setWork({ time: { destinations: { [DEST]: { camera_group_time_decisions: { C: cell,
+    "C#1": { camera_group: "C", clock_change_part: { of: "C", part: 1 }, user_decision: {} } } } } } });
+  const ref = { file: "time", dest: DEST, kind: "offset", key: "C" };
+  assert.equal(app.wouldResolve(ref), true);
+  const groups = app.offsetGroups(app.state.work.time.destinations[DEST]);
+  assert.deepEqual(groups[0].buckets.map((b) => b.key), ["C"]);
+});

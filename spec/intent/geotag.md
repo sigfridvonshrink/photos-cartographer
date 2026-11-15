@@ -590,6 +590,110 @@ A container destination's decisions SHALL never wait for the user.
 An answer given for a camera's day in a destination SHALL stay that day's answer when photos of another day arrive there or leave.
 :::
 
+:::{rul} A day split at a time is decided in parts
+:id: RUL-day_split_into_parts
+:status: ruled
+:criticality: high
+:verify: required
+:refines: RUL-offset_per_camera_destination_day
+:uses: DEF-clock_offset
+
+A camera's day in a destination, once split at a time, SHALL be decided as consecutive parts, each of its photos taking
+the offset of the part its camera time falls in.
+:::
+
+:::{rul} A clock changed during the day is proposed as a split
+:id: RUL-clock_change_split_proposed
+:status: ruled
+:criticality: high
+:verify: required
+:refines: RUL-day_split_into_parts
+:uses: DEF-camera_group, DEF-tracks
+
+Where the photos of a camera's day in a destination that its own GPS anchors form, in camera-time order, two
+consecutive runs, each agreeing within itself on an offset of its own, geotag SHALL propose splitting the day at the
+change between them.
+:::
+
+:::{rul} A change of the clock is seen only from the camera's GPS
+:id: RUL-clock_change_needs_gps
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+:refines: RUL-clock_change_split_proposed
+
+Geotag SHALL NOT find a change of a camera's clock within a day but from the camera's own GPS evidence of its photos'
+true time — their positions on the tracks, or the times their fixes recorded — never from the photos alone.
+:::
+
+:::{rul} Offsets that go back and forth are no change of the clock
+:id: RUL-alternating_runs_no_clock_change
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+:refines: RUL-clock_change_split_proposed
+
+A day whose anchored photos, in camera-time order, form three runs or more SHALL NOT be proposed a split.
+:::
+
+:::{rul} A split waits for the user's acceptance
+:id: RUL-clock_change_needs_acceptance
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+:refines: RUL-clock_change_split_proposed
+:uses: DEF-decision
+
+A proposed split of a camera's day SHALL NOT take effect until the user accepts it.
+:::
+
+:::{rul} A split is accepted once
+:id: RUL-clock_change_accepted_once
+:status: ruled
+:criticality: med
+:verify: required
+:refines: RUL-clock_change_needs_acceptance
+
+An accepted split of a camera's day SHALL put the offset of each of its parts into effect with no further answer.
+:::
+
+:::{rul} Each part is anchored by its own photos
+:id: RUL-clock_change_parts_own_evidence
+:status: ruled
+:criticality: high
+:verify: required
+:refines: RUL-clock_change_accepted_once
+
+Each part of a day split at a change of the clock SHALL take its offset from its own anchored photos.
+:::
+
+:::{rul} The photos between the runs are asked where the change fell
+:id: RUL-clock_change_first_after_asked
+:status: ruled
+:criticality: high
+:verify: required
+:refines: RUL-clock_change_accepted_once
+:uses: DEF-decision
+
+Where photos with no evidence of their own lie between the last photo of one run and the first of the other, a split
+SHALL NOT take effect until the user says which of them was the first after the change.
+:::
+
+:::{rul} With no photo between the runs, nothing is asked of the change
+:id: RUL-clock_change_first_after_not_asked
+:status: ruled
+:criticality: med
+:anti: yes
+:verify: required
+:refines: RUL-clock_change_first_after_asked
+
+Where no photo lies between the runs, an accepted split SHALL NOT ask where the change fell: the second part begins at
+the first photo of the second run.
+:::
+
 
 ## 8. Reading the tracks
 
@@ -1012,6 +1116,18 @@ the note that the group may be several bodies.
 A day of a camera group the configuration names several bodies SHALL NOT take, nor be held against, the offset the
 group's GPS gave that day in another destination: the bodies are told apart by the destinations their photos are
 sorted into.
+:::
+
+:::{rul} Several bodies are never split at a change of the clock
+:id: RUL-several_bodies_no_clock_change_split
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+:refines: RUL-several_bodies_named_by_configuration
+:uses: RUL-clock_change_split_proposed
+
+Geotag SHALL NOT propose splitting a day of a camera group the configuration names several bodies.
 :::
 
 

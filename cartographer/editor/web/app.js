@@ -160,6 +160,7 @@ function offsetGroups(destCell) {
   const byGroup = new Map();
   for (const key of Object.keys(cells)) {
     const c = cells[key], g = c.camera_group || key;
+    if (c.clock_change_part) continue;                     // a part of a day split at a clock change: shown on its day
     if (!byGroup.has(g)) byGroup.set(g, []);
     byGroup.get(g).push({ key, cell: c, date: c.date || null });
   }
@@ -172,7 +173,8 @@ function offsetGroups(destCell) {
     const byProp = new Map();                              // cluster key → member buckets
     for (const b of buckets) {
       const u = b.cell.user_decision || {}, p = b.cell.proposal || {};
-      const udSig = `${u.accept_proposal === true ? 1 : 0}|${u.accepted_offset_seconds ?? ""}|${u.manual_offset_seconds ?? ""}`;
+      const udSig = `${u.accept_proposal === true ? 1 : 0}|${u.accepted_offset_seconds ?? ""}|${u.manual_offset_seconds ?? ""}` +
+        (b.cell.clock_change ? `|change:${b.key}` : "");      // a day whose clock changed is a row of its own
       const pk = `${udSig}@${"proposed_offset_seconds" in p ? p.proposed_offset_seconds : "none"}`;
       if (!byProp.has(pk)) byProp.set(pk, []);
       byProp.get(pk).push(b);
@@ -251,6 +253,7 @@ function wouldResolve(ref) {
   if (ref.kind === "offset")
     return (u.manual_offset_seconds !== "" && u.manual_offset_seconds != null && validOffset(u.manual_offset_seconds))
       || keepHolds(c)                                           // a phone kept as it records itself
+      || clockChangeHolds(c)                                    // the day split where its clock changed
       || (acceptHolds(c) && !p.far_from_evidence && !inConflict(c));   // far from all evidence, or one clock read two
                                                                 // ways the same day: an acceptance is withheld again
   if (ref.kind === "reading")
@@ -402,6 +405,11 @@ function previewEffective(ref) {
       return `${fmtOffset(u.manual_offset_seconds)} (${picked ? "GPS group, picked" : "manual"})`;
     }
     if (keepHolds(c)) return "as the phone records itself (its own GPS set aside)";
+    if (clockChangeHolds(c)) return `split where the clock changed: ${fmtOffset(c.clock_change.runs[0].offset_seconds)} before ` +
+      `${clockChangeAt(c)}, ${fmtOffset(c.clock_change.runs[1].offset_seconds)} from then`;
+    if (u.accept_clock_change && c.clock_change && !clockChangeHolds(c))
+      return (c.clock_change.between || []).length && !clockChangeAt(c) ? "— (say which photo was the first after the change)"
+        : "— (accepted another change — accept again)";
     if (acceptHolds(c) && p.far_from_evidence) return "— (accepting is not enough here — set the offset)";
     if (acceptHolds(c) && inConflict(c)) return "— (an acceptance is withheld here — take the offset as your own)";
     if (acceptHolds(c)) return `${fmtOffset(p.proposed_offset_seconds)} (accept proposal)`;
@@ -1068,6 +1076,7 @@ function controls(ref) {
     else if (refInvalid(ref)) wrap.append(el("div", { class: "err" }, `not a timezone of ${countryInfo(k.code)?.name || k.code}`));
   } else if (ref.kind === "offset") {
     for (const note of offsetCellNotes(c)) wrap.append(el("div", { class: "hint warn" }, note));
+    if (c.clock_change) wrap.append(clockChangeControls(ref));
     if (c.phone && keepOffered(c)) {
       // a phone's own reading kept, its GPS's finding set aside: the track was someone else's (BLD-phone_offset_cell)
       wrap.append(checkbox("keep this phone as its photos record themselves — its GPS here is wrong", !!u.keep_as_recorded,
@@ -1528,6 +1537,61 @@ function gpsTimeAsideNote(a) {
   return `${n} here hold a GPS fix time, but they give offsets from ${fmtOffset(lo)} to ${fmtOffset(hi)} (e.g. ${leaf(a.example)}) — ` +
     "too far apart to be one clock — so the fixes' times are not read as the clock.";
 }
+// A camera's clock changed during the day (photos-21 clock_change, BLD-clock_change_split): its photos with their own
+// position fall into two runs, each agreeing on its own offset. The answer, on the day's cell: accept the split, naming
+// the two offsets accepted (accepted_change_offsets_seconds) — and, where photos with no GPS lie between the runs, which
+// of them was the first after the change (first_after_change, its camera time). Pure — unit-tested.
+const naiveMs = (s) => camNaiveMs(s);
+function clockChangeAt(c) {
+  const ch = (c && c.clock_change) || {}, u = (c && c.user_decision) || {}, runs = ch.runs || [];
+  if (runs.length !== 2) return "";
+  if (!(ch.between || []).length) return runs[1].first.camera_source_naive_time;
+  const at = naiveMs(u.first_after_change), lo = naiveMs(runs[0].last.camera_source_naive_time),
+    hi = naiveMs(runs[1].first.camera_source_naive_time);
+  return at != null && lo != null && hi != null && lo < at && at <= hi ? u.first_after_change : "";
+}
+function clockChangeHolds(c) {
+  const ch = c && c.clock_change, u = (c && c.user_decision) || {};
+  if (!ch || u.accept_clock_change !== true || (u.manual_offset_seconds !== "" && u.manual_offset_seconds != null)) return false;
+  const offs = u.accepted_change_offsets_seconds, tol = ch.acceptance_tolerance_seconds || 0;
+  return Array.isArray(offs) && offs.length === 2
+    && offs.every((o, i) => isNum(o) && Math.abs(o - ch.runs[i].offset_seconds) <= tol) && !!clockChangeAt(c);
+}
+// The decision fields of splitting the day (or not): accepting names the runs' offsets, and the first photo after the
+// change where one is asked; the day's own offset answers are cleared, a split replacing them.
+function clockChangeFields(c, on, first = "") {
+  const runs = ((c && c.clock_change) || {}).runs || [];
+  return on ? { accept_clock_change: true, accepted_change_offsets_seconds: runs.map((r) => r.offset_seconds),
+    first_after_change: first, accept_proposal: false, accepted_offset_seconds: "", manual_offset_seconds: "" }
+    : { accept_clock_change: false, accepted_change_offsets_seconds: "", first_after_change: "" };
+}
+function clockChangeControls(ref) {
+  const c = workCell(ref), u = c.user_decision || {}, ch = c.clock_change, wrap = el("div", { class: "pblock" });
+  const [a, b] = ch.runs, by = ch.evidence === "gps_time" ? "the times their GPS fixes recorded" : "their positions on the tracks";
+  wrap.append(el("h3", {}, "The camera's clock changed this day"));
+  wrap.append(el("div", { class: "hint warn" }, `By ${by}, ${a.photos} photo${a.photos === 1 ? "" : "s"} up to ${leaf(a.last.source_file)} ` +
+    `(${a.last.camera_source_naive_time}) give ${fmtOffset(a.offset_seconds)}, and ${b.photos} from ${leaf(b.first.source_file)} ` +
+    `(${b.first.camera_source_naive_time}) give ${fmtOffset(b.offset_seconds)}: the clock was set between them. Split the day there, ` +
+    "each part corrected by its own photos — or, if the clock did not change, answer the day's offset below."));
+  const on = u.accept_clock_change === true;
+  wrap.append(checkbox("split the day where the clock changed", on, (v) => { state.offsetEdit = null; editMany(ref, clockChangeFields(c, v, u.first_after_change || "")); }));
+  const between = ch.between || [];
+  if (on && between.length) {
+    wrap.append(el("div", { class: "hint" }, `${between.length} photo${between.length === 1 ? "" : "s"} without GPS lie between the two: ` +
+      "which was the first after the change?"));
+    const opts = [...between, { source_file: b.first.source_file, camera_source_naive_time: b.first.camera_source_naive_time, none: true }];
+    for (const o of opts) {
+      const sel = u.first_after_change === o.camera_source_naive_time;
+      wrap.append(el("div", { class: "off-opt" + (sel ? " on" : ""), onclick: () => edit(ref, "first_after_change", o.camera_source_naive_time) },
+        el("span", { class: "off-dot" }, sel ? "●" : "○"),
+        el("span", {}, o.none ? `none of them — ${leaf(o.source_file)} (${o.camera_source_naive_time}), the second run's first`
+          : `${leaf(o.source_file)} (${o.camera_source_naive_time})`)));
+    }
+  }
+  if (on && !clockChangeHolds(c)) wrap.append(el("div", { class: "hint warn" }, between.length && !clockChangeAt(c)
+    ? "Say which photo was the first after the change." : "Accepted for other offsets than the photos now give — accept again."));
+  return wrap;
+}
 // A phone's day kept as its photos record themselves (photos-21 user_decision.keep_as_recorded, BLD-phone_offset_cell):
 // offered, and holding, only where the cell's proposal is the phone's own GPS — its track anchor or its fixes' times.
 const keepOffered = (c) => ["gpx_self_anchor", "gps_time"].includes((c && c.proposal || {}).proposal_source);
@@ -1958,6 +2022,7 @@ export {
   offsetGroups, dateRange, fmtDate, peerKeys, parseLatLon, coordText, contiguousRange,
   groupChoice, chosenOffset, inConflict, proposalTaken, proposalNotes, driftConfirmHolds, driftConfirmFields, driftCorrectionFields, driftTracksHold, driftStaleReason, acceptFields, acceptHolds, tracksNote,
   zoneContradiction, offsetCellNotes, zoneSpokenFor, zoneDespiteFields, effectiveCountry, clearCountriesInside,
+  clockChangeHolds, clockChangeAt, clockChangeFields,
   scrubOffset, scrubSeedIndex, mapKeyFor, savePayload,
   ambiguousTimeNote, gpsTimeAsideNote, zoneOffer, validReading, keepHolds, keepFields, keepOffered, phoneNote,
   trueInstant, parseUtcOff, mismatchAccepted, recordAbsentText, DEVICE_CLASSES, changedHolds, changedFields, changedKeepLabel, keptTagNote, unidentifiedHolds, unidentifiedFields, loadRefusal, hasUnsavedEdits, utcOff,

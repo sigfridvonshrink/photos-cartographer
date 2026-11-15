@@ -238,10 +238,12 @@ CAM_SEG = "CAM|segment|G"           # one segment anchor -> medium
 CAM_CONF = "CAM|conflict|C"         # two conflicting anchors -> review_required
 CAM_REV = "CAM|revisit|R"           # the same spot on two days' tracks -> tied; the other day picked
 P, S, C, R = f"{BD}/SinglePoint", f"{BD}/Segment", f"{BD}/Conflict", f"{BD}/Revisit"
+CAM_CLK = "FUJIFILM|X-T5|K"         # its clock set from home time to local time at lunch (BLD-clock_change_split)
+CK = f"{BD}/ClockChange"
 
 
 def scenario_offset_variants():
-    _set_policy(device_groups={"fixed_clock_cameras": [CAM_PT, CAM_SEG, CAM_CONF, CAM_REV], "phones": []},
+    _set_policy(device_groups={"fixed_clock_cameras": [CAM_PT, CAM_SEG, CAM_CONF, CAM_REV, CAM_CLK], "phones": []},
                 default_folder_timezone="Europe/Brussels")
     gpx = _gpx([
         # each camera's region is a track file of its own: one device is in one place at a time
@@ -250,6 +252,9 @@ def scenario_offset_variants():
         _pt(54.0, 8.0, _utc(12, 0, 0), "conflict-a.gpx"), _pt(55.0, 9.0, _utc(9, 0, 0), "conflict-b.gpx"),  # offsets disagree
         _pt(56.0, 10.0, _utc(12, 0, 0), "trip-2024-07-03.gpx"),          # Revisit: the spot on 3 July ...
         _pt(56.0, 10.0, datetime(2024, 7, 4, 12, 0, tzinfo=timezone.utc), "trip-2024-07-04.gpx"),  # ... and 4 July
+        # ClockChange: a walk, two photos on a clock at UTC+2, then two after it was set to UTC+1
+        _pt(57.0, 11.0, _utc(8, 0), "clock.gpx"), _pt(57.01, 11.0, _utc(8, 30), "clock.gpx"),
+        _pt(57.02, 11.0, _utc(12, 0), "clock.gpx"), _pt(57.03, 11.0, _utc(12, 30), "clock.gpx"),
     ])
     files = [
         _file(f"{P}/p.arw", CAM_PT, "2024:07:03 14:00:00", gps={"lat": 52.0, "lon": 6.0}),
@@ -258,8 +263,13 @@ def scenario_offset_variants():
         _file(f"{C}/c1.arw", CAM_CONF, "2024:07:03 14:00:00", gps={"lat": 54.0, "lon": 8.0}),
         _file(f"{C}/c2.arw", CAM_CONF, "2024:07:03 14:00:00", gps={"lat": 55.0, "lon": 9.0}),
         _file(f"{R}/r.arw", CAM_REV, "2024:07:04 14:00:00", gps={"lat": 56.0, "lon": 10.0}),
+        _file(f"{CK}/k1.raf", CAM_CLK, "2024:07:03 10:00:00", gps={"lat": 57.0, "lon": 11.0}),
+        _file(f"{CK}/k2.raf", CAM_CLK, "2024:07:03 10:30:00", gps={"lat": 57.01, "lon": 11.0}),
+        _file(f"{CK}/k-between.raf", CAM_CLK, "2024:07:03 11:30:00"),             # no GPS: which side of the change?
+        _file(f"{CK}/k3.raf", CAM_CLK, "2024:07:03 13:00:00", gps={"lat": 57.02, "lon": 11.0}),
+        _file(f"{CK}/k4.raf", CAM_CLK, "2024:07:03 13:30:00", gps={"lat": 57.03, "lon": 11.0}),
     ]
-    groups = {k: {"camera_group_class": "camera"} for k in (CAM_PT, CAM_SEG, CAM_CONF, CAM_REV)}
+    groups = {k: {"camera_group_class": "camera"} for k in (CAM_PT, CAM_SEG, CAM_CONF, CAM_REV, CAM_CLK)}
 
     def fill(a):
         d = a["destinations"]
@@ -271,6 +281,11 @@ def scenario_offset_variants():
         rev = d[R]["camera_group_time_decisions"][CAM_REV]
         assert rev["proposal"]["tied"] is True, rev["proposal"]
         rev["user_decision"]["manual_offset_seconds"] = rev["proposal"]["groups"][1]["offset_seconds"]
+        # ClockChange: the split accepted, the photo between said to be the first after the change
+        ck = d[CK]["camera_group_time_decisions"][CAM_CLK]
+        assert ck["clock_change"]["between"], ck
+        ck["user_decision"].update(accept_clock_change=True, first_after_change="2024:07:03 11:30:00",
+                                   accepted_change_offsets_seconds=[r["offset_seconds"] for r in ck["clock_change"]["runs"]])
         return a
 
     _, comp = _td(_wf(), files, groups, gpx, fill)
@@ -380,6 +395,7 @@ def _verify():
         '"confidence": "high"', '"confidence": "medium"', '"confidence": "review_required"',
         '"stale_user_decision": true',
         '"reason": "no_reliable_gps_source"', '"reason": "manual_locked"', '"reason": "accepted_unlocated"',
+        '"effective_split"', '"clock_change_part"',
     ]
     missing = [m for m in required if m not in blob]
     # GPS automatic categories live in summary counts (>0 somewhere).

@@ -343,6 +343,27 @@ per destination over several days, would be wrong for every day but one. A day i
 the error stays put, so it is the unit decided.
 :::
 
+:::{rat} A clock changed during the day shows only on the GPS
+:id: RAT-clock_change_seen_by_gps
+:status: ruled
+:forced: no
+:follows_from: RAT-offset_per_day_and_place, RAT-anchor_agreement
+:justifies: RUL-day_split_into_parts, RUL-clock_change_split_proposed, RUL-clock_change_needs_gps, RUL-alternating_runs_no_clock_change, RUL-clock_change_needs_acceptance, RUL-clock_change_accepted_once, RUL-clock_change_parts_own_evidence, RUL-clock_change_first_after_asked, RUL-clock_change_first_after_not_asked
+
+A day is the unit because a clock is set again overnight; but it is also set at lunch, or reset, and then the day has
+two offsets and no one of them fits. Asked to move the photos after the change into a folder of their own, the user
+would change the library's folders to work round the tool. The change cannot be read from the photos themselves —
+the owner's question, answered yes: *"15 can only be detected using GPS, the photos themselves are not enough.
+Correct?"* — their times run on whatever the clock says; only a measurement of the true time, the camera's own
+positions on the tracks or its fixes' times, shows the clock jump. A clock set once runs on: in camera-time order its
+anchored photos fall into two runs, each agreeing on an offset of its own, and a split there is proposed. A clock does
+not go back and forth, so three runs or more are no change — they are positions gone wrong, or two bodies. The split
+is the user's to accept, as any proposal is, and accepting it once settles the day: each part's offset is what its own
+photos say, nothing borrowed across the change. Where photos with no evidence of their own lie between the runs,
+nothing says on which side of the change each was taken, and only the user, who knows when the clock was set, can
+say which was the first after it; where none lie between, there is nothing to ask.
+:::
+
 :::{rat} One place's clock evidence says nothing of another's
 :id: RAT-no_borrowed_offsets
 :status: ruled
@@ -571,7 +592,7 @@ geotag on a time that is, at worst, a poor guess the user can see and correct.
 :status: ruled
 :forced: no
 :follows_from: RAT-class_decides_time_model, RAT-anchor_agreement
-:justifies: RUL-several_bodies_named_by_configuration, RUL-several_bodies_offset_never_auto, RUL-several_bodies_noted, RUL-several_bodies_days_apart
+:justifies: RUL-several_bodies_named_by_configuration, RUL-several_bodies_offset_never_auto, RUL-several_bodies_noted, RUL-several_bodies_days_apart, RUL-several_bodies_no_clock_change_split
 
 Two bodies of one model that write no serial are one camera group: nothing in their photos tells them apart. With GPS
 on both, their anchors disagree for good and no one offset is right; with GPS on one that day, its offset would apply
@@ -581,7 +602,8 @@ that apply themselves. So the configuration says it, a group being one camera un
 this needs a workspace setting, default being that it's just one camera. If the setting says multiple cameras, then do
 the recommended"*. For a group so named, an offset from its GPS is a proposal, said to be perhaps one body's; its days in
 different destinations are decided apart; and the user tells the bodies apart by sorting one's photos into a folder of
-their own.
+their own — never by a split of the day, for two bodies shooting one after the other look like one clock set at the
+change.
 :::
 
 

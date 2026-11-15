@@ -302,6 +302,15 @@ tracks, more photos), it is asked again, your earlier answer left as you wrote i
 There is deliberately **no inheritance** between days or places: an offset you type or accept on a
 guess for one day applies only to that day, never to a sibling day or a neighbouring place.
 
+**A clock changed during the day.** Set to local time at lunch, or reset, a camera has two offsets that day, and
+no single one fits. Only the camera's own GPS can show it — its positions on the tracks, or its fixes' times; the
+photos' own times run on whatever the clock said. Where the day's photos with a position, in camera-time order,
+fall into two runs each agreeing on an offset of its own, geotag proposes **splitting the day at the change**.
+Accept it once and the day is decided as two parts, each corrected by its own photos. Where photos without GPS lie
+between the two runs, nothing says on which side of the change they were taken: you say which was the first after
+the change. Offsets that go back and forth — three runs or more — are no clock change: they are positions gone
+wrong, or two bodies in one group.
+
 ---
 
 ## Clock offset vs. GPS drift
