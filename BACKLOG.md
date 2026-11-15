@@ -12,7 +12,7 @@
 
 ### 2. The gap audit — the build against its spec
 
-**Why:** the owner: *"I am sure the build has some stuff not specced, and there may be stuff specced not built or
+**Why:** The owner: *"I am sure the build has some stuff not specced, and there may be stuff specced not built or
 incorrectly built."*
 
 **What:** walk the code and the corpus against each other: code behaviour with no
@@ -376,7 +376,7 @@ kept in the workspace, limited to the photos' dates) would cut it at the source.
 
 ### 29. Which track is trusted first, by the device that recorded it
 
-**Why:** the owner records each trip twice — a standalone receiver and the phone — and the phone turns out the more
+**Why:** The owner records each trip twice — a standalone receiver and the phone — and the phone turns out the more
 accurate. *"I want the device track to be used when phone track unavailable."* Today no track outranks another: where
 both cover a photo's time the one whose nearest point is closer in time wins, whichever device it came from, and
 where they lie farther apart than `gpx_tracks_agree_max_distance_meters` the photo is not placed at all. So the less
