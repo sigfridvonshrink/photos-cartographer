@@ -306,9 +306,9 @@ offset; else manual required.
      "rank": "same_day" }`.
   `high`: it applied itself there and applies itself here (`same_day_auto`, `decision_mode: "auto_resolved"`).
   `review_required`: accept it here (`same_day_accepted`). It takes the place only of a proposal that would
-  be `recorded_offset`, `timezone_naive` or `manual_required`. Never another day's offset, never one written by hand (the
-  donor's source is `gpx_anchor_auto` or `gpx_anchor_accepted`, one that applied itself chosen first, then
-  by path). Neither same-day source is drift-checked in photos-22.
+  be `recorded_offset`, `timezone_naive` or `manual_required`. Never another day's offset, never one written by hand
+  unless it is a group of the camera's own GPS the user picked (the donor's source is `gpx_anchor_auto`,
+  `gpx_anchor_accepted` or `gpx_anchor_chosen`, one that applied itself chosen first, then by path). Neither same-day source is drift-checked in photos-22.
 - **Manual required** (`proposal_source: "manual_required"`) — no signal: no anchor, no same-day offset,
   and no timezone-derived offset (no resolved timezone, no readable camera time, or a camera time the zone
   reads two ways); the human must enter a manual offset (or real UTC): `{ "proposal_source": "manual_required" }`.

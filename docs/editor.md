@@ -192,8 +192,9 @@ What the proposal panel shows depends on where the offset came from:
 
   Photos skipped for having a track only outside the plausible time window, or none nearby, are counted.
 - **Shared from the same day elsewhere** — no photo here has its own position, but the camera's GPS fixed
-  its clock that day in another destination. Where it applied itself there it applies here too;
-  otherwise accept it here or set another. If the camera's GPS gives two different offsets on one day in
+  its clock that day in another destination — by itself, by your acceptance, or as the group of its GPS
+  you picked there. Where it applied itself there it applies here too; otherwise accept it here or set
+  another. If the camera's GPS gives two different offsets on one day in
   two destinations, neither takes effect: both are shown, and you set the right offset by hand in the
   one that is wrong.
 - **The offset the photos record** — no GPS evidence, but the camera wrote, with each photo's time, the

@@ -123,6 +123,30 @@ def test_the_day_s_offset_is_the_camera_s_wherever_its_photos_were_sorted(tmp_pa
     assert _cell(art, f"{BYDEST}/Castle")["effective_time_anchor"] == {"offset_seconds": -7200, "source": "same_day_accepted"}
 
 
+@pytest.mark.spec("RUL-offset_shared_within_day", "BLD-offset_shared_within_day", "RUL-chosen_group_is_anchored",
+                  test="TST-geotag_offset_no_inheritance-a_group_the_user_chose_is_shared_within_the_day")
+def test_a_group_the_user_chose_is_shared_within_the_day(tmp_path):
+    """An offset the user picked from the camera's own GPS groups rests on the camera's own positions: the castle,
+    with none of its own, is offered it like any offset the camera's GPS gave that day — for the user to accept, the
+    pick not having applied itself. An offset no group supports is the user's alone, and is passed nowhere."""
+    wf = _wf(tmp_path)
+    files = PARENT_FRAMES + [_file(f"{BYDEST}/Castle/c.arw", f"{BYDEST}/Castle", naive="2024:07:03 17:00:00")]
+    def picked(offset):
+        prior = {"destinations": {f"{BYDEST}/Trip": {"camera_group_time_decisions": {CAM: {"user_decision": {
+            "manual_offset_seconds": offset}}}}}}
+        art, _ = _build(wf, files, _gpx(TRACK), prior, multi=False)
+        return _cell(art, f"{BYDEST}/Trip"), _cell(art, f"{BYDEST}/Castle")
+    trip, castle = picked(-7200)
+    assert trip["effective_time_anchor"] == {"offset_seconds": -7200, "source": "gpx_anchor_chosen"}
+    assert castle["proposal"]["proposal_source"] == "same_day_elsewhere"
+    assert castle["proposal"]["proposed_offset_seconds"] == -7200
+    assert castle["proposal"]["shared_from"] == {"destination": f"{BYDEST}/Trip", "bucket": CAM}
+    assert castle["effective_time_anchor"] == "" and castle["requires_user_input"]
+    trip, castle = picked(-3600)                                                 # no group of the camera's says so
+    assert trip["effective_time_anchor"] == {"offset_seconds": -3600, "source": "manual"}
+    assert castle["proposal"]["proposal_source"] != "same_day_elsewhere"
+
+
 @pytest.mark.spec("RUL-same_day_offsets_agree", "BLD-offset_shared_within_day",
                   test="TST-geotag_offset_no_inheritance-one_clock_read_two_ways_takes_no_effect")
 def test_one_clock_read_two_ways_on_one_day_takes_no_effect(tmp_path):

@@ -913,7 +913,9 @@ class GeotagWorkflow:
         neither takes effect, both ask; a hand-written offset is the user's word, and is neither withheld nor
         counted. (2) A cell with no GPS evidence of its own is proposed the offset the camera's GPS gave
         that day elsewhere, in place of the timezone's guess: applied by itself where it applied itself
-        there, else for the user to accept."""
+        there, else for the user to accept. An offset the user picked from the camera's own GPS groups
+        (`gpx_anchor_chosen`) rests on the camera's own GPS, and is passed on like the others
+        (BLD-offset_shared_within_day)."""
         limit = CONFIG["clock_offset_same_day_max_difference_seconds"]
         by_day = {}
         for dest, d in destinations.items():
@@ -925,15 +927,16 @@ class GeotagWorkflow:
                 continue
             hand = lambda c: (c.get("user_decision") or {}).get("manual_offset_seconds") not in ("", None)
             donors = [(dest, bucket, c) for dest, bucket, c in sorted(members, key=lambda m: (m[0], m[1]))
-                      if isinstance(c.get("effective_time_anchor"), dict) and not hand(c)
+                      if isinstance(c.get("effective_time_anchor"), dict)
                       and c["effective_time_anchor"].get("source") in self._OWN_GPS_SOURCES]
-            offs = [c["effective_time_anchor"]["offset_seconds"] for _d, _b, c in donors]
+            found = [m for m in donors if not hand(m[2])]      # what the GPS alone gave: the user's word stands
+            offs = [c["effective_time_anchor"]["offset_seconds"] for _d, _b, c in found]
             if offs and max(offs) - min(offs) > limit:
-                for dest, bucket, c in donors:
+                for dest, bucket, c in found:
                     c["conflicts_with"] = [{"destination": d2, "bucket": b2,
                                             "offset_seconds": c2["effective_time_anchor"]["offset_seconds"]}
-                                           for d2, b2, c2 in donors if c2 is not c]
-                for _dest, _bucket, c in donors:
+                                           for d2, b2, c2 in found if c2 is not c]
+                for _dest, _bucket, c in found:
                     c["effective_time_anchor"], c["requires_user_input"] = "", True
                     c.pop("decision_mode", None)
                 continue                              # one clock read two ways: nothing to pass on
