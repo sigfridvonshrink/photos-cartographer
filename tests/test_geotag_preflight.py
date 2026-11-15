@@ -934,6 +934,8 @@ def test_a_missing_setting_stops_every_phase(tmp_path, monkeypatch):
     (lambda c: c["folders"].__setitem__("extra", "9-extra"), "folders.extra"),                     # a role of one's own
     (lambda c: c["zfs"].__setitem__("snapshot_required", True), "zfs.snapshot_required"),          # a misspelling
     (lambda c: c.__setitem__("gpx_rot", "/tmp"), "gpx_rot"),                                       # at the top level
+    (lambda c: c["camera_time_and_timezone_policy"].__setitem__("phone_gpx_max_distance_meters", 250),
+     "camera_time_and_timezone_policy.phone_gpx_max_distance_meters"),                             # one nothing read
 ])
 def test_an_unknown_setting_stops_every_phase(tmp_path, monkeypatch, edit, named):
     """A setting cartographer does not know is never ignored: prep's load, geotag and merge each stop,

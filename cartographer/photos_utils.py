@@ -148,11 +148,7 @@ CONFIG = {
             "fixed_clock_cameras": []
         },
         "single_anchor_auto_apply": False,
-        "multi_anchor_auto_apply": True,
-        "phone_gpx_agreement_tolerance_seconds": 60,
-        "phone_gpx_conflict_threshold_seconds": 300,
-        "dst_conflict_tolerance_seconds": 120,
-        "phone_gpx_max_distance_meters": 250
+        "multi_anchor_auto_apply": True
     },
     "filename_timestamp_format": "%Y-%m-%d--%H-%M-%S",
     # Format-distribution subfolder names that mark the later development/processing phase
@@ -1389,10 +1385,6 @@ def validate_config(cfg: dict, workspace_root: str = None):
         for bk in ("single_anchor_auto_apply", "multi_anchor_auto_apply"):
             if bk in pol:
                 _check_bool(f"camera_time_and_timezone_policy.{bk}", pol[bk])
-        for nk in ("phone_gpx_agreement_tolerance_seconds", "phone_gpx_conflict_threshold_seconds",
-                   "dst_conflict_tolerance_seconds", "phone_gpx_max_distance_meters"):
-            if nk in pol:
-                _check_number(f"camera_time_and_timezone_policy.{nk}", pol[nk], minimum=0)
         if "default_folder_timezone" in pol:
             tz = pol["default_folder_timezone"]
             _check_string("camera_time_and_timezone_policy.default_folder_timezone", tz)
