@@ -55,7 +55,8 @@ from .photos_utils import (fingerprint_method_blocker, links_under, replace_dura
     folders_fingerprint, media_extensions_fingerprint,
     selected_gpx_root, NO_IDENTITY_KEY, has_own_position, FIELD_SET_VERSION, CAMERA_GROUP_KEY_VERSION, FOLDER_ROLES,
     missing_managed_folders, top_level_links, misplaced_top_level_entries, by_dest_reprep_pending,
-    json_dependency, verify_json_dependency, handoff_content_fingerprint, handoff_filename_format_blocker, write_json_artifact, write_versioned_json, db_path, ensure_control_dir,
+    json_dependency, verify_json_dependency, handoff_content_fingerprint, handoff_filename_format_blocker, write_json_artifact, write_versioned_json, backup_existing_artifact,
+    db_path, ensure_control_dir,
     journal_path, ContentHasher, _move_no_clobber, get_imagemagick_version,
     prep_log_path, prep_log_blocker, entries_not_carried, retaken_fingerprints, write_db_snapshot, take_zfs_snapshot,
     control_archive_members, write_control_archive, workspace_id,
@@ -2087,8 +2088,9 @@ class GeotagWorkflow:
         if snapshot is not None and snapshot["required"] and not snapshot["ok"]:
             reason = f"required ZFS pre-mutation snapshot failed: {snapshot['stderr']}"
             # Nothing was mutated, but BLD-execution_summary requires the snapshot record be carried into photos-25
-            # either way, so the abort is auditable like any other run.
-            write_json_artifact(execution_summary_path(ws), {
+            # either way, so the abort is auditable like any other run; the earlier summary is set aside under
+            # -NNN, never written over (BLD-geotag_records_versioned).
+            write_versioned_json(execution_summary_path(ws), {
                 "artifact_type": "execution_summary", "artifact_name": EXECUTION_SUMMARY_ARTIFACT,
                 "schema_version": 1, "plan_id": plan.get("plan_id"), "status": "rejected",
                 "snapshot": snapshot, "blockers": [reason], "failures": [], "fingerprint_mismatches": [],
@@ -2163,7 +2165,8 @@ class GeotagWorkflow:
         summary = self._build_summary(plan, results, now_iso, execution_id, jobs,
                                       self._prior_mismatches(ws, plan["plan_id"]))
         summary["snapshot"] = snapshot                                   # the pre-mutation ZFS record (or None)
-        write_json_artifact(execution_summary_path(ws), summary)
+        write_versioned_json(execution_summary_path(ws), summary)        # the earlier one kept as -NNN
+        # (BLD-geotag_records_versioned)
         return summary
 
     @staticmethod
@@ -2320,6 +2323,12 @@ class GeotagWorkflow:
         if self.finalize_warnings:
             log["partial"] = True
             log["warnings"] = self.finalize_warnings
+        # A package made again sets the earlier one aside first, file by file under the next -NNN, never writing
+        # over it (BLD-geotag_records_versioned); the copies are records, archived with the rest — the earlier
+        # archive itself excepted.
+        for p in (complete_log_path(ws), finalized_media_path(ws), geotag_db_snapshot_path(ws),
+                  archive_manifest_path(ws), archive_path(ws)):
+            backup_existing_artifact(p)
         write_json_artifact(complete_log_path(ws), log)
         write_json_artifact(finalized_media_path(ws), self._finalized_media(files, plan))
 

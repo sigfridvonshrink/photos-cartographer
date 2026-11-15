@@ -518,6 +518,20 @@ Each names the file. A file that is not there is none.
 
 ## 21. Finalize
 
+:::{bld} Summaries and packages set aside under `-NNN`
+:id: BLD-geotag_records_versioned
+:status: ruled
+:realises: RUL-geotag_run_records_kept
+:uses: BLD-plan_backups
+
+`photos-25-execution-summary.json` SHALL be written as {need}`BLD-plan_backups` writes a plan — an existing one that
+differs first copied whole to the next free `-NNN` — and `geotag finalize`, which may be run again, first copies each
+file of an existing package so — `photos-26-complete-log.json`, `photos-26-finalized-media.json`,
+`photos-26-geotag-ingest.db`, `photos-26-archive-manifest.json` and `photos-26-archive.tar.gz`, the last as
+`photos-26-archive-NNN.tar.gz` — before it writes the new one; the copies are archived with the rest of the control
+directory, an archive and its copies excepted.
+:::
+
 :::{bld} Where exiftool is needed
 :id: BLD-geotag_exiftool_needed
 :status: ruled

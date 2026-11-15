@@ -1660,6 +1660,18 @@ Finalize SHALL keep the plan's count of how every photo came by its position in 
 A photo the user left unlocated SHALL have that in its log, with the decision that left it so.
 :::
 
+:::{rul} Geotag's records of a run are set aside, never overwritten
+:id: RUL-geotag_run_records_kept
+:status: ruled
+:criticality: med
+:anti: yes
+:verify: required
+:uses: DEF-finalize
+
+Geotag SHALL never overwrite an execution's summary or finalize's package: made again, the earlier one is first set
+aside, recoverably.
+:::
+
 :::{rul} Finalize needs no tool it never runs
 :id: RUL-finalize_needs_no_metadata_tool
 :status: ruled

@@ -907,6 +907,20 @@ library.
 Merge refuses a photo changed since finalize, on the strength of what finalize recorded. If finalize records whatever it finds, an edit made between execute and finalize becomes the baseline, and the library receives a photo the log describes as something else. Finalize is given once the user judges the work done, so it is also where they are told how done: how many photos have a position and by what means, how many were left without one — each of those by their own recorded answer.
 :::
 
+:::{rat} What a run reported stays on the record
+:id: RAT-run_records_outlive_the_next
+:status: ruled
+:forced: yes
+:follows_from: RAT-superseded_plans_recoverable
+:justifies: RUL-geotag_run_records_kept
+
+An execution's summary is the one account of what that run did — what it applied, what failed, which pictures came
+out changed — and a package is what was handed on for keeping. The next execution, or a finalize run again after a
+further pass, would otherwise replace them, and with them a failure not yet looked at or the package already copied
+to storage, which the workspace could then no longer show as it was. Set aside, as a superseded plan is, they cost
+a file each and lose nothing.
+:::
+
 :::{rat} A refusal names what the command needs
 :id: RAT-refusal_for_what_is_needed
 :status: ruled

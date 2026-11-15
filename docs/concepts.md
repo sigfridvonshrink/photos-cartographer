@@ -51,7 +51,8 @@ Every change to your files is made the same way, in every phase:
   `photos-10-prep-plan.json`, geotag's `photos-24-executable-plan.json`, merge's
   `photos-30-merge-plan.json`). Planning moves and changes no photo; it keeps only fingerprints, so the
   next run need not compute them again. Planning again sets the earlier plan aside as `-001`, `-002`, …
-  rather than overwriting it.
+  rather than overwriting it — and so does each geotag execution with the earlier execution summary, and
+  `geotag finalize`, run again, with the earlier archival package.
 - **Dry run** (prep and merge) checks the saved plan and summarizes it. It is the plan execute would run,
   not a simulation. Geotag has no dry run: its plan, and the decision files beside it, are the review.
 - **Execute** carries out the saved plan and nothing else, recording each change in a journal. It first

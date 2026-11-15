@@ -804,3 +804,34 @@ def test_finalize_stops_on_an_unreadable_record_of_a_pass(tmp_path, monkeypatch,
     out = capsys.readouterr()
     assert str(bad) in out.out + out.err and "cannot be read" in out.out + out.err
     assert not list(ctl.glob("photos-26-*"))
+
+
+@pytest.mark.spec("RUL-geotag_run_records_kept", "BLD-geotag_records_versioned",
+                  test="TST-geotag_finalize-summary_and_package_made_again_keep_the_earlier")
+def test_summary_and_package_made_again_keep_the_earlier(tmp_path, monkeypatch):
+    """An execution run again sets the earlier summary aside under -NNN; finalize run again sets the whole earlier
+    package aside so, the archive as photos-26-archive-NNN.tar.gz — kept, and never archived again."""
+    import tarfile
+    ws, ctl = _ready_ws(tmp_path, monkeypatch)
+    _to_executed(monkeypatch, ws, ctl)
+    first_summary = (ctl / "photos-25-execution-summary.json").read_bytes()
+    assert _run(monkeypatch, ws, "execute") == 0                          # nothing left to do: a new summary
+    assert (ctl / "photos-25-execution-summary-001.json").read_bytes() == first_summary
+    assert _run(monkeypatch, ws, "finalize") == 0
+    names = ("photos-26-complete-log.json", "photos-26-finalized-media.json", "photos-26-geotag-ingest.db",
+             "photos-26-archive-manifest.json", "photos-26-archive.tar.gz")
+    first = {n: (ctl / n).read_bytes() for n in names}
+    assert not list(ctl.glob("photos-26-*-001*"))                        # a first package sets nothing aside
+    assert _run(monkeypatch, ws, "finalize") == 0
+    kept = {"photos-26-complete-log.json": "photos-26-complete-log-001.json",
+            "photos-26-finalized-media.json": "photos-26-finalized-media-001.json",
+            "photos-26-geotag-ingest.db": "photos-26-geotag-ingest-001.db",
+            "photos-26-archive-manifest.json": "photos-26-archive-manifest-001.json",
+            "photos-26-archive.tar.gz": "photos-26-archive-001.tar.gz"}
+    for n, copy in kept.items():
+        assert (ctl / copy).read_bytes() == first[n], copy
+    listed = set(json.load(open(ctl / "photos-26-archive-manifest.json"))["contents"])
+    assert "photos-26-complete-log-001.json" in listed and "photos-25-execution-summary-001.json" in listed
+    assert not any(n.endswith(".tar.gz") for n in listed)
+    with tarfile.open(ctl / "photos-26-archive.tar.gz") as tar:
+        assert not any(m.name.endswith(".tar.gz") for m in tar.getmembers())
