@@ -965,6 +965,55 @@ counted in one.
 Geotag SHALL NOT plan while the configuration classes a camera group as both a phone and a camera.
 :::
 
+:::{rul} The configuration says which camera groups are several bodies
+:id: RUL-several_bodies_named_by_configuration
+:status: ruled
+:criticality: high
+:verify: required
+:uses: DEF-camera_group, DEF-configuration
+
+The configuration SHALL name the camera groups that are several bodies of one camera, a group it does not name being
+one camera.
+:::
+
+:::{rul} An offset from the GPS of several bodies never applies itself
+:id: RUL-several_bodies_offset_never_auto
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+:refines: RUL-several_bodies_named_by_configuration
+:uses: DEF-clock_offset, DEF-decision
+
+A clock offset proposed from the GPS of a camera group the configuration names several bodies SHALL NOT take effect
+without the user's answer.
+:::
+
+:::{rul} The proposal says the group may be several bodies
+:id: RUL-several_bodies_noted
+:status: ruled
+:criticality: med
+:verify: required
+:refines: RUL-several_bodies_offset_never_auto
+
+A clock offset proposed from the GPS of a camera group the configuration names several bodies SHALL be recorded with
+the note that the group may be several bodies.
+:::
+
+:::{rul} The bodies' days in different destinations are decided apart
+:id: RUL-several_bodies_days_apart
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+:refines: RUL-several_bodies_named_by_configuration
+:uses: RUL-offset_shared_within_day
+
+A day of a camera group the configuration names several bodies SHALL NOT take, nor be held against, the offset the
+group's GPS gave that day in another destination: the bodies are told apart by the destinations their photos are
+sorted into.
+:::
+
 
 ## 10. Destination civil timezone
 

@@ -566,6 +566,24 @@ camera's clock still: a camera writes it as it writes the original. Treating suc
 geotag on a time that is, at worst, a poor guess the user can see and correct.
 :::
 
+:::{rat} Only the user knows a group is two bodies
+:id: RAT-several_bodies_said_by_the_user
+:status: ruled
+:forced: no
+:follows_from: RAT-class_decides_time_model, RAT-anchor_agreement
+:justifies: RUL-several_bodies_named_by_configuration, RUL-several_bodies_offset_never_auto, RUL-several_bodies_noted, RUL-several_bodies_days_apart
+
+Two bodies of one model that write no serial are one camera group: nothing in their photos tells them apart. With GPS
+on both, their anchors disagree for good and no one offset is right; with GPS on one that day, its offset would apply
+itself to the other's photos; and a day's offset found in one destination would be passed to, or held against, the other
+body's in the next. Geotag cannot see this, and treating every group as perhaps two would cost every camera the offsets
+that apply themselves. So the configuration says it, a group being one camera unless named — the owner's ruling: *"no,
+this needs a workspace setting, default being that it's just one camera. If the setting says multiple cameras, then do
+the recommended"*. For a group so named, an offset from its GPS is a proposal, said to be perhaps one body's; its days in
+different destinations are decided apart; and the user tells the bodies apart by sorting one's photos into a folder of
+their own.
+:::
+
 
 ## 10. Destination civil timezone
 

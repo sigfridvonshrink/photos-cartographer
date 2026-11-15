@@ -119,6 +119,15 @@ into `camera_time_and_timezone_policy.device_groups` in `photos-00-config.json` 
 the printed lists, every other setting left as it is — then re-run `geotag plan`. Pasting by hand still
 works as before.
 
+Below them, under **Cameras with a hand-set clock**, the view lists every camera with a hand-set clock among your
+photos, each **one camera** (the default) or **several bodies**. Two bodies of one model that write no serial number
+are one camera group: nothing in their photos tells them apart. Mark such a group as several bodies and an offset
+its GPS gives is always a proposal for you to accept, noted as perhaps one body's; its days in different
+destinations are decided apart; and its photos that disagree with the offset are never offered as wrong positions.
+To tell the bodies apart, move one body's photos into a sub-folder and re-run prep — each folder then has offsets
+of its own. Save writes the group into `camera_time_and_timezone_policy.several_bodies_groups` (or takes it out);
+by hand, edit that list.
+
 ---
 
 ## Time view

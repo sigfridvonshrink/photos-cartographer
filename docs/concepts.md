@@ -234,7 +234,12 @@ timezone-less clock needs a clock offset (next sections). A phone's photo record
 zone unasked only where the phone's tagged photos that day record the zone's offset; else its own GPS reads
 it; with neither, the zone's reading (or its tagged photos' offset) is a guess like a camera's — checked in
 the drift check where tracks lie by it, else accepted. A group not yet classed stops geotag, which
-prints both lists ready to paste — or class it in the editor's Cameras view, which writes them. A file whose metadata names no camera is never asked to be classed: it
+prints both lists ready to paste — or class it in the editor's Cameras view, which writes them. Two bodies
+of one model that write no serial number are one group, and nothing in their photos tells them apart: list such a
+group in `camera_time_and_timezone_policy.several_bodies_groups` (or mark it in the Cameras view) and an offset its
+GPS gives never applies itself — it is proposed, noted as perhaps one body's — and its days in different destinations
+are decided apart, so moving one body's photos into a sub-folder gives them offsets of their own. By default the list
+is empty: every group is one camera. A file whose metadata names no camera is never asked to be classed: it
 is solved on its own, by the offset recorded with its time; files recording none are one question for
 their destination — read them as local time in its zone? — answered once and kept. So is a photo
 whose only time is its `ModifyDate` — an export whose capture time is gone, timed by the editing

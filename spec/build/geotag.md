@@ -234,6 +234,20 @@ has it, it is classed `unidentified`, is in no group's offset cell or drift chec
 (`unidentified_native_offset`), else its destination's timezone; prep's camera group and its report are left as derived.
 :::
 
+:::{bld} Camera groups that are several bodies
+:id: BLD-several_bodies_groups
+:status: ruled
+:realises: RUL-several_bodies_named_by_configuration, RUL-several_bodies_offset_never_auto, RUL-several_bodies_noted, RUL-several_bodies_days_apart
+
+`camera_time_and_timezone_policy.several_bodies_groups`, beside `device_groups`, SHALL be a list of camera group keys,
+each listed in `device_groups.fixed_clock_cameras` and each once — else the configuration is refused; `[]` by default,
+every group one camera. `recognize_camera_groups` marks a `camera` group named there `several_bodies: true`, and
+`_offset_cell` then applies none of its GPX self-anchor or GPS-time proposals by itself, nor keeps one from earlier
+({need}`BLD-day_offset_kept`): each takes effect only accepted or written; a cell of such a group whose proposal is from
+its GPS, or shared, holds `several_bodies: true`. Its cells take no part in the offsets shared within a day
+({need}`BLD-offset_shared_within_day`): none is a donor, none is offered a donor's offset, none is held against another.
+:::
+
 
 ## 10. Destination civil timezone
 

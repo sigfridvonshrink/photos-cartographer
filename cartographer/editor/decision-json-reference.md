@@ -30,7 +30,7 @@ All live in the workspace control directory `.photos-ingest/`:
 | `photos-21-time-decisions.json` | `time_decisions` | Per-destination **country** and **civil timezone**, and per-(camera group, destination, day) **clock offset** for fixed-clock cameras. |
 | `photos-22-gps-drift-validation.json` | `gps_drift_validation` | Per at-risk bucket, **confirm or correct** a clock offset that no photo's own GPS pins (a manual, timezone-derived or imprecise-anchor offset) against the GPX track before it is used to place photos (§5a below). |
 | `photos-23-gps-decisions.json`  | `gps_decisions`  | Per-destination **GPS fallback** coordinate, and per-file **GPS** decisions for files an automatic source could not place. |
-| `photos-00-config.json` (`camera_time_and_timezone_policy.device_groups`) | — | Not a decision record but the workspace's configuration: the **class** of each new camera group — phone or fixed-clock camera — that geotag stops on before it writes any decision (§5c below). |
+| `photos-00-config.json` (`camera_time_and_timezone_policy.device_groups`) | — | Not a decision record but the workspace's configuration: the **class** of each new camera group — phone or fixed-clock camera — that geotag stops on before it writes any decision (§5c below), and which camera groups are several bodies (`several_bodies_groups`, §5d). |
 | `photos-25-execution-summary.json` | `execution_summary` | Not a decision record but `geotag execute`'s summary: per photo whose content changed when geotag wrote to it, whether that content **stands** (§5b below). |
 
 The editor opens one of these, presents the open decisions, lets the human resolve them, and writes the
@@ -243,6 +243,7 @@ destinations or buckets.
 | **`user_decision.keep_as_recorded`** | bool | **yes** | On a phone's cell only (§4.5): keep the phone's photos read as they record themselves — their own offset tag, else the zone — its GPS's finding set aside (the track was someone else's). |
 | `effective_time_anchor` | `""` \| object | no | `""` if unresolved; else `{ "offset_seconds": int, "source": … }` where source ∈ `manual` (a manual offset) \| `gpx_anchor_chosen` (a manual offset within `gpx_anchor_offset_spread_max_seconds` of one of a precise GPX proposal's `groups`) \| `gpx_anchor_accepted` \| `gpx_anchor_imprecise` (an accepted GPX proposal with `imprecise_seconds > 0`) \| `recorded_offset_accepted` \| `timezone_accepted` \| `same_day_accepted` (an accepted proposal of that kind) \| `gpx_anchor_auto` (a GPX proposal applied by itself, or kept from earlier) \| `as_recorded` (a phone's cell kept as its photos record themselves; no `offset_seconds`) \| `gps_time_auto` (two GPS fix times or more, applied by themselves) \| `gps_time_accepted` (an accepted GPS-time proposal) \| `same_day_auto` \| `recorded_offset_unconfirmed` \| `timezone_unconfirmed` (an offset from the photos' recorded offset, or from the timezone, sent to photos-22 to be confirmed). |
 | `conflicts_with` | array | no | Present when the camera's own GPS gave another offset the same day in another destination, farther off than `clock_offset_same_day_max_difference_seconds`, or where one of the two is a group of the camera's GPS the user picked (`gpx_anchor_chosen`): `[{ "destination", "bucket", "offset_seconds", "chosen" }]` — `chosen` is `true` where that other offset is one the user picked (`gpx_anchor_chosen`). An offset the GPS gave by itself (`gpx_anchor_auto`, `gpx_anchor_accepted`) takes no effect and the cell asks; a `gpx_anchor_chosen` one keeps its effect. Write `manual_offset_seconds` in the cell that is wrong — to take a cell's own proposal there, write its `proposed_offset_seconds` as `manual_offset_seconds` (the editor does so): `accept_proposal` there counts as what the GPS gave by itself and is withheld again. Two `gpx_anchor_chosen` offsets are never held against each other. |
+| `several_bodies` | `true` | no | On a cell of a camera group the configuration names several bodies (`camera_time_and_timezone_policy.several_bodies_groups`, §5d) whose proposal is from its GPS, or shared: the group may be several bodies, and the offset never applies itself — it is accepted or written. |
 | `anchored_by` | list | no | On a cell whose offset applied itself from GPS: the track files it was found from, each `{ "gpx_file", "sha256" }`. The offset is kept for later photos of the day (`decision_mode: "kept_from_earlier"`) only while each is under `gpx_root` unchanged and no newer GPS proposal says otherwise. |
 | `requires_user_input` | bool | no | `true` ⇔ `effective_time_anchor == ""`. (Containers carry no offset cells, so this is never softened here.) |
 | `stale_user_decision` | bool | no | `accept_proposal` is set but `accepted_offset_seconds` is no longer the offset proposed (another offset beyond the tolerance, or none proposed): kept as written, it takes no effect, nothing applies itself in its place, and the cell asks. |
@@ -708,6 +709,37 @@ indent), every other setting keeping its value.
 
 ---
 
+## 5d. One camera or several bodies — `photos-00-config.json`
+
+Two bodies of one model that write no serial number are one camera group: nothing in their photos tells them apart.
+`camera_time_and_timezone_policy.several_bodies_groups`, beside `device_groups`, lists the fixed-clock camera groups
+that are several bodies — empty by default, every group one camera. Each key must be one `device_groups.fixed_clock_cameras`
+lists, and be named once; else every run refuses the configuration.
+
+```jsonc
+"camera_time_and_timezone_policy": {
+  "device_groups": { "fixed_clock_cameras": [ "Sony|ILCE-6400|" ], "phones": [] },
+  "several_bodies_groups": [ "Sony|ILCE-6400|" ],
+  …
+}
+```
+
+For a group so named, an offset from its GPS — its anchors on the tracks, its fixes' times, or the same day elsewhere —
+never applies itself: the cell carries `several_bodies: true` and waits for `accept_proposal` or
+`manual_offset_seconds`; it keeps no earlier offset by itself; its days in different destinations are decided apart (no
+`same_day_elsewhere` proposal, no `conflicts_with`). To tell the bodies apart, move one body's photos into a sub-folder
+and run prep again: each destination then has cells of its own.
+
+**By hand:** add the group's key to `several_bodies_groups`, or take it out, then re-run `geotag plan`.
+
+**In the editor:** the **Cameras** view lists each fixed-clock camera group of the photos under **Cameras with a
+hand-set clock**, each a cell `cameras.bodies[<key>]` with `user_decision.several_bodies` (`true` or `false`), never
+requiring input. Saving puts the key into `several_bodies_groups` or takes it out, under the workspace lock, only
+while `photos-00-config.json` is the file the editor loaded (by its SHA-256), and only if the configuration then
+passes every check `load_config` makes; the file is written again whole, every other setting keeping its value.
+
+---
+
 ## 6. Within-cell precedence (which `user_decision` field wins)
 
 A cell can carry more than one decision field; geotag applies them in a fixed order. The editor's
@@ -788,7 +820,7 @@ A natural shape that satisfies the contract:
 
 **The save contract (this editor's server).** `GET /api/artifacts` returns `{ "workspace", "demo", "time",
 "drift", "gps", "execution", "cameras", "hashes" }` — the three decision records and photos-25 (`execution`) as
-loaded, the new camera groups (`cameras`, §5c), and in `hashes` (`{ "time", "drift", "gps", "execution", "cameras" }`)
+loaded, the new camera groups and the fixed-clock ones (`cameras.groups`, §5c; `cameras.bodies`, §5d), and in `hashes` (`{ "time", "drift", "gps", "execution", "cameras" }`)
 the SHA-256 of each record's bytes as read — `cameras` the configuration's — (`null` for a record that is absent).
 `POST /api/save` takes:
 
@@ -800,7 +832,8 @@ the SHA-256 of each record's bytes as read — `cameras` the configuration's —
   "gps":   [ { "dest": "…", "kind": "fallback" | "review", "path": "<relative_path, for review>",
                "user_decision": { … } } ],
   "execution": [ { "kind": "fingerprint", "path": "<relative_path of the mismatch>", "user_decision": { … } } ],
-  "cameras": [ { "kind": "camera", "key": "<camera group key>", "user_decision": { "device_class": "phones" } } ],
+  "cameras": [ { "kind": "camera", "key": "<camera group key>", "user_decision": { "device_class": "phones" } },
+               { "kind": "bodies", "key": "<camera group key>", "user_decision": { "several_bodies": true } } ],
   "hashes": { "time": "…", "drift": "…", "gps": "…", "execution": "…", "cameras": "…" }   // as the editor loaded them
 }
 ```

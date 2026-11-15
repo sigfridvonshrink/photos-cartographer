@@ -1659,7 +1659,7 @@
   "decision_mode": "no_op_or_auto_resolved",
   "depends_on": {
     "camera_group_key_version": 1,
-    "camera_time_policy_fingerprint": "325dbf2e93cd879e24466c89643aee2d548afb7ce1f2171200320d8adfb0fbe7",
+    "camera_time_policy_fingerprint": "3aa0a6df3c01e0f5bab6c6b214eea828fe6d5ca7cf175cae406e4d20f98b8277",
     "gpx_fingerprint": "example-gpx-fingerprint",
     "handoff": {
       "artifact_name": "photos-11-handoff.json",

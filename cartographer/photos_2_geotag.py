@@ -892,10 +892,15 @@ class GeotagWorkflow:
         per-(group, destination, day) offset); otherwise it is unknown and must be classified before geotag.
         The class is all geotag needs of a group: its facts — files, span, positions — are prep's to report,
         in the handoff's `camera_groups`."""
-        dg = (CONFIG.get("camera_time_and_timezone_policy") or {}).get("device_groups") or {}
+        policy = CONFIG.get("camera_time_and_timezone_policy") or {}
+        dg = policy.get("device_groups") or {}
+        several = set(policy.get("several_bodies_groups") or [])
         groups = {}
         for key in sorted({f["camera_group_key"] for f in files}):
             groups[key] = {"camera_group_key": key, "camera_group_class": camera_group_class(key, dg)}
+            if key in several and groups[key]["camera_group_class"] == "camera":
+                # the configuration says this group is several bodies of one model (BLD-several_bodies_groups)
+                groups[key]["several_bodies"] = True
         unknown = [k for k, g in groups.items() if g["camera_group_class"] == "unknown"]
         return groups, unknown
 
@@ -1294,12 +1299,16 @@ class GeotagWorkflow:
         A `gpx_anchor_chosen` offset rests on the camera's own GPS, and is passed on like the others
         (BLD-offset_shared_within_day)."""
         limit = CONFIG["clock_offset_same_day_max_difference_seconds"]
+        # a group of several bodies has a clock per body: its days in different destinations are decided apart
+        # (RUL-several_bodies_days_apart, BLD-several_bodies_groups)
+        several = set(CONFIG["camera_time_and_timezone_policy"].get("several_bodies_groups") or [])
         by_day = {}
         for dest, d in destinations.items():
             for bucket, cell in d["camera_group_time_decisions"].items():
                 # a phone's day is read in each destination on its own: its clock is the network's, set again
                 # wherever it went (BLD-phone_offset_cell)
-                if cell.get("day") and cell.get("camera_group_class") == "camera":
+                if cell.get("day") and cell.get("camera_group_class") == "camera" \
+                        and cell.get("camera_group") not in several:
                     by_day.setdefault((cell["camera_group"], cell["day"]), []).append((dest, bucket, cell))
         for (_group, _day), members in sorted(by_day.items()):
             if len(members) < 2:
@@ -1556,6 +1565,9 @@ class GeotagWorkflow:
         spread = CONFIG["gpx_anchor_offset_spread_max_seconds"]          # anchors this close agree
         tolerance = CONFIG["gpx_anchor_decision_tolerance_seconds"]      # a proposal this close is the one decided
         policy = CONFIG["camera_time_and_timezone_policy"]      # whole: the loader refuses one lacking a setting
+        # a group the configuration names several bodies: no offset from its GPS applies itself
+        # (RUL-several_bodies_offset_never_auto, BLD-several_bodies_groups)
+        several = bool(g.get("several_bodies"))
 
         ud = prior_cell.get("user_decision") or {}
         accept = _decision_flag(ud, "accept_proposal", f"{dest}: camera_group_time_decisions[{loc}].user_decision", blockers)
@@ -1608,12 +1620,13 @@ class GeotagWorkflow:
                              else "same_day_accepted" if is_shared
                              else "gps_time_accepted" if is_gps_time
                              else "recorded_offset_accepted" if is_recorded else "timezone_accepted"}
-        elif is_gps_time and ((proposal["gps_time_count"] >= 2 and policy["multi_anchor_auto_apply"]) or settles):
+        elif is_gps_time and not several and ((proposal["gps_time_count"] >= 2 and policy["multi_anchor_auto_apply"])
+                                              or settles):
             # two fixes or more, their times all different and their offsets agreeing, apply themselves as several
             # anchors do; one is a proposal to accept (RUL-gps_times_agreeing_apply, RUL-single_gps_time_proposed)
             effective = {"offset_seconds": proposal["proposed_offset_seconds"], "source": "gps_time_auto"}
             decision_mode = "auto_resolved"
-        elif is_gpx and not conflicting and not imprecise:
+        elif is_gpx and not conflicting and not imprecise and not several:
             # auto-resolution under the config flags (RUL-anchor_offset_auto_as_configured) — GPX-self-anchor only; a
             # timezone-derived proposal is confirmable, never auto-applied (the local-clock assumption can be wrong).
             n = proposal["anchor_count"]
@@ -1627,7 +1640,7 @@ class GeotagWorkflow:
             anchored_by = [{"gpx_file": f, "sha256": gpx.file_sha.get(f)} for f in
                            sorted({a["gpx_match"]["gpx_file"] for a in proposal["anchors"]
                                    if abs(a["proposed_offset_seconds"] - effective["offset_seconds"]) <= spread})]
-        if effective == "" and not stale and manual_off in ("", None) and not accept and not keep:
+        if effective == "" and not stale and manual_off in ("", None) and not accept and not keep and not several:
             # An offset found from the camera's own GPS stays this camera's offset for the day when the
             # photos that gave it are corrected and later ones bring no anchor — while what it rested on
             # still stands: every track that anchored it is under gpx_root unchanged, and no photo that has
@@ -1688,6 +1701,8 @@ class GeotagWorkflow:
             cell["day"] = day                      # the day its photos are of, whatever its key
         if decision_mode:
             cell["decision_mode"] = decision_mode
+        if several and (is_gpx or is_gps_time or is_shared):
+            cell["several_bodies"] = True          # the offset its GPS gives may be one body's (RUL-several_bodies_noted)
         return cell
 
     def _handoff_dependency(self, ws):
@@ -3065,9 +3080,16 @@ def _parsed_record(rec):
 
 def unclassified_camera_groups(handoff, cfg):
     """{camera group: its photos' paths} for each group of the handoff's photos under photos by destination that the
-    configuration `cfg` does not class — the groups geotag stops on (BLD-known_camera_group), keyed from prep's record
-    as `build_file_model` keys a photo with no pinned values. What the decision editor asks the class of
-    (BLD-editor_lists_new_camera_groups)."""
+    configuration `cfg` does not class — the groups geotag stops on (BLD-known_camera_group). What the decision editor
+    asks the class of (BLD-editor_lists_new_camera_groups)."""
+    return camera_groups_of_class(handoff, cfg, "unknown")
+
+
+def camera_groups_of_class(handoff, cfg, cls):
+    """{camera group: its photos' paths} for each group of the handoff's photos under photos by destination that the
+    configuration `cfg` classes `cls` (`camera_group_class`), keyed from prep's record as `build_file_model` keys a
+    photo with no pinned values. Of class `camera`, the groups the decision editor lets the user name as several
+    bodies (BLD-editor_marks_several_bodies)."""
     by_dest = ((cfg or {}).get("folders") or {}).get("photos_by_dest") or folder_name("photos_by_dest")
     dg = ((cfg or {}).get("camera_time_and_timezone_policy") or {}).get("device_groups") or {}
     out = {}
@@ -3077,7 +3099,7 @@ def unclassified_camera_groups(handoff, cfg):
         md, parsed = rec.get("metadata_status") or {}, _parsed_record(rec)
         key = clock_group_key({"camera_group_key": md.get("camera_group_key") or parsed.get("camera_group_key")
                                or NO_IDENTITY_KEY, "source_time_tag": parsed.get("selected_source_timestamp_tag")})
-        if camera_group_class(key, dg) == "unknown":
+        if camera_group_class(key, dg) == cls:
             out.setdefault(key, []).append(rec.get("relative_path"))
     return {k: sorted(p for p in v if p) for k, v in sorted(out.items())}
 

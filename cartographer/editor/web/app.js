@@ -85,8 +85,9 @@ function cellAt(arts, ref) {
     const d = arts.drift?.destinations?.[ref.dest]; if (!d) return null;
     return d.drift_decisions?.[ref.key];
   }
-  if (ref.file === "cameras")                  // a camera group the configuration does not class, by its key
-    return arts.cameras?.groups?.[ref.key] || null;
+  if (ref.file === "cameras")                  // a camera group the configuration does not class, by its key; or a
+    // fixed-clock camera group, whether it is several bodies (BLD-editor_marks_several_bodies)
+    return (ref.kind === "bodies" ? arts.cameras?.bodies?.[ref.key] : arts.cameras?.groups?.[ref.key]) || null;
   if (ref.file === "execution")                // photos-25: a photo whose content changed after a write, by its path
     return (arts.execution?.fingerprint_mismatches || []).find((m) => m && m.relative_path === ref.path) || null;
   const d = arts.gps?.destinations?.[ref.dest]; if (!d) return null;
@@ -99,6 +100,7 @@ const baseCell = (ref) => cellAt(state.base, ref);
 function allRefs() {
   const out = [];
   for (const key of Object.keys(state.work.cameras?.groups || {})) out.push({ file: "cameras", kind: "camera", key });
+  for (const key of Object.keys(state.work.cameras?.bodies || {})) out.push({ file: "cameras", kind: "bodies", key });
   for (const [dest, d] of Object.entries(state.work.time?.destinations || {})) {
     out.push({ file: "time", dest, kind: "timezone" });
     for (const key of Object.keys(d.camera_group_time_decisions || {})) out.push({ file: "time", dest, kind: "offset", key });
@@ -132,6 +134,7 @@ function refInvalid(ref) {
   if (ref.kind === "drift") return !validOffset(u.corrected_offset_seconds);
   if (ref.kind === "fingerprint") return typeof u.accept_fingerprint_change !== "boolean";
   if (ref.kind === "camera") return !["", ...DEVICE_CLASSES].includes(u.device_class ?? "");
+  if (ref.kind === "bodies") return typeof u.several_bodies !== "boolean";
   if (ref.kind === "changed") return !["", ...CHANGED_ANSWERS].includes(u.keep ?? "");
   if (ref.kind === "fallback") return !validLat(u.fallback_lat) || !validLon(u.fallback_lon) || !bothOrNeither(u.fallback_lat, u.fallback_lon);
   return !validLat(u.manual_lat) || !validLon(u.manual_lon) || !bothOrNeither(u.manual_lat, u.manual_lon);
@@ -255,6 +258,7 @@ function wouldResolve(ref) {
   if (ref.kind === "unidentified") return unidentifiedHolds(ref.dest, c);
   if (ref.kind === "fingerprint") return mismatchAccepted(c);
   if (ref.kind === "camera") return DEVICE_CLASSES.includes(u.device_class);
+  if (ref.kind === "bodies") return typeof u.several_bodies === "boolean";   // a setting: either answer stands
   if (ref.kind === "changed") return changedHolds(c);
   if (ref.kind === "drift")                       // confirmed for this offset (zero-scrub or a valid correction)
     return driftConfirmHolds(c) && validOffset(u.corrected_offset_seconds);
@@ -427,6 +431,9 @@ function previewEffective(ref) {
   if (ref.kind === "changed") return !changedHolds(c) ? (u.keep ? "— (answered for another time — answer again)" : "— (needs input)")
     : u.keep === "new" ? `keeps ${timePair(c.held_time)} — the true local time, no clock offset applied`
       : `geotag's time written back${c.geotag_wrote ? ` (${timePair(c.geotag_wrote)})` : ""}`;
+  if (ref.kind === "bodies") return u.several_bodies
+    ? "several bodies — written into several_bodies_groups: an offset from its GPS is always a proposal"
+    : "one camera — an offset its GPS agrees on applies itself as the configuration allows";
   if (ref.kind === "camera") return u.device_class === "phones" ? "a phone — written into device_groups.phones"
     : u.device_class === "fixed_clock_cameras" ? "a camera with a hand-set clock — written into device_groups.fixed_clock_cameras"
       : "— (needs input: geotag stops until it is classed)";
@@ -747,7 +754,10 @@ function renderCameras(list) {
   const cams = state.work.cameras;
   if (!cams || cams._error) return list.append(recordAbsent(cams, "photos-00-config.json"));
   const keys = Object.keys(cams.groups || {}).sort();
-  if (!keys.length) return list.append(el("div", { class: "empty" }, "Every camera group of the photos is classed in photos-00-config.json."));
+  if (!keys.length) {
+    list.append(el("div", { class: "empty" }, "Every camera group of the photos is classed in photos-00-config.json."));
+    return renderBodies(list);
+  }
   list.append(el("div", { class: "hint" }, "Geotag stops on a camera it has not met: say whether each is a phone (its clock set by the " +
     "network, its offset recorded with each photo) or a camera with a clock set by hand. Saving writes it into " +
     "photos-00-config.json (camera_time_and_timezone_policy.device_groups), as pasting geotag's lists would; then re-run `geotag plan`."));
@@ -759,6 +769,37 @@ function renderCameras(list) {
       el("span", { class: "label" }, who || key, el("span", { class: "sub" }, `  ${g.files} photo${g.files === 1 ? "" : "s"}`)),
       ...tags(ref), statusChip(ref)));
   }
+  renderBodies(list);
+}
+// Each fixed-clock camera group of the photos, one camera or several bodies of one model that write no serial
+// (camera_time_and_timezone_policy.several_bodies_groups, BLD-editor_marks_several_bodies): a setting, by default one
+// camera — never a question that waits. Saved like a new group's class, into photos-00-config.json.
+function renderBodies(list) {
+  const bodies = state.work.cameras?.bodies || {}, keys = Object.keys(bodies).sort();
+  if (!keys.length) return;
+  list.append(el("div", { class: "group-title" }, "Cameras with a hand-set clock"));
+  list.append(el("div", { class: "hint" }, "Two bodies of one model that write no serial are one group. Mark such a group as several " +
+    "bodies: an offset its GPS gives is then always a proposal, and its photos that disagree are not read as wrong positions. " +
+    "To tell the bodies apart, move one body's photos into a sub-folder and re-run prep."));
+  for (const key of keys) {
+    const g = bodies[key], ref = { file: "cameras", kind: "bodies", key };
+    const who = Object.values(g.identity || {}).join(" ");
+    list.append(el("div", { class: "row" + (isSel(ref) ? " sel" : ""), onclick: () => { state.selected = ref; render(); },
+        onmouseenter: (ev) => showHoverPreview((g.examples || [])[0], ev), onmousemove: moveHoverPreview, onmouseleave: hideHoverPreview },
+      el("span", { class: "label" }, who || key, el("span", { class: "sub" },
+        `  ${g.files} photo${g.files === 1 ? "" : "s"}${(g.user_decision || {}).several_bodies ? " · several bodies" : ""}`)),
+      ...tags(ref), statusChip(ref)));
+  }
+}
+function bodiesControls(ref) {
+  const c = workCell(ref), u = c.user_decision || {}, wrap = el("div", { class: "ctl-block" });
+  wrap.append(el("div", { class: "hint" }, `${c.files} photo${c.files === 1 ? "" : "s"} under photos by destination, e.g. ` +
+    `${(c.examples || []).map(leaf).join(", ")}.`));
+  const opt = (on, label) => el("div", { class: "off-opt" + (u.several_bodies === on ? " on" : ""), onclick: () => edit(ref, "several_bodies", on) },
+    el("span", { class: "off-dot" }, u.several_bodies === on ? "●" : "○"), el("span", {}, label));
+  wrap.append(opt(false, "one camera — the default"));
+  wrap.append(opt(true, "several bodies of one model — never apply an offset from its GPS by itself"));
+  return wrap;
 }
 function cameraControls(ref) {
   const c = workCell(ref), u = c.user_decision || {}, wrap = el("div", { class: "ctl-block" });
@@ -1043,6 +1084,8 @@ function controls(ref) {
     wrap.append(mismatchControls(ref));
   } else if (ref.kind === "camera") {
     wrap.append(cameraControls(ref));
+  } else if (ref.kind === "bodies") {
+    wrap.append(bodiesControls(ref));
   } else if (ref.kind === "changed") {
     wrap.append(changedControls(ref));
   } else if (ref.kind === "fallback") {
@@ -1324,8 +1367,8 @@ function driftMap(ref, frame, fi) {
 // decision" box for a GPS review item (the big map gets the rest of the panel). Null in demo mode or
 // for non-photo cells; for a multi-photo run, `ref.path` is the first photo.
 function decisionThumb(ref) {
-  const photo = ref.kind === "reading" || ref.kind === "changed" ? ref.key : ref.kind === "camera" ? (workCell(ref)?.examples || [])[0] : ref.path;
-  if (state.base.demo || !["review", "reading", "fingerprint", "camera", "changed"].includes(ref.kind) || !photo) return null;
+  const photo = ref.kind === "reading" || ref.kind === "changed" ? ref.key : ["camera", "bodies"].includes(ref.kind) ? (workCell(ref)?.examples || [])[0] : ref.path;
+  if (state.base.demo || !["review", "reading", "fingerprint", "camera", "bodies", "changed"].includes(ref.kind) || !photo) return null;
   const img = el("img", { class: "decision-thumb", alt: photo, title: photo.split("/").pop(),
     src: "/api/photo?path=" + encodeURIComponent(photo) });
   img.addEventListener("error", () => img.remove());
@@ -1757,9 +1800,10 @@ function renderPanel() {
     : ref.kind === "drift" ? `Drift · ${c.camera_group || ref.key}`
     : ref.kind === "fingerprint" ? "Content changed after a write"
     : ref.kind === "camera" ? "A new camera group"
+    : ref.kind === "bodies" ? "One camera, or several bodies"
     : ref.kind === "review" ? (multi ? `GPS review · ${ref.peers.length} photos` : "GPS review item")
       : ref.kind === "fallback" ? "Folder fallback" : "Timezone";
-  p.append(el("h2", {}, title), el("div", { class: "path" }, ref.path || (["reading", "camera", "changed"].includes(ref.kind) ? ref.key : ref.dest)));
+  p.append(el("h2", {}, title), el("div", { class: "path" }, ref.path || (["reading", "camera", "bodies", "changed"].includes(ref.kind) ? ref.key : ref.dest)));
   const head = el("div", { class: "pblock" }, ...(statusChip(ref) ? [statusChip(ref)] : []), ...tags(ref));
   // A multi-cell ref edits several siblings at once — say so. Offset cluster → which days; review run → how many.
   if (ref.kind === "offset" && multi) {
@@ -1777,7 +1821,7 @@ function renderPanel() {
   if (isDirty(ref)) head.append(el("button", { class: "mini", onclick: () => resetRef(ref) }, "reset"));
   // Fixed top: title + status + the decision controls + the effective preview — always visible, no scroll.
   const top = el("div", { class: "panel-top" },
-    el("h2", {}, title), el("div", { class: "path" }, ref.path || (["reading", "camera", "changed"].includes(ref.kind) ? ref.key : ref.dest)), head,
+    el("h2", {}, title), el("div", { class: "path" }, ref.path || (["reading", "camera", "bodies", "changed"].includes(ref.kind) ? ref.key : ref.dest)), head,
     el("div", { class: "pblock" }, el("h3", {}, "Your decision"), decisionThumb(ref), controls(ref)),
     el("div", { class: "pblock eff" }, el("h3", {}, "Effective (advisory — re-run to apply)"), el("div", { class: "eff-val" }, previewEffective(ref))));
   // Scroll area, the only thing that scrolls. For a GPS coord cell the MAP comes first — directly under
@@ -1788,7 +1832,7 @@ function renderPanel() {
   if (isGpsCoord) scroll.append(mapBlock(ref));   // the review photo is now a thumbnail in "Your decision" + a hover preview in the worklist
   // No raw "Proposal" JSON box for fallback — the inherited proposal is already shown in the
   // "accept inherited (lat, lon)" checkbox label, so the JSON dump was redundant clutter.
-  if (c.proposal && ref.kind !== "drift" && ref.kind !== "fallback" && ref.kind !== "reading" && ref.kind !== "fingerprint" && ref.kind !== "camera")
+  if (c.proposal && ref.kind !== "drift" && ref.kind !== "fallback" && ref.kind !== "reading" && ref.kind !== "fingerprint" && ref.kind !== "camera" && ref.kind !== "bodies")
     scroll.append(ref.kind === "offset" ? offsetProposalBlock(ref, c.proposal) : jsonBlock("Proposal", c.proposal));
   p.replaceChildren(top, scroll);
 }

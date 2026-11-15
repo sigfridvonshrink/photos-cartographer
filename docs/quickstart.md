@@ -49,9 +49,11 @@ browser; its map tiles and place search use OpenStreetMap at runtime and degrade
 
 ### Upgrading from 3.0.0
 
-Replace both files. A workspace begun under 3.0.0 needs one setting added to its
+Replace both files. A workspace begun under 3.0.0 needs two settings added to its
 `.photos-ingest/photos-00-config.json`: `"gpx_track_precedence": []` keeps every track ranked alike, as
-before; see [ranking your devices](concepts.md#placing-each-photo) for what to put in it. Four settings under
+before; see [ranking your devices](concepts.md#placing-each-photo) for what to put in it. And
+`"several_bodies_groups": []`, under `camera_time_and_timezone_policy` beside `device_groups`, keeps every camera
+group one camera, as before; see [camera groups](concepts.md#camera-groups) for what to put in it. Four settings under
 `camera_time_and_timezone_policy` are gone and must be taken out: `phone_gpx_agreement_tolerance_seconds`,
 `phone_gpx_conflict_threshold_seconds`, `phone_gpx_max_distance_meters` and `dst_conflict_tolerance_seconds` —
 nothing read them, and every run now refuses a setting it does not know.

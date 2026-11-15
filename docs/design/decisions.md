@@ -42,6 +42,11 @@ affordance.
   day, the camera's clock changed. Code site `offsetProposalBlock` / `groupChoice` / `proposalNotes` in
   `web/app.js`, tested in `app_offset_buckets.test.mjs`.
 - **Per-date offset buckets**: grouped, collapsible, fan-out edit (#115).
+- **One camera or several bodies, in the Cameras view**: under the new groups, every fixed-clock camera group of the
+  photos is listed with two choices — one camera (the default), several bodies — saved into
+  `several_bodies_groups` like a new group's class, never a question that waits or opens the view. Why: the owner
+  ruled the setting answerable in the configuration and in the editor's camera view (BACKLOG 39). Code site
+  `renderBodies` / `bodiesControls` in `web/app.js`, tested in `app_save.test.mjs`.
 - **The true time of a photo sets the offset**: for a decision with no anchor frame, a fourth view of the
   self-set offset names the cell's representative photo (photos-21 `representative`, its earliest; with a
   thumbnail) and takes the time it was really taken, typed in the destination's zone (UTC with none); the
