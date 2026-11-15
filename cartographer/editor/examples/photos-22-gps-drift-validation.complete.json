@@ -14,6 +14,7 @@
       "drift_decisions": {
         "CAM|drift|D": {
           "camera_group": "CAM|drift|D",
+          "confirmed_tracks_changed": [],
           "day": "2024-07-03",
           "effective_drift_offset": {
             "offset_seconds": -7200,
@@ -88,12 +89,24 @@
                 "lon": 4.006,
                 "time_utc": "2024-07-03T12:10:00Z"
               }
+            ],
+            "tracks": [
+              {
+                "gpx_file": "trip-2024-07-03.gpx",
+                "sha256": "3a523a4dfd1e3a4b76946262c5ee2cd60bd25bde0d086f5961683b5687e64379"
+              }
             ]
           },
           "requires_user_input": false,
           "stale_user_decision": false,
           "user_decision": {
             "confirmed": true,
+            "confirmed_against_tracks": [
+              {
+                "gpx_file": "trip-2024-07-03.gpx",
+                "sha256": "3a523a4dfd1e3a4b76946262c5ee2cd60bd25bde0d086f5961683b5687e64379"
+              }
+            ],
             "confirmed_offset_seconds": -7200,
             "corrected_offset_seconds": ""
           }

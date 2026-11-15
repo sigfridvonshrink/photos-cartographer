@@ -109,7 +109,8 @@ def _confirm_drift(ws, offset, bucket=CAM):
     a = json.loads(p.read_text())
     cell = a["destinations"][T]["drift_decisions"][bucket]
     cell["user_decision"].update(confirmed=True, corrected_offset_seconds=offset,
-                                 confirmed_offset_seconds=cell["proposal"]["current_offset_seconds"])
+                                 confirmed_offset_seconds=cell["proposal"]["current_offset_seconds"],
+                                 confirmed_against_tracks=cell["proposal"]["tracks"])
     p.write_text(json.dumps(a))
 
 

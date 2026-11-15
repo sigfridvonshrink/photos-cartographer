@@ -325,7 +325,8 @@ function previewEffective(ref) {
   }
   if (ref.kind === "drift") {
     if (!u.confirmed) return "— (needs confirmation)";
-    if (!driftConfirmHolds(c)) return "— (confirmed for another offset — confirm again)";
+    if (!driftConfirmHolds(c)) return driftStaleReason(c) === "tracks"
+      ? "— (confirmed against other tracks — confirm again)" : "— (confirmed for another offset — confirm again)";
     if (u.corrected_offset_seconds === "" || u.corrected_offset_seconds == null)
       return `${fmtOffset(p.current_offset_seconds)} (confirmed — offset was right)`;
     return validOffset(u.corrected_offset_seconds)
@@ -837,23 +838,46 @@ function tracksNote(t) {
 // `corrected_offset_seconds`); this pinned control is the affirmation + readout + a clear-back.
 // A drift confirmation names the offset it was made against and holds only while that is the bucket's
 // offset (RUL-confirmation_holds_for_its_offset): confirming writes the offset shown; one made against another
-// offset is stale.
+// offset is stale. It names the tracks shown as well, each with its SHA-256 (BLD-drift_confirmation_tracks), and
+// holds only while each is there unchanged (RUL-confirmation_rests_on_its_tracks) — one made with no track shown,
+// only while none is (RUL-trackless_confirmation_holds_while_none).
 function driftConfirmHolds(c) {
   const u = c.user_decision || {}, p = c.proposal || {};
   return !!u.confirmed && u.confirmed_offset_seconds !== "" && u.confirmed_offset_seconds != null
-    && Number(u.confirmed_offset_seconds) === p.current_offset_seconds;
+    && Number(u.confirmed_offset_seconds) === p.current_offset_seconds && driftTracksHold(c);
+}
+// Whether the tracks a confirmation names still stand. A track shown now is checked against its SHA-256 here; one
+// named but no longer shown, by what geotag found under gpx_root (`confirmed_tracks_changed`) — the editor writes
+// only tracks it shows, so any other came from the record geotag judged.
+function driftTracksHold(c) {
+  const named = (c.user_decision || {}).confirmed_against_tracks;
+  const shown = new Map(((c.proposal || {}).tracks || []).map((t) => [t.gpx_file, t.sha256]));
+  if (!Array.isArray(named)) return false;
+  if (named.length === 0) return shown.size === 0;
+  const changed = new Set(c.confirmed_tracks_changed || []);
+  return named.every((t) => !!t && typeof t.gpx_file === "string" && typeof t.sha256 === "string"
+    && (shown.has(t.gpx_file) ? shown.get(t.gpx_file) === t.sha256 : !changed.has(t.gpx_file)));
 }
 function driftConfirmFields(c, on) {
-  return on ? { confirmed: true, confirmed_offset_seconds: (c.proposal || {}).current_offset_seconds }
-    : { confirmed: false, confirmed_offset_seconds: "" };
+  const p = c.proposal || {};
+  return on ? { confirmed: true, confirmed_offset_seconds: p.current_offset_seconds,
+    confirmed_against_tracks: (p.tracks || []).map((t) => ({ gpx_file: t.gpx_file, sha256: t.sha256 })) }
+    : { confirmed: false, confirmed_offset_seconds: "", confirmed_against_tracks: [] };
+}
+// Why a confirmation no longer holds, for the readout and its warning: "offset", "tracks", or null while it holds.
+function driftStaleReason(c) {
+  const u = c.user_decision || {}, p = c.proposal || {};
+  if (!u.confirmed || driftConfirmHolds(c)) return null;
+  return Number(u.confirmed_offset_seconds) !== p.current_offset_seconds ? "offset" : "tracks";
 }
 function driftControls(ref) {
   const c = workCell(ref), u = c.user_decision || {}, p = c.proposal || {}, wrap = el("div", { class: "ctl-block" });
   wrap.append(el("div", { class: "hint" },
     `Current offset ${fmtOffset(p.current_offset_seconds)} (${p.proposal_source || "?"}). Scroll the photo along the track below to correct it, or confirm it as-is.`));
   const holds = driftConfirmHolds(c);
-  if (u.confirmed && !holds) wrap.append(el("div", { class: "hint warn" },
-    `Confirmed for ${fmtOffset(u.confirmed_offset_seconds)}; the offset is now ${fmtOffset(p.current_offset_seconds)} — check it on the track and confirm again.`));
+  if (u.confirmed && !holds) wrap.append(el("div", { class: "hint warn" }, driftStaleReason(c) === "tracks"
+    ? "Confirmed against tracks since removed or changed — check it on the track as it is now and confirm again."
+    : `Confirmed for ${fmtOffset(u.confirmed_offset_seconds)}; the offset is now ${fmtOffset(p.current_offset_seconds)} — check it on the track and confirm again.`));
   wrap.append(checkbox("confirm this bucket (offset is right as shown)", holds, (v) => editMany(ref, driftConfirmFields(c, v))));
   const corr = u.corrected_offset_seconds;
   if (corr !== "" && corr != null) {
@@ -1372,7 +1396,7 @@ export {
   fmtOffset, camNaiveMs, dtLocalToMs, msToDtLocal, utcStrToMs, fmtLocal, fmtDT, offsetImpact,
   cellAt, cellStatus, wouldResolve, previewTz, previewFallback, refInvalid, isDirty, state,
   offsetGroups, dateRange, fmtDate, peerKeys, parseLatLon, coordText, contiguousRange,
-  groupChoice, chosenOffset, proposalNotes, driftConfirmHolds, driftConfirmFields, acceptFields, acceptHolds, tracksNote,
+  groupChoice, chosenOffset, proposalNotes, driftConfirmHolds, driftConfirmFields, driftTracksHold, driftStaleReason, acceptFields, acceptHolds, tracksNote,
   zoneContradiction, offsetCellNotes, zoneSpokenFor, zoneDespiteFields, effectiveCountry, clearCountriesInside,
   scrubOffset, scrubSeedIndex, mapKeyFor, savePayload,
   ambiguousTimeNote, zoneOffer, loadRefusal, hasUnsavedEdits,

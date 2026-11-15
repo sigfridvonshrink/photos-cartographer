@@ -538,6 +538,22 @@ and that has not been looked at: carried over, the confirmation would pass an of
 correction found for the old one override the user's new decision.
 :::
 
+:::{rat} What was seen was those tracks
+:id: RAT-confirmed_on_those_tracks
+:status: ruled
+:forced: yes
+:follows_from: RAT-confirmed_one_offset, RAT-kept_offset_needs_its_evidence
+:justifies: RUL-confirmation_rests_on_its_tracks, RUL-changed_tracks_asked_again, RUL-trackless_confirmation_holds_while_none, RUL-stale_confirmation_kept
+
+Confirming is looking at the photos on a track as it was recorded then. The user takes a track out of the folder
+because it was someone else's, or puts in another export of the day; an offset that looked right on the first is then
+read on a track nobody set the photos against, and carried over, the confirmation would pass a placement nobody
+checked. So it names the tracks it was made against, as an offset found from the camera's own GPS names the tracks it
+was found from, and holds while they stand. One made where no track lay by the photos saw none: any track that comes
+later is one it never saw. The answer that no longer holds is still the user's: it stays as they wrote it, the record
+of what they saw, for them to replace.
+:::
+
 
 ## 15. Every photo's own values
 

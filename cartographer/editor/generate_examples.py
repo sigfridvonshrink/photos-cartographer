@@ -27,6 +27,7 @@ preservation/validation path).
 
 Run from the repo root:  python3 cartographer/editor/generate_examples.py
 """
+import hashlib
 import json
 import os
 import sys
@@ -66,6 +67,8 @@ def _pt(lat, lon, t, src="trip-2024-07-03.gpx"):
 def _gpx(points):
     idx = cal.GPXIndex("")
     idx.points = list(points)
+    # each track file's SHA-256, as GPXIndex.build would take it from the file's bytes — here from its name
+    idx.file_sha = {p.source_file: hashlib.sha256(p.source_file.encode()).hexdigest() for p in points}
     return idx
 
 
@@ -349,7 +352,8 @@ def scenario_drift_validation():
 
     def fill_drift(a):                                                   # confirm the bucket (zero scrub)
         cell = a["destinations"][DR]["drift_decisions"][CAM_DR]
-        cell["user_decision"].update(confirmed=True, confirmed_offset_seconds=cell["proposal"]["current_offset_seconds"])
+        cell["user_decision"].update(confirmed=True, confirmed_offset_seconds=cell["proposal"]["current_offset_seconds"],
+                                     confirmed_against_tracks=cell["proposal"]["tracks"])
         return a
 
     drift_comp, blk = wf.build_drift_validation(files, time_comp, rows0, gpx, fill_drift(_copy(drift_req)))

@@ -1203,8 +1203,9 @@ class GeotagWorkflow:
         """Build/regenerate photos-22 from the COMPLETE photos-21 + the resolved UTC under the
         current offsets (`rows0`). One review item per at-risk bucket (manual/tz-derived offset, no
         native-GPS anchor, and GPX coverage over its plausible time window). Authored confirmations
-        are preserved across reruns, each holding only for the offset it confirmed — a changed offset
-        makes it stale; one whose bucket no longer triggers is dropped, nothing being left to check.
+        are preserved across reruns, each holding only for the offset it confirmed and while the tracks it
+        names stand — a changed offset or track makes it stale; one whose bucket no longer triggers is
+        dropped, nothing being left to check.
         Returns (artifact, blockers); a bad authored value is a blocker (leave the artifact as-is)."""
         blockers = _decision_shape_blockers(prior, "drift")
         if blockers:
@@ -1216,6 +1217,7 @@ class GeotagWorkflow:
         resolved_by_path = {r["relative_path"]: r["resolved_utc"] for r in rows0
                             if r["resolved_utc_status"] == "valid"}
         prior_dests = ((prior or {}).get("destinations")) or {}
+        track_sha = gpx.file_sha if gpx is not None else {}
         destinations = {}
         for dest, d in (time_artifact.get("destinations") or {}).items():
             prior_cells = (prior_dests.get(dest, {}).get("drift_decisions")) or {}
@@ -1232,7 +1234,8 @@ class GeotagWorkflow:
                     # every photo here is corrected already: keep the confirmation for later arrivals,
                     # derived again from the decision and the current offset, never copied
                     if prior_drift:
-                        kept = self._drift_cell(dest, bucket, cell, [], [], prior_drift, blockers, date=date)
+                        kept = self._drift_cell(dest, bucket, cell, [], [], prior_drift, blockers, date=date,
+                                                track_sha=track_sha)
                         if kept["effective_drift_offset"]:
                             kept["requires_user_input"] = False
                             cells[bucket] = kept
@@ -1246,7 +1249,7 @@ class GeotagWorkflow:
                 if not seg and eff.get("source") != "timezone_unconfirmed":
                     continue                                  # no GPX coverage -> phase 23 fallback/lost
                 cells[bucket] = self._drift_cell(dest, bucket, cell, seg, frames,
-                                                 prior_drift, blockers, date=date)
+                                                 prior_drift, blockers, date=date, track_sha=track_sha)
             if cells:
                 destinations[dest] = {"destination_path": dest, "drift_decisions": cells}
         requires = any(c["requires_user_input"] for d in destinations.values()
@@ -1264,12 +1267,15 @@ class GeotagWorkflow:
             artifact["decision_mode"] = "no_op_or_confirmed"
         return artifact, blockers
 
-    def _drift_cell(self, dest, bucket, time_cell, track_segment, frames, prior_cell, blockers, date=None):
+    def _drift_cell(self, dest, bucket, time_cell, track_segment, frames, prior_cell, blockers, date=None,
+                    track_sha=None):
         """One drift-validation bucket: the current offset, the covering GPX track + the bucket's
         frames (evidence the editor scrubs a photo along), the operator's explicit confirmation, and
         the validated/corrected offset compute_resolved_utc consumes. requires_user_input until
         `confirmed` is actively set (a zero-scrub counts only when the operator confirms it — inaction
-        never satisfies the gate, RUL-untouched_check_confirms_nothing)."""
+        never satisfies the gate, RUL-untouched_check_confirms_nothing). `track_sha` is each track file's SHA-256
+        by its path under gpx_root, as the tracks are now (GPXIndex.file_sha)."""
+        track_sha = track_sha or {}
         eff = time_cell.get("effective_time_anchor") or {}
         current = eff.get("offset_seconds")
         loc = bucket
@@ -1277,6 +1283,22 @@ class GeotagWorkflow:
         confirmed = _decision_flag(prior_ud, "confirmed", f"{dest}: drift_decisions[{loc}].user_decision", blockers)
         corrected = prior_ud.get("corrected_offset_seconds", "")
         against = prior_ud.get("confirmed_offset_seconds", "")
+        # The tracks shown: what a confirmation made now is made against, and what the editor writes with it
+        # (BLD-drift_confirmation_tracks).
+        shown = [{"gpx_file": f, "sha256": track_sha.get(f)} for f in sorted({p.source_file for p in track_segment})]
+        named = prior_ud.get("confirmed_against_tracks")
+        named_ok = isinstance(named, list) and all(
+            isinstance(t, dict) and isinstance(t.get("gpx_file"), str) and t["gpx_file"]
+            and isinstance(t.get("sha256"), str) and t["sha256"] for t in named)
+        # A confirmation rests on the tracks it was made against (RUL-confirmation_rests_on_its_tracks): each still
+        # under gpx_root with the SHA-256 it names. One made where no track was shown saw none, and holds only while
+        # none is shown (RUL-trackless_confirmation_holds_while_none).
+        changed = sorted({t["gpx_file"] for t in named if track_sha.get(t["gpx_file"]) != t["sha256"]}) \
+            if named_ok else []
+        tracks_hold = named_ok and (not shown if not named else not changed)
+        if confirmed and not named_ok:
+            blockers.append(f"{dest}: drift_decisions[{loc}].user_decision.confirmed_against_tracks must name the "
+                            "tracks the confirmation was made against, each with its gpx_file and sha256.")
         effective, stale = "", False
         # A confirmation names the offset it was made against (RUL-confirmation_holds_for_its_offset), and holds only
         # while that is the offset: changed in photos-21 since, it is stale — kept as written, applied to nothing, the
@@ -1290,8 +1312,10 @@ class GeotagWorkflow:
                             "must be a whole number of seconds.")
             confirmed_ok = False
         else:
-            stale = bool(confirmed) and int(against) != current
-            confirmed_ok = bool(confirmed) and not stale
+            # a changed offset or changed tracks: the check asks again, the confirmation kept as written
+            # (RUL-changed_offset_asked_again, RUL-changed_tracks_asked_again, RUL-stale_confirmation_kept)
+            stale = bool(confirmed) and named_ok and (int(against) != current or not tracks_hold)
+            confirmed_ok = bool(confirmed) and named_ok and not stale
         if confirmed_ok:
             if corrected == "" or corrected is None:
                 effective = {"offset_seconds": current, "source": "gps_drift_validated"}   # zero scrub
@@ -1315,10 +1339,14 @@ class GeotagWorkflow:
                 "track_segment": [{"lat": p.lat, "lon": p.lon,
                                    "time_utc": p.time_utc.strftime("%Y-%m-%dT%H:%M:%SZ")}
                                   for p in track_segment],
+                "tracks": shown,
             },
             "user_decision": {"confirmed": confirmed,
                               "corrected_offset_seconds": corrected if corrected is not None else "",
-                              "confirmed_offset_seconds": against if against is not None else ""},
+                              "confirmed_offset_seconds": against if against is not None else "",
+                              "confirmed_against_tracks": named if named is not None else []},
+            # the named tracks no longer there with the SHA-256 named: the editor's view of what geotag found
+            "confirmed_tracks_changed": changed,
             "effective_drift_offset": effective,
             "requires_user_input": effective == "",
             "stale_user_decision": stale,
