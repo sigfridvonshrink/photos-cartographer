@@ -84,6 +84,20 @@ Geotag runs prep itself so that sorting photos and going straight to geotag work
 :::
 
 
+:::{rat} A field read another way is another reading
+:id: RAT-fields_read_one_way
+:status: ruled
+:forced: yes
+:follows_from: RAT-no_chain_of_vouching
+:justifies: RUL-handoff_fields_of_this_build
+
+Geotag decides from the fields prep read out of each photo — its times and their offsets, its position, its camera.
+A version of cartographer that reads them otherwise — another field kept, another group preferred — may give the same
+photo another time to correct or another offset to read it by. Planned from a reading the running version would not
+make, the corrections would rest on values neither version would now take for the photo's; prep reads the photos again
+first, and the plan then rests on one reading throughout.
+:::
+
 ## 5. JSON artifact rule
 
 :::{rat} A missing record should mean one thing

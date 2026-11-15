@@ -530,7 +530,9 @@ class GeotagWorkflow:
         self._check_reprep_gate(handoff, by_dest, by_date, blockers)
 
         # 5. The handoff's camera-group keys and extracted fields must come from this version of
-        # cartographer: a key derived the old way would be matched against a config written for the new.
+        # cartographer: a key derived the old way would be matched against a config written for the new, and a
+        # field set read the old way would be planned from as this one would not read it
+        # (RUL-camera_group_derivation_versioned, BLD-handoff_field_set_checked).
         self._check_derivation_versions(handoff, blockers)
 
         # 5b. A photo whose fingerprint was taken again keeps its pinned values only through a mapping that is

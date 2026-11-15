@@ -80,6 +80,18 @@ Geotag SHALL change only files in photos by destination — never a file in any 
 Geotag SHALL NOT plan, execute or finalize while a photo in photos by destination has no fingerprint.
 :::
 
+:::{rul} Geotag plans only from metadata read as this build reads it
+:id: RUL-handoff_fields_of_this_build
+:status: ruled
+:criticality: med
+:anti: yes
+:verify: required
+:uses: DEF-geotag
+
+Geotag SHALL NOT plan from prep's record of a photo whose metadata was read as another version of cartographer reads
+it — another set of fields, or another order of finding them.
+:::
+
 :::{rul} Geotag runs prep itself only to record a sort
 :id: RUL-auto_reprep_moves_no_media
 :status: ruled

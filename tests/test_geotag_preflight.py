@@ -170,7 +170,8 @@ def test_missing_handoff_blocks(tmp_path):
     assert any("handoff" in b and "photos-cartographer prep" in b for b in blockers), blockers
 
 
-@pytest.mark.spec("RUL-camera_group_derivation_versioned", test="TST-geotag_preflight-handoff_of_another_derivation_version_blocks")
+@pytest.mark.spec("RUL-camera_group_derivation_versioned", "RUL-handoff_fields_of_this_build",
+                  "BLD-handoff_field_set_checked", test="TST-geotag_preflight-handoff_of_another_derivation_version_blocks")
 @pytest.mark.parametrize("field", ["camera_group_key_version", "field_set_version"])
 def test_handoff_of_another_derivation_version_blocks(tmp_path, field):
     rel = "6-photos-by-dest/Trip/a.jpg"

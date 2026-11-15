@@ -45,6 +45,16 @@ are made — before any change, and each photo's preconditions as it applies it.
 never checked as a dependency.
 :::
 
+:::{bld} The handoff's field set is this build's
+:id: BLD-handoff_field_set_checked
+:status: ruled
+:realises: RUL-handoff_fields_of_this_build
+
+Geotag's preflight for `plan` SHALL block when a handoff record's `metadata_status.field_set_version` is not this
+build's `FIELD_SET_VERSION`, naming how many records and one of them, with prep's plan and execute as the remedy;
+execute compares the plan's `metadata_field_set_version` likewise ({need}`BLD-geotag_dependencies`).
+:::
+
 ## 4. Geotag scope
 
 :::{bld} Geotag's file model
