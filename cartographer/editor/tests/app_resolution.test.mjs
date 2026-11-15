@@ -48,6 +48,19 @@ test("wouldResolve: each of the two offset modes is independently sufficient", (
   mk({});                                                                       assert.equal(app.wouldResolve(ref), false);
 });
 
+test("wouldResolve: a guess far from all evidence is not resolved by its acceptance, only by an offset written", () => {
+  const dest = "6-photos-by-dest/B", key = "CAM", ref = { file: "time", dest, kind: "offset", key };
+  const far = { proposal_source: "timezone_naive", proposed_offset_seconds: -3600,
+    far_from_evidence: { max_clock_error_seconds: 172800, other_photos: 1, nearest_other_photo: "p.heic",
+      nearest_other_photo_seconds: 830000000, nearest_track_seconds: "" } };
+  const mk = (ud) => setWork(
+    { time: { destinations: { [dest]: { camera_group_time_decisions: { [key]: { user_decision: ud, proposal: far } } } } } });
+  mk({ accept_proposal: true, accepted_offset_seconds: -3600, manual_offset_seconds: "" });
+  assert.equal(app.wouldResolve(ref), false);
+  mk({ accept_proposal: false, accepted_offset_seconds: "", manual_offset_seconds: 830000000 });
+  assert.equal(app.wouldResolve(ref), true);
+});
+
 test("clearing a folder fallback (the Clear button payload) resolves to none", () => {
   const dest = "6-photos-by-dest/Belgium", ref = { file: "gps", dest, kind: "fallback" };
   const mk = (ud, proposal = {}) => setWork(

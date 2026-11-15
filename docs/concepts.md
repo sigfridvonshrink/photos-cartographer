@@ -204,10 +204,18 @@ Each day's offset is proposed, in this order:
    decision lists the offsets seen. A value in the tag that is no offset counts as none.
 4. **From the destination's timezone** — computed from the zone, daylight saving included, assuming the
    camera kept local time.
-5. **By hand** — you type it.
+5. **By hand** — you type it, or, in the editor, give the true time of one of its photos.
 
 Proposals 3 and 4 are guesses, never applied on their own: each is confirmed against the tracks in the
 drift check, or, with no track by the photos, accepted in the Time view.
+
+A guess can be far out: a camera whose battery ran out wakes at its factory date, and the guess moves
+it only a few hours. So a guess that would put every photo of the day farther than
+`gpx_anchor_max_clock_error_seconds` (two days by default) from every track point **and** from every
+photo another device took in that destination — a phone's, or another camera's whose offset its GPS
+fixed or you wrote — is **not** taken on acceptance: the decision asks for the offset itself, the
+proposal still shown with how far it lands. Where no other device's photo is there, nothing can tell a
+reset clock from a trip without tracks, and the guess is offered as usual.
 
 An accepted proposal records the offset you accepted. If a later run proposes a different one (new
 tracks, more photos), it is asked again, your earlier answer left as you wrote it.

@@ -226,6 +226,25 @@ one day recording two offsets say the setting was changed that day, or that the 
 day's is a guess, so neither is proposed, and the offsets are shown for the user to answer.
 :::
 
+:::{rat} A guess that leaves the photos where nothing else was is no reading of the clock
+:id: RAT-reset_clock_not_accepted
+:status: ruled
+:forced: no
+:follows_from: RAT-assumptions_need_acceptance, CHC-photos_matter
+:justifies: RUL-offset_far_from_evidence_asks
+
+A camera whose battery ran out wakes at its factory date, years from the trip. Nothing of its own can anchor it, and
+the zone's guess, or the offset it records, moves it a few hours: one acceptance — a click meant to say "the camera
+kept local time" — would write that year into the originals as corrected. What the guess cannot see, the
+destination's other photos can: a phone, or another camera whose offset is settled, says when the destination was
+visited, and the tracks say when the user was out. An offset leaving every photo of a day farther from all of them
+than any clock is allowed to be wrong is not a reading of that clock, and accepting it is not an answer; the user is
+asked for the offset itself, which the true time of one photo gives. Where no other device's photo is there, nothing
+tells a reset clock from a trip with no tracks, and asking every such day would cost an answer the user cannot
+improve on; the guess is offered as before. The tracks alone are not that evidence: under a library's worth of them,
+a trip with none of its own would be far from all of them too.
+:::
+
 :::{rat} One number, one question
 :id: RAT-one_number_one_question
 :status: ruled

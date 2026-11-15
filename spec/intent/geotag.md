@@ -388,6 +388,21 @@ decision exactly as the user wrote it, for the user to replace.
 A value the user writes for a decision SHALL take effect over a proposal accepted for the same decision.
 :::
 
+:::{rul} A guessed offset that puts the photos where nothing else was is not taken on acceptance
+:id: RUL-offset_far_from_evidence_asks
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+:refines: RUL-proposals_need_acceptance
+:uses: DEF-clock_offset, DEF-tracks
+
+A clock offset proposed from the destination's timezone, or from the offset a camera's photos record, SHALL NOT take
+effect without an offset the user writes where it would put every photo of its day farther than the largest clock
+error the configuration allows from every track point and from the true time of every photo of the destination taken
+by another device whose true time is known, at least one such photo being there.
+:::
+
 
 ## 7. Per-destination structure
 

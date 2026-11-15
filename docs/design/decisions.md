@@ -42,6 +42,15 @@ affordance.
   day, the camera's clock changed. Code site `offsetProposalBlock` / `groupChoice` / `proposalNotes` in
   `web/app.js`, tested in `app_offset_buckets.test.mjs`.
 - **Per-date offset buckets**: grouped, collapsible, fan-out edit (#115).
+- **The true time of a photo sets the offset**: for a decision with no anchor frame, a fourth view of the
+  self-set offset names the cell's representative photo (photos-21 `representative`, its earliest; with a
+  thumbnail) and takes the time it was really taken, typed in the destination's zone (UTC with none); the
+  editor computes `manual_offset_seconds` = that − its camera time. A time the zone skips or repeats is
+  refused, never read one way. No decision field of its own: `manual_real_utc` was removed on purpose and
+  stays removed — the offset is the one stored value. Where accepting is not enough (`far_from_evidence`),
+  **accept** is greyed out and a click on a self-set view opens it empty instead of seeding it with the
+  proposal, so a reset clock's guess is never written by a stray click. Code site `offsetEditor` /
+  `offsetFromTrueTime` / `zonedWallToUtcMs` in `web/app.js`, tested in `app_datetime.test.mjs`.
 - **A GPS proposal says which frames it left out**: beside the proposal, a note counts the camera's own-position
   frames that took no part in it — those whose only track lies outside the plausible time window (most likely
   another trip or year), and those with no track at all — so a proposal resting on few frames is not read as

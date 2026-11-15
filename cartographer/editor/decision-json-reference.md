@@ -219,6 +219,7 @@ destinations or buckets.
 | `date` | string | no | Present only on a per-date bucket: the naive calendar date (`"YYYY-MM-DD"`) this bucket covers. |
 | `proposal` | object | no | One of five shapes — see below. |
 | `representative` | object | no | On a cell with photos not yet corrected: the earliest of them, `{ "source_file", "camera_source_naive_time" }` — the photo the editor asks the true time of, to set the offset by. |
+| `proposal.far_from_evidence` | object | no | On a `recorded_offset` or `timezone_naive` proposal that would put every photo of the cell not yet corrected farther than `gpx_anchor_max_clock_error_seconds` from every track point and from every photo of the destination by another device whose time is known (a smartphone's; a camera's not yet corrected whose cell's offset is from its GPS, the same day elsewhere, or written by hand) — there being at least one such photo: `{ "max_clock_error_seconds", "other_photos", "nearest_other_photo", "nearest_other_photo_seconds", "nearest_track_seconds" }` (`nearest_track_seconds` `""` with no track). The proposal does **not** take effect — accepted, or bound for photos-22 — and the cell asks for `manual_offset_seconds` (a clock reset to its factory date is the case). Present whatever the cell's decision. |
 | `recorded_offsets_differ` | array | no | Present when the cell's photos record more than one UTC offset with their times: `[{ "recorded_offset_seconds", "photos", "example" }]`, one per offset, sorted. No `recorded_offset` proposal is made from them. |
 | `day` | string | no | The naive calendar date this cell's photos are of (`"YYYY-MM-DD"`), on every cell whose photos have a readable camera time. |
 | **`user_decision.accept_proposal`** | bool | **yes** | Accept the proposal's offset. |
@@ -516,7 +517,8 @@ UI should make the *effective* choice obvious and ideally offer them as mutually
   tracks by the photos, sent to photos-22 (`recorded_offset_unconfirmed`, `timezone_unconfirmed`). Setting a manual offset overrides `accept_proposal`. Two GPS-derived offsets of
   one camera and day in different destinations that differ by more than
   `clock_offset_same_day_max_difference_seconds` both lose effect (`conflicts_with`); a manual one is never
-  withheld.
+  withheld. A `recorded_offset` or `timezone_naive` proposal carrying `far_from_evidence` takes no effect,
+  accepted or not: only `manual_offset_seconds` resolves the cell.
 - **Drift:** `confirmed` holding for the current offset (`confirmed_offset_seconds` equal to it) →
   `corrected_offset_seconds` if given, else the current offset; otherwise nothing.
 - **Folder fallback:** `fallback_lat`+`fallback_lon` (if both set & valid) → `accept_proposal`.

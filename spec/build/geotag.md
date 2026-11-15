@@ -221,6 +221,14 @@ only once accepted, as `timezone_accepted`. A camera time the zone skips or repe
 A camera group's bucket with no anchor and no offset shared from the same day elsewhere, whose photos not yet corrected record at least one offset with their times — each read as `_own_offset` reads it, the offset recorded with the field its time was read from, a value that is no offset being none — and all the same one, SHALL be proposed −(that offset) as `proposal_source: "recorded_offset"`, ahead of `timezone_naive`, with `proposed_offset_seconds`, `recorded_offset_seconds`, `recorded_by` (how many photos record it), an `example` of them and `proposed_real_utc` at the bucket's earliest camera time. It takes effect as a `timezone_naive` proposal does ({need}`BLD-timezone_naive_offset`): as `recorded_offset_unconfirmed`, `decision_mode: "to_be_confirmed_against_tracks"`, where track points lie by its photos and no decision is given, else only once accepted, as `recorded_offset_accepted`. Photos recording more than one offset give no such proposal; the cell holds `recorded_offsets_differ`, each offset recorded with how many photos record it and an `example`.
 :::
 
+:::{bld} A guessed offset far from all evidence
+:id: BLD-offset_far_from_evidence
+:status: ruled
+:realises: RUL-offset_far_from_evidence_asks
+
+After the offsets shared within a day, `build_time_decisions` SHALL withdraw the effective offset of a cell whose proposal is `recorded_offset` or `timezone_naive` and whose effective source is that proposal's (`recorded_offset_unconfirmed`, `recorded_offset_accepted`, `timezone_unconfirmed` or `timezone_accepted`), the cell asking, where the destination holds a photo of another camera group whose resolved UTC is known — a smartphone's, resolved as `compute_resolved_utc` resolves it, or a camera's not yet corrected whose cell's effective source is `gpx_anchor_auto`, `gpx_anchor_accepted`, `gpx_anchor_chosen`, `gpx_anchor_imprecise`, `same_day_auto`, `same_day_accepted` or `manual` — and every photo of the cell not yet corrected, at the time the proposal gives, lies farther than `gpx_anchor_max_clock_error_seconds` from each such photo's resolved UTC and from every track point. Such a proposal, whatever the cell's decision, holds `far_from_evidence`: `max_clock_error_seconds`, `other_photos` (how many), `nearest_other_photo`, `nearest_other_photo_seconds` and `nearest_track_seconds` (empty with no track).
+:::
+
 :::{bld} A day's offset shared between destinations
 :id: BLD-offset_shared_within_day
 :status: ruled

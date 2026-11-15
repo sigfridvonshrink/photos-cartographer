@@ -165,7 +165,12 @@ You answer in one of two ways:
   the proposal was X; it is now Y — accept it again, or set the offset."
 - **manual offset** — your own value (camera time + offset = real UTC), set on the h/m/s spinner (scroll
   or ↑/↓ over a unit), in seconds in the box beside it, or — for a proposal found from GPS — as the
-  **anchor real-UTC** of the proposal's example photo.
+  **anchor real-UTC** of the proposal's example photo. Otherwise, as the **true time of a photo**: the
+  decision's earliest photo is named (with a thumbnail) beside its camera time; type when it was really
+  taken, in the destination's local time (UTC while the destination has no timezone), and the editor
+  works out the offset from it. A time the destination's clocks skipped or showed twice at a
+  daylight-saving change gives no single offset and is refused — use another photo's time or the offset.
+  This is how a clock reset to its factory date is answered: no need to count the seconds since 2000.
 
 An **Impact** line shows what the offset does to a photo: its camera time → the corrected local time (and
 UTC). **clear** removes your answer.
@@ -203,6 +208,12 @@ What the proposal panel shows depends on where the offset came from:
   the camera really tracked local time — a camera left on home time would be wrong. Where GPX tracks
   cover these photos, there is **nothing to accept here**: the decision says to confirm it in the Drift
   view, against the tracks, once.
+- **Too far from everything** — a local-time or recorded-offset proposal that would put every photo of the
+  day farther than a clock may be wrong (`gpx_anchor_max_clock_error_seconds`, two days by default) from
+  every track point and from every photo another device took in this destination. The note says how far
+  (e.g. "26.3 years from the nearest photo another device took here"): most likely the camera's clock
+  was reset. **accept proposal** is greyed out — accepting would not take effect — so give the true time
+  of one of its photos, or set the offset.
 - **No proposal** — set the destination's timezone and re-run to get a local-time proposal, or enter the
   offset yourself. No local-time proposal is made when the photos' time falls at a **daylight-saving
   change** in that zone (a time that happened twice, or never): the zone gives two offsets there, and the

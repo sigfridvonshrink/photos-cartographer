@@ -89,6 +89,7 @@ __all__ = [
     'OFFSET_TAG_FOR',
     '_own_offset',
     'recorded_offset_proposal',
+    'far_from_evidence',
     'compute_resolved_utc',
     'resolved_utc_fingerprint',
     '_interp',
@@ -858,6 +859,29 @@ def recorded_offset_proposal(photos, rep_naive):
         except OverflowError:
             pass                                # a time at the calendar's edge: no instant to name
     return proposal, None
+
+
+def far_from_evidence(times, others, track_times, bound):
+    """Whether a guessed offset leaves a cell's photos where nothing else was (BLD-offset_far_from_evidence): None
+    where there is no other device's photo to tell (`others` empty), or a photo of the cell at `times` lies within
+    `bound` seconds of one of `others` [(path, aware UTC)] or of a track point (`track_times`, sorted). Else the
+    reason: how far the nearest of each lies."""
+    if not others or not times:
+        return None
+    other_times = sorted((t, p) for p, t in others)
+    keys = [t for t, _p in other_times]
+
+    def nearest(sorted_times, t):
+        i = bisect.bisect_left(sorted_times, t)
+        return min((abs((sorted_times[j] - t).total_seconds()), j) for j in (i - 1, i) if 0 <= j < len(sorted_times))
+    near_other = min(nearest(keys, t) for t in times)
+    near_track = min((nearest(track_times, t)[0] for t in times), default=None) if track_times else None
+    if near_other[0] <= bound or (near_track is not None and near_track <= bound):
+        return None
+    return {"max_clock_error_seconds": bound, "other_photos": len(others),
+            "nearest_other_photo": other_times[near_other[1]][1],
+            "nearest_other_photo_seconds": int(near_other[0]),
+            "nearest_track_seconds": int(near_track) if near_track is not None else ""}
 
 
 def compute_resolved_utc(files, groups, artifact, offset_overrides=None):

@@ -230,3 +230,18 @@ test("zoneOffer: one click takes the proposed zone, never the zone the photos co
   assert.equal(app.zoneOffer({ proposed_iana_timezone: "Europe/Brussels", proposal_source: "config_default",
     user_decision: { manual_iana_timezone: "Asia/Tokyo" } }), "");
 });
+
+test("offsetCellNotes / fmtSpan: a guess far from all evidence says how far, and that accepting is not enough", () => {
+  const notes = app.offsetCellNotes({ proposal: { proposal_source: "timezone_naive", proposed_offset_seconds: -3600,
+    far_from_evidence: { max_clock_error_seconds: 172800, other_photos: 3, nearest_other_photo: "6-photos-by-dest/Bruges/p.heic",
+      nearest_other_photo_seconds: 26.3 * 365.25 * 86400, nearest_track_seconds: "" } } });
+  assert.equal(notes.length, 1);
+  assert.match(notes[0], /26\.3 years from the nearest photo another device took here \(p\.heic\) — farther than a clock may be wrong \(2 days\)/);
+  assert.match(notes[0], /Accepting it is not enough: give the true time of one of its photos/);
+  assert.doesNotMatch(notes[0], /track point/);
+  const withTrack = app.offsetCellNotes({ proposal: { far_from_evidence: { max_clock_error_seconds: 172800, other_photos: 1,
+    nearest_other_photo: "p.heic", nearest_other_photo_seconds: 864000, nearest_track_seconds: 18000 } } });
+  assert.match(withTrack[0], /10 days from .* and 5 hours from the nearest track point/);
+  assert.equal(app.fmtSpan(90), "2 minutes");
+  assert.equal(app.fmtSpan(-7200), "2 hours");
+});
