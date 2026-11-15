@@ -4,77 +4,11 @@
 
 - **What this is:** [`README.md`](README.md). **The record:** [`HISTORY.md`](HISTORY.md).
 
-*Open items: **29** — 2, 6 to 7, 11, 13 to 16, 18, 20 to 23, 25, 27, 28, 30 to 32, 35, 39, 40, 43, 45 to 50.* 🛑 Numbers are never reused; the next is **51**.
+*Open items: **28** — 6 to 7, 11, 13 to 16, 18, 20 to 23, 25, 27, 28, 30 to 32, 35, 39, 40, 43, 45 to 50.* 🛑 Numbers are never reused; the next is **51**.
 
 ---
 
 ## Open
-
-### 2. The gap audit — the build against its spec
-
-**Why:** The owner: *"I am sure the build has some stuff not specced, and there may be stuff specced not built or
-incorrectly built."*
-
-**What:** walk the code and the corpus against each other: code behaviour with no
-build item (**unspecified**), an intent or build item with no code or no test (**specified, not built**), code that
-contradicts its item (**built wrong**). Each finding becomes its own backlog item. 🛑 **A gap is raised, ruled and
-written into the spec first, then coded** — the code is never taken as the answer.
-
-**Where it stands:** the conversion (done 2026-11-14) checked every section against the code as it went, so the
-direction "specified, not built / built wrong" has had one full pass, its findings fixed. Left: the other direction —
-walking the code for behaviour no item states.
-
-**Found and ruled (2026-11-14):** eight behaviours the code had and no item stated, met while citations were
-rewritten to item ids. Six are items now, each with its test — `RUL-write_leftovers_quarantined`,
-`RUL-write_leftovers_by_dest_warned`, `BLD-database_effects_one_transaction`, `RUL-log_step_names_run` (merge's
-steps did not name their run; they do), `RUL-records_written_alike`, `RUL-handoff_read_back`,
-`RUL-inbox_non_media_never_blocks`; `RUL-prep_run_summarised` speaks of the plan as well as the execution; the
-editor's note of frames left out of a proposal is in `docs/design/decisions.md`.
-
-**The walk (2026-11-14):** every function of the three phases, the calculation layer and the shared library was read
-against the corpus, some ninety-five findings. Done since, needing no ruling: the fourteen places where the code
-contradicted a ruled rule are fixed, each with a test (a failed execute rolls its database effects back; merge never
-moves or removes a photo changed after the plan, and one photo's error blocks it alone; the console judges a plan
-by the workspace's own configuration and its editor tab holds to the editor's rules; exiftool gets its two attempts;
-a plan's existing snapshot counts as taken; the seal is checked before the workspace is walked), and the dead code
-is removed.
-
-**Ruled and built (2026-11-15) — safety:** the thirteen matters of safety the walk found are rules now, each
-built and tested: a photo with no fingerprint stops geotag and merge; a fingerprint covers every frame and every
-stream, and one of another method is never compared; the same picture in a library file of other bytes blocks,
-neither removed (*"if library copy is same pixels, stop and let user sort"*); the user's own `_original` backup is
-a stray; a hidden folder holding files stops prep, and any hidden entry among the photos stops merge; each `<trk>`
-is a track and a `<trkseg>` break is never bridged; a time a daylight-saving change skips or repeats is never
-guessed; geotag runs prep itself only where prep's plan touches no media; pruning by age takes a day or more; a
-library lies outside every workspace; an earlier place counts only inside the library now configured; the editor
-saves only over what it loaded; tracks none of which can be read stop geotag.
-
-**Ruled and built (2026-11-15) — the rest** (*"all as recommended"*, with 1, 4, 5 and 34 changed on a second look):
-the other forty-one findings, each now an item with its test, and where ruled, a change. Changed: a moved photo's
-position is asked again, like its zone and offset; finalize needs no exiftool; a development subfolder is found in any
-case; `geotag plan` stops on a prep log the handoff does not vouch for; merge stops without ImageMagick (neither
-`magick` nor `identify`); an unreadable journal, earlier pass or prep log stops the command, named, and a quarantine
-manifest that can be neither read nor set aside stops the move; photos-25 and the photos-26 package keep the earlier
-one under `-NNN`; a prune is recorded (`photos-16-prune-record.json`); quarantine is counted by reason; geotag
-lowercases a photo's extension in its rename; merge's plan and dry run exit 2 with blockers; the editor checks a zone
-by the host's list; a drift cell's offsets are checked whether confirmed or not; `null` is no answer for
-`confirmed_despite_recorded_offsets`; prep's own "Next:" lines are held back when geotag runs it; an offset chosen
-from the camera's own GPS groups is shared within the day; three fields nothing read and the four settings kept for
-item 6 are gone. The rest stated as they are. A gone photo's log entry was found given to a new photo taking its
-name; fixed. The `+carto-time` mark is item 46's.
-
-**Ruled and built (2026-11-15) — what the rest left open** (*"rest as recommended"*): prep ends with the exit
-statuses geotag and merge use (1 locked only, 2 refused, 3 failed once changing, 130 interrupted); the prep fields
-nothing read are gone (the cache's and plan's schema versions go to 4); `geotag execute` stops on a prep log the
-handoff does not vouch for, as plan does; an offset the user chose from the camera's own GPS groups is held against
-the day's automatic one — the automatic one asks, the choice stands, and the editor says which side is whose. An
-accepted proposal counts as automatic (*"keep it automatic"*). The photo put by hand at a removed photo's path is
-item 50's.
-
-`prep prune-quarantine` refusing its selection ends 2 like every other refusal (*"refuses a bad selection w/ exit
-2, like every other refusal"*). Nothing of item 2 awaits a ruling.
-
----
 
 ### 6. Check a phone's time against the tracks
 
@@ -163,22 +97,30 @@ and, per photo, the name of the track that placed it — not the points — so o
 evidence behind a placement or a clock offset can no longer be seen. The owner: *"I will have always the gps data used
 during the process, in the form used during the decisioning, which would make the workspace truly self-contained."*
 
-**What to do:**
-
-- A geotag region of `photos-00-ingest.db` — the one record database, snapshotted into the archive at finalize and
-  merge, so sealed with the workspace — holding a catalogue of every track file under `gpx_root` (path, size,
-  modification time, SHA-256, first and last point time) and the points that fall in the window, as decided on (UTC
-  time, latitude, longitude, file, index). It replaces the scratch track memo.
-- Refresh on every run by size and modification time, as prep's plan memo does: an unchanged file is not read; a new
-  or changed one is read and parsed; one gone is dropped **with a warning naming it** — the one reason to take a track
-  out is that it records someone else's trip at the same time, and the user should see that it went.
-- The window: the union of a window around each photo day — of the photos in photos by destination with a recorded
-  time — with a margin of at least `gpx_anchor_max_clock_error_seconds` (2 days by default) each side, since offset
-  inference looks that far from a camera's time; and, once `photos-21` is complete, a window around each photo's
-  corrected time too, since placement uses it and a manual real time can lie far from the camera's. Sorting photos in,
-  or new tracks under `gpx_root`, grows it.
-- The GPX fingerprint becomes the hash of the points in the window, so tracks added for another time restale nothing.
-- Rule it: this reverses the ruled "every track file is read whole on every run" (`BLD-idempotency`).
+**Ruled (2026-11-15)** (*"rest as recommended"*, and the window as below, *"ok"*):
+1. **Where:** a geotag region of `photos-00-ingest.db` — the one record database, snapshotted into the archive at
+   finalize and merge, so sealed with the workspace. It replaces the scratch track memo.
+2. **What:** a catalogue of every track file under `gpx_root` — path, its rank's folder, size, modification time,
+   inode, SHA-256, first and last point time — and the points that fall in the window, as decided on: UTC time,
+   latitude, longitude, file, point index, track, segment.
+3. **Reading:** a file whose size, modification time and inode are unchanged is not read again; a new or changed one
+   is read and parsed. This reverses the ruled "every track file is read whole on every run" (`BLD-idempotency`).
+4. **Fingerprint:** the GPX fingerprint becomes the hash of the points in the window with the ranking, so tracks
+   added for another time restale nothing. A drift confirmation still names each track by its file's SHA-256, from
+   the catalogue.
+5. **The window:** no setting of its own — the union of what each reader of tracks reaches, from the reader's own
+   setting: offset inference and the far-from-evidence check, `gpx_anchor_max_clock_error_seconds` each side of a
+   photo's camera time; the drift check, `drift_check_track_window_seconds` each side of its corrected time;
+   placement, the interpolation gap and extrapolation reach each side of its corrected time (once `photos-21` is
+   complete, around each photo's corrected time, since a true time given by hand may lie far from the camera's).
+   Sorting photos in, or a setting widened, grows it; a file whose first-to-last span meets the new part is read
+   again. Past the window the far-from-evidence check reports no track within reach — the same decision.
+6. **A track file gone:** warned of, naming it, and no longer used — the one reason to take a track out is that it
+   records someone else's trip at the same time. Its points stay in the record, marked withdrawn, where an executed
+   plan placed or timed photos by it, so the evidence of every value written into an original survives.
+7. **`gpx_root` unreadable** at plan or execute stops geotag: what cannot be checked counts as changed
+   (`RUL-unchecked_counts_as_changed`). Finalize and merge never need it: they seal what is kept.
+8. **The scratch memo** `photos-00-track-memo.db` is removed.
 
 **When:** any time — the conversion is done.
 
