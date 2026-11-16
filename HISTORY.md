@@ -2,6 +2,30 @@
 
 *What was decided and why, newest first. A record: never corrected forward. Per-commit detail is `git log`.*
 
+## 2026-11-16 — a second walk of the code against the corpus
+
+The code changed since v3.0.0 — some 9,700 lines, built rule first — was walked against the corpus again, and each
+rule it touched broken on purpose to see its tests fail. Ruled *"All as recommended"*:
+
+- **A photo merge placed is confirmed by its bytes.** A merge cut short, ImageMagick upgraded, and the next plan read
+  the library's copy as gone, so the workspace could never seal. Execute now journals each placed file's hash; a later
+  plan confirms the place by it, whatever ImageMagick reads.
+- **A failed prep execute keeps the hand changes it passed.** A RAW deleted before it was otherwise lost from every
+  record, and its JPEG was never quarantined.
+- **Geotag judges the offsets the photos' own GPS fixed before the guesses**, so a guess never stands on a fix the
+  same pass withdraws. **A set-aside JPEG left behind takes its RAW's name.** A run the snapshot stops records no
+  tracks as used.
+- **The editor** writes no acceptance into a day geotag withholds; its phone "accept" takes effect; it previews the
+  offset accepted; it offers no time geotag cannot read; a stale split can be cleared.
+- **The console's Accept** on an execute the page never ran opens the confirmation gate; it no longer sends a merge plan
+  that cannot be read to be planned again.
+- **Merge checks the workspace before it validates**, as the rule says; a record of the wrong shape is unreadable, not
+  a traceback. **Prep:** a prune cut short is no change; an inbox source is looked for on disk; one photo in two
+  destinations is matched by path. An unreadable answer about the table of countries stops the run; its download
+  follows no redirect off HTTPS.
+- Six build items caught up with the code; four high-criticality behaviours no test caught a break of now have one;
+  the editor's own test suites count in the corpus.
+
 ## 2026-11-16 — an inherited fallback applies itself; the editor grouped by what can differ (BACKLOG 56)
 
 - **An inherited folder fallback applies itself.** It used to be a proposal each destination had to accept. The owner:
