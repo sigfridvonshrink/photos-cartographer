@@ -2,6 +2,23 @@
 
 *What was decided and why, newest first. A record: never corrected forward. Per-commit detail is `git log`.*
 
+## 2026-11-16 — an inherited fallback applies itself; the editor grouped by what can differ (BACKLOG 56)
+
+- **An inherited folder fallback applies itself.** It used to be a proposal each destination had to accept. The owner:
+  *"The idea is not to manually accept it for all children but to manually override if I want for the children."* —
+  and *"An inherited fallback applies itself - yes but I should be able to be overriden at child destination level, in
+  one go, not to be overriden at image level."* A fallback written for a destination outranks the inherited one and
+  passes to the destinations below; emptied, the inherited one returns. There is no "none" to write: the owner wants
+  no unlocated photos. The user is told, per destination, how many photos the fallback placed and whose fallback it
+  was, and each such photo is recorded with why the tracks missed it.
+- **The editor's views are grouped by what can differ**: a level only where its members can carry different answers;
+  a level of one folds into its parent; what waits is open and first; destination, then its own decisions, then
+  per-camera ones, then single photos. The GPS view is a tree whose destinations open on two buckets, Fallback and
+  Placed (Unplaced where no fallback reaches), broken down by why or how. It has no camera level — the owner: *"the
+  per camera buckets should be showed only if there are decisions that might be different for different cameras"* —
+  but names a camera's day whose photos all fell back though tracks had points that day. In the Time view the cameras
+  the photos settle fold into one line.
+
 ## 2026-11-16 — dates for scans, zones asked once per place, fingerprints across ImageMagick (BACKLOG 7, 11, 14, 22, 28, 40, 47, 55)
 
 - **A date fallback per destination** for photos with no recorded time — scans above all. The owner: *"date could be
