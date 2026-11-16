@@ -1124,7 +1124,7 @@ The log SHALL record a step for the change when a photo's fingerprint is taken a
 :criticality: high
 :anti: yes
 :verify: required
-:refines: RUL-no_op_run
+:refines: RUL-no_op_run_same_result
 
 Prep's plan of a workspace SHALL be the same whatever number of jobs it runs with: the same operations, names and
 fingerprints.
