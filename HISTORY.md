@@ -2,6 +2,22 @@
 
 *What was decided and why, newest first. A record: never corrected forward. Per-commit detail is `git log`.*
 
+## 2026-11-16 — the filesystems, the library's room, a torn plan, a culled RAW (BACKLOG 18, 27, 48, 54)
+
+- **The workspace must be on a local filesystem** — known by its type against a list of kinds known to be local,
+  anything else refused, naming it; no setting overrides it. Every run first tries, on scratch files, what it needs of
+  the filesystem — the lock, an atomic rename, a move refusing a taken name, syncing — and stops naming what is
+  missing. The library may lie on a network share; merge tries it the same way first. Two machines merging into one
+  library at once is the user's to avoid: at worst a photo fails or lands twice, never one overwritten.
+- **Merge checks the library's room before moving anything** into another filesystem: the photos still to move and a
+  margin on top — the owner: *"I think a safety margin is needed. Configurable, too, default say 5% on top of by-dest
+  size?"* — `merge.library_space_margin_percent`, 5 by default. The plan warns of it.
+- **A plan that cannot be read** sends the user to plan again, never a traceback. **The editor's save** writes its
+  records in the order each depends on the one before — a save cut short keeps a leading part, no answer standing on
+  one left unsaved — and keeps each record it replaces as a `-NNN` copy, in one series with a re-plan's.
+- **A RAW the user culls takes its set-aside JPEG into the quarantine** on the next prep run, noted in the prep log
+  with the RAW it went with, and recorded as the run's own change. A video is never a pair.
+
 ## 2026-11-16 — no photo leaves geotag without a position (BACKLOG 21)
 
 The owner: *"I explicitly want* no *unlocated photos. this is the role of the folder fallback."* Ruled as recommended:

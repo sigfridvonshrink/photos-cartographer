@@ -4,7 +4,7 @@
 
 - **What this is:** [`README.md`](README.md). **The record:** [`HISTORY.md`](HISTORY.md).
 
-*Open items: **17** — 7, 11, 14, 18, 22, 27, 28, 30 to 32, 40, 47 to 49, 53 to 55.* 🛑 Numbers are never reused; the next is **56**.
+*Open items: **13** — 7, 11, 14, 22, 28, 30 to 32, 40, 47, 49, 53, 55.* 🛑 Numbers are never reused; the next is **56**.
 
 ---
 
@@ -87,19 +87,6 @@ the parent's zone.
 
 **When:** any time — the conversion is done.
 
-### 18. Merge: check the free space before moving into another filesystem
-
-**Why:** a merge into a library on another filesystem copies each photo before removing it from the workspace. Safety
-holds — a full disk fails the one photo, which stays in the workspace, and the run ends `partial` — but nothing warns
-before the run that the library cannot hold the batch, so the shortage shows late, one photo at a time. (Found in a
-risk review of 2026-06-21; the other half of that finding — temporary copies a hard crash leaves in the library — is
-done: merge clears them as its execution starts.)
-
-**What to do:** decide whether merge's plan, or its execute before any move, checks the library's free space against
-the batch's size and stops or warns; rule it into the spec, then code it.
-
-**When:** any time; low priority.
-
 ### 22. A date fallback per destination, for photos with no recorded time
 
 **Why:** one untimed photo in photos by destination stops geotag for the whole workspace, and the only cure is to
@@ -112,16 +99,6 @@ photos above all, whose folder says when they were made better than any one phot
 no way to say a time is approximate; whether it passes down to subfolders as the position fallback does; whether it
 is written into the photo or recorded only; the name such a photo is given; and what it does to a photo that has a
 time of its own. Not to be built until ruled.
-
-### 27. A torn plan, and the editor's save of three records
-
-**Why:** every rewrite is now synced to disk before it replaces the earlier file (`BLD-rewrite_synced_before_rename`,
-2026-11-14), which settles the power cut. Two things remain of this item: a `photos-24` that cannot be read is an
-unhandled error rather than a message; and the editor's save of the three decision records is not all-or-nothing
-across the three, and keeps no copy of what it replaces.
-
-**What to do:** make an unreadable plan a plain "re-run `geotag plan`"; decide whether the editor's save sets the
-earlier records aside as a re-plan does, and whether the three are saved as one.
 
 ### 28. Finding anchors and placing photos against years of tracks
 
@@ -228,16 +205,6 @@ AVI), and whether a video it cannot write is held as a photo is (BACKLOG 25's wa
 is the photo camera's (the same body) or its own camera group; how a video's span (start to end) is placed — at its
 start, as one point; and what merge does with them.
 
-### 54. A set-aside JPEG whose RAW was culled after geotag
-
-**Why:** geotag renames a set-aside JPEG with its RAW (BACKLOG 43), writing nothing into it; prep accepts the JPEG's
-new name only while its RAW, found by fingerprint, bears the same stem. Culling the RAW afterwards — a hand action the
-workspace check lets pass — leaves the JPEG with a name that is neither its recorded time nor its partner's, and the
-next `prep plan` stops on it as misnamed; the user must rename it by hand.
-
-**Open:** accept a JPEG whose recorded pair is gone, under the name geotag gave it (the prep log says why); or have the
-cull take the JPEG with it; or keep the stop and name the way out.
-
 ### 55. Sub-second times for photos timed by CreateDate or ModifyDate
 
 **Why:** a burst's order within one second follows the sub-second time (BACKLOG 45). Prep reads
@@ -271,18 +238,6 @@ spelt as their owner spells them, in any language.
   the table should travel inside the executable.
 
 ---
-
-### 48. Say at the start that a filesystem cannot hold a workspace or a library
-
-**Why:** `RUL-filesystem_agnostic` names what cartographer requires of a filesystem: file locks, an atomic rename, a
-move that fails where its target exists, syncing a file and a folder to disk. A filesystem without them — a FAT or
-exFAT card, some network shares — is not checked for: a run there fails at its first lock or move, with that call's
-error and no word of why. The owner, 2026-11-14: backlog it.
-
-**What:** at a run's start, on the workspace's filesystem and, for merge, the library's: try each requirement on a
-scratch file in the control directory and stop, naming the one that is missing, before anything else is done. To be
-ruled with it: whether a network filesystem, where the lock guards one machine only
-(`RUL-stale_takeover_conservative`), is refused, warned of, or left to the user.
 
 ---
 
