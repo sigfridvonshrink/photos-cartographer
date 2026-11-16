@@ -156,6 +156,7 @@ with its English `name` and its `zones` (sorted).
 {
   "destination_path": "Belgium/Brussels",
   "destination_timezone": { /* §4.3 tz cell */ },
+  "date_fallback": { /* §4.9 */ },                        // its date, for its photos that record no time
   "camera_group_time_decisions": {                        // one offset cell per FIXED-CLOCK camera group,
     "<camera_group_key>": { /* §4.4 offset cell */ },     //   SPLIT per naive date when the group spans >1
     "<camera_group_key>@<YYYY-MM-DD>": { /* §4.4 */ }      //   day here (see §4.4 "per-date buckets") — and a
@@ -508,6 +509,43 @@ photo's unasked: it asks here, alone, which the photo keeps. Until answered, pho
 **By hand:** `"user_decision": { "keep": "geotag", "answered_for": { "DateTimeOriginal": "2024:07:03 14:45:00",
 "OffsetTimeOriginal": "+02:00" } }` — `answered_for` copied from `held_time`. `"new"` needs a time to keep: a
 `held_time` with no `DateTimeOriginal` can only be answered `"geotag"`.
+
+---
+
+### 4.9 `date_fallback` — a destination's date, for its photos that record no time
+
+A photo that records no time (a scanned print, above all) can be timed by the date its folder stands for. Every
+destination — a container too — has this cell; it asks only where the destination holds a photo with no recorded time
+and no date is in effect. The date in effect is the one written here, else the one in effect at the nearest
+destination above — **it applies itself, nothing to accept** — so one date written on `Scans/1985` covers every folder
+inside it.
+
+| Field | Type | Editable | Meaning |
+|-------|------|----------|---------|
+| **`user_decision.date`** | string (`""`) | **yes** | `"YYYY"`, `"YYYY-MM"` or `"YYYY-MM-DD"` — as much as you know. A month or day left out is the first: `"1985"` is 1 January 1985, `"1985-06"` 1 June 1985. `""` = none written here. |
+| `effective_date` | object \| `null` | no | The date in effect: `{ "date": "1985-06", "filled": "1985-06-01", "set_at": "<destination it was written at>" }`. |
+| `inherited_from` | string | no | Present when the date comes from a destination above: the nearest one that had a date in effect. |
+| `untimed_photos` | [string] | no | Present where the destination holds photos with no recorded time: their paths. |
+| `requires_user_input` | bool | no | `true` ⇔ `untimed_photos` is there and no date is in effect. geotag stops after writing photos-21, naming the photos, until a date is given (or they are moved out). |
+| `stale_user_decision` | bool | no | Always `false`. |
+
+What the date does, to a photo with **no recorded time** only — a photo with a time of its own keeps it:
+
+- Its time is the filled day's **midnight, local to its destination** (read through its timezone, so the destination
+  needs one; a midnight its zone skips or repeats is asked in `local_time_readings`, §4.6). `time_rule_used:
+  "date_fallback"`.
+- That time is **written** into the photo as any corrected time is (`DateTimeOriginal` and its offset tag), and the
+  photo is **named** by it. Several photos of one date share its timestamp: their suffixes follow their current file
+  names, compared as text (`scan10.jpg` before `scan2.jpg`) — the order they came from the scanner.
+- The tracks **never place** it — that time is not when it was taken. Its position comes from its own GPS, a position
+  set for it, or its folder's fallback (§5.3); with none it waits in photos-23 (`tracks.reason:
+  "time_from_date_fallback"`), and finalize refuses it as any unplaced photo.
+- It is no evidence of any camera's clock, and its camera group (a scanner's) is never asked about.
+- The time write in photos-24 carries `provenance.date_fallback` (the date as written, the day filled, where it was
+  written) and the log records a `date_fallback_applied` step.
+
+**By hand:** `"date_fallback": { "user_decision": { "date": "1985-06" } }` in the destination's entry. A value that is
+not one of the three forms, or not a real day (`"1985-02-30"`), stops geotag naming it.
 
 ---
 
@@ -897,6 +935,8 @@ UI should make the *effective* choice obvious and ideally offer them as mutually
   applying their offset themselves; one photo's never applies itself.
 - **A time at a daylight-saving change (§4.6):** `utc_offset_seconds`, one of the two readings for a repeated time.
 - **A time changed since geotag wrote it (§4.8):** `keep`, while `answered_for` is the pair the photo holds.
+- **Date fallback (§4.9):** `date` written here → else the date in effect at the nearest destination above (applies
+  itself). It times only photos with no recorded time.
 - **Drift:** `confirmed` holding for the current offset (`confirmed_offset_seconds` equal to it) and for the
   tracks (`confirmed_against_tracks` each unchanged under `gpx_root`, or `[]` with no track shown) →
   `corrected_offset_seconds` if given, else the current offset; otherwise nothing.
@@ -922,6 +962,7 @@ Mirror these client-side; a value that fails makes geotag reject the whole artif
 | `manual_iana_timezone` | Must resolve as a real IANA zone in the zone database geotag runs with — never a name standing for the host (`localtime`, `posixrules`, `Factory`). With a country in effect (`country_zones` present), it must be one of `country_zones`. `""` allowed (= unset). |
 | `confirmed_despite_recorded_offsets` | A list of whole numbers of seconds; `[]` (or `null`, or the field absent) = not given. |
 | `keep_as_recorded` | `true` or `false` on a phone's cell (absent or `null` reads as `false`); anything else a blocker. |
+| `date` (`date_fallback`) | `""` (= none), or text `"YYYY"`, `"YYYY-MM"` or `"YYYY-MM-DD"` in ASCII digits naming a real day (year 0001 on; no `"1985-02-30"`, no `"1985-6"`, not a number). Anything else is a blocker naming the destination and the value. |
 | `accepted_timezone` (`unidentified_files`) | Text; required, the zone accepted, whenever `accept_proposal` is `true`. |
 | `keep` / `answered_for` (`changed_times`) | `keep` is `""`, `"new"` or `"geotag"`; with an answer, `answered_for` must be an object of exactly `DateTimeOriginal` and `OffsetTimeOriginal` (one for another pair than `held_time` is `stale_user_decision`, not a blocker); `"new"` for a `held_time` with no time is a blocker. |
 | `utc_offset_seconds` (`local_time_readings`) | `""`, or a whole number of seconds within ±14 hours (not a boolean, not a string such as `"+01:00"`); for a `repeated` time, one of `offsets_seconds` (another is `stale_user_decision`, not a blocker). |

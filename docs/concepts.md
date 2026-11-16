@@ -494,13 +494,14 @@ that cannot be listed stops `geotag plan` and `geotag execute`: what it holds ca
 
 ## What cascades down the tree (and what doesn't)
 
-Two facts inherit downward through the destination tree, from the nearest folder above that has one,
+Three facts inherit downward through the destination tree, from the nearest folder above that has one,
 parent→child only (never sibling→sibling):
 
 | Fact | Inherits? | Applied automatically? | A value written on a folder… |
 |---|---|---|---|
 | **Timezone** (from a zone written above, or a country of one zone) | yes, downward | yes — unless the destination's own photos speak against it; the configured default is only offered | **re-roots the chain** at that folder for everything inside |
 | **Folder GPS fallback** | yes, downward | no — an inherited fallback must be **accepted** | **re-roots the chain** at that folder for everything inside |
+| **Date fallback** (photos with no recorded time) | yes, downward | yes | **re-roots the chain** at that folder for everything inside |
 | **Clock offset** | **no** | only one the camera's own GPS fixed, when its photos agree | n/a — each day's offset is proposed from its own evidence |
 
 **Re-rooting** is the behavior to internalize: when you write a timezone (or fallback) on a folder,
@@ -513,6 +514,26 @@ change there included.
 The folder fallback is **optional and never blocks**: a destination without one simply leaves its
 unplaced photos in the worklist. A fallback placement is written as a manual position
 (`manual_fallback`), so it's always clear it wasn't measured, and it is undone like any decision.
+
+### A date for photos with no time — scans
+
+A scanned print records no time, and prep sets a photo with none aside in `2-missing-metadata/`. Sorted into a
+destination anyway — a folder of scans from 1985 — it can be timed by a **date fallback**: a date you give the folder,
+as much of it as you know — a year (`1985`), a month (`1985-06`) or a day (`1985-06-14`), a month or day left out
+being the first. It cascades like the folder fallback, but needs no accepting: the date given on the nearest folder up,
+the photo's own included, covers it. Write it once on `Scans/1985` and every folder inside takes it.
+
+It times **only photos with no recorded time**; a photo with a time of its own keeps it. Such a photo takes the filled
+day's midnight, local to its destination, is written that time (`DateTimeOriginal` and its offset, like any corrected
+time) and named by it; several of one date take their suffixes in the order of their current file names — the order
+they came from the scanner. The date you gave and where you gave it are kept in geotag's records and log, so a
+`1985-01-01 00:00:00` can be told from a photo really taken that night.
+
+That time is a filing, not the moment it was taken: the tracks never place such a photo, and it says nothing of any
+camera's clock. Its position comes from its own GPS, a position you set, or its folder's GPS fallback — with none,
+it waits like any unplaced photo. A photo with no recorded time that no date covers stops geotag: `geotag plan` writes
+the time decisions, names it, and asks for a date for its folder — in the editor or by hand in photos-21 — or for the
+photo to go back to `2-missing-metadata/`.
 
 ---
 
@@ -588,7 +609,8 @@ outside the inbox not named as prep named it (prep gives the name it should carr
 **Geotag plan** — `0-sources/` not empty, photos still in `5-photos-by-date/`, or a sort prep hasn't
 recorded (run prep, or let geotag run it); anything but photos in `6-photos-by-dest/`, or a `jpg` / `tif`
 development subfolder (`JPG` or `Tif` as well — the case does not matter); a camera group not yet
-classed; a photo there with no recorded time (it belongs in `2-missing-metadata/`) or with no fingerprint (move it out, or repair it so ImageMagick can read it,
+classed; a photo there with no recorded time that no date fallback covers (give its folder a date, or move it to
+`2-missing-metadata/` — geotag stops on it once it has written the time decisions) or with no fingerprint (move it out, or repair it so ImageMagick can read it,
 then run prep); a `gpx_root` that is not there, or tracks of which not one can be read; a decision file that doesn't parse or holds an invalid value (it is kept as
 written for you to fix); prep's record made by another fingerprint method (run prep again). And a photo
 whose time (`DateTimeOriginal` or its offset) was changed — in another tool — since geotag wrote to it:

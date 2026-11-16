@@ -23,17 +23,57 @@ is settled for every photo first, and only then is any position planned.
 :status: ruled
 :forced: no
 :follows_from: RAT-untimed_set_apart, CHC-ask_only_what_data_cannot_settle
-:justifies: RUL-untimed_photo_stops_geotag
+:justifies: RUL-untimed_photo_stops_geotag, RUL-untimed_photo_named
 
 A photo with no recorded time has nothing to correct and nothing to look up: its true time is unknown, and no
 camera's offset or destination's timezone can supply one. Prep sets such a photo aside in missing metadata for the
 user to deal with by hand. Sorted into a destination anyway, it would pass through geotag's decisions with nothing to
-ask about it and stop only at the last plan, where nothing the user could decide would clear it. Stopping at the start,
-naming it and where it belongs, makes the one possible fix plain.
+ask about it and stop only at the last plan, where nothing the user could decide would clear it. Stopping before any
+time is resolved, naming it and the two ways out, makes the fix plain.
 
 Letting such a photo through untimed, placed by hand or by its folder's fallback and left unrenamed, and giving it a
-time by a decision, were weighed and set aside: the stop was ruled kept (2026-11-16). A date given per destination,
-as a position is by its fallback, is the way being considered for scans; it is not built.
+time by a decision for that photo alone, were weighed and set aside: the stop was ruled kept (2026-11-16). The one time
+the user can give it is a date for its folder ({need}`RAT-date_fallback_for_scans`) — the user's word, never the
+tool's guess; a photo no such date covers stops as before. The stop comes once the time decisions are written, not
+before, so that the date can be asked there, in the editor or by hand, like any other question of time.
+:::
+
+:::{rat} A folder says when its scans were made
+:id: RAT-date_fallback_for_scans
+:status: ruled
+:forced: no
+:follows_from: RAT-folder_gps_fallback, RAT-untimed_set_apart, RAT-no_phase_invents_time
+:justifies: RUL-date_fallback_from_nearest, RUL-date_fallback_times_untimed, RUL-date_fallback_fills_to_a_day, RUL-date_fallback_time_written, RUL-date_fallback_names_in_scanner_order
+
+A scanned print records no time: the scanner's clock says when it was scanned, if anything, never when it was taken.
+What does say it is the folder the user sorts it into — "1985", "Christmas 1985" — better than any one photo can. The
+owner, first: *"later on I am thinking I might consider setting a date fallback per destination just like I have a
+location fallback ... the idea would work for scanned photos"*; and, ruling it (2026-11-16): *"date could be any of Y,
+YM, YMD, with missing parts filled as 1; same cascade; what gets written is (a); scanner order ok"*.
+
+So a date is a year, a month or a day, as much as the user knows, its missing parts the first; it passes down the
+folders as the position fallback does, the nearest one given covering a photo, and since only the user gives it, it
+takes effect without being accepted again below. EXIF has no way to say a time is approximate, so what is written is
+the filled day's midnight, as the photo's time, in its destination's local time: the photo then sorts, names and shows
+in the library by that day, and the date as the user gave it is kept in geotag's record. Photos of one such date share
+one timestamp, so their suffixes follow the only order left, the one they came in from the scanner: the order of their
+names.
+:::
+
+:::{rat} A filled time is not when the photo was taken
+:id: RAT-filled_time_not_when_taken
+:status: ruled
+:forced: yes
+:follows_from: RAT-date_fallback_for_scans, RAT-position_follows_time
+:justifies: RUL-date_fallback_only_untimed, RUL-date_fallback_never_placed_by_tracks, RUL-date_fallback_no_clock_evidence, RUL-date_fallback_recorded
+
+The time a date fallback gives is midnight on a day that stands for a year, a month or a day: a filing, not a moment.
+A track places a photo where its wearer was at the photo's instant, so placed by this time a scan would land wherever
+someone walked that midnight — a precise answer to a question nobody asked. Its position comes from what does know
+it: the photo's own GPS, a position set for it, or its folder's fallback; with none it waits, as any unplaced photo
+does. For the same reason it is no evidence of a camera's clock, and a photo with a time of its own keeps it: a real
+reading is never traded for a filing. Since the written time looks like any other, the record keeps that it came from
+the date fallback, and the date as given, so a "1985-01-01" can be told from a photo taken that night.
 :::
 
 ## 3. Linear dependency inclusion

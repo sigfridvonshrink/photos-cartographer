@@ -1608,7 +1608,7 @@ both checks are needed, every time.
 :status: ruled
 :forced: yes
 :follows_from: RAT-plain_json_record, RAT-why_did_this_change
-:justifies: INV-authored_values_checked, RUL-checked_paths, RUL-checked_timezones, RUL-checked_positions_and_times, RUL-checked_filename_format, RUL-checked_numbers, RUL-checked_shapes, RUL-invalid_value_stops, RUL-invalid_value_located, RUL-invalid_value_never_repaired, RUL-unknown_decision_field_refused
+:justifies: INV-authored_values_checked, RUL-checked_paths, RUL-checked_timezones, RUL-checked_positions_and_times, RUL-checked_filename_format, RUL-checked_numbers, RUL-checked_shapes, RUL-date_fallback_checked, RUL-invalid_value_stops, RUL-invalid_value_located, RUL-invalid_value_never_repaired, RUL-unknown_decision_field_refused
 
 The user writes the configuration and the decisions by hand, so the tool cannot assume they are well formed. A
 mistyped timezone or an unsafe path, reported early as a specific problem in a named place, is fixed at its source;

@@ -18,14 +18,39 @@ once all three are complete assemble `photos-24-executable-plan.json`, which ref
 resolved time.
 :::
 
-:::{bld} Geotag's preflight refuses a photo with no recorded time
+:::{bld} Geotag stops at photos-21 on a photo with no recorded time and no date
 :id: BLD-geotag_untimed_gate
 :status: ruled
-:realises: RUL-untimed_photo_stops_geotag
+:realises: RUL-untimed_photo_stops_geotag, RUL-untimed_photo_named
 
-Geotag's preflight for `plan` SHALL block on every handoff record of a photo under `6-photos-by-dest` whose
-`metadata_status.has_timestamp` — or, failing it, the `has_timestamp` of its `parsed_json` — is false, naming the
-photos and `2-missing-metadata`.
+Geotag's preflight SHALL pass a photo under `6-photos-by-dest` whose `metadata_status.has_timestamp` — or, failing it,
+the `has_timestamp` of its `parsed_json` — is false; `geotag plan`, once it has written
+`photos-21-time-decisions.json`, stops with exit status 2 before resolving any time where a destination's
+`date_fallback` requires input ({need}`BLD-date_fallback_cell`), naming the photos it lists in `untimed_photos`, the
+date fallback, and `2-missing-metadata`.
+:::
+
+:::{bld} The date fallback cell
+:id: BLD-date_fallback_cell
+:status: ruled
+:realises: RUL-date_fallback_checked, RUL-date_fallback_from_nearest, RUL-date_fallback_times_untimed, RUL-date_fallback_fills_to_a_day, RUL-date_fallback_only_untimed, RUL-date_fallback_time_written, RUL-date_fallback_recorded, RUL-date_fallback_never_placed_by_tracks, RUL-date_fallback_no_clock_evidence, RUL-untimed_photo_stops_geotag
+
+Each destination's entry in `photos-21-time-decisions.json`, a container's included, SHALL hold `date_fallback`:
+`user_decision.date` — `""`, or `YYYY`, `YYYY-MM` or `YYYY-MM-DD` in ASCII digits naming a day of the calendar, else a
+blocker naming the destination and the value; `effective_date` — `date` as written, `filled`, the day it stands for as
+`YYYY-MM-DD`, a month or day left out being `01`, and `set_at`, the destination it was written at — the one written
+there, else, destinations being built parent first, its nearest ancestor's, named in `inherited_from`, else `null`;
+`untimed_photos`, the paths of its photos whose `has_timestamp` is false, where it holds any; `requires_user_input`,
+true where it lists one and has no `effective_date`, which leaves photos-21 incomplete; and `stale_user_decision`,
+false. A photo whose `has_timestamp` is false is keyed `NO_IDENTITY_KEY` by `clock_group_key`, so in no group's offset
+cell, drift check or class question; is resolved by `compute_resolved_utc` to its destination's `effective_date.filled`
+at `00:00:00` read through the destination's zone, rule `date_fallback` — a midnight the zone skips or repeats asked as
+{need}`BLD-local_time_readings` asks; is left by `classify_gps` and the tracks' window to its own position, the one set
+for it or its folder's fallback, its review item's `tracks.reason` being `time_from_date_fallback`; and is written and
+named by its resolved time as any photo is, its time write's `provenance` carrying `date_fallback` (`date`, `filled`,
+`set_at`) and a `because` naming `photos-21 destinations.<set_at>.date_fallback`. A photo with a time of its own is
+never given one. The values pinned at a photo's first write hold no time where it had none, so every later plan decides
+it untimed again ({need}`BLD-decided_from_own_values`).
 :::
 
 ## 2. Artifact dependencies
@@ -471,7 +496,9 @@ its time — one written within the time's own value, after the seconds and any 
 `OffsetTimeOriginal` for `DateTimeOriginal`, `OffsetTimeDigitized` for `CreateDate`, `OffsetTime`
 for `ModifyDate` (`smartphone_native_offset`) — else its destination's timezone (`destination_timezone`); and a time
 geotag already corrected by its own offset, else the timezone (`geotag_corrected`); a time the user kept as the
-photo's true time by the timezone (`kept_true_time`, {need}`BLD-changed_time_kept`); every other photo `unresolved` —
+photo's true time by the timezone (`kept_true_time`, {need}`BLD-changed_time_kept`); a photo with no recorded time by
+its destination's date fallback, at midnight, through the timezone (`date_fallback`, {need}`BLD-date_fallback_cell`);
+every other photo `unresolved` —
 one whose time its offset carries past the calendar's first or last year as `time_out_of_range`. An offset is `Z`, or a
 sign, two digits of hours up to 14 and two of minutes up to 59, with or without a colon between; anything else is none.
 `geotag plan` writes the rows — `relative_path`, `destination_path`, `destination_timezone`, `camera_group`,
@@ -573,7 +600,7 @@ status 2.
 `manual_locked` where its review item is `own_position_contradicted` ({need}`BLD-contradicted_position`) and holds
 `manual_lat`/`manual_lon`; its
 review item's `manual_lat`/`manual_lon` as `manual_locked`; the tracks at its resolved time as `gpx_interpolation` or
-`gpx_extrapolation`; its destination's effective fallback as `manual_fallback`; else `blocked`, its review item
+`gpx_extrapolation`, unless a date fallback times it ({need}`BLD-date_fallback_cell`); its destination's effective fallback as `manual_fallback`; else `blocked`, its review item
 requiring input. A position from `manual_locked` or `manual_fallback` is written with that marker, and undone like any
 manual position.
 :::
@@ -707,7 +734,7 @@ A position write of photos-24 whose placement has `lower_tracks` SHALL carry the
 :::{bld} How renames are planned
 :id: BLD-rename_planning
 :status: ruled
-:realises: RUL-suffix_no_clobber, RUL-uncorrected_keeps_its_name, RUL-geotag_name_final, RUL-geotag_extension_lowercase, RUL-suffix_in_capture_order, RUL-pair_named_as_one
+:realises: RUL-suffix_no_clobber, RUL-uncorrected_keeps_its_name, RUL-geotag_name_final, RUL-geotag_extension_lowercase, RUL-suffix_in_capture_order, RUL-pair_named_as_one, RUL-date_fallback_names_in_scanner_order
 
 For each destination, `plan_renames` SHALL count every current name of its photos as taken, case folded, and never
 freed by a rename it plans — two photos that would trade names both take a suffix — then leave a photo whose name
@@ -720,6 +747,9 @@ timestamp prep named it by (`source_naive_time`), none first, and their path, ea
 `allocate_stem` the first stem of its timestamp, bare or suffixed, that no name taken holds under any extension, each
 member keeping its own extension. Every planned name ends with the photo's extension in lowercase. Execution applies
 these renames, and those of {need}`BLD-set_aside_renamed_with_raw`, and no other, each by a no-clobber move.
+Photos a date fallback times record no fraction and were never named by a timestamp, so among themselves they take
+their suffixes by path alone: in one destination, the file names they hold before the rename, compared as text,
+character by character (`scan10.jpg` before `scan2.jpg`).
 :::
 
 :::{bld} The fraction of a second a photo records

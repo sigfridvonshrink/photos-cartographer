@@ -381,6 +381,22 @@ def test_apply_edits_saves_the_answer_for_a_destination_s_files_naming_no_camera
     assert q["user_decision"] == {"accept_proposal": True, "accepted_timezone": "Europe/Brussels"} and q["files"] == 2
 
 
+@pytest.mark.spec("RUL-every_question_in_editor", "BLD-editor_answers_every_question", "BLD-date_fallback_cell",
+                  test="TST-serve-saves_a_destination_s_date_fallback")
+def test_apply_edits_saves_a_destination_s_date_fallback():
+    """The date given a destination for its photos with no recorded time is written as its `date_fallback`'s
+    `user_decision.date` in photos-21, nothing else of the cell touched."""
+    dest = "6-photos-by-dest/Scans"
+    art = {"destinations": {dest: {"date_fallback": {"user_decision": {"date": ""}, "effective_date": None,
+                                                     "untimed_photos": [f"{dest}/scan001.jpg"],
+                                                     "requires_user_input": True, "stale_user_decision": False}}}}
+    edits = [{"dest": dest, "kind": "date", "user_decision": {"date": "1985-06"}}]
+    assert serve._unapplicable_edits(art, edits) == [] and serve._apply_edits(art, edits) == 1
+    c = art["destinations"][dest]["date_fallback"]
+    assert c["user_decision"] == {"date": "1985-06"} and c["untimed_photos"] == [f"{dest}/scan001.jpg"]
+    assert serve._unapplicable_edits({"destinations": {dest: {}}}, edits) == edits     # no cell: refused, not dropped
+
+
 @pytest.mark.spec("RUL-every_question_in_editor", "RUL-every_question_answerable_by_hand",
                   "BLD-editor_answers_every_question", "BLD-editor_save_locks",
                   test="TST-serve-saves_a_fingerprint_change_s_answer_into_photos_25")
@@ -425,7 +441,7 @@ def _camera_workspace(tmp_path):
 
     def rec(rel, key, media="image"):
         return {"relative_path": rel, "folder_class": "6-photos-by-dest", "media_class": media,
-                "metadata_status": {"camera_group_key": key,
+                "metadata_status": {"camera_group_key": key, "has_timestamp": True,
                                     "parsed_json": json.dumps({"selected_source_timestamp_tag": "EXIF:DateTimeOriginal"})}}
     handoff = {"files": [rec("6-photos-by-dest/A/2.heic", "Apple|iPhone 15"), rec("6-photos-by-dest/A/1.heic", "Apple|iPhone 15"),
                          rec("6-photos-by-dest/A/c.cr2", "Canon|EOS", "raw"), rec("6-photos-by-dest/A/v.mov", "GoPro|7", "video")],

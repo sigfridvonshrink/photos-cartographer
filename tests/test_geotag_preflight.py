@@ -139,12 +139,11 @@ def test_directory_symlink_at_root_blocks(tmp_path):
     assert any("Forbidden symlink at the workspace root" in b for b in blockers), blockers
 
 
-@pytest.mark.spec("RUL-time_before_gps", "RUL-untimed_photo_stops_geotag", "RUL-untimed_photo_named",
-                  test="TST-geotag_preflight-a_photo_with_no_recorded_time_stops_geotag")
-def test_a_photo_with_no_recorded_time_stops_geotag(tmp_path):
-    """A photo sorted into a destination by hand with no recorded time can never be resolved to its
-    true time: geotag stops before planning anything, naming it as belonging in missing metadata —
-    the photo with a time passes unnamed."""
+@pytest.mark.spec("BLD-geotag_untimed_gate", test="TST-geotag_preflight-untimed_photo_passes_the_preflight")
+def test_a_photo_with_no_recorded_time_passes_the_preflight(tmp_path):
+    """A photo sorted into a destination by hand with no recorded time passes the preflight: its folder's date
+    fallback may time it, and where none does photos-21 asks for one and geotag stops there
+    (test_geotag_date_fallback)."""
     rels = ("6-photos-by-dest/Trip/timed.jpg", "6-photos-by-dest/Trip/untimed.jpg")
     md = lambda t: {"has_timestamp": t, "camera_group_key_version": cal.CAMERA_GROUP_KEY_VERSION,
                     "field_set_version": cal.FIELD_SET_VERSION}
@@ -153,9 +152,7 @@ def test_a_photo_with_no_recorded_time_stops_geotag(tmp_path):
              {"relative_path": rels[1], "folder_class": "6-photos-by-dest", "media_class": "image",
               "metadata_status": md(0)}]
     blockers, _, _ = _pf(_ws(tmp_path, bydest=rels, handoff_files=files))
-    hit = [b for b in blockers if "no recorded time" in b]
-    assert len(hit) == 1 and "untimed.jpg" in hit[0] and "timed.jpg" not in hit[0].replace("untimed.jpg", "")
-    assert "2-missing-metadata" in hit[0]
+    assert not [b for b in blockers if "untimed.jpg" in b and "fingerprint" not in b], blockers
 
 
 # --- config / handoff --------------------------------------------------------

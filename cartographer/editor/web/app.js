@@ -79,6 +79,7 @@ function cellAt(arts, ref) {
     if (ref.kind === "reading") return d.local_time_readings?.[ref.key];
     if (ref.kind === "unidentified") return d.unidentified_files;
     if (ref.kind === "changed") return d.changed_times?.[ref.key];
+    if (ref.kind === "date") return d.date_fallback;
     return ref.kind === "timezone" ? d.destination_timezone : d.camera_group_time_decisions?.[ref.key];
   }
   if (ref.file === "drift") {
@@ -129,6 +130,7 @@ function allRefs() {
   for (const key of Object.keys(state.work.cameras?.bodies || {})) out.push({ file: "cameras", kind: "bodies", key });
   for (const [dest, d] of Object.entries(state.work.time?.destinations || {})) {
     out.push({ file: "time", dest, kind: "timezone" });
+    if (d.date_fallback) out.push({ file: "time", dest, kind: "date" });
     for (const key of Object.keys(d.camera_group_time_decisions || {})) out.push({ file: "time", dest, kind: "offset", key });
     for (const key of Object.keys(d.local_time_readings || {})) out.push({ file: "time", dest, kind: "reading", key });
     for (const key of Object.keys(d.changed_times || {})) out.push({ file: "time", dest, kind: "changed", key });
@@ -157,6 +159,7 @@ function refInvalid(ref) {
     return !validTz(u.manual_iana_timezone) || (!!u.manual_iana_timezone && !!k && k.zones.length > 0 && !k.zones.includes(u.manual_iana_timezone));
   }
   if (ref.kind === "offset") return !validOffset(u.manual_offset_seconds);
+  if (ref.kind === "date") return !validDateFallback(u.date);
   if (ref.kind === "reading") return !validReading(c, u.utc_offset_seconds);
   if (ref.kind === "drift") return !validOffset(u.corrected_offset_seconds);
   if (ref.kind === "fingerprint") return typeof u.accept_fingerprint_change !== "boolean";
@@ -166,6 +169,19 @@ function refInvalid(ref) {
   if (ref.kind === "fallback") return !validLat(u.fallback_lat) || !validLon(u.fallback_lon) || !bothOrNeither(u.fallback_lat, u.fallback_lon);
   return !validLat(u.manual_lat) || !validLon(u.manual_lon) || !bothOrNeither(u.manual_lat, u.manual_lon);
 }
+// A destination's date fallback (photos-21 date_fallback, BLD-date_fallback_cell): "YYYY", "YYYY-MM" or "YYYY-MM-DD", a
+// day the calendar has; the month and day left out are the first. The day it stands for as "YYYY-MM-DD", or null — the
+// same check geotag makes (`date_fallback_day`). Pure — unit-tested.
+function dateFallbackDay(v) {
+  const m = typeof v === "string" ? /^([0-9]{4})(?:-([0-9]{2})(?:-([0-9]{2}))?)?$/.exec(v) : null;
+  if (!m) return null;
+  const y = +m[1], mo = m[2] ? +m[2] : 1, d = m[3] ? +m[3] : 1;
+  if (y < 1 || mo < 1 || mo > 12 || d < 1) return null;
+  const t = new Date(Date.UTC(2000, mo - 1, d)); t.setUTCFullYear(y);
+  if (t.getUTCFullYear() !== y || t.getUTCMonth() !== mo - 1 || t.getUTCDate() !== d) return null;
+  return `${m[1]}-${String(mo).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+}
+const validDateFallback = (v) => v === "" || v == null || dateFallbackDay(v) !== null;
 // A photo's answer for a time its zone skips or repeats (photos-21 local_time_readings, BLD-local_time_readings): a whole
 // number of seconds within ±14 h; for a time shown twice, one of its two readings. Empty = not answered.
 function validReading(c, v) {
@@ -282,6 +298,7 @@ function wouldResolve(ref) {
   if (ref.kind === "reading")
     return u.utc_offset_seconds !== "" && u.utc_offset_seconds != null && validReading(c, u.utc_offset_seconds);
   if (ref.kind === "unidentified") return unidentifiedHolds(ref.dest, c);
+  if (ref.kind === "date") return !!previewDate(ref.dest);           // a date given here, or one in effect above
   if (ref.kind === "fingerprint") return mismatchAccepted(c);
   if (ref.kind === "camera") return DEVICE_CLASSES.includes(u.device_class);
   if (ref.kind === "bodies") return typeof u.several_bodies === "boolean";   // a setting: either answer stands
@@ -450,6 +467,12 @@ function previewEffective(ref) {
     if (u.accept_proposal) return "— (accepted another proposal — accept again)";
     return "— (GPX auto-resolves on re-run, else needs input)";
   }
+  if (ref.kind === "date") {
+    if (!validDateFallback(u.date)) return "✗ not a date";
+    const pv = previewDate(ref.dest);
+    if (!pv) return (c.untimed_photos || []).length ? "— (needs input: a date, or move these photos out)" : "— (none)";
+    return `${pv.date} — ${pv.filled} 00:00:00 local` + (pv.source === "inherited" ? ` (inherited ⟵ ${leaf(pv.from)}, preview)` : "");
+  }
   if (ref.kind === "unidentified") {
     if (unidentifiedHolds(ref.dest, c)) return `read as local time in ${u.accepted_timezone}`;
     if (u.accept_proposal) return "— (accepted for another timezone — accept again)";
@@ -583,6 +606,27 @@ function zoneSettled(dest) {
   const asked = c.asked_for || [];
   return asked.length > 0 && asked.every(zoneSettled);
 }
+// The date fallback in effect at `dest` in the WORKING decisions — written there, else the nearest above it, which
+// applies itself (RUL-date_fallback_from_nearest): {date, filled, source, from}, or null. Pure over state.
+function previewDate(dest) {
+  const dests = state.work.time?.destinations || {}, parts = dest.split("/");
+  for (let i = parts.length; i > 0; i--) {
+    const at = parts.slice(0, i).join("/"), v = dests[at]?.date_fallback?.user_decision?.date;
+    if (at in dests && v !== "" && v != null) {
+      const filled = dateFallbackDay(v);
+      return filled ? { date: v, filled, source: at === dest ? "own" : "inherited", from: at } : null;
+    }
+  }
+  return null;
+}
+// Whether a destination's time-view row shows its date fallback: where it, or a destination inside it, holds a photo
+// with no recorded time, or a date is written there. The cell is in the record for every destination. Pure over state.
+function showsDate(dest) {
+  const dests = state.work.time?.destinations || {}, own = dests[dest]?.date_fallback;
+  if (!own) return false;
+  if ((own.user_decision?.date ?? "") !== "") return true;
+  return Object.entries(dests).some(([d, v]) => (d === dest || d.startsWith(dest + "/")) && (v.date_fallback?.untimed_photos || []).length);
+}
 // Same advisory walk for the GPS folder-fallback: a destination with no own fallback shows the one it
 // would inherit from its nearest resolved ancestor (e.g. a parent/container you just set), updating live.
 function fbOwnDecision(dest) {
@@ -625,6 +669,9 @@ function tags(ref) {
   } else if (ref.kind === "fallback") {
     const pv = previewFallback(ref.dest);                 // live preview, updates as ancestors change
     if (pv && pv.source === "inherited") out.push(chip("inherited", `inherited ⟵ ${leaf(pv.from)}`));
+  } else if (ref.kind === "date") {
+    const pv = previewDate(ref.dest);                     // live preview, updates as ancestors change
+    if (pv && pv.source === "inherited") out.push(chip("inherited", `inherited ⟵ ${leaf(pv.from)}`));
   }                                                       // offsets never inherit (RUL-offset_from_own_evidence)
   if (isDirty(ref)) out.push(chip("edited", "edited"));
   if (refInvalid(ref)) out.push(chip("invalid", "✗ invalid"));
@@ -652,6 +699,11 @@ function renderTreeNode(node, box) {
       node.dest.file_less ? el("span", { class: "container-tag", title: "no photos here — its decisions only set defaults for sub-destinations" }, "container") : null));
     const tzpv = previewTz(node.path);
     n.append(row({ file: "time", dest: node.path, kind: "timezone" }, "Timezone", null, tzpv ? tzpv.tz : "—"));
+    if (showsDate(node.path)) {
+      const dpv = previewDate(node.path), k = (node.dest.date_fallback.untimed_photos || []).length;
+      n.append(row({ file: "time", dest: node.path, kind: "date" }, "Date fallback",
+        k ? `${k} photo${k === 1 ? "" : "s"} with no time` : null, dpv ? dpv.date : "—"));
+    }
     renderOffsetRows(node.path, node.dest, n);
     if (node.dest.unidentified_files) {
       const q = node.dest.unidentified_files;
@@ -1162,6 +1214,8 @@ function controls(ref) {
         (v) => { state.offsetEdit = null; editMany(ref, keepFields(c, v)); }));
     }
     wrap.append(offsetEditor(ref));
+  } else if (ref.kind === "date") {
+    wrap.append(dateControls(ref));
   } else if (ref.kind === "reading") {
     wrap.append(readingControls(ref));
   } else if (ref.kind === "unidentified") {
@@ -1243,6 +1297,7 @@ function tracksNote(t) {
   if (!t || !t.reason) return "";
   const span = (s) => s >= 3600 ? `${Math.round(s / 360) / 10} h` : s >= 60 ? `${Math.round(s / 60)} min` : `${s} s`;
   if (t.reason === "no_tracks") return "No tracks to place it by.";
+  if (t.reason === "time_from_date_fallback") return "Its time is its folder's date fallback, not when it was taken: the tracks do not place it.";
   if (t.reason === "outside_track") return `The nearest track point is ${span(t.seconds_from_track)} from this photo's time.`;
   if (t.reason === "track_gap") return `The track has a ${span(t.gap_seconds)} gap here; its nearest point is ${span(t.seconds_from_track)} away.`;
   if (t.reason === "track_jump") return `The track jumps ${t.jump_meters} m between the two points around this photo — too far or too fast to place it between them.`;
@@ -1856,6 +1911,23 @@ function readingControls(ref) {
     wrap.append(el("button", { class: "mini", onclick: () => edit(ref, "utc_offset_seconds", "") }, "clear"));
   return wrap;
 }
+// A destination's date fallback: the date its photos with no recorded time were made — a year, a month or a day. It
+// times only those photos, at midnight local to the destination, and places none of them by the tracks.
+function dateControls(ref) {
+  const c = workCell(ref), u = c.user_decision || {}, wrap = el("div", { class: "ctl-block" }), k = (c.untimed_photos || []).length;
+  wrap.append(el("div", { class: k ? "hint warn" : "hint" }, (k ? `${k} photo${k === 1 ? "" : "s"} here record${k === 1 ? "s" : ""} no time ` +
+    `(${(c.untimed_photos || []).slice(0, 5).map(leaf).join(", ")}${k > 5 ? ", …" : ""}). ` : "") +
+    "A date given here times every photo with no recorded time in this folder and the folders inside it, at midnight " +
+    "local time; a photo with a time of its own keeps it. The tracks place none of them by it — their position comes " +
+    "from their own GPS, a position set for them, or the folder fallback."));
+  const inp = el("input", { type: "text", class: "spin-num" + (refInvalid(ref) ? " bad" : ""), placeholder: "1985, 1985-06 or 1985-06-14",
+    value: typeof u.date === "string" ? u.date : (u.date == null ? "" : String(u.date)) });
+  inp.addEventListener("change", () => edit(ref, "date", inp.value.trim()));
+  wrap.append(el("label", { class: "ctl-field" }, el("span", {}, "Date"), inp));
+  if (!validDateFallback(u.date)) wrap.append(el("div", { class: "err" }, "a year (1985), a year and month (1985-06) or a day (1985-06-14)"));
+  if ((u.date ?? "") !== "") wrap.append(el("button", { class: "mini", onclick: () => edit(ref, "date", "") }, "clear"));
+  return wrap;
+}
 // "+01:00" / "-05:30" / "+0100" / "Z" as seconds east of UTC, or null.
 function parseUtcOff(s) {
   const t = String(s || "").trim();
@@ -2004,6 +2076,7 @@ function renderPanel() {
     : ref.kind === "reading" ? "Time at a daylight-saving change"
     : ref.kind === "changed" ? "Time changed since geotag wrote it"
     : ref.kind === "unidentified" ? "Files naming no camera"
+    : ref.kind === "date" ? "Date fallback"
     : ref.kind === "drift" ? `Drift · ${c.camera_group || ref.key}`
     : ref.kind === "fingerprint" ? "Content changed after a write"
     : ref.kind === "camera" ? "A new camera group"
@@ -2170,5 +2243,6 @@ export {
   scrubOffset, scrubSeedIndex, mapKeyFor, savePayload, withChosenCells, reviewOffers, placedByLabel, placedSummary,
   ambiguousTimeNote, gpsTimeAsideNote, zoneOffer, validReading, keepHolds, keepFields, keepOffered, phoneNote,
   trueInstant, parseUtcOff, mismatchAccepted, recordAbsentText, DEVICE_CLASSES, changedHolds, changedFields, changedKeepLabel, keptTagNote, unidentifiedHolds, unidentifiedFields, loadRefusal, hasUnsavedEdits, utcOff,
+  dateFallbackDay, validDateFallback, previewDate, showsDate,
   fmtSpan, utcToZonedWallMs, zonedWallToUtcMs, offsetFromTrueTime, trueTimeOf,
 };

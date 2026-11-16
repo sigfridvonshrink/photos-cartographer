@@ -17,16 +17,17 @@ to. *Why* each holds is in [the rationale](../rationale/geotag.md); *how this bu
 Geotag SHALL plan no photo's position until every photo's true time is resolved.
 :::
 
-:::{rul} A photo with no recorded time stops geotag
+:::{rul} A photo with no recorded time and no date fallback stops geotag
 :id: RUL-untimed_photo_stops_geotag
 :status: ruled
 :criticality: high
 :anti: yes
 :verify: required
 :refines: RUL-time_before_gps
-:uses: DEF-geotag, DEF-managed_folders, DEF-recorded_time
+:uses: DEF-geotag, DEF-managed_folders, DEF-recorded_time, DEF-date_fallback
 
-A photo in photos by destination carrying no recorded time SHALL stop geotag before it plans anything.
+A photo in photos by destination carrying no recorded time, which no date fallback covers, SHALL stop geotag before it
+resolves any photo's time.
 :::
 
 :::{rul} A photo with no recorded time is named
@@ -36,9 +37,133 @@ A photo in photos by destination carrying no recorded time SHALL stop geotag bef
 :anti: yes
 :verify: required
 :refines: RUL-untimed_photo_stops_geotag
-:uses: DEF-geotag, DEF-managed_folders, DEF-recorded_time
+:uses: DEF-geotag, DEF-managed_folders, DEF-recorded_time, DEF-date_fallback
 
-A photo that stops geotag for carrying no recorded time SHALL be named to the user as belonging in missing metadata.
+A photo that stops geotag for carrying no recorded time SHALL be named to the user as wanting a date fallback for its
+folder, or else belonging in missing metadata.
+:::
+
+:::{def} A date fallback
+:id: DEF-date_fallback
+:status: ruled
+:uses: DEF-destination, DEF-recorded_time
+
+A **date fallback** is a date the user gives a destination — a year, a month of a year, or a day — for when its photos
+that carry no recorded time were made.
+:::
+
+:::{rul} A date fallback is a year, a month or a day
+:id: RUL-date_fallback_checked
+:status: ruled
+:criticality: med
+:anti: yes
+:verify: required
+:refines: INV-authored_values_checked
+:uses: DEF-date_fallback, RUL-invalid_value_stops, RUL-invalid_value_located
+
+A date fallback that is not a year, a month of a year or a day of the calendar SHALL be refused, naming it.
+:::
+
+:::{rul} The nearest date fallback covers a photo
+:id: RUL-date_fallback_from_nearest
+:status: ruled
+:criticality: med
+:verify: required
+:uses: DEF-date_fallback, DEF-destination
+
+The date fallback covering a photo SHALL be the one given at the nearest destination it lies in that has one, its own
+included, taking effect with no acceptance asked.
+:::
+
+:::{rul} A date fallback times a photo with no recorded time
+:id: RUL-date_fallback_times_untimed
+:status: ruled
+:criticality: high
+:verify: required
+:uses: DEF-date_fallback, DEF-recorded_time, DEF-destination
+
+A photo with no recorded time that a date fallback covers SHALL take as its true time the midnight that begins the
+fallback's day, local to its destination.
+:::
+
+:::{rul} A year or a month stands for its first day
+:id: RUL-date_fallback_fills_to_a_day
+:status: ruled
+:criticality: med
+:verify: required
+:refines: RUL-date_fallback_times_untimed
+
+A date fallback given as a year, or as a month of a year, SHALL stand for its first day.
+:::
+
+:::{rul} A photo's own time is never replaced by a date fallback
+:id: RUL-date_fallback_only_untimed
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+:refines: RUL-date_fallback_times_untimed
+:uses: DEF-recorded_time
+
+A date fallback SHALL NOT time a photo that carries a recorded time of its own.
+:::
+
+:::{rul} The time a date fallback gives is written
+:id: RUL-date_fallback_time_written
+:status: ruled
+:criticality: med
+:verify: required
+:refines: RUL-date_fallback_times_untimed
+:uses: DEF-corrected_time
+
+Geotag SHALL write into a photo the time its date fallback gives it, as it writes any corrected time.
+:::
+
+:::{rul} A time from a date fallback is recorded with the date as given
+:id: RUL-date_fallback_recorded
+:status: ruled
+:criticality: med
+:verify: required
+:refines: RUL-cause_locatable
+:uses: DEF-date_fallback
+
+A time a date fallback gave a photo SHALL be recorded in the workspace's record with the date fallback as the user gave
+it and the destination it was given at.
+:::
+
+:::{rul} No track places a photo by the time a date fallback gave it
+:id: RUL-date_fallback_never_placed_by_tracks
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+:refines: RUL-placement_order
+:uses: DEF-date_fallback, DEF-tracks
+
+The tracks SHALL NOT place a photo that a date fallback times.
+:::
+
+:::{rul} A photo a date fallback times is no clock's evidence
+:id: RUL-date_fallback_no_clock_evidence
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+:uses: DEF-date_fallback
+
+A photo a date fallback times SHALL take no part in finding any camera's clock offset.
+:::
+
+:::{rul} Photos of one date fallback are suffixed in the order of their names
+:id: RUL-date_fallback_names_in_scanner_order
+:status: ruled
+:criticality: low
+:verify: required
+:refines: RUL-suffix_in_capture_order
+:uses: DEF-date_fallback, DEF-timestamp_name
+
+Photos of a destination that a date fallback times, taking new names of one timestamp, SHALL take their suffixes in the
+order of the names they hold before geotag renames them.
 :::
 
 ## 3. Linear dependency inclusion
