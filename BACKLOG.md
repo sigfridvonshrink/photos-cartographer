@@ -106,6 +106,11 @@ more alternating runs are no clock change (a clock does not go back and forth) a
 changes: a day's cell may be split at a time into consecutive parts. The editor's interim advice (move the photos into
 a sub-folder) goes once 15 and 16 are built.
 
+**Built (2026-11-16), and corrected** (*"Both ok"*): the runs are ordered by each photo's true time from its GPS —
+its track match or its fix — not by its camera time, so a clock set back, which interleaves the runs in camera time,
+shows as two consecutive runs like any other change (built ordered by camera time first, which missed it and sent
+such photos to item 16 as wrong positions).
+
 **When:** any time — the conversion is done.
 
 ### 16. Photos whose own position the agreed clock offset contradicts
@@ -168,6 +173,10 @@ mid-day), from the other side.
 **Ruled (2026-11-16)** (*"rest is ok"*): a day with no anchor of its own is proposed the offset of the day before or
 after of the same camera in the same destination, where that day is anchored — a proposal to accept, then checked on
 the tracks by the drift check as any. No new setting and no gap bound, the user accepting it; the day stays the unit.
+**Built (2026-11-16), and corrected** (*"Both ok"*): asked once, as a timezone guess is — with tracks by the photos the
+neighbour day's offset goes to the drift check unasked here and is answered there; without, it is accepted in
+photos-21 (built first as an acceptance and then a drift confirmation: two answers).
+
 
 ### 25. A photo that cannot be written holds the whole workspace
 
