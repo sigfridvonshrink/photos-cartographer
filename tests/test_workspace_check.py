@@ -174,7 +174,8 @@ def test_a_culled_photo_passes_and_is_named_in_the_log(tmp_path, monkeypatch):
     ("3-redundant-jpgs", "deleted"), ("2-missing-metadata", "removed"), ("1-strays", "removed"),
     (".photos-ingest-quarantine/run-1", "removed")])
 @pytest.mark.spec("RUL-culling_passes", "RUL-unexpected_change_stops", "RUL-change_told_by_entries",
-                  "BLD-workspace_check", test="TST-workspace_check-a_deletion_is_culling_only_where_a_person_culls")
+                  "RUL-check_covers_media_folders", "BLD-workspace_check",
+                  test="TST-workspace_check-a_deletion_is_culling_only_where_a_person_culls")
 def test_a_deletion_is_culling_only_where_a_person_culls(tmp_path, folder, kind):
     """A file gone from photos by date or by destination, videos by date or the redundant JPEGs is culling, allowed;
     gone from missing metadata, the strays or the quarantine it is a change no person is expected to make."""
@@ -304,7 +305,7 @@ _UNEXPECTED = ["changed", "replaced", "appeared", "missing_metadata_removed", "s
 
 @pytest.mark.parametrize("how", _UNEXPECTED)
 @pytest.mark.spec("RUL-unexpected_change_stops", "RUL-workspace_checked_first", "RUL-change_told_by_entries",
-                  "BLD-workspace_check", "BLD-exit_statuses",
+                  "RUL-check_covers_media_folders", "BLD-workspace_check", "BLD-exit_statuses",
                   test="TST-workspace_check-an_unexpected_change_stops_naming_the_file")
 def test_an_unexpected_change_stops_naming_the_file(tmp_path, monkeypatch, how):
     """A photo changed in place, or another put at its path; a file appearing outside the inbox; one gone from
