@@ -3002,11 +3002,6 @@ class GeotagWorkflow:
         # the failures the previous execution of this plan recorded: a write failing again the same way is told
         # with its way out (BLD-repeated_write_failure)
         prior_failures = self._prior_failures(ws, plan["plan_id"])
-        self._keep_executed_decisions(plan)
-        # the tracks this plan places and times photos by stay in the record if they leave gpx_root
-        # (RUL-withdrawn_track_points_kept), their points in its window whatever a later plan's reaches
-        GPXIndex.mark_used(db_path(ws), plan["plan_id"], self._tracks_used(plan),
-                           valid_window((plan.get("depends_on") or {}).get("gpx_window")) or [])
 
         # Optional pre-mutation ZFS snapshot (BLD-geotag_execution), labelled "geotag" so it never collides
         # with prep's "prep-" snapshot. A REQUIRED snapshot that cannot be taken aborts before any
@@ -3029,6 +3024,13 @@ class GeotagWorkflow:
             })
             return {"status": "rejected", "plan_id": plan.get("plan_id"),
                     "stale": [reason], "snapshot": snapshot}
+        # Only a run that goes on to change photos keeps its decisions and records its tracks: one a required snapshot
+        # ended executed nothing (BLD-geotag_execution, BLD-withdrawn_track_points).
+        self._keep_executed_decisions(plan)
+        # the tracks this plan places and times photos by stay in the record if they leave gpx_root
+        # (RUL-withdrawn_track_points_kept), their points in its window whatever a later plan's reaches
+        GPXIndex.mark_used(db_path(ws), plan["plan_id"], self._tracks_used(plan),
+                           valid_window((plan.get("depends_on") or {}).get("gpx_window")) or [])
 
         by_file = {}
         for dd in plan["destinations"].values():
