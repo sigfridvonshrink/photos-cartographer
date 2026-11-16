@@ -914,9 +914,20 @@ sign), `GPSLongitude` and `GPSLongitudeRef` (`E` or `W`); clearing one empties a
 :::{bld} A day's offset kept
 :id: BLD-day_offset_kept
 :status: ruled
-:realises: RUL-day_offset_kept_for_later_photos, RUL-kept_offset_rests_on_its_tracks, RUL-kept_offset_yields_to_new_photo
+:realises: RUL-day_offset_kept_for_later_photos, RUL-kept_offset_rests_on_its_tracks, RUL-kept_offset_yields_to_new_photo, RUL-kept_offset_rests_on_its_fixes
 
-A cell's dates SHALL be counted over all its group's photos in the destination, corrected ones included. A cell whose offset applied itself from the camera's own GPS (`gpx_anchor_auto`) records in `anchored_by` the track files of the anchors that agree with it, each with its SHA-256. A cell that would ask, its decision not given, takes the previous run's effective offset when that was `gpx_anchor_auto`, every file in its `anchored_by` is under `gpx_root` with that SHA-256, and no GPS proposal now made for it conflicts, ties, is imprecise or lies beyond `gpx_anchor_decision_tolerance_seconds` of it — as `decision_mode: "kept_from_earlier"`, `anchored_by` carried on; a cell whose photos are all corrected keeps its decision and its drift confirmation, the effective values derived again each run.
+A cell's dates SHALL be counted over all its group's photos in the destination, corrected ones included. A cell whose
+offset applied itself from the camera's own GPS (`gpx_anchor_auto`) records in `anchored_by` the track files of the
+anchors that agree with it, each with its SHA-256. A cell whose offset applied itself from its photos' fixes' times
+(`gps_time_auto`) records in `fixed_by` the content fingerprints of the photos whose readings agree with it. A cell that
+would ask, its decision not given, takes the previous run's effective offset when that was `gpx_anchor_auto` and every
+file in its `anchored_by` is under `gpx_root` with that SHA-256, or `gps_time_auto` and every fingerprint in its
+`fixed_by` is one of the camera group's photos in the destination, corrected ones included; and no GPS proposal now made
+for it — a self-anchor or its fixes' times — conflicts, ties, is imprecise or lies beyond
+`gpx_anchor_decision_tolerance_seconds` of it — as `decision_mode: "kept_from_earlier"`, `anchored_by` or `fixed_by`
+carried on, and never withdrawn by the check of a guess against the destination's other devices
+({need}`BLD-offset_far_from_evidence`), which judges the guess, not it; a cell whose photos are all corrected keeps its
+decision and its drift confirmation, the effective values derived again each run.
 :::
 
 

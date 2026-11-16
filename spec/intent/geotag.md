@@ -2773,8 +2773,21 @@ later — one found from its own GPS included, though the later photos bring no 
 :verify: required
 :refines: RUL-day_offset_kept_for_later_photos
 
-An offset found from a camera's own GPS SHALL be kept for later photos only while every track file it was found from is
-there unchanged.
+An offset found from a camera's own positions on the tracks SHALL be kept for later photos only while every track file
+it was found from is there unchanged.
+:::
+
+:::{rul} A kept offset rests on the fixes it was found from
+:id: RUL-kept_offset_rests_on_its_fixes
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+:refines: RUL-day_offset_kept_for_later_photos
+:uses: DEF-destination
+
+An offset found from the times a camera's own GPS fixes recorded SHALL be kept for later photos only while every
+photo whose fix gave it is still among that camera's photos in the destination.
 :::
 
 :::{rul} A kept offset yields to a photo that says otherwise

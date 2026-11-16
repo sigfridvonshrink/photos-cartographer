@@ -331,6 +331,61 @@ def test_gps_derived_offset_is_kept_for_later_photos(tmp_path, monkeypatch):
     assert ops[f"{T}/c.arw"]["writes"]["DateTimeOriginal"] == "2024:07:03 15:00:00"
 
 
+def _fixed(ws, rel, dto, fix_utc):
+    """A photo holding its own position far from every track, and the UTC its own fix recorded."""
+    rec = _rec(ws, rel, dto, gps=(35.0, 135.7))
+    parsed = json.loads(rec["metadata_status"]["parsed_json"])
+    parsed["GPSDateTime"] = fix_utc
+    rec["metadata_status"]["parsed_json"] = json.dumps(parsed)
+    return rec
+
+
+@pytest.mark.spec("RUL-day_offset_kept_for_later_photos", "RUL-kept_offset_rests_on_its_fixes",
+                  "RUL-kept_offset_yields_to_new_photo", "BLD-day_offset_kept",
+                  test="TST-geotag_rerun_markers-fix_time_offset_is_kept_for_later_photos")
+def test_an_offset_from_the_fixes_times_is_kept_for_later_photos(tmp_path, monkeypatch):
+    """Two photos' own fixes agree on the clock (−1 h 50 min) and apply themselves. Once they are corrected, a later photo
+    of that camera and day with no GPS takes the same offset unasked — while the photos whose fixes gave it are there,
+    and no fix that arrives since puts the clock elsewhere."""
+    ws = _ws(tmp_path, [lambda ws: _fixed(ws, f"{T}/a.arw", "2024:07:03 10:00:00", "2024:07:03 08:10:00Z"),
+                        lambda ws: _fixed(ws, f"{T}/b.arw", "2024:07:03 10:30:00", "2024:07:03 08:40:01Z")])
+    record = ws / ".photos-ingest" / cal.TIME_DECISIONS_ARTIFACT
+    cell_of = lambda: json.loads(record.read_text())["destinations"][T]["camera_group_time_decisions"][CAM]
+    _plan(monkeypatch, ws)
+    cell = cell_of()
+    assert cell["effective_time_anchor"] == {"offset_seconds": -6600, "source": "gps_time_auto"}
+    assert cell["fixed_by"] == ["fp-a.arw", "fp-b.arw"]
+    _executed_and_reprepped(ws)
+    done = json.loads((ws / ".photos-ingest" / "photos-11-handoff.json").read_text())["files"]
+
+    def replan(files, prior=None):
+        if prior is not None:
+            record.write_text(prior)                         # each case planned from the kept record
+        _write_handoff(ws, files)
+        _plan(monkeypatch, ws)
+        return cell_of()
+
+    later = _rec(ws, f"{T}/c.arw", "2024:07:03 14:50:00")         # 13:00Z: on the track
+    kept = replan(done + [later])
+    assert kept["decision_mode"] == "kept_from_earlier" and not kept["requires_user_input"]
+    assert kept["effective_time_anchor"]["offset_seconds"] == -6600 and kept["fixed_by"] == cell["fixed_by"]
+    assert _ops(ws)[f"{T}/c.arw"]["writes"]["DateTimeOriginal"] == "2024:07:03 15:00:00"
+    kept_record = record.read_text()
+    # a fix arriving since that puts the clock an hour from it, beyond the tolerance: the day asks
+    far = _fixed(ws, f"{T}/d.arw", "2024:07:03 10:55:00", "2024:07:03 07:55:00Z")
+    asked = replan(done + [later, far], kept_record)
+    assert asked["requires_user_input"] and asked["effective_time_anchor"] == ""
+    assert asked["proposal"]["proposed_offset_seconds"] == -10800
+    # a photo whose fix gave it taken out of the workspace: what the offset rested on is gone, and the day is decided
+    # again as one with no GPS — here the zone's guess, sent to the check against the tracks
+    os.remove(ws / far["relative_path"])
+    (a,) = [f for f in done if "fp-a.arw" in f["content_hash"]]
+    os.remove(ws / a["relative_path"])
+    gone = replan([f for f in done if f is not a] + [later], kept_record)
+    assert gone["effective_time_anchor"] == {"offset_seconds": -7200, "source": "timezone_unconfirmed"}
+    assert "fixed_by" not in gone
+
+
 @pytest.mark.spec("BLD-rerun_recognition", test="TST-geotag_rerun_markers-a_devices_own_marker_is_native")
 def test_a_devices_own_marker_is_native(tmp_path, monkeypatch):
     """A phone's own GPSProcessingMethod is not geotag's: its position is kept and its time is not

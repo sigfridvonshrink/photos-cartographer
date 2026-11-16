@@ -887,9 +887,14 @@ devices that holds back a guess far from all of them.
 :status: ruled
 :forced: yes
 :follows_from: RAT-day_offset_is_the_cameras, RAT-decision_withdrawable
-:justifies: RUL-kept_offset_rests_on_its_tracks
+:justifies: RUL-kept_offset_rests_on_its_tracks, RUL-kept_offset_rests_on_its_fixes
 
-The offset is kept because it was read from the camera's own GPS against the tracks, and the photos that gave it can no longer give it again. But the user takes a track out of the folder for one reason — it was someone else's — and an offset read against it goes with it; and a photo arriving later with its own position is new evidence about the same clock. Kept past either, the offset would be the one decision in the record nobody could withdraw and nothing still supported.
+The offset is kept because it was read from the camera's own GPS — against the tracks, or from the times its fixes
+recorded — and the photos that gave it can no longer give it again. But the user takes a track out of the folder for one
+reason — it was someone else's — and an offset read against it goes with it; a photo whose fix gave it, taken out of the
+workspace, takes its reading with it; and a photo arriving later with its own position is new evidence about the same
+clock. Kept past either, the offset would be the one decision in the record nobody could withdraw and nothing still
+supported.
 :::
 
 
