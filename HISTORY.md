@@ -2,6 +2,20 @@
 
 *What was decided and why, newest first. A record: never corrected forward. Per-commit detail is `git log`.*
 
+## 2026-11-16 — names outside photos by destination, and a second's photos (BACKLOG 43, 45)
+
+Ruled as recommended (*"43 - ok"*, *"45 - ok"*):
+
+- **A JPEG set aside beside its RAW is renamed with it**, to the RAW's new name — a rename only, the one exception to
+  geotag changing nothing outside photos by destination. Prep records the pair when it sets the JPEG aside, and
+  accepts the JPEG's new name on a later run while its RAW bears it.
+- **A video keeps its camera's clock in its name**, final for this tool: it has no destination, so no zone. Sorting
+  videos into destinations and geotagging them is BACKLOG 53.
+- **Photos of one second are named in the order they were taken** — sub-second time, then the suffix each held — and
+  a pair sharing a stem is given one name across its extensions.
+- **A filename format holding a zone field is refused**: prep and geotag would read it differently.
+- **Names in the hour a clock repeats sort by local time**, as a name is local time; the true order is in the metadata.
+
 ## 2026-11-16 — an untimed photo, a photo that cannot be written, what "corrected" means (BACKLOG 22, 25, 46)
 
 - **A photo with no recorded time** still stops geotag. Letting it through untimed, or giving it a time by a

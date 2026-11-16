@@ -4,7 +4,7 @@
 
 - **What this is:** [`README.md`](README.md). **The record:** [`HISTORY.md`](HISTORY.md).
 
-*Open items: **18** — 7, 11, 14, 18, 21, 22, 27, 28, 30 to 32, 40, 43, 45, 47 to 49, 53.* 🛑 Numbers are never reused; the next is **54**.
+*Open items: **18** — 7, 11, 14, 18, 21, 22, 27, 28, 30 to 32, 40, 47 to 49, 53 to 55.* 🛑 Numbers are never reused; the next is **56**.
 
 ---
 
@@ -225,24 +225,6 @@ recording another offset stops the zone until the user moves it, picks its zone 
 
 **Open:** ask a missing zone once, at the topmost destination that neither has nor inherits one.
 
-### 43. Videos and set-aside JPEGs keep the uncorrected clock in their names
-
-**Why:** geotag changes photos by destination only, never a video (`RUL-geotag_changes_only_by_dest`). A camera on
-home time: its photos are named in destination-local time, its videos of the same minutes eight hours away, and a
-RAW no longer shares its name with its set-aside JPEG. No item says the provisional name is final for them.
-
-**Open:** say so, or correct those names from the camera-day's settled offset — a rename, no tag written.
-
-### 45. Order and pairs among photos of one second
-
-**Why:** suffixes are given in path order, and `-` sorts before `.`: `T.jpg, T-001.jpg, T-002.jpg` become
-`T'-002.jpg, T'.jpg, T'-001.jpg` on geotag's rename, a burst's order rotating, and a RAW can land beside another
-frame's JPEG. Sub-second times are read by prep and used nowhere. Two smaller things of the same kind: a filename
-format holding `%z` reads differently in prep and geotag, and names in the hour a zone repeats sort against true time.
-
-**Open:** order by sub-second then the suffix already held, one suffix across the extensions of a stem; refuse a
-format whose fields read differently with and without a zone.
-
 ### 53. Videos sorted into destinations, and geotagged
 
 **Why:** videos stay in videos by date, never sorted, so geotag gives them no place and no corrected time: their
@@ -255,6 +237,26 @@ their own; which time and position tags a video holds that exiftool writes safel
 AVI), and whether a video it cannot write is held as a photo is (BACKLOG 25's way out); whether a video's own clock
 is the photo camera's (the same body) or its own camera group; how a video's span (start to end) is placed — at its
 start, as one point; and what merge does with them.
+
+### 54. A set-aside JPEG whose RAW was culled after geotag
+
+**Why:** geotag renames a set-aside JPEG with its RAW (BACKLOG 43), writing nothing into it; prep accepts the JPEG's
+new name only while its RAW, found by fingerprint, bears the same stem. Culling the RAW afterwards — a hand action the
+workspace check lets pass — leaves the JPEG with a name that is neither its recorded time nor its partner's, and the
+next `prep plan` stops on it as misnamed; the user must rename it by hand.
+
+**Open:** accept a JPEG whose recorded pair is gone, under the name geotag gave it (the prep log says why); or have the
+cull take the JPEG with it; or keep the stop and name the way out.
+
+### 55. Sub-second times for photos timed by CreateDate or ModifyDate
+
+**Why:** a burst's order within one second follows the sub-second time (BACKLOG 45). Prep reads
+`SubSecTimeOriginal`; `SubSecCreateDate` and `SubSecModifyDate` are in its field list, but exiftool gives them only as
+Composite tags, which prep never reads — so a photo timed by `CreateDate` or `ModifyDate` gets a fraction only where
+the time value itself holds one. Reading `SubSecTimeDigitized` and `SubSecTime` needs a field-set version bump, which
+makes prep read every file again once.
+
+**When:** any time; low priority.
 
 ### 47. What the country choice leaves open
 
