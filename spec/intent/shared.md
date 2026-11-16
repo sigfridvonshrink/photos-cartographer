@@ -3868,8 +3868,9 @@ Planning SHALL change no media file.
 :refines: RUL-planning_changes_no_media
 
 Planning SHALL write nothing but its plan, its decision records, what it keeps so that later runs need not compute it
-again, the changes to the workspace the user accepts ({need}`RUL-acceptance_recorded`), and — on a workspace's first
-run — the configuration it seeds.
+again, the changes to the workspace the user accepts ({need}`RUL-acceptance_recorded`), the user's answer to whether to
+download the table of countries with the table downloaded ({need}`RUL-zone_table_asked_once`), and — on a workspace's
+first run — the configuration it seeds.
 :::
 
 :::{rul} Execution carries out the plan, and only the plan

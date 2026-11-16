@@ -506,7 +506,31 @@ def _state(workspace):
         "runnable": sorted("/".join(p) for p in _RUNNABLE),
         "actions": _runnable_actions(workspace, phases, sealed, busy, initialized),
         "phases": phases,
+        "zone_table": _zone_table_state(workspace, sealed),
     }
+
+
+def _zone_table_state(workspace, sealed):
+    """The question of downloading the table of countries, while the workspace has it unanswered: {"question": the
+    words `prep plan` asks it in} — the Plan button then asks it and sends the answer with the run, as the CLI's
+    `--download-zone-table` (BLD-zone_table_question; docs/design/decisions.md). None where the host has its own table,
+    the answer is recorded, or the workspace is sealed."""
+    if sealed or not U.zone_table_question_pending(workspace):
+        return None
+    return {"question": U.zone_table_question(U.bundled_zone_table()["tzdata_version"])}
+
+
+def _zone_table_extra(phase, command, payload):
+    """`(argv, error)`: `['--download-zone-table', answer]` for a `prep plan` the client sends with the user's answer
+    to the question of the table of countries; `[]` with none. Any other command, or another value, is refused."""
+    answer = payload.get("zone_table")
+    if answer is None:
+        return [], None
+    if (phase, command) != ("prep", "plan"):
+        return None, f"{phase} {command} does not ask about the table of countries"
+    if answer not in ("yes", "no"):
+        return None, "the answer about the table of countries is yes or no"
+    return ["--download-zone-table", answer], None
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -649,7 +673,10 @@ class Handler(BaseHTTPRequestHandler):
         accept, err = _accept_extra(phase, command, payload)
         if err:
             return self._send(400, {"ok": False, "error": err})
-        extra = extra + accept
+        zone, err = _zone_table_extra(phase, command, payload)
+        if err:
+            return self._send(400, {"ok": False, "error": err})
+        extra = extra + accept + zone
         # Parallelism: -j lives on each phase's PARENT parser, so it must precede the subcommand — pass
         # it as `pre`, not in `extra`. Sent whenever the client supplies a valid count (clamped); phases
         # that don't parallelize accept-and-ignore it.

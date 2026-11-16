@@ -40,7 +40,7 @@ import errno
 # CONFIGURATION BLOCK
 # ==============================================================================
 from .photos_utils import CONFIG, CAMERA_IDENTITY_FIELDS, folder_name, managed_folder_names, dedup_priority, is_track_file, missing_managed_folders, misplaced_top_level_entries, FOLDER_ROLES, UNTIMED_PREFIX, untimed_stem, carries_stem, filename_format_changed, code_fingerprint, hidden_folder_holds_files
-from .photos_utils import (add_accept_changes_argument, check_workspace, read_workspace_record, write_workspace_record,
+from .photos_utils import (add_accept_changes_argument, add_zone_table_argument, check_workspace, read_workspace_record, write_workspace_record,
                           forget_in_workspace_record, note_execution_begun)
 from .reporting import get_reporter, emit_next_step
 from .photos_utils import (replace_durably, _move_no_clobber, _move_link_unlink, _get_renameat2,
@@ -3189,6 +3189,7 @@ def add_arguments(parser):
                 subparsers.add_parser("execute", help="Execute the saved prep plan")]
     for p in checking:
         add_accept_changes_argument(p)
+    add_zone_table_argument(checking[0])
 
     prune_parser = subparsers.add_parser("prune-quarantine", help="Delete recoverable quarantine (dry-run by default).")
     prune_parser.add_argument("--plan-id", action="append", dest="plan_ids", help="Quarantine <plan_id> directory to prune (repeatable).")
@@ -3260,6 +3261,26 @@ def _emit_first_run_config_notice(workspace_root, plan, reporter):
     reporter.warn("   Take a good look at the config now and tune it — it has big consequences downstream "
                   "(time / place / library layout). Then re-run `prep plan` before dry-run / execute.")
     reporter.warn("")
+
+
+def _zone_table_answer(args, workspace_root, reporter):
+    """The answer to the question of downloading the table of countries (BLD-zone_table_question): the one the command
+    gives (`--download-zone-table`), else — while the question is unanswered and a person is at a terminal to answer
+    it — theirs, asked as y/N; else None. Never asked where no terminal reads the answer: the console gives it with
+    the run, and a run with no one to answer goes on with the carried copy (RUL-zone_table_never_stops_prep)."""
+    from .photos_utils import zone_table_question_pending, zone_table_question, bundled_zone_table
+    from .reporting import TtySink
+    given = getattr(args, "download_zone_table", None)
+    if given is not None or not zone_table_question_pending(workspace_root):
+        return given
+    if not (sys.stdin.isatty() and any(isinstance(s, TtySink) for s in reporter.sinks)):
+        return None
+    reporter.warn(zone_table_question(bundled_zone_table()["tzdata_version"]))
+    try:
+        said = input("Download it? [y/N] ")
+    except EOFError:
+        return None
+    return "yes" if said.strip().lower() in ("y", "yes") else "no"
 
 
 def run(args):
@@ -3433,6 +3454,11 @@ def _run_locked(args, workspace_root, reporter):
         from .photos_utils import config_path as _config_path
         _config_was_seeded = not os.path.exists(_config_path(workspace_root))
 
+        # Where the host's zone database has no table of countries, the user is asked — once, before anything is
+        # downloaded — whether to download it (BLD-zone_table_question); asked here, before the scan, so the answer
+        # is not waited for at its end. Settled once the plan is saved, the control directory then there.
+        _zone_answer = _zone_table_answer(args, workspace_root, reporter)
+
         cache = WorkspaceCache(workspace_root, read_only=True)
         # A database of another schema is never migrated: the plan is refused, nothing planned (BLD-exit_statuses).
         from .photos_utils import cache_schema_mismatch
@@ -3458,6 +3484,8 @@ def _run_locked(args, workspace_root, reporter):
         reporter.log(f"Plan saved to {pp}", stream="stdout")
         if _bak:
             reporter.log(f"  Previous plan backed up to {_bak}", stream="stdout")
+        from .photos_utils import settle_zone_table
+        settle_zone_table(workspace_root, _zone_answer, reporter)
 
         # First plan on this workspace: the config was just seeded with defaults — prompt the
         # operator to review/tune it (esp. media_extensions) before trusting the plan. Advisory.

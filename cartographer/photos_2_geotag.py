@@ -49,6 +49,7 @@ from datetime import datetime, timedelta, timezone
 
 from .photos_utils import (fingerprint_method_blocker, links_under, replace_durably,
     country_table,
+    zone_table,
     code_fingerprint,
     CONFIG, CONTROL_DIR, control_dir, FINALIZED_MEDIA_ARTIFACT, finalized_media_path, workspace_volume_error, workspace_filesystem_error, config_path, handoff_path, guard_path, is_sealed, likely_new_dump,
     validate_config, load_config, sha256_file, sha256_text, media_class_for_ext, folder_name,
@@ -476,6 +477,12 @@ def read_executable_plan(ws):
         return _read_record(executable_plan_path(ws))
     except UnreadableRecord as e:
         raise UnreadablePlan(e.path, e.why)
+
+
+def _country_table_dependency(ws):
+    """Where the table of countries a plan reads came from, and its SHA-256 (BLD-country_table_dependency)."""
+    t = zone_table(ws)
+    return {"source": t["source"], "sha256": t["sha256"]}
 
 
 class GeotagWorkflow:
@@ -985,7 +992,7 @@ class GeotagWorkflow:
         recall = {}                                  # (destination, bucket) -> what its cell was built from
         # A country is chosen once, at the top of its tree (RUL-country_chosen_once): `eff_country` maps a destination
         # to (code, the destination it was chosen at) for itself and everything inside it.
-        eff_country, table = {}, country_table()
+        eff_country, table = {}, country_table(self.workspace_root)
         self.country_removals = []
         # where a zone written above stops reaching down: a folder with a zone written, or a country chosen
         # (RUL-zone_asked_at_every_level)
@@ -1019,7 +1026,8 @@ class GeotagWorkflow:
             if own_country and own_country not in table:
                 blockers.append(f"{dest}: destination_timezone.user_decision.country {own_country!r} is not a "
                                 + ("country code of the zone database (two letters, such as \"US\")." if table else
-                                   "choice this host can read: its zone database has no table of countries."))
+                                   "choice this host can read: its zone database knows no zone of the table of "
+                                   "countries."))
                 own_country = ""
             country = (own_country, dest) if own_country else above
             if country:
@@ -2588,6 +2596,8 @@ class GeotagWorkflow:
             "media_extensions_fingerprint": media_extensions_fingerprint(),
             "media_preconditions": media_pre,
             "planned_operation_fingerprint": planned_op_fp,
+            # the table of countries the decisions were made from, and where it came from (BLD-country_table_dependency)
+            "country_table": _country_table_dependency(ws),
         }
 
     # --- Stage 10: execution (photos-25, BLD-geotag_execution) ---------------
@@ -2681,7 +2691,8 @@ class GeotagWorkflow:
                        ("camera_group_fingerprint", sha256_text(policy)),
                        ("camera_group_key_version", CAMERA_GROUP_KEY_VERSION),
                        ("metadata_field_set_version", FIELD_SET_VERSION),
-                       ("gpx_fingerprint", gpx.fingerprint)):
+                       ("gpx_fingerprint", gpx.fingerprint),
+                       ("country_table", _country_table_dependency(ws))):
             if dep.get(k) != cur:
                 stale.append(f"{k} changed")
         # The tracks that cannot be checked count as changed (RUL-unchecked_counts_as_changed): a gpx_root not

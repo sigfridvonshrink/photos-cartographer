@@ -112,7 +112,16 @@ photos-cartographer prep plan    # plan the work (no photo is moved or changed)
 
 The first `prep plan` creates the hidden control folder `.photos-ingest/`, seeds the workspace's
 configuration in it, and prints a **FIRST RUN** notice: review the configuration *now*, before anything
-is executed (next section). Then plan again, inspect, and apply:
+is executed (next section).
+
+On a host whose zone database ships without its table of countries (`zone.tab`, missing from some minimal
+images), the first `prep plan` also asks — before anything is downloaded — whether to download the current table
+from IANA, once, into the workspace; geotag needs it only to offer a country's timezones. Refusing uses the copy
+carried inside photos-cartographer, which may be stale. Give the answer with `--download-zone-table yes` (or `no`)
+where nobody is at the terminal; with no answer, prep goes on with the carried copy and says how to answer. The
+answer is kept in the workspace and not asked again; the console's Plan button asks the same question.
+
+Then plan again, inspect, and apply:
 
 ```bash
 photos-cartographer prep plan    # re-plan under the configuration you reviewed

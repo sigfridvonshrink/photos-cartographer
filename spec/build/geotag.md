@@ -39,7 +39,8 @@ photos and `2-missing-metadata`.
 the handoff's `content_fingerprint`; `config_fingerprint`, `code_fingerprint`, `camera_group_fingerprint`,
 `camera_group_key_version`, `gpx_fingerprint` with the `gpx_window` it is of, `metadata_field_set_version`, `filename_format_fingerprint`,
 `folders_fingerprint` and `media_extensions_fingerprint`; `resolved_utc_cache_fingerprint` and
-`prep_cache_fingerprint`; each photo's `media_preconditions`; and `planned_operation_fingerprint`. Execute recomputes
+`prep_cache_fingerprint`; each photo's `media_preconditions`; `planned_operation_fingerprint`; and `country_table`
+({need}`BLD-country_table_dependency`). Execute recomputes
 all but the two cache fingerprints — vouched for by the records and handoff they were derived from, checked where they
 are made — before any change, and each photo's preconditions as it applies it. `photos-25-execution-summary.json` is
 never checked as a dependency.
@@ -357,7 +358,30 @@ A container destination's timezone cell with no `effective_iana_timezone`, where
 :status: ruled
 :realises: RUL-country_gives_its_timezone, RUL-country_chosen_once
 
-A destination's `destination_timezone.user_decision.country` — the country it is in — SHALL hold an ISO 3166 code of `country_table` — every country of the zone database's `zone.tab`, named from `iso3166.tab`, with its timezones — or be empty; another value, or any where the host's database has no such table, is a blocker. The topmost country chosen above or at a destination is in effect there, recorded as `country`, with `country_from` where it was chosen above and `country_zones`. One chosen within it is written back empty, the cell holding `country_removed` (`country`, `because`, `country_there`) for that run, and `geotag plan` warns of each. A country of one timezone proposes it as `proposal_source: "country"`, taking effect like an inherited zone, over any zone from above. A country of several gives its own destination's zone to nothing within it and lets none through from above; within it a `manual_iana_timezone` that is none of `country_zones` is a blocker, and the configured default is proposed only where it is one. `photos-21-time-decisions.json` holds the table read as `countries`.
+A destination's `destination_timezone.user_decision.country` — the country it is in — SHALL hold an ISO 3166 code of `country_table` ({need}`BLD-country_table`) or be empty; another value is a blocker. The topmost country chosen above or at a destination is in effect there, recorded as `country`, with `country_from` where it was chosen above and `country_zones`. One chosen within it is written back empty, the cell holding `country_removed` (`country`, `because`, `country_there`) for that run, and `geotag plan` warns of each. A country of one timezone proposes it as `proposal_source: "country"`, taking effect like an inherited zone, over any zone from above. A country of several gives its own destination's zone to nothing within it and lets none through from above; within it a `manual_iana_timezone` that is none of `country_zones` is a blocker, and the configured default is proposed only where it is one. `photos-21-time-decisions.json` holds the table read as `countries`.
+:::
+
+:::{bld} The table of countries read
+:id: BLD-country_table
+:status: ruled
+:realises: RUL-zone_table_host_first, RUL-zone_table_zone_known
+
+`zone_table(ws)` SHALL read `zone.tab` and `iso3166.tab` from where this Python reads its zones — `zoneinfo.TZPATH`,
+then the `tzdata` package — as `source: "host"` where `zone.tab` is there; else the `copy` in the workspace's
+`photos-02-zone-table.json` that `check_zone_table_text` still finds well formed, as `source: "web"`; else the copy in
+the package's `zone_table/` (tzdata 2026c, from a Debian host's `/usr/share/zoneinfo`, with its `version`), as
+`source: "bundled"`. `country_table` is its `countries`: every country of `zone.tab` holding a zone
+`valid_iana_timezone` takes, named from `iso3166.tab` (its code where unnamed), with those zones, sorted; `sha256` is
+the SHA-256 of `countries` as sorted JSON.
+:::
+
+:::{bld} The plan names the table of countries it was made from
+:id: BLD-country_table_dependency
+:status: ruled
+:realises: RUL-zone_table_restales_plan
+
+`photos-24-executable-plan.json`'s `depends_on.country_table` SHALL be `{"source", "sha256"}` of the `zone_table` its
+plan read, `revalidate_plan` holding the plan stale where the table read now differs in either.
 :::
 
 :::{bld} The zone a country's photos fit

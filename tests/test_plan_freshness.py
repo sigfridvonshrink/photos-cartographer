@@ -204,6 +204,8 @@ def _geotag_setup(tmp_path):
     deps["gpx_fingerprint"] = "GPXFP"
     deps["gpx_window"] = []
     deps["planned_operation_fingerprint"] = U.sha256_text(json.dumps([], sort_keys=True))
+    _table = U.zone_table(ws)
+    deps["country_table"] = {"source": _table["source"], "sha256": _table["sha256"]}
     plan = {"status": "ready", "destinations": {}, "depends_on": deps}
     self_obj = SimpleNamespace(workspace_root=ws,
                                _verify_handoff_dependency=geo.GeotagWorkflow._verify_handoff_dependency)

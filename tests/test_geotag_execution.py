@@ -757,6 +757,26 @@ def test_revalidate_detects_each_stale_input(tmp_path, monkeypatch):
     assert any("planned operations changed" in s for s in wf.revalidate_plan(pk, gpx))
 
 
+@pytest.mark.spec("RUL-zone_table_restales_plan", "BLD-country_table_dependency", "BLD-geotag_dependencies",
+                  test="TST-geotag_execution-another_table_of_countries_restales_the_plan")
+def test_another_table_of_countries_restales_the_plan(tmp_path, monkeypatch):
+    """The plan names the table of countries it was made from and where that came from; another one — the host's
+    gone, a copy downloaded, another release — makes it stale, as a changed decision does."""
+    ws, ctl = _ready_ws(tmp_path, monkeypatch)
+    wf = cal.GeotagWorkflow(str(ws)); wf.preflight(for_execute=True)
+    plan = json.load(open(ctl / "photos-24-executable-plan.json"))
+    gpx = wf.plan_tracks(plan)
+    table = utils.zone_table(str(ws))
+    assert plan["depends_on"]["country_table"] == {"source": "host", "sha256": table["sha256"]}
+    assert wf.revalidate_plan(plan, gpx) == []
+    pk = {**plan, "depends_on": {**plan["depends_on"], "country_table": {"source": "host", "sha256": "0" * 64}}}
+    assert any("country_table" in s for s in wf.revalidate_plan(pk, gpx))
+    real = utils._zone_database_file
+    monkeypatch.setattr(utils, "_zone_database_file",
+                        lambda name: None if name in ("zone.tab", "iso3166.tab") else real(name))
+    assert any("country_table" in s for s in wf.revalidate_plan(plan, gpx))   # the carried copy now
+
+
 @pytest.mark.spec("RUL-plan_carried_out_by_its_code", "BLD-code_fingerprint",
                   test="TST-geotag_execution-a_plan_made_by_other_code_is_stale")
 def test_a_plan_made_by_other_code_is_stale(tmp_path, monkeypatch):

@@ -58,6 +58,16 @@ def _restore_config():
 
 
 @pytest.fixture(autouse=True)
+def _no_network(monkeypatch):
+    """No test reaches the network: the one download the tool makes, of the table of countries
+    (BLD-zone_table_download), is refused unless a test replaces it."""
+    def refuse(url, timeout):
+        raise OSError("tests do not reach the network")
+    monkeypatch.setattr(photos_utils, "_download_zone_archive", refuse)
+    yield
+
+
+@pytest.fixture(autouse=True)
 def _hand_built_workspace_recorded(request, monkeypatch):
     """A workspace a test builds by hand stands for one as prep's execution left it — its handoff, log and files
     written as prep's would be (tests/_handoff.py) — so the state an execution records (BLD-workspace_record) is

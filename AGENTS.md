@@ -213,7 +213,10 @@ The whole design exists to safely mutate **irreplaceable originals**. These rule
   operation with a plan ID, op ID, explicit preconditions, expected result, and journal entry. Planning
   mutates nothing but the fingerprints it keeps for later runs (prep's plan memo, geotag's track
   catalogue and the track points of its window in `photos-00-ingest.db`, merge's library cache) and, given
-  `--accept-changes`, the record of what was accepted (`photos-01-accepted-changes.json`).
+  `--accept-changes`, the record of what was accepted (`photos-01-accepted-changes.json`), and, on a host whose
+  zone database has no `zone.tab`, the user's answer to whether to download the table of countries with the copy
+  downloaded (`photos-02-zone-table.json`, `BLD-zone_table_question`) — the tool's one network access, made only on
+  that answer.
 - **Dry-run is not simulation.** Dry-run validates the *real* serialized plan that execution would
   consume (the persisted canonical plan artifact) and reports a **summary** of it — never a separate
   virtual-filesystem code path. It does not dump every operation: the full exact plan is the saved
@@ -251,7 +254,8 @@ Defined in the shared contract (`spec/intent/shared.md`, `spec/build/shared.md`)
   from — written outside the plan/execute op model, never journalled or archived, safe to delete. The tracks
   geotag reads are record: a catalogue of every track file and the points of the window its readers reach, in
   `photos-00-ingest.db`, archived and sealed with it (`BLD-track_catalogue`); so is the `workspace_record` table, the state the last
-  execute left (`BLD-workspace_record`), and `photos-01-accepted-changes.json`, the hand changes accepted.
+  execute left (`BLD-workspace_record`), `photos-01-accepted-changes.json`, the hand changes accepted, and
+  `photos-02-zone-table.json`, the table of countries downloaded for a host without one (`BLD-zone_table_download`).
   Finalize adds
   `photos-26-finalized-media.json` and the archival package (`photos-26-archive-manifest.json` +
   `photos-26-archive.tar.gz`); merge remakes it as `photos-35-*`.

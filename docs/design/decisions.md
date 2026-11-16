@@ -150,6 +150,14 @@ event/sink seam.
   that joins late until the next run starts. No per-file picking: the code accepts the whole list or
   nothing, as on the command line. (Hand-editing a file of acceptances was rejected by the owner as
   tedious; that is behaviour, in the spec — `RAT-accept_once_by_code`.)
+- **The question of downloading the table of countries is asked by the prep Plan button** (BACKLOG 47 (e)): while
+  the host's zone database has no `zone.tab` and the workspace has not answered, Plan opens a dialog with the same
+  words `prep plan` asks in on a terminal — **Download once** / **Use the carried copy** / Cancel — and sends the
+  answer with the run as `--download-zone-table`, so the console's run is the CLI's. Asked *before* the run, as the
+  library path is for `init-library`, not after it like an acceptance: the answer is wanted before the scan, never
+  after it, and a run never waits on it. On a terminal the CLI asks y/N, the default no; where nobody can answer (a
+  pipe) it says how to answer and goes on with the carried copy — that it never stops prep is behaviour, in the
+  spec (`RUL-zone_table_never_stops_prep`).
 
 ---
 

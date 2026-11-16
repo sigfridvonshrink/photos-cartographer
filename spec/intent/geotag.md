@@ -358,6 +358,148 @@ A country said of a destination within one already said to be in a country SHALL
 The user SHALL be told of a country taken out of a decision, and why.
 :::
 
+:::{rul} The table of countries is the host's, else the workspace's, else the one carried
+:id: RUL-zone_table_host_first
+:status: ruled
+:criticality: high
+:verify: required
+:refines: RUL-country_gives_its_timezone
+:uses: DEF-geotag
+
+The countries a destination can be said to be in, with their timezones, SHALL be read from the host's zone database
+where it has them; else from a copy downloaded for the workspace; else from the copy cartographer carries.
+:::
+
+:::{rul} A timezone the host does not know is no country's
+:id: RUL-zone_table_zone_known
+:status: ruled
+:criticality: high
+:verify: required
+:refines: RUL-zone_table_host_first
+
+A timezone the table of countries names that the host's zone database does not know SHALL be given to no country.
+:::
+
+:::{rul} The table is downloaded only on the user's word
+:id: RUL-zone_table_download_on_word
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+:refines: RUL-zone_table_host_first
+
+The table of countries SHALL NOT be downloaded but on the user's permission, asked for before.
+:::
+
+:::{rul} The table is downloaded only where the host has none
+:id: RUL-zone_table_download_where_missing
+:status: ruled
+:criticality: med
+:anti: yes
+:verify: required
+:refines: RUL-zone_table_download_on_word
+
+The table of countries SHALL NOT be downloaded, nor the user asked to, where the host's zone database has it.
+:::
+
+:::{rul} Asked to download, the user is told what refusing leaves
+:id: RUL-zone_table_refusal_told
+:status: ruled
+:criticality: med
+:verify: required
+:refines: RUL-zone_table_download_on_word
+
+The user asked whether to download the table of countries SHALL be told that refusing leaves in use the copy
+cartographer carries, which may be stale.
+:::
+
+:::{rul} The question of the table is asked once
+:id: RUL-zone_table_asked_once
+:status: ruled
+:criticality: med
+:verify: required
+:refines: RUL-zone_table_download_on_word
+
+A workspace's answer to whether to download the table of countries SHALL be kept with it, the question not asked
+again.
+:::
+
+:::{rul} A permission downloads the table once
+:id: RUL-zone_table_downloaded_once
+:status: ruled
+:criticality: med
+:verify: required
+:refines: RUL-zone_table_download_on_word
+
+A permission to download the table of countries SHALL download it once, by the run it is given to.
+:::
+
+:::{rul} A table downloaded is kept with the workspace
+:id: RUL-zone_table_copy_kept
+:status: ruled
+:criticality: high
+:verify: required
+:refines: RUL-zone_table_downloaded_once
+:uses: DEF-control_records
+
+A table of countries downloaded for a workspace SHALL be kept among its control records.
+:::
+
+:::{rul} The question of the table never stops prep
+:id: RUL-zone_table_never_stops_prep
+:status: ruled
+:criticality: med
+:verify: required
+:refines: RUL-zone_table_download_on_word
+:uses: DEF-prep
+
+Prep SHALL go on, the copy cartographer carries in use, where nobody answers whether to download the table of countries.
+:::
+
+:::{rul} A table downloaded is taken only whole and well formed
+:id: RUL-zone_table_checked
+:status: ruled
+:criticality: high
+:verify: required
+:refines: RUL-zone_table_downloaded_once
+
+A download of the table of countries that does not give it whole and well formed SHALL be refused, the table in use
+before staying in use.
+:::
+
+:::{rul} A download that failed is told
+:id: RUL-zone_table_failure_told
+:status: ruled
+:criticality: med
+:verify: required
+:refines: RUL-zone_table_checked
+
+The user SHALL be told of a download of the table of countries that failed or was refused, and that another table
+stays in use.
+:::
+
+:::{rul} The download carries nothing of the user
+:id: RUL-zone_table_request_bare
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+:refines: RUL-zone_table_downloaded_once
+
+A download of the table of countries SHALL NOT carry anything of the workspace, the host or the user.
+:::
+
+:::{rul} Another table of countries makes the plan stale
+:id: RUL-zone_table_restales_plan
+:status: ruled
+:criticality: high
+:verify: required
+:refines: RUL-geotag_plan_carries_every_dependency, RUL-zone_table_host_first
+
+Geotag's executable plan SHALL record the table of countries it was made from and where that came from, so that
+another table makes it stale.
+:::
+
 :::{rul} A timezone stands against the photos only on the user's word
 :id: RUL-zone_against_photos_needs_word
 :status: ruled
