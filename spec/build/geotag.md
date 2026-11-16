@@ -712,9 +712,9 @@ these renames, and those of {need}`BLD-set_aside_renamed_with_raw`, and no other
 :realises: RUL-suffix_in_capture_order
 
 `build_file_model` SHALL take a photo's `sub_second` from its record in the handoff, by `recorded_sub_second`: the
-fraction written in its recorded time itself, else that of the sub-second field prep reads beside it —
-`SubSecTimeOriginal` beside `DateTimeOriginal`, `SubSecCreateDate` beside `CreateDate`, `SubSecModifyDate` beside
-`ModifyDate` — its digits, or the fraction of the whole time it holds; none where neither holds one.
+fraction written in its recorded time itself, else the digits of the EXIF sub-second field prep reads beside it —
+`SubSecTimeOriginal` beside `DateTimeOriginal`, `SubSecTimeDigitized` beside `CreateDate`, `SubSecTime` beside
+`ModifyDate`; none where neither holds one.
 :::
 
 :::{bld} A set-aside JPEG renamed with its RAW

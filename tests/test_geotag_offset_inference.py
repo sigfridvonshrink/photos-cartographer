@@ -818,3 +818,69 @@ def test_how_far_a_proposal_may_move_under_an_acceptance_is_its_own_setting(monk
     assert eff["source"] == "gpx_anchor_accepted" and not stale
     eff, stale, proposal = source(gpx_anchor_decision_tolerance_seconds=5.0)
     assert eff == "" and stale and proposal["acceptance_tolerance_seconds"] == 5.0
+
+
+@pytest.mark.spec("BLD-anchor_matching", "RUL-anchor_within_clock_error", "RUL-tracks_never_joined",
+                  test="TST-geotag_offset_inference-anchor_search_by_place_finds_what_the_whole_walk_finds")
+def test_anchor_search_by_place_finds_what_the_whole_walk_finds(monkeypatch):
+    # Many points on loops walked again and again, stays, breaks in the recording, jumps too long for the grid, a
+    # track over the antimeridian and one by the pole: the search over only the points by each photo's place gives
+    # every candidate, in order, and every skipped reason, that the walk over every point of the window gives.
+    import math
+    import random
+    rnd = random.Random(28)
+    t0 = datetime(2024, 7, 1, tzinfo=timezone.utc)
+    pts = []
+
+    def track(src, trk, n, lat0, lon0, rlat, rlon, days=0):
+        seg, theta, t = 0, 0.0, t0 + timedelta(days=days)
+        for i in range(n):
+            if i % 2500 == 2499:
+                seg += 1                                            # a break in the recording
+            if i % 4000 == 3999:
+                lat, lon = lat0 + 0.6, lon0 - 0.7                   # a jump far off, within one segment
+            elif i % 700 < 40 and i:
+                lat, lon = pts[-1].lat, pts[-1].lon                 # a stay
+            else:
+                theta += rnd.uniform(0.0, 2 * math.pi / 300)
+                lat, lon = lat0 + rlat * math.sin(theta), lon0 + rlon * math.cos(2 * theta)
+            t += timedelta(seconds=rnd.choice((1, 1, 2, 5, 30, 200)))
+            pts.append(cal.GPXPoint(lat, ((lon + 180.0) % 360.0) - 180.0, t, src, i, trk, seg))
+
+    track("phone/a.gpx", 0, 9000, 48.0, 11.0, 0.003, 0.0045)
+    track("phone/a.gpx", 1, 3000, 48.001, 11.0, 0.002, 0.003)       # a second <trk> of the same file
+    track("watch/b.gpx", 0, 6000, 48.0005, 11.0005, 0.003, 0.004, 3)  # another device, ranked below
+    track("watch/c.gpx", 0, 4000, -16.5, 179.9995, 0.002, 0.003, 20)  # over the antimeridian
+    track("watch/d.gpx", 0, 3000, 89.995, 30.0, 0.002, 40.0, 40)      # by the pole
+    gpx = _gpx(pts)
+    gpx.precedence = ["phone", "watch"]
+    cfg = {**utils.CONFIG, **CFG}                                    # placement's limits: a better track's cover
+
+    frames = []
+    for _ in range(120):
+        p = pts[rnd.randrange(len(pts))]
+        reach = 0.0003 if rnd.random() < 0.85 else 0.05
+        naive = (p.time_utc + timedelta(seconds=rnd.choice((0, 1, -1)) * rnd.randrange(0, 260000))).replace(tzinfo=None)
+        frames.append(_frame(p.lat + rnd.uniform(-1, 1) * reach, p.lon + rnd.uniform(-1, 1) * 0.0004,
+                             naive.strftime("%Y:%m:%d %H:%M:%S")))
+    frames.append(_frame(95.0, 11.0, "2024:07:01 12:00:00"))            # no place on the globe: the whole walk
+
+    seen = {"walked": 0, "searched": 0}
+    real = gpx.nearby
+
+    def counted(lat, lon, pt_max, seg_max, spans=None):
+        out = real(lat, lon, pt_max, seg_max, spans)
+        if out is not None and spans is not None:
+            seen["walked"] += sum(hi - lo for lo, hi in spans)
+            seen["searched"] += sum(map(len, out))
+        return out
+
+    monkeypatch.setattr(gpx, "nearby", counted)
+    by_place = [(cal.frame_candidates(f, gpx, cfg), cal._frame_skip_reason(f, gpx, cfg)) for f in frames]
+    monkeypatch.setattr(gpx, "nearby", lambda *a, **k: None)        # every point of the window, one by one
+    whole = [(cal.frame_candidates(f, gpx, cfg), cal._frame_skip_reason(f, gpx, cfg)) for f in frames]
+
+    assert by_place == whole
+    assert sum(1 for cs, _ in whole if cs) > 40 and {r for _, r in whole} == {"no_nearby_track", "outside_time_window"}
+    assert {c["gpx_file"] for cs, _ in whole for c in cs} == {"phone/a.gpx", "watch/b.gpx", "watch/c.gpx", "watch/d.gpx"}
+    assert seen["searched"] * 3 < seen["walked"]                      # and it looked at a part of it
