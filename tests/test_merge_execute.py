@@ -1317,6 +1317,65 @@ def test_reseal_archives_the_control_directory_with_merges_records(tmp_path):
     assert names == {rec["path"] for rec in manifest["contents"].values()} | {".photos-ingest/photos-35-archive-manifest.json"}
 
 
+def _changed_under_new_engine(p, now):
+    """A photo prep fingerprinted as p["fp"] whose file another ImageMagick now reads as `now`."""
+    return dict(p, fp=now, content_hash=json.dumps({"status": "valid", "value": p["fp"]}))
+
+
+@pytest.mark.spec("RUL-merge_merges_changed_fingerprint", "RUL-changed_fingerprint_mapping_recorded",
+                  "BLD-fingerprint_map", "RUL-phase_writes_own_records", "BLD-merge_success_sequence",
+                  test="TST-merge_execute-a_new_fingerprint_is_merged_and_mapped_in_merges_package")
+def test_a_new_fingerprint_is_merged_and_mapped_in_merges_package(tmp_path, monkeypatch):
+    """A photo whose fingerprint another ImageMagick changed, the file finalize recorded, is merged; merge's package
+    maps its old value to its new, with both versions and where it was and is, beside the records keyed by the old —
+    which, geotag's among them, are copied or read, never rewritten. A photo whose value held maps nothing."""
+    import tarfile
+    ws, lib = _ws(tmp_path, [_changed_under_new_engine({"fp": "A", "dest": "Trip", "final_name": "a.jpg"}, "A2"),
+                             {"fp": "B", "dest": "Trip", "final_name": "b.jpg"}])
+    monkeypatch.setattr(merge, "get_imagemagick_version", lambda: "newer")
+    complete_before = open(_ctl(ws, "photos-26-complete-log.json"), "rb").read()
+    finalized_before = open(_ctl(ws, "photos-26-finalized-media.json"), "rb").read()
+    assert merge._run_locked_workflow("plan", str(ws)) == 0
+    assert merge._run_locked_workflow("execute", str(ws)) == 0
+    assert utils.is_sealed(str(ws))
+    a_lib = os.path.join(str(lib), "Trip", "a.jpg")
+    fmap = json.loads(open(_ctl(ws, "photos-35-fingerprint-map.json")).read())
+    assert fmap["photos"] == {"A2": {"was": {"content_fingerprint": "A", "image_engine_version": None},
+                                     "now": {"content_fingerprint": "A2", "image_engine_version": "newer"},
+                                     "from": "6-photos-by-dest/Trip/a.jpg", "library_path": a_lib}}
+    log = json.loads(open(_ctl(ws, "photos-35-merge-log.json")).read())
+    assert log["photos"]["A"]["library_path"] == a_lib and "A2" not in log["photos"]    # keyed by prep's value
+    assert open(_ctl(ws, "photos-26-complete-log.json"), "rb").read() == complete_before
+    assert open(_ctl(ws, "photos-26-finalized-media.json"), "rb").read() == finalized_before
+    manifest = json.loads(open(_ctl(ws, "photos-35-archive-manifest.json")).read())
+    assert "photos-35-fingerprint-map.json" in manifest["contents"]
+    with tarfile.open(_ctl(ws, "photos-35-archive.tar.gz")) as tar:
+        assert ".photos-ingest/photos-35-fingerprint-map.json" in tar.getnames()
+
+
+@pytest.mark.spec("BLD-fingerprint_map", "BLD-changed_fingerprint_mapped", "RUL-replan_carries_placed",
+                  "RUL-changed_fingerprint_mapping_recorded",
+                  test="TST-merge_execute-a_photo_merged_under_a_new_fingerprint_is_carried_forward_by_it")
+def test_a_photo_merged_under_a_new_fingerprint_is_carried_forward_by_it(tmp_path, monkeypatch):
+    """A partial merge moved a photo under its new value; the re-plan finds it in the library by that value, carries
+    it forward, and the merge that finishes maps it."""
+    ws, lib = _ws(tmp_path, [_changed_under_new_engine({"fp": "A", "dest": "Trip", "final_name": "a.jpg"}, "A2"),
+                             {"fp": "B", "dest": "Trip", "final_name": "b.jpg"}],
+                  library_files=[{"fp": "FAIL", "dest": "Trip", "name": "b.jpg"}])
+    monkeypatch.setattr(merge, "get_imagemagick_version", lambda: "newer")
+    assert merge._run_locked_workflow("plan", str(ws)) == 2
+    assert merge._run_locked_workflow("execute", str(ws)) == 3          # a moved, b blocked
+    assert not os.path.exists(_src(ws, "Trip", "a.jpg"))
+    open(os.path.join(str(lib), "Trip", "b.jpg"), "wb").write(_fp_bytes("OTHER"))
+    assert merge._run_locked_workflow("plan", str(ws)) == 0
+    [a] = [f for d in json.loads(open(_ctl(ws, "photos-30-merge-plan.json")).read())["destinations"].values()
+           for f in d["files"] if f["content_fingerprint"] == "A"]
+    assert a["carried_from_plan"] and a["engine_mapping"]["now"]["content_fingerprint"] == "A2"
+    assert merge._run_locked_workflow("execute", str(ws)) == 0
+    fmap = json.loads(open(_ctl(ws, "photos-35-fingerprint-map.json")).read())
+    assert list(fmap["photos"]) == ["A2"]
+
+
 def _rows(db, skip=()):
     """{table: sorted rows} of every table in the SQLite file `db` but those in `skip`."""
     import sqlite3
