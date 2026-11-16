@@ -303,7 +303,7 @@ one of places, and this is the one place the tool can hold it to that.
 :status: ruled
 :forced: no
 :follows_from: RAT-country_said_not_guessed, RAT-tracks_kept_with_workspace
-:justifies: RUL-zone_table_host_first, RUL-zone_table_zone_known, RUL-zone_table_download_on_word, RUL-zone_table_download_where_missing, RUL-zone_table_refusal_told, RUL-zone_table_asked_once, RUL-zone_table_downloaded_once, RUL-zone_table_copy_kept, RUL-zone_table_never_stops_prep, RUL-zone_table_checked, RUL-zone_table_failure_told, RUL-zone_table_request_bare, RUL-zone_table_restales_plan
+:justifies: RUL-zone_table_host_first, RUL-zone_table_zone_known, RUL-zone_table_download_on_word, RUL-zone_table_download_where_missing, RUL-zone_table_refusal_told, RUL-zone_table_asked_once, RUL-unreadable_zone_table_record_stops, RUL-zone_table_downloaded_once, RUL-zone_table_copy_kept, RUL-zone_table_never_stops_prep, RUL-zone_table_checked, RUL-zone_table_failure_told, RUL-zone_table_request_bare, RUL-zone_table_restales_plan
 
 A country is picked from the zone database's own list, and some hosts' zone databases ship without it: there the
 choice of a country would be refused. The owner asked: *"can we use OS one if available and some sort of master copy
@@ -314,7 +314,9 @@ zones are read from, and where it has one nothing is asked. Fetching is new for 
 reaches the network, so it is done only on the user's word, asked once when the workspace is made, carrying nothing
 of the workspace or its user; the answer is kept so the question is not asked again, and the table fetched is kept
 with the records — a choice of country rests on it, and a sealed workspace must show what it rested on, as it does the
-track points. A table fetched is only taken whole and well formed; a failed fetch, a refusal or no one there to answer
+track points. A kept answer that cannot be read is not no answer: taken for none, the question would come back, the
+answer would be written over, and the table in use would change with no one told why — so the run stops on it, named,
+as on the other records the workspace keeps. A table fetched is only taken whole and well formed; a failed fetch, a refusal or no one there to answer
 leaves the carried copy in use, said aloud, for the question matters only to a choice of country and must never stop
 prep. A zone the host cannot read is no country's, whichever table names it. And a choice made from one table may be
 wrong by another, so the plan names the table it was made from: another one makes it stale, as a changed decision

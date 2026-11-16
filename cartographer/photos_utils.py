@@ -298,12 +298,31 @@ def check_zone_table_text(zone_tab, iso3166_tab) -> None:
             raise ValueError(f"{name} holds no row")
 
 
-def _download_zone_archive(url, timeout) -> bytes:
-    """The bytes at `url`, at most ZONE_TABLE_MAX_BYTES of them — the one network access of the tool. The seam the
-    tests replace: no test reaches the network."""
+def _https_only_opener():
+    """An opener of the standard library that follows a redirect only to another `https` address, refusing any other
+    (BLD-zone_table_download): the download stays over HTTPS wherever the server sends it."""
+    import urllib.error
+    import urllib.parse
     import urllib.request
+
+    class HttpsOnlyRedirect(urllib.request.HTTPRedirectHandler):
+        def redirect_request(self, req, fp, code, msg, headers, newurl):
+            if urllib.parse.urlsplit(newurl).scheme.lower() != "https":
+                raise urllib.error.HTTPError(newurl, code, f"redirected to {newurl}, which is not HTTPS; refused",
+                                             headers, fp)
+            return super().redirect_request(req, fp, code, msg, headers, newurl)
+    return urllib.request.build_opener(HttpsOnlyRedirect)
+
+
+def _download_zone_archive(url, timeout) -> bytes:
+    """The bytes at `url`, at most ZONE_TABLE_MAX_BYTES of them — the one network access of the tool, over HTTPS
+    only, a redirect elsewhere refused. The seam the tests replace: no test reaches the network."""
+    import urllib.parse
+    import urllib.request
+    if urllib.parse.urlsplit(url).scheme.lower() != "https":
+        raise ValueError(f"{url} is not an HTTPS address; refused")
     req = urllib.request.Request(url, headers={"User-Agent": ZONE_TABLE_USER_AGENT})
-    with urllib.request.urlopen(req, timeout=timeout) as r:
+    with _https_only_opener().open(req, timeout=timeout) as r:
         data = r.read(ZONE_TABLE_MAX_BYTES + 1)
     if len(data) > ZONE_TABLE_MAX_BYTES:
         raise ValueError(f"the archive is larger than {ZONE_TABLE_MAX_BYTES} bytes")
@@ -340,15 +359,36 @@ def fetch_zone_table(url=ZONE_TABLE_URL) -> dict:
 
 def read_zone_table_record(ws) -> dict:
     """The workspace's answer to the question of the table and the copy it downloaded, or None where none is
-    recorded or the record cannot be read as one."""
+    recorded. One that is there and cannot be read as one raises ValueError naming it: it is never taken for no answer
+    (RUL-unreadable_zone_table_record_stops)."""
     if not ws:
         return None
-    try:
-        with open(zone_table_path(ws), encoding="utf-8") as f:
-            rec = json.load(f)
-    except (OSError, ValueError):
+    p = zone_table_path(ws)
+    if not os.path.lexists(p):
         return None
-    return rec if isinstance(rec, dict) and rec.get("download") in ("accepted", "declined") else None
+    try:
+        with open(p, encoding="utf-8") as f:
+            rec = json.load(f)
+        if not isinstance(rec, dict) or rec.get("download") not in ("accepted", "declined"):
+            raise ValueError("it holds no answer, accepted or declined")
+    except (OSError, ValueError) as e:
+        raise ValueError(f"{ZONE_TABLE_ARTIFACT} cannot be read ({e}); the answer to whether to download the table "
+                         "of countries, and the copy downloaded, would be taken for none. Restore it, or move it out "
+                         f"of {CONTROL_DIR}/ to be asked again.")
+    return rec
+
+
+def zone_table_record_error(ws):
+    """Why the workspace's record of the table of countries cannot be read, naming it — None where it can, where there
+    is none, or where the host has its own table and so it is not read (RUL-unreadable_zone_table_record_stops,
+    BLD-zone_table_question)."""
+    if host_has_zone_table():
+        return None
+    try:
+        read_zone_table_record(ws)
+    except ValueError as e:
+        return str(e)
+    return None
 
 
 def _workspace_zone_copy(ws):
@@ -407,8 +447,14 @@ def country_table(ws=None) -> dict:
 
 def zone_table_question_pending(ws) -> bool:
     """Whether the question of downloading the table of countries is still to be asked of this workspace: the host has
-    no table of its own and no answer is recorded (RUL-zone_table_asked_once)."""
-    return not host_has_zone_table() and read_zone_table_record(ws) is None
+    no table of its own and no answer is recorded (RUL-zone_table_asked_once). A record there that cannot be read is
+    not none: the run that reads it stops on it (RUL-unreadable_zone_table_record_stops), nothing asked."""
+    if host_has_zone_table():
+        return False
+    try:
+        return read_zone_table_record(ws) is None
+    except ValueError:
+        return False
 
 
 def add_zone_table_argument(parser) -> None:
@@ -1550,8 +1596,9 @@ def _prep_own_work(ws, plan, journal, work, cur):
 
     def apply(ch):
         src, exp = ch["from"], ch["exp"]
-        if src in cur:
-            return False                                  # still where it was, or another file there now
+        if src in cur or (exp[2] is None and os.path.lexists(os.path.join(ws, src))):
+            return False                                  # still where it was, or another file there now — in the
+                                                          # inbox, which the entries leave out, seen on disk
         hits = [(p, fp) for p, fp in ch["places"] if p in cur and p not in work and cur[p][:2] == exp[:2]
                 and (exp[2] is None or cur[p][2] == exp[2])]
         if len(hits) != 1 or (exp[2] is not None and src not in work):
@@ -1665,8 +1712,9 @@ def recognise_interrupted_work(ws: str, record_id, record: dict, current: dict):
 
 
 def forget_in_workspace_record(ws: str, prefixes) -> None:
-    """Take out of the record every file under each folder in `prefixes` (workspace-relative) — what a quarantine prune
-    removes, so the next check does not take it for a change (RUL-quarantine_changed_only_by_prune). No record, no-op."""
+    """Take out of the record every file under each folder in `prefixes` (workspace-relative) that is no longer on disk
+    — what a quarantine prune removed, all of the folder or, cut short, part of it — so the next check does not take it
+    for a change (RUL-quarantine_changed_only_by_prune). No record, no-op."""
     if read_workspace_record(ws)[0] is None:
         return
     conn = sqlite3.connect(db_path(ws))
@@ -1674,7 +1722,10 @@ def forget_in_workspace_record(ws: str, prefixes) -> None:
         with conn:
             for pre in prefixes:
                 pre = pre.rstrip("/") + "/"
-                conn.execute("DELETE FROM workspace_record WHERE substr(relative_path, 1, ?) = ?", (len(pre), pre))
+                rels = [r for (r,) in conn.execute("SELECT relative_path FROM workspace_record "
+                                                   "WHERE substr(relative_path, 1, ?) = ?", (len(pre), pre))]
+                conn.executemany("DELETE FROM workspace_record WHERE relative_path = ?",
+                                 [(r,) for r in rels if not os.path.lexists(os.path.join(ws, r))])
     finally:
         conn.close()
 
@@ -3096,10 +3147,23 @@ def photos_without_position(handoff, plan):
     plan clears it (a `gps_marker_write` emptying `GPSLatitude`), else the one its handoff record holds — prep's reading
     of the photo — judged by the one own-position test (BLD-own_position_test), so latitude 0 and longitude 0 is none.
     A record is joined to the plan's operations by its content fingerprint, which a metadata write and geotag's rename
-    leave as it was — by its path only where it holds none. Read from the records, never by a tool run on a photo: finalize runs none
-    (RUL-finalize_needs_no_metadata_tool). Their paths as the handoff records them, sorted."""
+    leave as it was — by the path the plan was built on where it holds none, or where another record holds the same one
+    (a photo copied into two destinations, which prep keeps both of). Read from the records, never by a tool run on a
+    photo: finalize runs none (RUL-finalize_needs_no_metadata_tool). Their paths as the handoff records them, sorted."""
     by_dest = folder_name('photos_by_dest')
-    written = {}                                # fingerprint or path -> (lat, lon) the plan leaves, or None
+    records = []
+    for rec in (handoff or {}).get("files") or []:
+        if rec.get("folder_class") != by_dest or rec.get("media_class") not in ("image", "raw"):
+            continue
+        try:
+            fp = json.loads(rec.get("content_hash")).get("value")
+        except Exception:
+            fp = None
+        records.append((rec, fp))
+    held = {}
+    for _rec, fp in records:
+        held[fp] = held.get(fp, 0) + 1
+    written = {}                                # ("fp", fingerprint) or ("path", path) -> (lat, lon) left, or None
     for dd in ((plan or {}).get("destinations") or {}).values():
         for op in dd.get("operations") or []:
             w = op.get("writes") or {}
@@ -3109,19 +3173,14 @@ def photos_without_position(handoff, plan):
                 pos = None
             else:
                 continue
-            key = (op.get("preconditions") or {}).get("content_fingerprint") or op.get("relative_path")
-            if pos is not None or key not in written:     # a position written outranks a clear
-                written[key] = pos
+            fp = (op.get("preconditions") or {}).get("content_fingerprint")
+            for key in ((("fp", fp),) if fp else ()) + (("path", op.get("relative_path")),):
+                if pos is not None or key not in written:     # a position written outranks a clear
+                    written[key] = pos
     out = []
-    for rec in (handoff or {}).get("files") or []:
-        if rec.get("folder_class") != by_dest or rec.get("media_class") not in ("image", "raw"):
-            continue
+    for rec, fp in records:
         rel = rec.get("relative_path")
-        try:
-            fp = json.loads(rec.get("content_hash")).get("value")
-        except Exception:
-            fp = None
-        key = fp if fp else rel
+        key = ("fp", fp) if fp and held[fp] == 1 else ("path", rel)
         if key in written:
             pos = written[key]
         else:

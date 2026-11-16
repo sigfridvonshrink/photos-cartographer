@@ -174,7 +174,8 @@ def test_a_culled_photo_passes_and_is_named_in_the_log(tmp_path, monkeypatch):
     ("3-redundant-jpgs", "deleted"), ("2-missing-metadata", "removed"), ("1-strays", "removed"),
     (".photos-ingest-quarantine/run-1", "removed")])
 @pytest.mark.spec("RUL-culling_passes", "RUL-unexpected_change_stops", "RUL-change_told_by_entries",
-                  "BLD-workspace_check", test="TST-workspace_check-a_deletion_is_culling_only_where_a_person_culls")
+                  "RUL-check_covers_media_folders", "BLD-workspace_check",
+                  test="TST-workspace_check-a_deletion_is_culling_only_where_a_person_culls")
 def test_a_deletion_is_culling_only_where_a_person_culls(tmp_path, folder, kind):
     """A file gone from photos by date or by destination, videos by date or the redundant JPEGs is culling, allowed;
     gone from missing metadata, the strays or the quarantine it is a change no person is expected to make."""
@@ -304,7 +305,7 @@ _UNEXPECTED = ["changed", "replaced", "appeared", "missing_metadata_removed", "s
 
 @pytest.mark.parametrize("how", _UNEXPECTED)
 @pytest.mark.spec("RUL-unexpected_change_stops", "RUL-workspace_checked_first", "RUL-change_told_by_entries",
-                  "BLD-workspace_check", "BLD-exit_statuses",
+                  "RUL-check_covers_media_folders", "BLD-workspace_check", "BLD-exit_statuses",
                   test="TST-workspace_check-an_unexpected_change_stops_naming_the_file")
 def test_an_unexpected_change_stops_naming_the_file(tmp_path, monkeypatch, how):
     """A photo changed in place, or another put at its path; a file appearing outside the inbox; one gone from
@@ -562,6 +563,28 @@ def test_maintenance_commands_do_not_check(tmp_path, monkeypatch):
     assert rc == 0 and stop is None, said
 
 
+@pytest.mark.spec("RUL-quarantine_changed_only_by_prune", "BLD-workspace_record",
+                  test="TST-workspace_check-a_prune_cut_short_is_no_change")
+def test_a_prune_cut_short_is_no_change(tmp_path, monkeypatch):
+    """A prune whose removal of a run folder stops midway — the duplicate gone, its manifest left — takes what it
+    removed out of the record all the same: the next plan goes on."""
+    ws, q = _with_quarantine(monkeypatch, tmp_path)
+
+    def cut_short(path, *a, **kw):
+        os.remove(q)
+        raise OSError("the disk said no")
+    monkeypatch.setattr(shutil, "rmtree", cut_short)
+    monkeypatch.chdir(ws)
+    with use_reporter(Reporter([CaptureSink()])):
+        with pytest.raises(OSError):
+            prep.prune_quarantine(str(ws), do_delete=True, prune_all=True)
+    monkeypatch.undo()
+    _install(monkeypatch)
+    assert not os.path.exists(q) and glob.glob(str(ws / ".photos-ingest-quarantine" / "*" / "manifest.json"))
+    rc, said, stop = _prep(monkeypatch, ws, "plan")
+    assert rc == 0 and stop is None, said
+
+
 @pytest.mark.no_hand_built_record
 @pytest.mark.spec("BLD-hand_change_is_work", "RUL-prepped_nothing_to_do",
                   test="TST-workspace_check-a_workspace_with_no_record_is_work_for_prep")
@@ -736,6 +759,20 @@ def test_a_hard_killed_merge_execution_is_recognised(tmp_path, monkeypatch):
     assert stop is None and "deleted" not in said, said
     assert [(c["kind"], c["path"]) for c in changes] == [("interrupted_run", f"{BY_DEST}/Trip/a.jpg"),
                                                          ("interrupted_run", f"{BY_DEST}/Trip/b.jpg")]
+
+
+@pytest.mark.spec("RUL-interrupted_work_exact", "RUL-unexpected_change_stops", "BLD-interrupted_run_recognised",
+                  test="TST-workspace_check-a_file_still_in_the_inbox_is_no_work_of_the_killed_run")
+def test_a_file_still_in_the_inbox_is_no_work_of_the_killed_run(tmp_path, monkeypatch):
+    """After a hard kill, a photo the killed run filed from the inbox that is in the inbox again — copied back with its
+    size and time kept — is not gone from where it was: the file at the plan's place is no work of that run, and the
+    command stops naming it."""
+    ws, _rid, moved = _killed_prep(monkeypatch, tmp_path)
+    filed = next(m for m in moved if m.startswith(BY_DATE) and (ws / m).read_bytes() == b"DDDD")
+    shutil.copy2(ws / filed, ws / "0-sources" / "d.jpg")          # back where it was, as `cp -p` leaves it
+    rc, said, stop = _prep(monkeypatch, ws, "plan")
+    assert rc == 2 and stop is not None, said
+    assert filed in "\n".join(stop.lines), stop.lines
 
 
 @pytest.mark.spec("RUL-interrupted_work_exact", "RUL-unexpected_change_stops", "BLD-interrupted_run_recognised",

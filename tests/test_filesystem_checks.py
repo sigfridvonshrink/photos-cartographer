@@ -197,7 +197,7 @@ def test_each_requirement_is_tried_and_the_missing_one_named(tmp_path, monkeypat
 
 
 @pytest.mark.spec("RUL-filesystem_lacking_stops", "RUL-filesystem_lacking_named", "RUL-filesystem_trial_leaves_nothing",
-                  test="TST-filesystem_checks-phases_stop_on_a_missing_requirement")
+                  "RUL-filesystem_requirements_tried", test="TST-filesystem_checks-phases_stop_on_a_missing_requirement")
 @pytest.mark.parametrize("phase", ["prep-first", "prep", "geotag", "merge"])
 def test_a_phase_stops_on_a_missing_requirement_before_its_lock(tmp_path, monkeypatch, capsys, phase):
     """A filesystem without locks stops each phase naming them — never read as a run in progress — and leaves the

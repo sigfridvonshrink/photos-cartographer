@@ -1040,7 +1040,7 @@ photo, to proceed without it.
 plan is executed, by `has_own_position` ({need}`BLD-own_position_test`) of the position it holds: the one its
 `metadata_gps_write` wrote, none where a `gps_marker_write` emptied `GPSLatitude`, else the `GPSLatitude` and
 `GPSLongitude` its handoff record holds — a record joined to the plan's operations by its content fingerprint, by its
-path only where it holds none — so read without running a tool on a photo. `geotag finalize` refuses, writing nothing,
+path only where it holds none or another record under `6-photos-by-dest` holds the same — so read without running a tool on a photo. `geotag finalize` refuses, writing nothing,
 while it names any; merge's preflight, from the current handoff and `photos-24-executable-plan.json`, gathers a blocker
 for them.
 :::

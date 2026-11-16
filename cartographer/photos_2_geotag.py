@@ -48,7 +48,7 @@ import zoneinfo
 from datetime import datetime, timedelta, timezone
 
 from .photos_utils import (fingerprint_method_blocker, links_under, replace_durably,
-    country_table,
+    country_table, zone_table_record_error,
     zone_table,
     code_fingerprint,
     CONFIG, CONTROL_DIR, control_dir, FINALIZED_MEDIA_ARTIFACT, finalized_media_path, workspace_volume_error, workspace_filesystem_error, config_path, handoff_path, guard_path, is_sealed, likely_new_dump,
@@ -3837,6 +3837,13 @@ def run(args):
         # The workspace as the last execution left it (RUL-workspace_checked_first), before anything else is read.
         workspace_changes = _check_workspace(args, workspace_root) if args.command in ("plan", "execute", "finalize") \
             else []
+        # The record of the table of countries, where the host has none of its own, read for the plan and its
+        # staleness: one that cannot be read stops the run, naming it, before anything changes
+        # (RUL-unreadable_zone_table_record_stops).
+        zone_err = zone_table_record_error(workspace_root)
+        if zone_err:
+            reporter.error(f"\n{zone_err} Nothing was changed.")
+            sys.exit(2)
         # BLD-geotag_auto_reprep: auto re-prep a clean by-dest move so the operator can go straight to geotag — prep's
         # plan and execute run inside this run's lock; the _check_reprep_gate below re-validates after.
         _auto_reprep_for_clean_move(args, workspace_root, reporter)

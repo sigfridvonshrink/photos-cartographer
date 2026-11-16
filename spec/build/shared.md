@@ -22,7 +22,7 @@ records, `photos-1-prep`, `photos-2-geotag` and `photos-3-merge`.
 Prep's plan, dry run, execute and `prune-quarantine`, and geotag's and merge's commands, SHALL exit 0 for a run that did what it was
 asked; 1 for a workspace or a library found locked; 2 for a refusal — no control directory, the seal, a change in the
 workspace no command made and none a person is expected to make, a workspace whose state no execution recorded (geotag's
-and merge's), a record of accepted changes it cannot read, a precondition,
+and merge's), a record of accepted changes or of the answer about the table of countries it cannot read, a precondition,
 a required tool absent, a plan missing, stale or failing its checks, a plan of prep's own it cannot read, a plan or
 journal of merge's own it cannot read, a workspace database of another schema, a required snapshot not taken, a
 prune's selection refused, and a plan, or a dry run, that reports a blocker; 3 for an execution that ended partial or failed — an operation failed, or
@@ -1587,8 +1587,9 @@ in `.photos-ingest-quarantine/` whole but the `.tmp-` files of a manifest's rewr
 before its database image, or in its `finally` once its operations have begun; geotag's `execute_plan` in a `finally`
 once it begins applying photos, each written or renamed photo's fingerprint carried from the path it was planned under;
 merge's `execute_plan` in a `finally` once its moves have begun, before its summary, database image and seal. A prune
-that deletes takes the run folders it removed out of the record (`forget_in_workspace_record`), the workspace not
-sealed. No plan, dry run or finalize writes it.
+that deletes takes out of the record every file under the run folders it removes that is no longer on disk
+(`forget_in_workspace_record`), in a `finally`, so a removal cut short midway is taken out as far as it went, the
+workspace not sealed. No plan, dry run or finalize writes it.
 :::
 
 :::{bld} Recognising the work of an execution killed before its record
@@ -1605,8 +1606,8 @@ record's id is therefore an execution begun since that record and never recorded
 or `photos-30`, or the version a re-plan kept under `-NNN` — and its journal `journal-<plan id>.json`, and takes into
 the record it compares with, over a copy of it: for prep, each file its move, rename and quarantine operations take,
 followed through them in plan order, found at exactly one place they take it with the recorded file's size, time and
-inode — or, from the inbox, the plan's preconditioned size and time — gone from where it was and at a place no recorded
-file holds, and `<quarantine>/<plan id>/manifest.json` where it holds only entries of the plan's quarantine operations;
+inode — or, from the inbox, the plan's preconditioned size and time — gone from where it was (an inbox path looked
+for on disk, the inbox being in no record) and at a place no recorded file holds, and `<quarantine>/<plan id>/manifest.json` where it holds only entries of the plan's quarantine operations;
 for geotag, each photo whose rename target (or own path) the journal's `media_after` notes, found there with exactly
 that size and time, gone from its recorded path where renamed; for merge, each photo of the plan gone from photos by
 destination that the journal confirms, or whose `library_target` has its recorded size and time. Each is returned as
@@ -1664,6 +1665,7 @@ The check SHALL print the changes it passes, `sorted` aside, and those accepted,
 `from`, the `accepted` code, an interrupted run's `phase` and `plan_id` and, where the record holds one, the
 `content_fingerprint` — for the execution's record:
 prep's execute adds them, each with its `run`, to `workspace_changes` of `photos-15-prep-log.json`, after the earlier
-runs'; geotag's execute writes them as `workspace_changes` of `photos-25-execution-summary.json`, merge's as
+runs' — an execute that ends short of writing its log adds them there, the rest of the log as it was, before it records
+the state it leaves; geotag's execute writes them as `workspace_changes` of `photos-25-execution-summary.json`, merge's as
 `workspace_changes` of `photos-31-merge-summary.json`. A plan, a dry run and finalize print them.
 :::
