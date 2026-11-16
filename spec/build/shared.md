@@ -1420,6 +1420,34 @@ workspace lock and have found the workspace not sealed against them ({need}`BLD-
 found elsewhere, report it and exit 2.
 :::
 
+:::{bld} The workspace's filesystem type, from the mount table
+:id: BLD-local_filesystem_types
+:status: ruled
+:realises: RUL-workspace_local_filesystem, RUL-local_filesystem_checked_first, RUL-not_local_stops, RUL-not_local_named
+
+`filesystem_type` SHALL read `/proc/self/mountinfo`, or else `/proc/mounts`, and take the type of the mount whose
+point is the longest prefix of the workspace's real path, the later listed of two at one point; `local_filesystem_error`
+accepts the types of `LOCAL_FILESYSTEM_TYPES` — `ext2`, `ext3`, `ext4`, `xfs`, `btrfs`, `zfs`, `f2fs`, `bcachefs`,
+`jfs`, `reiserfs`, `nilfs2`, `tmpfs`, `ramfs` and `overlay` — and refuses any other, naming it, and a system with no
+mount table to read. `workspace_filesystem_error` asks it, then tries the requirements ({need}`BLD-filesystem_trial`):
+prep's and geotag's `run`, merge's plan, dry run, execution and in-workspace `init-library`, and the editor's start and
+save, call it before they take the workspace's or the editor's lock — geotag, merge and the editor once they have found
+the workspace — and on a refusal report it and exit 2, the editor's save refused.
+:::
+
+:::{bld} The filesystem's requirements, tried on scratch files
+:id: BLD-filesystem_trial
+:status: ruled
+:realises: RUL-filesystem_requirements_tried, RUL-filesystem_lacking_stops, RUL-filesystem_lacking_named, RUL-filesystem_trial_leaves_nothing
+
+`filesystem_lacks` SHALL make a folder of its own, `.photos-fs-trial-` and a random suffix, in the folder it is given,
+and try in it, in order, each requirement asked: an exclusive non-blocking `flock` taken and let go; `os.replace` onto
+a taken name; `_rename_no_clobber_same_fs` refusing a taken name, both files left as they were, and moving to a free
+one; `fsync` of a file; `fsync` of the folder — returning the first that fails or raises, then removing its folder and
+putting back the given folder's modification time. The workspace's are all five, tried in the control directory, or in
+the workspace itself on a first prep run, before the control directory is made.
+:::
+
 :::{bld} Only merge's moves fall back to a copy
 :id: BLD-cross_fs_merge_only
 :status: ruled

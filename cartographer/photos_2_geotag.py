@@ -50,7 +50,7 @@ from datetime import datetime, timedelta, timezone
 from .photos_utils import (fingerprint_method_blocker, links_under, replace_durably,
     country_table,
     code_fingerprint,
-    CONFIG, CONTROL_DIR, control_dir, FINALIZED_MEDIA_ARTIFACT, finalized_media_path, workspace_volume_error, config_path, handoff_path, guard_path, is_sealed, likely_new_dump,
+    CONFIG, CONTROL_DIR, control_dir, FINALIZED_MEDIA_ARTIFACT, finalized_media_path, workspace_volume_error, workspace_filesystem_error, config_path, handoff_path, guard_path, is_sealed, likely_new_dump,
     validate_config, load_config, sha256_file, sha256_text, media_class_for_ext, folder_name,
     folders_fingerprint, media_extensions_fingerprint,
     selected_gpx_root, NO_IDENTITY_KEY, has_own_position, photos_without_position,FIELD_SET_VERSION, CAMERA_GROUP_KEY_VERSION, FOLDER_ROLES,
@@ -3636,6 +3636,13 @@ def run(args):
     if not os.path.isdir(control_dir(workspace_root)):
         reporter.error(f"Not an initialized workspace (no {CONTROL_DIR}/) — run prep first: "
                        "`photos-cartographer prep plan` then `photos-cartographer prep execute`. Nothing was created.")
+        sys.exit(2)
+
+    # The workspace's filesystem, before anything else is done, the lock included (RUL-local_filesystem_checked_first,
+    # RUL-filesystem_requirements_tried).
+    fs_err = workspace_filesystem_error(workspace_root)
+    if fs_err:
+        reporter.error(fs_err)
         sys.exit(2)
 
     # Whole-run workspace lock (RUL-one_workspace_lock, RUL-lock_before_reading): one lock across every phase, taken

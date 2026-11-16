@@ -98,8 +98,9 @@ the destination inherits it from a folder above; zones you wrote by hand stay. Y
 
 ## 2. Initialize a workspace and run prep
 
-Pick an empty working folder (separate from your permanent library) on a single filesystem — every
-phase refuses a workspace with a folder mounted from another volume — and drop your raw dump into it.
+Pick an empty working folder (separate from your permanent library) on a single, local filesystem — every
+phase refuses a workspace with a folder mounted from another volume, and one on a network share or a FAT/exFAT
+card — and drop your raw dump into it. (The library may live on a network share.)
 Then plan:
 
 ```bash

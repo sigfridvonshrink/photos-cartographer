@@ -559,6 +559,12 @@ run the command again.
   `0-sources/`, or out), a symbolic link among the files (put the file itself there), a managed folder
   missing (put an empty folder back under its name). Prep checks this before it scans anything.
 - *A folder of the workspace lies on another filesystem* — keep the whole workspace on one.
+- *The workspace is not on a local filesystem* — a network share (NFS, SMB, sshfs) or a kind cartographer does not
+  know to be local (a FAT or exFAT card among them): the stop names its type; move the workspace onto a local disk.
+  The known kinds are ext2/3/4, xfs, btrfs, zfs, f2fs, bcachefs, jfs, reiserfs, nilfs2, tmpfs, ramfs and overlay.
+- *The workspace's filesystem fails at something cartographer needs of it* — file locks, an atomic rename, a move
+  that refuses a name already taken, or syncing a file or a folder to disk. Every run tries them first, on scratch
+  files it removes, and the stop names the one that failed. The decision editor's save checks both as well.
 - *The configuration* lacks a setting, holds one cartographer does not know, or holds an invalid value.
 
 **Prep** — a track file anywhere among the media (keep tracks under `gpx_root`); an editing sidecar
@@ -593,7 +599,14 @@ back into `5-photos-by-date/`, then run `prep plan`, `prep execute` and `geotag 
 the photos; a photo with no fingerprint; a library folder without its mark (run `merge init-library`), or
 inside a workspace. One photo whose picture the library already holds with other metadata is held back
 alone, both files named: replace the library's copy with it and plan again, or take it out of
-`6-photos-by-dest/` and redo prep and geotag.
+`6-photos-by-dest/` and redo prep and geotag. A library whose filesystem fails at a lock, a move that refuses a
+taken name or a sync stops it, named — tried in the library at each start. The library may be on a network share;
+its lock may then hold back only the merges of one machine, so never run merges from two machines into one library
+at once (at worst a photo fails, or lands twice under two names — never one overwritten).
+
+**Merge execute** — a library on another filesystem than the workspace with less free space than the photos still to
+move: the stop names both, and nothing moves (merge plan warns of it already). On one filesystem a move is a rename
+and needs no room.
 
 ---
 

@@ -38,6 +38,30 @@ holding a position ({need}`BLD-no_photo_unplaced`). Any
 blocker ends the run with exit status 2 before the library lock, the plan or the summary. It stops, too, on a photo in `6-photos-by-dest` whose handoff record holds no fingerprint and on any hidden file or folder there, each named.
 :::
 
+:::{bld} The library's filesystem, tried before its lock
+:id: BLD-library_trial
+:status: ruled
+:realises: RUL-library_requirements_tried, RUL-library_lacking_stops, RUL-library_lacking_named, RUL-library_network_allowed
+:uses: BLD-filesystem_trial
+
+Merge's plan, dry run and execute SHALL, after the preflight and the workspace's check and before `LibraryLock`, call
+`library_filesystem_error`, which tries through `filesystem_lacks`, in `library_root`, the lock, the move that refuses a
+taken name and the two syncs, and checks no filesystem type; one failing stops the run with exit status 2, naming it.
+:::
+
+:::{bld} The library's free space against the photos still to move
+:id: BLD-library_space
+:status: ruled
+:realises: RUL-library_space_checked, RUL-library_space_short_stops, RUL-library_space_short_named, RUL-library_space_warned_at_plan
+
+`_space_shortfalls` SHALL total the size of each photo of the plan placed new or renamed whose copy is still in
+photos by destination and whose place is free, by the filesystem of the nearest existing folder of its place, leaving
+out the workspace's own; and compare each total with that filesystem's free space as `shutil.disk_usage` gives it,
+naming the library where it lies there. Execute calls it after revalidating the plan and reading the journal, before
+the snapshots, and a shortfall stops it with exit status 2, no summary written; the plan calls it once written,
+warning of each.
+:::
+
 ## 3. Configuration and validation
 
 :::{bld} `init-library`'s four cases

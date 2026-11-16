@@ -113,6 +113,96 @@ Merge SHALL NOT plan, dry-run or execute while ImageMagick, by which it fingerpr
 :::
 
 
+:::{rul} What merge needs of the library's filesystem is tried at its start
+:id: RUL-library_requirements_tried
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+:refines: RUL-filesystem_agnostic
+:uses: DEF-merge, DEF-library, RUL-library_confirmed_before_lock
+
+Merge's plan, dry run and execution SHALL try on the library's filesystem its lock, the move that fails where its
+target exists, and syncing a file and a folder — once the library's mark has confirmed it, and before its lock is
+taken.
+:::
+
+:::{rul} A library's filesystem lacking one stops merge
+:id: RUL-library_lacking_stops
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+:refines: RUL-library_requirements_tried
+
+A library whose filesystem fails at one of them SHALL stop merge with nothing changed.
+:::
+
+:::{rul} The stop names what the library's filesystem lacks
+:id: RUL-library_lacking_named
+:status: ruled
+:criticality: med
+:verify: required
+:refines: RUL-library_lacking_stops
+
+The report of a library whose filesystem fails at a requirement SHALL name the requirement.
+:::
+
+:::{rul} A library may lie across a network
+:id: RUL-library_network_allowed
+:status: ruled
+:criticality: med
+:anti: yes
+:verify: required
+:uses: DEF-merge, DEF-library
+
+Merge SHALL NOT refuse a library for the kind of filesystem it lies on, a network filesystem among them, while that
+filesystem does what merge needs of it.
+:::
+
+:::{rul} A library on another filesystem is checked for room before anything moves
+:id: RUL-library_space_checked
+:status: ruled
+:criticality: med
+:verify: required
+:uses: DEF-merge, DEF-library
+
+Where the library lies on another filesystem than the workspace, merge's execution SHALL compare, before its first
+move, the library's free space with the total size of the photos it is about to move into it.
+:::
+
+:::{rul} A library short of room stops the execution
+:id: RUL-library_space_short_stops
+:status: ruled
+:criticality: med
+:anti: yes
+:verify: required
+:refines: RUL-library_space_checked
+
+An execution that finds the library's free space short of the photos it is about to move SHALL stop with nothing
+moved.
+:::
+
+:::{rul} The stop names the room needed and the room free
+:id: RUL-library_space_short_named
+:status: ruled
+:criticality: low
+:verify: required
+:refines: RUL-library_space_short_stops
+
+The report of a library short of room SHALL name the space the photos need and the space free.
+:::
+
+:::{rul} Merge's plan warns of a library short of room
+:id: RUL-library_space_warned_at_plan
+:status: ruled
+:criticality: low
+:verify: required
+:refines: RUL-library_space_checked
+
+Merge's plan SHALL warn of a library its execution would find short of room, the plan written all the same.
+:::
+
 ## 4. Destination-to-library mapping
 
 :::{rul} The library mirrors the destination tree

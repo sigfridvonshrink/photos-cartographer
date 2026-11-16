@@ -225,6 +225,8 @@ The whole design exists to safely mutate **irreplaceable originals**. These rule
   a separate explicit command.
 - **No destructive in-place mutation model.** The active scripts work strictly on the plan/validate/execute
   path; never reintroduce the original monolith's destructive in-place mutation approach.
+- **The workspace is local.** Every run refuses a workspace not on a filesystem known to be local — no setting overrides
+  it — and first tries what it needs of the filesystem on scratch files (`RUL-workspace_local_filesystem`).
 - **Idempotent & resumable.** Reruns act on the diff; a crash mid-run is recoverable (prep re-plans from
   the filesystem as truth; geotag resumes its plan and skips applied ops).
 - **The workspace is as the last run left it.** Every execute records the state it leaves (`workspace_record` in

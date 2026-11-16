@@ -3193,6 +3193,15 @@ def run(args):
     # structure, move the base dump into 0-sources, and write the guard last). So prep does NOT
     # hard-require the sentinel here. A SEALED workspace is refused below (after the lock).
 
+    # The workspace's filesystem, before anything else is done — the lock included, which on a filesystem without
+    # locks would read as a run in progress: local (RUL-local_filesystem_checked_first), and doing what cartographer
+    # needs of it (RUL-filesystem_requirements_tried).
+    from .photos_utils import workspace_filesystem_error
+    fs_err = workspace_filesystem_error(workspace_root)
+    if fs_err:
+        reporter.error(fs_err)
+        sys.exit(2)
+
     # Whole-run workspace lock (RUL-lock_before_reading, RUL-lock_fail_fast): acquired once here, before any
     # scan/plan/dry-run/execute, held for the entire run, released on exit. Fail-fast.
     run_lock = WorkspaceLock(workspace_root)
