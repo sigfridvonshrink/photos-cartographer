@@ -170,6 +170,80 @@ class GPXPoint:
         self.segment = segment
 
 
+_EARTH_RADIUS_M = 6371000.0
+_GRID_PER_DEGREE = 200                    # a grid cell is 1/200 degree a side: some 550 m north to south
+_GRID_COLUMNS = 360 * _GRID_PER_DEGREE
+_GRID_MAX_CELLS = 64                      # a point or segment reaching over more cells is looked at from everywhere
+
+
+def _grid_cell(lat, lon):
+    """The grid cell of a place, its longitude in [-180, 180]."""
+    return math.floor(lat * _GRID_PER_DEGREE), math.floor(lon * _GRID_PER_DEGREE) % _GRID_COLUMNS
+
+
+def _grid_enter(cells, i, lat0, lat1, lon0, lon1):
+    """Enter `i` in every cell the box [lat0, lat1] x [lon0, lon1] (degrees; longitude unwrapped) reaches into;
+    False, entering nothing, when that is more than `_GRID_MAX_CELLS`."""
+    r0, r1 = math.floor(lat0 * _GRID_PER_DEGREE), math.floor(lat1 * _GRID_PER_DEGREE)
+    c0, c1 = math.floor(lon0 * _GRID_PER_DEGREE), math.floor(lon1 * _GRID_PER_DEGREE)
+    if (r1 - r0 + 1) * (c1 - c0 + 1) > _GRID_MAX_CELLS:
+        return False
+    for r in range(r0, r1 + 1):
+        for c in range(c0, c1 + 1):
+            hits = cells.setdefault((r, c % _GRID_COLUMNS), [])
+            if not hits or hits[-1] != i:
+                hits.append(i)
+    return True
+
+
+def _on_globe(*pts):
+    return all(math.isfinite(p.lat) and math.isfinite(p.lon) and -90.0 <= p.lat <= 90.0 for p in pts)
+
+
+def _proximity_grid(pts, pt_max, seg_max):
+    """`(cells, wide)` for one track's points in time order: `cells` maps a grid cell to the sorted indices `i`
+    whose point lies within `pt_max` metres — by `haversine` — of some place in the cell, or whose segment to point
+    `i + 1` of the same `<trkseg>` within `seg_max` — by `_point_to_segment` — of one; `wide`, the sorted indices of
+    the points and segments too wide to enter, which every place may touch. Each box is a bound the measure cannot
+    exceed, widened past rounding: a place a point or segment is within reach of is always in a cell it entered."""
+    cells, wide = {}, []
+    widen, pad = 1.001, 1e-7
+    half = pt_max / (2.0 * _EARTH_RADIUS_M)
+    sin_half = math.sin(half) if 0.0 <= half <= math.pi / 2 else None
+    dlat_pt = math.degrees(pt_max / _EARTH_RADIUS_M) * widen + pad
+    dlat_seg = math.degrees(seg_max / _EARTH_RADIUS_M) * widen + pad
+    for i, p in enumerate(pts):
+        ok = sin_half is not None and _on_globe(p)
+        if ok:
+            # haversine within pt_max: the latitudes differ by at most dlat_pt, and
+            # cos(lat1)·cos(lat2)·sin²(Δlon/2) <= sin²(pt_max / 2R), each cosine at least that of |lat| + dlat_pt
+            top = abs(p.lat) + dlat_pt
+            cos_top = math.cos(math.radians(top)) if top < 90.0 else 0.0
+            ok = cos_top > 0.0 and sin_half / cos_top < 1.0
+            if ok:
+                dlon = math.degrees(2.0 * math.asin(sin_half / cos_top)) * widen + pad
+                lon = _wrap_lon(p.lon)
+                ok = _grid_enter(cells, i, p.lat - dlat_pt, p.lat + dlat_pt, lon - dlon, lon + dlon)
+        if not ok:
+            wide.append(i)
+        if i + 1 < len(pts) and pts[i + 1].segment == p.segment:
+            b = pts[i + 1]
+            ok = seg_max >= 0.0 and _on_globe(p, b)
+            if ok:
+                # in the plane about p, a place within seg_max of the segment is within seg_max of a point of it
+                # on each axis: its latitude, and its longitude scaled by cos(p.lat)
+                cos_a = math.cos(math.radians(p.lat))
+                ok = cos_a > 1e-3
+                if ok:
+                    dlon = math.degrees(seg_max / (_EARTH_RADIUS_M * cos_a)) * widen + pad
+                    step, lon = _lon_delta(p.lon, b.lon), _wrap_lon(p.lon)
+                    ok = _grid_enter(cells, i, min(p.lat, b.lat) - dlat_seg, max(p.lat, b.lat) + dlat_seg,
+                                     lon + min(0.0, step) - dlon, lon + max(0.0, step) + dlon)
+            if not ok and (not wide or wide[-1] != i):
+                wide.append(i)
+    return cells, wide
+
+
 _REL = "\x00rel\x00"            # stands for the file's path in a parse's warnings: a parse is of bytes, wherever they lie
 GPX_PARSE_VERSION = "gpx-parse-v3"   # bump when the parse below changes what it yields: a track file kept under
                                      # another version is read and parsed again, as a new entry of the catalogue
@@ -305,6 +379,7 @@ class GPXIndex:
         self.read = 0                      # track files read this build
         self.catalogued = False            # whether this build kept the catalogue over its window
         self._tracks = None
+        self._grids = None                 # (key, [(cells, wide)] per track) — see nearby()
         self._any_points = False
         self.file_sha = {}                 # each track file's SHA-256, by its path under gpx_root
         self.unreadable = []               # [(file, why)] of the track files that could not be read or parsed
@@ -324,6 +399,30 @@ class GPXIndex:
             self._tracks = ((id(self.points), len(self.points)),
                             [(f, pts, [p.time_utc for p in pts]) for (f, _t), pts in sorted(by_track.items())])
         return self._tracks[1]
+
+    def nearby(self, lat, lon, pt_max, seg_max, spans=None):
+        """For each track of `tracks()`, in its order, the sorted indices of its points a photo at (`lat`, `lon`)
+        can touch — a point within `pt_max` metres of it, a segment from one point to the next within `seg_max` —
+        and the indices on either side, within that track's `(lo, hi)` of `spans` (None: all its points); every
+        index left out it touches nothing at. None when the place is no place on the globe: then any index can.
+        Read from a grid of each track's points and segments, built once per radius pair, so an anchor search
+        measures only what passes by the photo's place, not every point of its window (BLD-anchor_matching)."""
+        if not (math.isfinite(lat) and math.isfinite(lon) and -90.0 <= lat <= 90.0):
+            return None
+        tracks = self.tracks()
+        key = (self._tracks[0], pt_max, seg_max)
+        if self._grids is None or self._grids[0] != key:
+            self._grids = (key, [_proximity_grid(pts, pt_max, seg_max) for _f, pts, _t in tracks])
+        cell = _grid_cell(lat, _wrap_lon(lon))
+        out = []
+        for k, (cells, wide) in enumerate(self._grids[1]):
+            lo, hi = spans[k] if spans is not None else (0, len(tracks[k][1]))
+            near = set()
+            for hits in (cells.get(cell, ()), wide):
+                # one index either side of the span: its neighbour inside may be the one touched
+                near.update(hits[bisect.bisect_left(hits, lo - 1):bisect.bisect_right(hits, hi)])
+            out.append(sorted({j for i in near for j in (i - 1, i, i + 1) if lo <= j < hi}))
+        return out
 
     def rank(self, rel):
         """The rank of the track file at `rel` under gpx_root (RUL-tracks_ranked_by_folder): the place of the
@@ -753,12 +852,16 @@ def frame_candidates(frame, gpx, cfg):
     naive_utc = naive.replace(tzinfo=timezone.utc)
     out = []
     tracks = gpx.tracks()
-    for src, pts, times in tracks:
-        # only the stretch of the track inside the window
-        lo = bisect.bisect_left(times, naive_utc - timedelta(seconds=window))
-        hi = bisect.bisect_right(times, naive_utc + timedelta(seconds=window))
+    # only the stretch of each track inside the window
+    spans = [(bisect.bisect_left(times, naive_utc - timedelta(seconds=window)),
+              bisect.bisect_right(times, naive_utc + timedelta(seconds=window))) for _s, _p, times in tracks]
+    # and of it only the points by the place and those either side: at any other point there is no pass to
+    # extend or end, so the walk below does nothing there
+    nearby = gpx.nearby(flat, flon, pt_max, seg_max, spans)
+    for k, (src, pts, times) in enumerate(tracks):
+        lo, hi = spans[k]
         passes, run = [], []                          # a pass: [(gpx time, rank, distance, segment duration)]
-        for i in range(lo, hi):
+        for i in (nearby[k] if nearby is not None else range(lo, hi)):
             p = pts[i]
             d = haversine(flat, flon, p.lat, p.lon)
             near = d <= pt_max
@@ -819,7 +922,13 @@ def _frame_skip_reason(frame, gpx, cfg):
     if ng.get("lat") is None or ng.get("lon") is None or naive is None or not gpx.points:
         return "no_nearby_track"
     flat, flon, pt_max = float(ng["lat"]), float(ng["lon"]), cfg["gpx_anchor_max_point_distance_meters"]
-    if any(haversine(flat, flon, p.lat, p.lon) <= pt_max for p in gpx.points):
+    nearby = gpx.nearby(flat, flon, pt_max, cfg["gpx_anchor_max_segment_distance_meters"])
+    if nearby is None:
+        near = any(haversine(flat, flon, p.lat, p.lon) <= pt_max for p in gpx.points)
+    else:                                   # only the points by the place can be within reach
+        near = any(haversine(flat, flon, pts[i].lat, pts[i].lon) <= pt_max
+                   for (_s, pts, _t), idx in zip(gpx.tracks(), nearby) for i in idx)
+    if near:
         return "outside_time_window"
     return "no_nearby_track"
 
