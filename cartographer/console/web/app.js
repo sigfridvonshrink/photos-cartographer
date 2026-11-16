@@ -28,7 +28,6 @@ let planId = null;         // plan_id being reviewed in the gate
 let gatePhase = "prep";    // the phase the open gate is for (tab could change underneath)
 let currentJobLabel = null;// label of the running job (e.g. "prep execute"), for the Stop confirm
 let prevRunning = false;   // last poll's running flag — to detect a job just finishing
-const phasePlanIds = {};   // phase -> its saved plan's id, from the last state poll
 
 // Reload the folded-in decision editor (Edit tab) so it re-reads the latest decision JSONs. Called
 // when a geotag plan finishes — the plan it just wrote is what the editor edits. No-op until the
@@ -224,7 +223,6 @@ async function refreshState() {
   else if (!running && s.lock_owner) { lock.textContent = "● locked (another run)"; lock.style.color = "var(--warn)"; }
 
   zoneQuestion = s.zone_table || null;
-  for (const [p, v] of Object.entries(s.phases || {})) phasePlanIds[p] = v.plan_id || null;
   const ph = (s.phases && s.phases[currentPhase]) || {};
   // status chip for the current phase (plan-exists / blockers / staleness / ready)
   const ps = $("#phase-status");
@@ -332,11 +330,14 @@ function hideChanges() { pendingChanges = null; changesOverlay.hidden = true; }
 async function acceptChanges() {
   const m = pendingChanges;
   if (!m) return;
-  const prev = lastRun[`${m.phase}/${m.command}`]
-    || (m.command === "execute" ? { phase: m.phase, command: m.command, confirm: true,
-                                     plan_id: phasePlanIds[m.phase] || undefined, jobs: jobsValue() }
-                                : { phase: m.phase, command: m.command, jobs: jobsValue() });
-  await postRun({ ...prev, accept_changes: m.code });
+  const prev = lastRun[`${m.phase}/${m.command}`];
+  if (!prev && m.command === "execute") {
+    // No execute remembered by this page (reloaded, or another tab): its confirmation was never given here, so the
+    // execute gate opens on the saved plan, the code attached — never a confirmation made up for it.
+    hideChanges();
+    return openGate(m.phase, m.code);
+  }
+  await postRun({ ...(prev || { phase: m.phase, command: m.command, jobs: jobsValue() }), accept_changes: m.code });
 }
 $("#changes-close").onclick = hideChanges;
 $("#changes-accept").onclick = acceptChanges;
@@ -344,14 +345,18 @@ $("#changes-accept").onclick = acceptChanges;
 // --- execute confirm gate (prep) ------------------------------------------
 const overlay = $("#gate-overlay");
 
-async function openGate() {
-  const phase = currentPhase;
+// `accept`: the code of a stop on changes to the workspace, sent with the execute once confirmed ("Accept these" with
+// no execute remembered by this page, above); none from the Execute button.
+let gateAccept = null;
+async function openGate(phase = currentPhase, accept = null) {
+  if (typeof phase !== "string") phase = currentPhase;    // opened by the Execute button: its click event
   let s;
   try { s = await (await fetch(`/api/plan-summary?phase=${encodeURIComponent(phase)}`)).json(); } catch { return; }
   if (!s.exists || (s.blockers && s.blockers.length)) { await refreshState(); return; }
   gatePhase = phase;
+  gateAccept = accept;
   planId = s.plan_id;
-  $("#gate-title").textContent = `Confirm ${phase} execute`;
+  $("#gate-title").textContent = `Confirm ${phase} execute` + (accept ? ", accepting the listed changes" : "");
   $("#gate-sum").textContent = `Plan ${s.plan_id}\n${(s.lines || []).join("\n")}`;
   $("#gate-warn").textContent = GATE_WARN[phase] || "This mutates workspace state.";
   $("#gate-go").textContent = `Execute ${s.operations} operation${s.operations === 1 ? "" : "s"}`;
@@ -362,7 +367,8 @@ function closeGate() { overlay.hidden = true; }
 
 async function confirmExecute() {
   closeGate();
-  await postRun({ phase: gatePhase, command: "execute", confirm: true, plan_id: planId, jobs: jobsValue() });
+  await postRun({ phase: gatePhase, command: "execute", confirm: true, plan_id: planId, jobs: jobsValue(),
+                  ...(gateAccept ? { accept_changes: gateAccept } : {}) });
 }
 
 $("#gate-cancel").onclick = closeGate;

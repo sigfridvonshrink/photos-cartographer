@@ -172,6 +172,10 @@ event/sink seam.
 - **A stop on changes to the workspace is offered for acceptance in a dialog** (BACKLOG 50): the same
   list the command printed, grouped as printed, and an **Accept these** button that re-sends the same run
   (an execute's confirmation and reviewed plan id included) with the stop's code as `--accept-changes`.
+  Where the page holds no run to re-send — reloaded, or another tab, the stop shown from the snapshot — a plan or
+  dry run is sent with the code at once, but an execute is not: Accept opens the execute gate on the saved plan, the
+  code attached, and only the confirmation given there sends it. A confirmation is never made up for a gate the user
+  never saw (the server's "plan changed since you reviewed it" check would be empty with the current plan's id).
   The list arrives as its own `changes` event — not parsed out of log lines — and is kept for a page
   that joins late until the next run starts. No per-file picking: the code accepts the whole list or
   nothing, as on the command line. (Hand-editing a file of acceptances was rejected by the owner as
