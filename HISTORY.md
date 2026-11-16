@@ -2,6 +2,21 @@
 
 *What was decided and why, newest first. A record: never corrected forward. Per-commit detail is `git log`.*
 
+## 2026-11-16 — no photo leaves geotag without a position (BACKLOG 21)
+
+The owner: *"I explicitly want* no *unlocated photos. this is the role of the folder fallback."* Ruled as recommended:
+
+- **"Leave unlocated" is gone** — from the decision records, the editor and the by-hand reference; a record still
+  holding an unknown field is refused, naming it.
+- **Finalize refuses while a photo in photos by destination holds no position**, judged from what each photo holds,
+  and merge refuses the same; a photo nothing places waits for a position for it or a fallback for its folder, and
+  the editor offers the folder's fallback first.
+- **What existed only for unlocated photos is removed**, the clearing of a device's 0,0 among it: a photo holding
+  0,0 has no position, so it is placed like any other and the zeros are written over, the log keeping them. This
+  supersedes the ruling of 2026-11-15 that cleared the 0,0 of a photo accepted as unlocated.
+- **A position for one photo the tracks or the fallback place** can now be given, in the editor from a folded list
+  of the destination's placed photos, or by hand as a `chosen_by_user` entry; it is kept while it holds.
+
 ## 2026-11-16 — names outside photos by destination, and a second's photos (BACKLOG 43, 45)
 
 Ruled as recommended (*"43 - ok"*, *"45 - ok"*):

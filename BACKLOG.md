@@ -4,7 +4,7 @@
 
 - **What this is:** [`README.md`](README.md). **The record:** [`HISTORY.md`](HISTORY.md).
 
-*Open items: **18** — 7, 11, 14, 18, 21, 22, 27, 28, 30 to 32, 40, 47 to 49, 53 to 55.* 🛑 Numbers are never reused; the next is **56**.
+*Open items: **17** — 7, 11, 14, 18, 22, 27, 28, 30 to 32, 40, 47 to 49, 53 to 55.* 🛑 Numbers are never reused; the next is **56**.
 
 ---
 
@@ -99,16 +99,6 @@ done: merge clears them as its execution starts.)
 the batch's size and stops or warns; rule it into the spec, then code it.
 
 **When:** any time; low priority.
-
-### 21. Let the user leave one photo unlocated in a folder that has a fallback
-
-**Why:** the placement order puts a destination's fallback above a photo's own `accept_unlocated`, and a photo the
-fallback or a track places has no review item — so "leave this one without a position" cannot be said for it, and an
-answer given earlier is dropped once a fallback or track covers the photo. The rationale ranks sources by how specific
-they are, and the photo's own answer is the most specific there is.
-
-**Open:** whether a per-photo answer outranks the folder's fallback (and a track?), and how the editor offers it for a
-photo that is not on the worklist.
 
 ### 22. A date fallback per destination, for photos with no recorded time
 
