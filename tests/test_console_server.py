@@ -215,6 +215,21 @@ def test_geotag_and_merge_plan_summaries(tmp_path):
     assert ms["exists"] and ms["plan_id"] == "m1" and ms["operations"] == 5   # placed_new
 
 
+@pytest.mark.spec("RUL-unreadable_plan_replanned", "BLD-unreadable_plan",
+                  test="TST-console_server-unreadable_geotag_plan_summarised_as_a_blocker")
+@pytest.mark.parametrize("torn", ['{"plan_id": "g1", "destinations": {', "[]"], ids=["torn", "not_an_object"])
+def test_unreadable_geotag_plan_summarised_as_a_blocker(tmp_path, torn):
+    """A photos-24 that cannot be read — torn, or not an object — is summarised as a plan with a blocker sending the
+    user to `geotag plan` again, never an error of the server; the gate refuses to execute it."""
+    from cartographer.photos_2_geotag import executable_plan_path
+    g = executable_plan_path(str(tmp_path)); os.makedirs(os.path.dirname(g), exist_ok=True)
+    with open(g, "w") as f:
+        f.write(torn)
+    gs = server._plan_summary(str(tmp_path), "geotag")
+    assert gs["exists"] and len(gs["blockers"]) == 1 and "`geotag plan` again" in gs["blockers"][0]
+    assert server._execute_guard(str(tmp_path), "geotag", {"confirmed": True}) is not None
+
+
 # --- execute gate (generic, per phase) ------------------------------------
 
 def test_execute_guard_requires_confirmation(tmp_path):

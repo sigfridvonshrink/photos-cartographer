@@ -79,7 +79,12 @@ A save is refused, and **nothing is saved**, when:
   edits again;
 - **the workspace is sealed.**
 
-A successful save names the files it wrote and reminds you to run `geotag plan` and reload.
+A successful save names the files it wrote and reminds you to run `geotag plan` and reload. Each record
+it changes is first copied beside itself under the next free `-NNN` number — `photos-23-gps-decisions-002.json`,
+say — in the same series a re-plan's copies are in, so an answer lost to a mistaken save can be found again. The
+configuration, when a save writes a camera's class into it, keeps no copy. The records are written one after
+another — photos-21, photos-22, photos-23, then photos-25 and the configuration — so a save cut short (a power cut,
+the editor killed) leaves the earlier ones saved and the later ones as they were: save again to finish it.
 
 **Coming from 2.0.0:** an offset you accepted under 2.0.0 didn't record which offset it accepted, so
 `geotag plan` now stops on it. Open the editor: the decision says it was accepted for another proposal —

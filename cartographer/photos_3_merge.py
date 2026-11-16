@@ -366,8 +366,14 @@ class MergeWorkflow:
             try:
                 with open(plan_p) as f:
                     plan = json.load(f)
+                if not isinstance(plan, dict):
+                    plan = None
+                    raise ValueError("not a JSON object")
             except Exception as e:
-                blockers.append(f"Geotag plan photos-24-executable-plan.json could not be read: {e}")
+                # made from records still there: planned again, never repaired (BLD-unreadable_plan)
+                blockers.append(f"Geotag plan photos-24-executable-plan.json cannot be read ({e}) — run "
+                                "`photos-cartographer geotag plan` again, then `execute` and `finalize`, before "
+                                "merging.")
         if not os.path.exists(summ_p):
             blockers.append("Geotag was not executed (photos-25-execution-summary.json is missing) "
                             "— run `photos-cartographer geotag execute` before merging.")

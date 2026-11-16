@@ -1325,6 +1325,19 @@ log without a word — each loss silent, and none recoverable from the photos. A
 at; stopping and naming it keeps it as it is until they have.
 :::
 
+:::{rat} A plan is made again, not repaired
+:id: RAT-plan_made_again
+:status: ruled
+:forced: yes
+:follows_from: RAT-unreadable_record_not_empty
+:justifies: RUL-unreadable_plan_replanned
+
+The executable plan holds nothing of its own: geotag makes it from the decision records, the photos and the tracks, all
+still there, so planning again makes it whole and nothing is lost — unlike a journal or a summary, which hold what only
+a run saw. Read in part, a plan would be carried out in part, or summarised and merged on as if whole; stopped on, it
+points the user to the one command that makes it anew.
+:::
+
 :::{rat} Geotag's summary, too, records an execution
 :id: RAT-geotag_summary_records_an_execution
 :status: ruled

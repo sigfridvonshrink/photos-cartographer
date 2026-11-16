@@ -329,6 +329,19 @@ def test_missing_geotag_plan_blocks(tmp_path):
     assert any("has not produced an executable plan" in b for b in blockers), blockers
 
 
+@pytest.mark.spec("RUL-unreadable_plan_replanned", "BLD-unreadable_plan",
+                  test="TST-merge_preflight-unreadable_geotag_plan_blocks_with_plan_again")
+@pytest.mark.parametrize("torn", ['{"status": "ready", "depends_on": {', "[]"], ids=["torn", "not_an_object"])
+def test_unreadable_geotag_plan_blocks_with_plan_again(tmp_path, torn):
+    """A photos-24 merge cannot read — torn, or not an object — is a blocker sending the user to `geotag plan` again,
+    never an error the preflight does not catch."""
+    ws, _ = _make(tmp_path)
+    (_ctl(ws) / "photos-24-executable-plan.json").write_text(torn)
+    blockers, _, _ = _pf(ws)
+    assert any("photos-24-executable-plan.json cannot be read" in b and "geotag plan` again" in b
+               for b in blockers), blockers
+
+
 @pytest.mark.spec("RUL-merge_takes_finalized_current", test="TST-merge_preflight-geotag_not_executed_blocks")
 def test_geotag_not_executed_blocks(tmp_path):
     ws, _ = _make(tmp_path, cal_summary=False)

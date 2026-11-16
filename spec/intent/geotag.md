@@ -2492,6 +2492,17 @@ Geotag's execution and finalize SHALL NOT take a record of an earlier execution 
 stop before they change or write anything, naming it.
 :::
 
+:::{rul} A plan that cannot be read is made again
+:id: RUL-unreadable_plan_replanned
+:status: ruled
+:criticality: med
+:verify: required
+:uses: DEF-geotag
+
+Each command that reads geotag's executable plan — its execution, finalize, merge's plan and the summary shown before
+an execution — SHALL stop on one it cannot read, changing nothing, and send the user to plan again.
+:::
+
 :::{rul} Geotag's summary is written only for an execution
 :id: RUL-geotag_summary_only_for_execution
 :status: ruled

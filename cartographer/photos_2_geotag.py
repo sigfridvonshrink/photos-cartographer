@@ -439,7 +439,7 @@ class UnreadableRecord(Exception):
 
     def __init__(self, path, why):
         super().__init__(f"{path} cannot be read ({why})")
-        self.path = path
+        self.path, self.why = path, why
 
 
 def _read_record(path):
@@ -455,6 +455,27 @@ def _read_record(path):
     if not isinstance(obj, dict):
         raise UnreadableRecord(path, "not a JSON object")
     return obj
+
+
+class UnreadablePlan(Exception):
+    """The executable plan photos-24, there and unreadable — torn, not JSON, not an object. It is made from records
+    still on disk, so the way on is to plan again (RUL-unreadable_plan_replanned, BLD-unreadable_plan)."""
+
+    def __init__(self, path, why):
+        super().__init__(f"{path} cannot be read ({why})")
+        self.path = path
+
+
+REPLAN_ADVICE = "run `geotag plan` again to make it anew"
+
+
+def read_executable_plan(ws):
+    """photos-24 as a JSON object, or None when there is none; UnreadablePlan when it is there and cannot be read
+    (BLD-unreadable_plan)."""
+    try:
+        return _read_record(executable_plan_path(ws))
+    except UnreadableRecord as e:
+        raise UnreadablePlan(e.path, e.why)
 
 
 class GeotagWorkflow:
@@ -2831,8 +2852,10 @@ class GeotagWorkflow:
         execution_id are injected so the fingerprint-bearing body stays reproducible. Returns the
         summary dict (status 'rejected' with stale reasons if the plan no longer applies)."""
         ws = self.workspace_root
-        with open(executable_plan_path(ws)) as f:
-            plan = json.load(f)
+        # a plan there that cannot be read raises UnreadablePlan before anything is read or written (BLD-unreadable_plan)
+        plan = read_executable_plan(ws)
+        if plan is None:
+            raise UnreadablePlan(executable_plan_path(ws), "it is not there")
         # the tracks over the plan's window as they are now, the record left as it is (BLD-track_window)
         gpx = self.plan_tracks(plan)
         stale = self.revalidate_plan(plan, gpx)
@@ -3096,17 +3119,20 @@ class GeotagWorkflow:
         earlier execution that cannot be read is one, naming it (RUL-unreadable_execution_record_stops)."""
         try:
             return self._finalize_package(now_iso)
+        except UnreadablePlan as e:
+            # made from records still there: planned again, never repaired (BLD-unreadable_plan)
+            return [f"{e} — {REPLAN_ADVICE}, then `geotag execute` and `geotag finalize`; nothing was written."]
         except UnreadableRecord as e:
             return [f"{e} — repair it, or move it out of {CONTROL_DIR}/ if it cannot be repaired; nothing was "
                     "written."]
 
     def _finalize_package(self, now_iso):
         ws = self.workspace_root
-        if not os.path.exists(executable_plan_path(ws)):
+        plan = read_executable_plan(ws)
+        if plan is None:
             return [f"No {EXECUTABLE_PLAN_ARTIFACT} — run `plan` then `execute` first."]
         if not os.path.exists(execution_summary_path(ws)):
             return [f"No {EXECUTION_SUMMARY_ARTIFACT} — `execute` the plan first."]
-        plan = json.load(open(executable_plan_path(ws)))
         summary = _read_record(execution_summary_path(ws))
         blk = []
         if plan.get("status") != "ready":
@@ -3945,6 +3971,11 @@ def run(args):
             jobs = args.jobs or CONFIG.get("jobs") or 4
             try:
                 summary = wf.execute_plan(jobs, now_iso, execution_id, workspace_changes=workspace_changes)
+            except UnreadablePlan as e:
+                # made from records still there: planned again, never repaired (BLD-unreadable_plan)
+                reporter.error(f"\nExecution cannot proceed: {e}. Nothing was changed.")
+                emit_next_step(reporter, f"{REPLAN_ADVICE}, then `geotag execute`.")
+                sys.exit(2)
             except UnreadableRecord as e:
                 reporter.error(f"\nExecution cannot proceed: {e}. Nothing was changed.")
                 emit_next_step(reporter, f"repair it (or move it out of {CONTROL_DIR}/ if it cannot be "
@@ -4012,8 +4043,7 @@ def run(args):
                 sys.exit(2)
             for w in getattr(wf, "finalize_warnings", []):
                 reporter.warn(f"  partial record: {w}")
-            with open(executable_plan_path(workspace_root)) as pf:
-                placed = (json.load(pf) or {}).get("placement") or {}
+            placed = (read_executable_plan(workspace_root) or {}).get("placement") or {}   # read whole by finalize
             if placed:
                 # the measure of the run: every photo, by how it came by its position — and those with none
                 reporter.log("Positions: " + ", ".join(f"{n} {how.replace('_', ' ')}" for how, n in placed.items())

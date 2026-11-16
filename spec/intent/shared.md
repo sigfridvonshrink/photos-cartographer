@@ -3174,6 +3174,30 @@ it up between one save or display and the next.
 The decision editor SHALL NOT save while a decision record is not the one it loaded, or while an edit names a decision the record does not hold.
 :::
 
+:::{rul} A save writes its records in the order they stand on each other
+:id: RUL-save_writes_in_order
+:status: ruled
+:criticality: med
+:verify: required
+:uses: DEF-decision
+
+The decision editor SHALL write the records a save changes one after another, each whole, in the order each stands on
+the one before — the time decisions, the drift validation, the GPS decisions, then the execution's summary, and the
+configuration last — so that a save cut short leaves only a leading part of it written.
+:::
+
+:::{rul} A save keeps the record it replaces
+:id: RUL-save_keeps_the_replaced
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+:uses: DEF-decision
+
+The decision editor's save SHALL NOT overwrite a record it answers into: each one whose content it changes is first set
+aside, recoverably, among the earlier versions a re-plan sets aside — the configuration excepted.
+:::
+
 :::{rul} Every question can be answered in the decision editor
 :id: RUL-every_question_in_editor
 :status: ruled
