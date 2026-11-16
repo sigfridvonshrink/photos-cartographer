@@ -1631,8 +1631,9 @@ other `moved`. `changed`, `appeared`, `removed` and `moved` stop the command, ex
 `_run_locked` for its plan, dry run and execute once its shape check has passed and the configuration loads, comparing
 nothing where there is no record; geotag in `run` for its plan, execute and finalize, before the automatic re-prep,
 where its preflight would find the workspace initialized and unsealed, the configuration readable, the top level as it
-should be and no link in photos by destination; merge in `_run_locked_workflow` for its plan, dry run and execute once
-its preflight has passed. Geotag and merge stop, exit 2, on a workspace with no record. `prune-quarantine`,
+should be and no link in photos by destination; merge in `_run_locked_workflow` for its plan, dry run and execute,
+before its preflight validates the library, the handoff or the photos, where the preflight's first steps find the
+workspace initialized and unsealed, the configuration readable and the top level as it should be. Geotag and merge stop, exit 2, on a workspace with no record. `prune-quarantine`,
 `init-library` and the editor never call it.
 :::
 

@@ -223,6 +223,15 @@ class MergeWorkflow:
         workspace lock, BEFORE main() acquires the library lock (RUL-library_confirmed_before_lock) — so no
         `.photos-merge.lock` is ever dropped into a directory that is not a blessed library."""
         blockers, warnings, info = [], [], {}
+        if not self.shape_passes(blockers, warnings):
+            return blockers, warnings, info
+        return self._preflight_rest(blockers, warnings, info)
+
+    def shape_passes(self, blockers, warnings):
+        """The preflight's first steps, each stopping it: the seal, the initialization mark, a link at the top level,
+        the configuration read and checked (loaded into CONFIG), a missing managed folder, a misplaced top-level entry.
+        True when all pass — the workspace one whose folders are known, which the workspace's check compares before
+        the rest of the preflight validates anything (RUL-workspace_checked_first); else False, the blocker added."""
         ws = self.workspace_root
 
         # 0. Terminal-seal check — sealed means sealed (RUL-sealed_refuses).
@@ -233,47 +242,51 @@ class MergeWorkflow:
                 warnings.append("A likely new dump is present (at the workspace root or in "
                                 f"{folder_name('sources')}/). A sealed workspace is final; move it into "
                                 "a fresh workspace by hand — merge left it exactly where it is.")
-            return blockers, warnings, info
+            return False
 
         # 0a. Initialized, and no misplaced entry at the workspace root (RUL-only_prep_builds_structure;
         # RUL-top_level_only_managed).
         if not os.path.exists(guard_path(ws)):
             blockers.append("Not an initialized workspace (no photos-00-workspace-guard) — "
                             "run prep first: `photos-cartographer prep plan` then `photos-cartographer prep execute`.")
-            return blockers, warnings, info
+            return False
         root_syms = top_level_links(ws)
         if root_syms:
             blockers.append(f"Forbidden symlink at the workspace root: {', '.join(root_syms)}. Symlinks are "
                             "never followed; remove it before merging.")
-            return blockers, warnings, info
+            return False
         # The configuration is read first: it names the managed folders the checks below look for
         # (RUL-control_directory_fixed — it is found without knowing any of them).
         cfg_p = config_path(ws)
         if not os.path.exists(cfg_p):
             blockers.append("Workspace config photos-00-config.json is missing — run prep first: `photos-cartographer prep plan` then `photos-cartographer prep execute`.")
-            return blockers, warnings, info
+            return False
         try:
             load_config(ws)                 # the workspace's file, whole and checked, replaces CONFIG
         except ValueError as e:
             blockers.append(f"Invalid workspace config: {e}")
-            return blockers, warnings, info
+            return False
         except Exception as e:
             blockers.append(f"Workspace config could not be read: {e}")
-            return blockers, warnings, info
+            return False
         # 0c. The managed 0-6 structure must be intact (RUL-missing_folder_blocks) — merge never creates/repairs it.
         struct_missing = missing_managed_folders(ws)
         if struct_missing:
             blockers.append("Workspace is non-conforming: missing managed folder(s): "
                             f"{', '.join(struct_missing)}. Restore the 0-6 structure (merge never "
                             "creates or repairs it) before merging.")
-            return blockers, warnings, info
+            return False
         misplaced = misplaced_top_level_entries(ws)
         if misplaced:
             blockers.append(f"Misplaced entry at workspace root (dumps belong in "
                             f"{folder_name('sources')}/): {', '.join(misplaced)}. The top level holds only "
                             "the managed folders and hidden entries.")
-            return blockers, warnings, info
+            return False
+        return True
 
+    def _preflight_rest(self, blockers, warnings, info):
+        """The preflight past its shape steps (`shape_passes`): the library, the handoff and the photos."""
+        ws = self.workspace_root
         cfg = CONFIG
 
         # 5. Config valid + library_root is a blessed library (RUL-library_place_checked; RUL-library_mark_required).
@@ -1947,6 +1960,16 @@ def _run_locked_workflow(command, ws, jobs=None, accept_changes=None):
             reporter.error(vol_err)
             return 2
         wf = MergeWorkflow(ws)
+        # The workspace as the last execution left it (RUL-workspace_checked_first), before the preflight validates
+        # the library, the handoff or the photos — as geotag checks it before its preflight. Made where the
+        # preflight's first steps find it initialized, unsealed, its configuration read and its top level as it should
+        # be, so its folders are known; otherwise the preflight refuses below, naming why. A workspace with no record
+        # is refused (RUL-record_needed).
+        workspace_changes = []
+        if wf.shape_passes([], []):
+            workspace_changes, stop = check_workspace(ws, "merge", command, accept_changes)
+            if stop:
+                return stop
         blockers, warnings, info = wf.preflight()
         for w in warnings:
             reporter.warn(f"  Warning: {w}")
@@ -1958,12 +1981,6 @@ def _run_locked_workflow(command, ws, jobs=None, accept_changes=None):
             emit_next_step(reporter, "resolve the blocker(s) above — usually `geotag finalize`, then "
                                      f"`merge init-library` to bless the library — and re-run `merge {command}`.")
             return 2
-        # The workspace as the last execution left it (RUL-workspace_checked_first): the preflight has found it
-        # initialized, unsealed and its configuration read, so its folders are known; a workspace with no record is
-        # refused (RUL-record_needed).
-        workspace_changes, stop = check_workspace(ws, "merge", command, accept_changes)
-        if stop:
-            return stop
 
         # Preflight confirmed the .photos-library marker — safe to take the library-side lock now
         # (RUL-library_confirmed_before_lock: workspace lock, then config+marker, then library lock).

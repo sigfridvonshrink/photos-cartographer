@@ -347,6 +347,27 @@ def test_every_checking_command_checks(tmp_path, monkeypatch):
         assert any(isinstance(e, ChangesEvent) for e in sink.events), command
 
 
+@pytest.mark.no_hand_built_record
+@pytest.mark.spec("RUL-workspace_checked_first", "BLD-workspace_check",
+                  test="TST-workspace_check-merge_checks_the_workspace_before_its_preflight_validates")
+def test_merge_checks_the_workspace_before_its_preflight_validates(tmp_path):
+    """Merge, like geotag, compares the workspace before its preflight validates anything past the workspace's shape:
+    with a change by hand to stop on and a library its preflight would refuse, each command stops on the change, and
+    the library is never judged."""
+    import test_merge_execute as mx
+    ws, lib = mx._ws(tmp_path, [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"}])
+    utils.write_workspace_record(str(ws))
+    (ws / "1-strays" / "notes.txt").write_text("x")                            # a change to stop on
+    os.remove(utils.library_marker_path(str(lib)))                              # the preflight would refuse it
+    for command in ("plan", "dry-run", "execute"):
+        sink = CaptureSink()
+        with use_reporter(Reporter([sink])):
+            assert merge._run_locked_workflow(command, str(ws)) == 2
+        said = "\n".join(e.msg for e in sink.logs())
+        assert any(isinstance(e, ChangesEvent) for e in sink.events), (command, said)
+        assert "blessed library" not in said, (command, said)
+
+
 # --- accepting once, by the code -----------------------------------------
 
 @pytest.mark.spec("RUL-stop_gives_acceptance_code", "RUL-code_accepts_only_its_list", "BLD-accept_changes",
