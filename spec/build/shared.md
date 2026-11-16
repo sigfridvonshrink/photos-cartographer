@@ -37,7 +37,7 @@ and 2 when it refuses, and a phase named with no command prints what it does and
 :::{bld} The workspace lock
 :id: BLD-workspace_lock
 :status: ruled
-:realises: RUL-one_workspace_lock, RUL-lock_fail_fast, RUL-lock_refusal_says_locked, RUL-lock_released_on_any_end, RUL-lock_through_the_run
+:realises: RUL-one_workspace_lock, RUL-lock_fail_fast, RUL-lock_refusal_says_locked, RUL-lock_released_on_any_end, RUL-lock_through_the_run, RUL-stale_lock_recovered, RUL-stale_takeover_conservative
 
 `WorkspaceLock` SHALL be an exclusive non-blocking `flock` on `.photos-ingest/photos-00-workspace.lock`, one per
 workspace for every command, taken without waiting, released by the kernel however its holder ends, the file never
@@ -50,8 +50,9 @@ progress.
 :status: ruled
 :realises: RUL-lock_before_reading
 
-The lock SHALL be taken as soon as the run's workspace is known, before the guard, `photos-00-workspace-guard`, or
-anything else in it is read.
+The lock SHALL be taken as soon as the filesystem checks ({need}`BLD-local_filesystem_types`) and, for geotag and
+merge, the control directory's existence have passed, before the guard, `photos-00-workspace-guard`, or anything else
+in it is read.
 :::
 
 :::{bld} Only prep creates the control directory
@@ -74,10 +75,10 @@ with exit status 2, having created nothing.
 :::{bld} The lock records its owner
 :id: BLD-lock_owner_record
 :status: ruled
-:realises: RUL-stale_lock_recovered
+:uses: BLD-workspace_lock
 
-The lock SHALL record the identity of the process that owns it and the time it started, so that a lock whose owner is
-gone can be told from one whose owner is running.
+The lock SHALL record the identity of the process that holds it and the time it started, for the user's information —
+never the test of staleness, which is whether the `flock` can be had ({need}`BLD-workspace_lock`).
 :::
 
 :::{bld} The phases run inside the run's lock
@@ -364,7 +365,7 @@ going to `1-strays/<plan-id>/`.
 :refines: BLD-prep_skip_set
 :realises: RUL-hidden_folder_among_photos_blocks
 
-A hidden folder in a managed folder other than `0-sources` SHALL not be read, and one holding any file — a link
+A hidden folder in a managed folder other than `0-sources` and `1-strays` SHALL not be read, and one holding any file — a link
 counted — is a blocker naming it.
 :::
 
@@ -498,8 +499,9 @@ plan against every file of the handoff, and by geotag's execute against its plan
 :status: ruled
 :realises: RUL-known_when_classified
 
-A group SHALL be known when its key is listed under `camera_time_and_timezone_policy.device_groups` — `phones` (mobile)
-or `fixed_clock_cameras` (fixed-clock).
+A group SHALL be known when its key is listed under `camera_time_and_timezone_policy.device_groups` in exactly one of
+`phones` (mobile) and `fixed_clock_cameras` (fixed-clock); in neither or in both, it is unknown
+({need}`BLD-group_in_both_lists`).
 :::
 
 ## 6. One filename format
@@ -573,7 +575,7 @@ configured format at plan once a file outside the inbox carries a timestamp name
 The tracks' location SHALL be the configuration key `gpx_root`: a path, absolute or relative to the workspace, resolved
 through links before use; empty means no tracks. It MAY be anywhere outside `0-sources` … `6-photos-by-dest` — on any
 disk, or under the control directory, such as `.photos-ingest/gpx/`, which prep's skip of `.photos-ingest/` already keeps
-out of the scan. Geotag catalogues every `*.gpx` file beneath it ({need}`BLD-track_catalogue`). The value and the matching thresholds are read by geotag;
+out of the scan and the package leaves out ({need}`BLD-archive_manifest`). Geotag catalogues every `*.gpx` file beneath it ({need}`BLD-track_catalogue`). The value and the matching thresholds are read by geotag;
 their detail is {need}`BLD-track_points` and {need}`BLD-anchor_matching`.
 :::
 
@@ -687,9 +689,11 @@ and stops on it ({need}`RUL-hidden_folder_among_photos_blocks`).
 :status: ruled
 :realises: RUL-geotag_gates, RUL-sort_photos_only, RUL-development_after_merge, RUL-unfingerprinted_photo_stops_geotag
 
-The gates SHALL be checked as follows: `geotag plan` checks every gate; `geotag execute` and `finalize` check the
-development gate and the workspace's shape, and validate against the plan's own dependencies instead of the scope and
-re-prep gates ({need}`RUL-geotag_gates`, {need}`BLD-reprep_pending`); merge's preflight checks the inbox, the
+The gates SHALL be checked as follows: `geotag plan`, `execute` and `finalize` check every gate — at `execute` and
+`finalize` a photo in `6-photos-by-dest` counting as recorded where the handoff records it or the plan's renames name
+it, prep's other checks of its record ({need}`BLD-reprep_pending`) being the plan's own dependencies there, and a
+`<photo>_exiftool_tmp` beside a photo the plan writes being left to the writer ({need}`BLD-metadata_safe_write`);
+merge's preflight checks the inbox, the
 development gate and that photos by destination holds only photos ({need}`BLD-merge_preflight`). A development subfolder
 is one named in `destination_distribution_subfolders`. Geotag's preflight stops as well on a photo in `6-photos-by-dest` whose handoff record holds no fingerprint, named.
 :::
@@ -1001,9 +1005,14 @@ A phase SHALL write only records in its own number band of the numbering scheme:
 merge `photos-3X`, and on success the seal, `photos-00-sealed.json`, which merge alone writes. The configuration and
 the database are phase-neutral, each with its own writers' rule: prep seeds
 the configuration, which `init-library` may later extend by `library_root` alone
-({need}`BLD-init_library_writes_library_root`) and the decision editor by a camera group's class alone
-({need}`BLD-editor_writes_device_groups`), and prep writes the database's cache and identity rows while geotag and
-merge write only their own regions of it ({need}`BLD-workspace_database`). Bundling copies of every phase's records into
+({need}`BLD-init_library_writes_library_root`) and the decision editor by a camera group's class and its naming as
+several bodies alone ({need}`BLD-editor_writes_device_groups`, {need}`BLD-editor_marks_several_bodies`); prep writes
+the database's cache and identity rows while geotag and merge write only their own regions of it, every execution the
+record of the state it leaves and a prune that deletes that record's rows of what it removed
+({need}`BLD-workspace_database`); `photos-01-accepted-changes.json` is written by any checking command
+({need}`BLD-accept_changes`) and `photos-02-zone-table.json` by `prep plan` ({need}`BLD-zone_table_question`) and by
+the decision editor, which records the same answer; and the editor writes, of geotag's records, the user's answers
+alone. Bundling copies of every phase's records into
 the archival package reads them, and is no write.
 :::
 
@@ -1014,10 +1023,13 @@ the archival package reads them, and is no write.
 
 `geotag finalize` SHALL write `photos-26-complete-log.json` and the database image `photos-26-geotag-ingest.db`, then
 list every file of the control directory but the transient ones — locks, `.tmp-` files, SQLite's `-journal` files, the
-plan memo `photos-00-plan-memo.db`, and any `*-archive.tar.gz` or its `-NNN` copy — with its SHA-256 and path in
+plan memo `photos-00-plan-memo.db`, and any `*-archive.tar.gz` or its `-NNN` copy — and but the tracks' folder where
+`gpx_root` lies inside it, or the track files where `gpx_root` is the control directory itself ({need}`BLD-gpx_root`) —
+with its SHA-256 and path in
 `photos-26-archive-manifest.json`, recording the workspace's identity — the init run id prep wrote in the guard — with
 the folder's name beside it, and the plan and execution ids, and archive those files and the manifest into
-`photos-26-archive.tar.gz` in the control directory, by a temporary name and an atomic rename — writing nothing else,
+`photos-26-archive.tar.gz` in the control directory, by a temporary name and an atomic rename — besides `photos-26-finalized-media.json` ({need}`BLD-finalized_media`) and
+the `-NNN` copies of its earlier records, writing nothing else,
 and requiring a ready plan whose execution succeeded ({need}`BLD-finalize_preconditions`). Merge's re-seal does the same
 into `photos-35-archive-manifest.json` and `photos-35-archive.tar.gz` ({need}`BLD-merge_success_sequence`).
 :::
@@ -1119,9 +1131,10 @@ thread); geotag, of the resolved-UTC cache (`resolved_utc_cache`), the values ea
 to it and the times geotag wrote to it (`original_values`, {need}`BLD-original_values_pinned`,
 {need}`BLD-time_written_recorded`), and the catalogue of the tracks with the points kept and the tracks each executed plan
 used (`gpx_track_files`, `gpx_track_points`, `gpx_track_use`, {need}`BLD-track_catalogue`); merge, of the library-file fingerprint cache
-(`library_fingerprint_cache`, keyed by the library file's absolute path with its size and modification time); and every
-execution, of the record of the state it leaves the workspace's files in (`workspace_record`, named by
-`meta.workspace_record_id`, {need}`BLD-workspace_record`). Where each
+(`library_fingerprint_cache`, keyed by the library file's absolute path with its size and modification time); every
+execution, of the record of the state it leaves the workspace's files in (`workspace_record`, {need}`BLD-workspace_record`)
+and the `meta` rows that name it (`workspace_record_id`, `executions_unrecorded`); and a prune that deletes, of the
+`workspace_record` rows of what it removed. Where each
 photo landed is in merge's
 JSON records, not the database. The other database is scratch, re-derivable and deletable at any time: prep's
 plan memo, `photos-00-plan-memo.db` ({need}`BLD-plan_memo`).
@@ -1387,7 +1400,8 @@ blocker per field, naming it.
 Every move and rename that carries content SHALL go through `_move_no_clobber`: on one filesystem `renameat2` with
 `RENAME_NOREPLACE`, one call that refuses an existing name, or where that is unavailable `os.link` then `os.unlink`;
 across filesystems, for merge alone, `_move_cross_fs_no_clobber`. A refused name stops that operation: prep records it
-failed and stops; geotag and merge record a blocker and leave the photo where it is. Merge also tests its target before
+failed and stops; geotag records the operation failed, with a blocker naming the photo, leaving it under its name
+({need}`BLD-geotag_failed_write`); merge records a blocker and leaves the photo where it is. Merge also tests its target before
 moving, and geotag compares names ignoring case ({need}`BLD-rename_planning`). The rename that completes an operation is
 thus itself the check that its name is free ({need}`RUL-target_free_at_execute`).
 :::

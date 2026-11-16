@@ -884,13 +884,24 @@ _ARCHIVE_NAME_RE = re.compile(r"-archive(-\d{3,})?\.tar\.gz$")
 
 def control_archive_members(ws: str, exclude=()) -> list:
     """The control directory's files the archival package carries (BLD-archive_manifest), as workspace-relative
-    paths in sorted order: every file but the transient ones and those in `exclude`."""
+    paths in sorted order: every file but the transient ones and those in `exclude` — and none of the tracks'
+    folder where `gpx_root` lies inside the control directory: the package keeps the track points the decisions
+    rest on, in the database, never every point of every track (RUL-unused_points_not_kept). With `gpx_root` the
+    control directory itself, its track files alone are left out."""
     root = os.path.join(ws, CONTROL_DIR)
+    real_root = os.path.realpath(root)
+    tracks = os.path.realpath(os.path.join(ws, CONFIG["gpx_root"])) if CONFIG.get("gpx_root") else None
+    if tracks and tracks != real_root and not tracks.startswith(real_root + os.sep):
+        tracks = None
     out = []
     for dp, dns, fns in os.walk(root):
+        if tracks and tracks != real_root:
+            dns[:] = [d for d in dns if os.path.realpath(os.path.join(dp, d)) != tracks]
         dns.sort()
         for fn in fns:
             if _not_archived(fn) or fn in exclude:
+                continue
+            if tracks == real_root and os.path.realpath(dp) == real_root and is_track_file(fn):
                 continue
             out.append(os.path.relpath(os.path.join(dp, fn), ws))
     return sorted(out)

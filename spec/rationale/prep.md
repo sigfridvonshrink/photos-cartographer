@@ -416,7 +416,7 @@ workspace is the remedy.
 :status: ruled
 :forced: no
 :follows_from: RAT-piggyback_on_the_destination_sort, RAT-idempotent_reruns
-:justifies: RUL-move_recognized
+:justifies: RUL-move_recognized, RUL-sort_recorded_by_stat
 
 Sorting photos into destinations is the user's own work, done between runs, and prep must plan again after it. Were each
 moved photo read again, every sort would cost a decode of everything sorted. A move made by hand keeps a file's size,

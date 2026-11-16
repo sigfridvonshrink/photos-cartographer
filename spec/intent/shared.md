@@ -149,7 +149,7 @@ of two phases, a merge, a finalize, or a quarantine prune.
 :verify: required
 :upholds: INV-one_run_at_a_time
 
-Every run, and every change to the workspace, SHALL hold the workspace's lock.
+Every run, and every change to the workspace's media or control records, SHALL hold the workspace's lock.
 :::
 
 :::{rul} A workspace has one lock
@@ -238,8 +238,7 @@ workspace locked for good.
 :refines: RUL-stale_lock_recovered
 
 A lock SHALL be taken over only once the machine's own system reports that no running process holds it — never on what
-the lock's record says of its owner. This guards the runs of one machine; where two machines reach one library over a
-network, whether the lock holds between them is that filesystem's doing.
+the lock's record says of its owner.
 :::
 
 Merge also takes a lock on the library it writes into, so that two merges into one library — even from two workspaces
@@ -506,9 +505,9 @@ media.
 :verify: required
 :refines: RUL-remake_only_what_depends
 
-A change to one area of the configuration SHALL make stale only what depends on that area. A change to the track
-thresholds restales placement and the plans, not the renames; a change to the filename format restales the renames,
-not placement.
+A change to one area of the configuration SHALL make stale only what depends on that area, every plan depending on the
+whole configuration ({need}`RUL-any_config_change_replans`). A change to the track thresholds restales placement, not
+the resolved true times.
 :::
 
 :::{rul} Costly results survive edits they do not depend on
@@ -570,9 +569,9 @@ workspace, no setting moving it.
 :status: ruled
 :uses: DEF-configuration
 
-The configuration sets, at least: the snapshot policy; which camera groups are phones and which have fixed clocks; the
-filename timestamp format; where the tracks are and the thresholds for matching photos to them; the camera-time policy;
-the library and how merge places files in it; the managed folders' names; the names of the development subfolders;
+The configuration sets, at least: the snapshot policy; the filename timestamp format; where the tracks are and the
+thresholds for matching photos to them; the camera-time policy — which camera groups are phones, which have fixed
+clocks and which are several bodies, and when an offset applies itself; the library and how merge places files in it; the managed folders' names; the names of the development subfolders;
 and which extensions are which class of media. Each area's detail is in the items of its own section.
 :::
 
@@ -603,8 +602,8 @@ Every phase SHALL find a managed folder by its role, never by its name.
 :anti: yes
 :verify: required
 
-Of camera grouping, the configuration SHALL set only which camera groups are phones and which have fixed clocks — never
-how a group is derived, nor the version of that derivation.
+Of camera grouping, the configuration SHALL set only each group's class — phone or camera with a fixed clock — and
+which groups are several bodies: never how a group is derived, nor the version of that derivation.
 :::
 
 :::{rul} Each extension is one class of media
@@ -729,7 +728,8 @@ version-control directory, and the strays folder with everything in it; and ever
 :anti: yes
 :verify: required
 
-Prep SHALL NOT plan while a hidden folder inside a managed folder other than the inbox holds a file.
+Prep SHALL NOT plan while a hidden folder inside a managed folder other than the inbox and the strays folder holds a
+file.
 :::
 
 :::{rul} The strays folder's contents are never processed again
@@ -739,7 +739,8 @@ Prep SHALL NOT plan while a hidden folder inside a managed folder other than the
 :verify: required
 :refines: RUL-not_inventoried
 
-Nothing SHALL process the strays folder's contents again: prep writes into it, but never scans it.
+No phase SHALL inventory, organize or move the strays folder's contents again: prep writes into it, and the
+workspace check compares its entries ({need}`RUL-check_covers_media_folders`), but nothing else reads it.
 :::
 
 :::{rul} Hidden files in a dump are quarantined
@@ -1165,8 +1166,8 @@ workspace check ({need}`RUL-workspace_checked_first`), scanning, planning or cha
 :id: DEF-camera_group
 :status: ruled
 
-A **camera group** is the photos one camera or device took, identified by a key derived from the device-identity
-metadata the files carry.
+A **camera group** is the photos whose device-identity metadata derive one key — one camera's or device's, or several
+bodies' the metadata cannot tell apart ({need}`RUL-several_bodies_named_by_configuration`).
 :::
 
 :::{rul} Prep derives the camera group
@@ -1231,8 +1232,8 @@ a change to the derivation is detected and old and new groups are never silently
 :verify: required
 :uses: RUL-camera_classes_not_derivation
 
-A camera group SHALL be known when the configuration classes it as a phone or as a camera with a fixed clock, and
-unknown otherwise.
+A camera group SHALL be known when the configuration classes it as exactly one of a phone or a camera with a fixed
+clock, and unknown otherwise.
 :::
 
 ## 6. One filename format
@@ -1241,8 +1242,8 @@ unknown otherwise.
 :id: DEF-recorded_time
 :status: ruled
 
-A file's **recorded time** is the time of its making that its own metadata holds, as the camera's clock read it:
-uncorrected, with no timezone.
+A file's **recorded time** is the time its own metadata gives for its making ({need}`RUL-recorded_time_order`),
+uncorrected and with no timezone — the camera's clock reading where the metadata holds one.
 :::
 
 :::{rul} Which field is the recorded time
@@ -1354,8 +1355,9 @@ Merge SHALL take the suffix above the highest already used for a name, never a l
 :criticality: med
 :verify: required
 
-Prep SHALL derive a file's name from its raw timestamp, as the camera recorded it, for organizing and ordering only — a
-provisional name, which prep never corrects, resolves to a timezone or converts to UTC.
+Prep SHALL derive a file's name from its raw timestamp, as the camera recorded it, for organizing and ordering only,
+never correcting it, resolving it to a timezone or converting it to UTC — a provisional name for a photo, which geotag
+recomputes; a video keeps it ({need}`RUL-video_name_stays_uncorrected`).
 :::
 
 :::{rul} Geotag's name is final
@@ -1364,7 +1366,7 @@ provisional name, which prep never corrects, resolves to a timezone or converts 
 :criticality: med
 :verify: required
 
-Geotag SHALL recompute a file's name from its corrected local time at the destination — its resolved true time, in the
+Geotag SHALL recompute the name of each photo whose time it corrects from its corrected local time at the destination — its resolved true time, in the
 destination's civil timezone — and rename it to that final name.
 :::
 
@@ -1375,8 +1377,8 @@ destination's civil timezone — and rename it to that final name.
 :verify: required
 :uses: RUL-prep_name_provisional, RUL-geotag_name_final
 
-A file's name SHALL change between prep and geotag only when its timestamp is corrected, or its extension is not in
-lowercase: geotag plans no rename for a file whose time is not corrected but to lowercase its extension.
+A file's name SHALL change between prep and geotag only when its timestamp is corrected, its extension is not in
+lowercase, or it is a set-aside JPEG taking its RAW's name ({need}`RUL-set_aside_jpeg_renamed_with_raw`): geotag plans no rename for a file whose time is not corrected but to lowercase its extension.
 :::
 
 :::{def} An untimed name
@@ -1430,15 +1432,15 @@ Prep SHALL name every misnamed file it finds.
 Prep SHALL give, with each misnamed file it names, the name the file should carry.
 :::
 
-:::{rul} No meaning is read from a file's name
+:::{rul} No time is read from a file's name
 :id: RUL-no_meaning_from_names
 :status: ruled
 :criticality: med
 :anti: yes
 :verify: required
-:refines: RUL-misnamed_file_stops_prep
+:refines: RUL-recorded_time_order
 
-No phase SHALL read meaning from a file's name: its timestamp comes from its metadata.
+No phase SHALL read a file's time from its name: its timestamp comes from its metadata.
 :::
 
 :::{rul} A redundant JPG gets its timestamp name
@@ -1482,7 +1484,8 @@ Once prep has named a workspace's files in a format, a change to the format SHAL
 :uses: DEF-geotag, DEF-configuration
 
 A workspace's **tracks** are the recorded position logs geotag reads as evidence: to propose time anchors, and to place
-photos along them by interpolation or extrapolation. The configuration says where they are.
+photos along them by interpolation or extrapolation. The configuration says where they are. A **track file** holds
+one or more **tracks**, each one device's recording; a track's **segments** are its stretches between breaks.
 :::
 
 :::{rul} Only geotag reads the tracks
@@ -1518,6 +1521,7 @@ part of this contract.
 :anti: yes
 :verify: required
 :uses: DEF-tracks
+:excepts: RUL-inbox_non_media_never_blocks
 
 A track file — a recorded position log in any of the usual formats, whether or not geotag reads that format — found
 anywhere prep inventories, in the dump or in a managed folder, SHALL block prep's plan.
@@ -1779,10 +1783,10 @@ Geotag SHALL NOT plan while photos by destination holds a photo prep has not rec
 :status: ruled
 :criticality: med
 :verify: required
-:refines: RUL-prep_records_sort
+:refines: RUL-moved_file_carried
 
-A prep run after the latest sort SHALL record the moves from the files' sizes and modification times alone, carrying
-each moved file's identity forward without reading it again.
+A prep run after the latest sort SHALL record the moves, reading again no file whose row it would have reused
+({need}`RUL-moved_file_carried`).
 :::
 
 :::{rul} Geotag plans only on a record that still holds
@@ -1808,7 +1812,7 @@ Geotag SHALL be re-runnable any number of times — after a successful execution
 not been merged.
 :::
 
-:::{rul} A re-run changes nothing already settled
+:::{rul} A re-run never corrects a time twice
 :id: RUL-geotag_rerun_keeps_settled
 :status: ruled
 :criticality: high
@@ -1826,7 +1830,7 @@ A geotag re-run SHALL recognise a time an earlier run corrected, never correctin
 :criticality: high
 :anti: yes
 :verify: required
-:refines: RUL-geotag_rerun_keeps_settled
+:refines: RUL-geotag_rerunnable
 :uses: RUL-decision_kept, RUL-mutate_on_difference
 
 A geotag re-run SHALL derive again and replace a position geotag wrote, never keeping it as the file's own.
@@ -1924,7 +1928,7 @@ decided as before the change: from the photo's own time, or from the true time t
 :verify: required
 :uses: DEF-geotag, DEF-managed_folders
 
-Geotag SHALL NOT proceed unless the workspace now satisfies its gates: photos by date holds no photo; photos
+Geotag's planning, execution and finalize SHALL NOT proceed unless the workspace now satisfies its gates: photos by date holds no photo; photos
 by destination holds only photos and no development subfolder; prep has recorded every photo in it; and the inbox is
 empty.
 :::
@@ -2031,7 +2035,8 @@ finalize.
 :verify: required
 :uses: DEF-merge, DEF-workspace
 
-Merge SHALL be the last phase run in a workspace: once it succeeds, more media goes to a fresh workspace.
+Merge SHALL be the last phase run in a workspace, pruning its quarantine aside ({need}`RUL-sealed_prune_allowed`):
+once it succeeds, more media goes to a fresh workspace.
 :::
 
 :::{rul} The library accepts merges from many workspaces
@@ -2166,7 +2171,8 @@ A run over unchanged inputs SHALL never treat earlier work as an error.
 
 A **decision** is a value the user records in one of geotag's records for the tool to act on — a destination's
 timezone, an accepted time anchor, a clock offset, a confirmed drift check, a manual position, a folder fallback, a
-content acceptance in the execution summary — among others.
+content acceptance in the execution summary — among others. Geotag keeps them in three records — the **time
+decisions**, the **drift check** and the **GPS decisions** — and the content acceptances in its execution summary.
 :::
 
 :::{def} A photo's own values
@@ -2220,7 +2226,9 @@ A phase SHALL create every field a decision needs, so the user fills in values, 
 :upholds: INV-every_change_from_the_record
 :uses: DEF-prep
 
-Prep SHALL ask the user for no decision, organizing from the state of the workspace and its configuration alone.
+Prep SHALL take no decision and wait on no answer, organizing from the state of the workspace and its configuration
+alone: its one question, whether to download the table of countries ({need}`RUL-zone_table_never_stops_prep`), never
+holds it up.
 :::
 
 :::{rul} The cause of every change can be found
@@ -2244,9 +2252,20 @@ through the plan, to the record of what ran — so a wrong result points at a re
 :upholds: INV-every_change_from_the_record
 :uses: DEF-decision, DEF-dependency_cascade
 
-A decision SHALL be revised by changing it in the record and running again, the change reaching everything that depends
-on it: no change the tool makes is irreversible at the level of the decisions, and a wrong choice never needs the
-mutated files repaired by hand.
+Until merge, a decision SHALL be revised by changing it in the record and running again, the change reaching everything
+that depends on it.
+:::
+
+:::{rul} A wrong choice needs no repair by hand
+:id: RUL-wrong_choice_needs_no_hand_repair
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+:refines: RUL-decision_revisable
+
+A wrong decision SHALL never need the files it changed repaired by hand: no change the tool makes is irreversible at
+the level of the decisions.
 :::
 
 :::{rul} Withdrawing a decision undoes it
@@ -2298,8 +2317,9 @@ everything done to it and why. Each phase keeps its own, carrying the previous p
 :status: ruled
 :uses: DEF-control_records, DEF-transformation_log
 
-The **archival package** is one archive, kept with the control records, holding the complete record of a dump's journey
-through the pipeline — what was done to its photos and why. It is what the user keeps when the workspace goes away.
+The **archival package** is an archive, kept with the control records, holding the complete record of a dump's journey
+through the pipeline — what was done to its photos and why: finalize makes it, and a merge that succeeds makes a later
+one that supersedes it. It is what the user keeps when the workspace goes away.
 :::
 
 :::{rul} The record is whole at the end of every phase
@@ -2348,7 +2368,8 @@ the earlier one untouched, and never deriving an earlier phase's history again.
 :uses: DEF-finalize, DEF-archival_package
 
 Finalize SHALL change nothing in the workspace's media, its other records or the library, only reading the record that
-already stands at the end of geotag and writing the package from it.
+already stands at the end of geotag and writing from it the complete log, geotag's database image, its record of the
+photos as it found them, and the package.
 :::
 
 :::{rul} What the package holds
@@ -2539,7 +2560,7 @@ The log SHALL be stably ordered.
 
 The records the log is made from SHALL be kept across runs in enough detail to rebuild every photo's history through
 each phase — each step, the decision and inputs behind it, and the run that made it — never only the last run's.
-Anything beyond that MAY be pruned.
+Anything beyond that, and beyond what the package holds ({need}`RUL-package_contents`), MAY be pruned.
 :::
 
 :::{rul} A history too thin to rebuild is never shown as whole
@@ -2767,11 +2788,11 @@ A workspace is **sealed** once merge has succeeded in it: marked as finished, by
 :verify: required
 :uses: DEF-merge, DEF-library
 
-Merge SHALL never rename, overwrite, move, delete or change a file already in the library, an incoming photo whose place
-is taken giving way instead.
+Merge SHALL never rename, overwrite, move, delete or change a file already in the library that merge did not leave
+there as its own temporary copy, an incoming photo whose place is taken giving way instead.
 :::
 
-:::{rul} Merge reads the library only where it places a photo
+:::{rul} Merge looks for a photo in the library only at its place
 :id: RUL-library_not_scanned
 :status: ruled
 :criticality: med
@@ -2779,8 +2800,7 @@ is taken giving way instead.
 :verify: required
 :uses: DEF-merge, DEF-library
 
-Merge SHALL touch the library only at the places its photos go, and read a library file only when one is already there —
-never scanning, indexing or de-duplicating the library.
+Merge SHALL look for an incoming photo in the library only at its place, never de-duplicating the library as a whole.
 :::
 
 :::{rul} A taken place is settled by content
@@ -2791,7 +2811,8 @@ never scanning, indexing or de-duplicating the library.
 :uses: DEF-merge, DEF-library, DEF-fingerprint
 :refines: RUL-library_never_altered
 
-Where an incoming photo's place in the library is taken, merge SHALL compare the two by fingerprint.
+Where an incoming photo's place in the library is taken, merge SHALL compare the two by fingerprint and, where the
+fingerprints match, by their bytes.
 :::
 
 :::{rul} The same content is already in the library
@@ -2845,7 +2866,7 @@ The report of a photo blocked for the same picture in another library file SHALL
 :verify: required
 :refines: RUL-collision_by_content
 
-A taken place holding different content SHALL mean two photos share a name: the incoming one is placed under a
+A taken place holding another picture — another fingerprint — SHALL mean two photos share a name: the incoming one is placed under a
 differentiating name.
 :::
 
@@ -2927,8 +2948,10 @@ folder that neither lies inside the workspace nor holds it.
 :anti: yes
 :verify: required
 :uses: DEF-library
+:refines: RUL-library_place_checked
 
-A folder SHALL NOT be taken as the library while it is a workspace, lies inside one, or holds one among its own folders.
+A folder SHALL NOT be taken as the library while it is a workspace, lies inside one, or holds one among its immediate
+folders.
 :::
 
 :::{rul} A library is known by its mark alone
@@ -2996,7 +3019,8 @@ it with.
 :uses: DEF-library, DEF-merge
 
 Merge SHALL hold a lock on the library for its whole run, besides the workspace's lock and not instead of it, so that no
-two merges write one library at once, even from different workspaces.
+two merges on one machine write one library at once, even from different workspaces; between machines it holds only as
+far as the library's filesystem makes it ({need}`RUL-library_network_allowed`).
 :::
 
 :::{rul} The library's lock holds only who holds it
@@ -3139,8 +3163,8 @@ package. Merge's plan and journal, from which an interrupted merge resumes, are 
 :verify: required
 :uses: DEF-merge, DEF-archival_package
 
-A merge that succeeds SHALL remake the archival package to hold its own records too, as part of the same run and with no
-command of its own.
+A merge that succeeds SHALL make an archival package of its own, holding its records too, superseding finalize's — as
+part of the same run and with no command of its own.
 :::
 
 :::{rul} Remaking the package re-derives nothing
@@ -3197,8 +3221,9 @@ Whether a workspace is finished SHALL be read from its seal alone, never from th
 :refines: RUL-merge_is_terminal
 :uses: DEF-sealed_workspace
 
-In a sealed workspace prep, geotag and merge SHALL stop as they start, changing nothing but the owner record of the
-workspace lock. Its records MAY still be read.
+In a sealed workspace prep's plan, dry run and execution, geotag and merge SHALL stop as they start, changing nothing
+but the owner record of the workspace lock; pruning the quarantine is the exception ({need}`RUL-sealed_prune_allowed`).
+Its records MAY still be read.
 :::
 
 :::{rul} The decision editor refuses a sealed workspace
@@ -3242,7 +3267,7 @@ Merge's library setup SHALL NOT record a library in a sealed workspace's configu
 :excepts: RUL-sealed_refuses
 :uses: DEF-sealed_workspace
 
-Pruning the quarantine SHALL remain allowed in a sealed workspace — the only change allowed there.
+Pruning the quarantine SHALL remain allowed in a sealed workspace.
 :::
 
 :::{rul} A new dump in a sealed workspace is pointed out
@@ -3298,11 +3323,10 @@ check that it has not changed.
 :criticality: med
 :anti: yes
 :verify: required
-:uses: DEF-configuration, DEF-managed_folders, DEF-tracks
+:uses: DEF-configuration
 :refines: INV-authored_values_checked
 
-A path the configuration names SHALL be neither empty nor blank, hold no character the platform forbids, and stay where
-it must: the tracks' place outside the managed folders, the library's an existing folder that neither lies inside the workspace nor holds it.
+A path the configuration names SHALL be neither empty nor blank, and hold no character the platform forbids.
 :::
 
 :::{rul} A snapshot's name is checked before any snapshot
@@ -3562,7 +3586,7 @@ on the strength of the plan: a name found taken blocks that operation.
 :refines: RUL-target_free_at_execute
 :uses: RUL-suffix_no_clobber, DEF-library
 
-Execution's check that a name is free SHALL ignore case where the filesystem does.
+Execution's check that a name is free SHALL ignore case, on every filesystem.
 :::
 
 :::{rul} An interrupted move leaves the before or the after
@@ -3619,9 +3643,10 @@ nothing: an interruption leaves no file under that name, or the complete one, ne
 :verify: required
 :uses: DEF-merge, DEF-library, RUL-temp_name_own
 :refines: RUL-cross_fs_all_or_nothing
+:excepts: RUL-library_never_altered, RUL-execution_only_the_plan
 
-Merge SHALL clear, as its execution starts, the temporary copies an interrupted merge left in the folders it places
-into.
+Merge SHALL clear, as its execution starts, the temporary copies an interrupted merge left in the library's top folder
+and the folders it places into.
 :::
 
 :::{rul} The temporary copies cleared are counted
@@ -3710,7 +3735,8 @@ first run — the configuration it seeds; a prep execution that geotag's plan ru
 :verify: required
 :upholds: INV-every_change_from_the_record
 
-Execution SHALL carry out only the operations its plan records, re-deriving no decision.
+Execution SHALL carry out only the operations its plan records, re-deriving no decision — clearing the temporary
+copies a crash left ({need}`RUL-crash_temps_cleared`) aside.
 :::
 
 :::{rul} The job count changes nothing an execution does
@@ -3766,8 +3792,9 @@ file system entries alone, reading no media file.
 :verify: required
 :refines: RUL-workspace_checked_first
 
-The comparison SHALL cover every file of the managed folders but the inbox, and of the quarantine — never the inbox,
-which is the user's to fill, nor the control records, which keep checks of their own.
+The comparison SHALL cover every file of the managed folders but the inbox, and of the quarantine, hidden files aside,
+which no phase reads — never the inbox, which is the user's to fill, nor the control records, which keep checks of their
+own.
 :::
 
 :::{rul} A file is told moved, changed or gone by its entry
@@ -4271,8 +4298,8 @@ answer reaches and at every container destination asking for no other.
 :refines: RUL-config_writers
 :uses: DEF-camera_group, RUL-known_when_classified
 
-The decision editor, given by the user the class of a camera group the configuration does not class — a phone, or a
-camera with a fixed clock — SHALL write in the configuration no setting but that class.
+The decision editor, given by the user the class of a camera group the configuration does not know
+({need}`RUL-known_when_classified`) — a phone, or a camera with a fixed clock — SHALL write in the configuration no setting but that class.
 :::
 
 :::{rul} The decision editor records whether a camera group is several bodies, and nothing else

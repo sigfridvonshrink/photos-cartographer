@@ -280,13 +280,53 @@ def test_dev_subfolder_blocks_at_execute(tmp_path):
     assert any("Development has already started" in b for b in blockers), blockers
 
 
-def test_execute_preflight_still_skips_planning_scope_gates(tmp_path):
-    # Over-blocking guard: only the dev-subfolder presence check was added to the execute path. A
-    # planning-only scope gate (a leftover in 0-sources) must NOT block execute.
+def _plan_renaming(ws, rel, to, via=None):
+    """A photos-24 whose one operation renames `rel` to `to` (by `via` for a change of case alone)."""
+    op = {"operation_id": "op1", "type": "rename_no_clobber", "relative_path": rel,
+          "from": os.path.basename(rel), "to": to}
+    if via:
+        op["via"] = via
+    (ws / ".photos-ingest" / "photos-24-executable-plan.json").write_text(
+        json.dumps({"plan_id": "p1", "destinations": {"Trip": {"operations": [op]}}}))
+
+
+@pytest.mark.spec("RUL-geotag_gates", "BLD-loop_gates", test="TST-geotag_preflight-execute_and_finalize_check_every_gate")
+@pytest.mark.parametrize("gate", ["inbox", "by_date", "non_photo", "unrecorded"])
+def test_execute_and_finalize_check_every_gate(tmp_path, gate):
+    """Execution and finalize stop on every gate, as planning does: a dump waiting in the inbox, a photo left in
+    photos by date, a file not a photo among the photos, and a photo prep has not recorded there."""
     ws = _ws(tmp_path)
-    (ws / "0-sources" / "leftover.jpg").write_bytes(b"x")
+    _plan_renaming(ws, "6-photos-by-dest/Trip/a.jpg", "2024-01-01--10-00-00.jpg")
+    assert cal.GeotagWorkflow(str(ws)).preflight(for_execute=True)[0] == []
+    said = {"inbox": "0-sources/ is not empty", "by_date": "5-photos-by-date/ still contains",
+            "non_photo": "must contain only photos", "unrecorded": "is out of date"}[gate]
+    target = {"inbox": "0-sources/leftover.jpg", "by_date": "5-photos-by-date/2023-01-01--00-00-00.jpg",
+              "non_photo": "6-photos-by-dest/Trip/notes.txt", "unrecorded": "6-photos-by-dest/Trip/new.jpg"}[gate]
+    (ws / target).write_bytes(b"x")
+    for needs_exiftool in (True, False):                 # execute, and finalize
+        blockers, _, _ = cal.GeotagWorkflow(str(ws)).preflight(for_execute=True, needs_exiftool=needs_exiftool)
+        assert any(said in b for b in blockers), blockers
+
+
+@pytest.mark.spec("RUL-geotag_gates", "BLD-loop_gates",
+                  test="TST-geotag_preflight-names_the_plan_gives_are_recorded_at_execute")
+def test_names_the_plan_gives_are_recorded_at_execute(tmp_path):
+    """A photo the plan renamed, under its new name or a case change's temporary one, is not an unrecorded photo to
+    execute's resume or to finalize; the leftover of a planned write beside it is the writer's, not a stray file."""
+    ws = _ws(tmp_path)
+    bd = ws / "6-photos-by-dest" / "Trip"
+    _plan_renaming(ws, "6-photos-by-dest/Trip/a.jpg", "A.jpg", via="a.jpg.tmp-case.jpg")
+    (bd / "a.jpg").rename(bd / "A.jpg")
+    assert cal.GeotagWorkflow(str(ws)).preflight(for_execute=True)[0] == []
+    (bd / "A.jpg").rename(bd / "a.jpg.tmp-case.jpg")
+    assert cal.GeotagWorkflow(str(ws)).preflight(for_execute=True)[0] == []
+    (bd / "a.jpg.tmp-case.jpg").rename(bd / "a.jpg")
+    (bd / "a.jpg_exiftool_tmp").write_bytes(b"partial")
+    assert cal.GeotagWorkflow(str(ws)).preflight(for_execute=True)[0] == []
+    # the same leftover beside a photo no operation writes is a file among the photos, as at planning
+    (bd / "a.jpg_exiftool_tmp").rename(bd / "b.jpg_exiftool_tmp")
     blockers, _, _ = cal.GeotagWorkflow(str(ws)).preflight(for_execute=True)
-    assert not any("0-sources/ is not empty" in b for b in blockers), blockers
+    assert any("must contain only photos" in b and "b.jpg_exiftool_tmp" in b for b in blockers), blockers
 
 
 @pytest.mark.spec("RUL-sort_photos_only", test="TST-geotag_preflight-video_in_by_dest_blocks")

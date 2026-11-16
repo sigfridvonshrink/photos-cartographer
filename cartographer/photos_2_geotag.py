@@ -48,6 +48,7 @@ import zoneinfo
 from datetime import datetime, timedelta, timezone
 
 from .photos_utils import (ends_unforeseen_error_apart, fingerprint_method_blocker, links_under, replace_durably,
+    exiftool_artifact_base,
     country_table, zone_table_record_error,
     zone_table,
     code_fingerprint,
@@ -578,13 +579,12 @@ class GeotagWorkflow:
         """Return (blockers, warnings, info). A non-empty `blockers` means geotag cannot
         proceed. Textual only — writes no JSON. The lifecycle guards (sealed / uninitialized /
         loose-root-file) and the development-started gate (RUL-development_after_merge) hard-stop early; the remaining
-        by-dest scope and re-prep gates are collected so the rest are reported at once. `for_execute` keeps the
-        lifecycle guards, the development gate, and the config/handoff load, but SKIPS the
-        planning-phase scope and re-prep gates: execution validates against the plan's own dependency
-        fingerprints + per-op preconditions, and the by-dest filenames it renames would otherwise trip
-        the re-prep gate (BLD-loop_gates: it is a planning concern). The development gate is the exception — it is
-        re-checked at execute/finalize too (a breakout begun after planning moves no planned file). `needs_exiftool`
-        is false for finalize alone, which runs no tool on a photo."""
+        by-dest scope and re-prep gates are collected so the rest are reported at once. `for_execute` (execute and
+        finalize) checks every gate too — the inbox, photos by date, photos by destination holding only photos, and
+        that prep recorded every photo there — but the last against the handoff and the plan's renames together:
+        the by-dest names the plan gives would otherwise trip the re-prep gate, and prep's other checks of its
+        record are the plan's own dependency fingerprints and per-op preconditions there (BLD-loop_gates).
+        `needs_exiftool` is false for finalize alone, which runs no tool on a photo."""
         blockers, warnings, info = [], [], {}
         ws = self.workspace_root
 
@@ -712,13 +712,10 @@ class GeotagWorkflow:
                             f"{by_dest}/ (or repair them so ImageMagick can read them), then re-run prep — "
                             "`photos-cartographer prep plan` then `photos-cartographer prep execute`.")
 
-        if for_execute:                 # execution skips the planning-phase scope/re-prep gates
-            return blockers, warnings, info
-
         sources = folder_name('sources')
         by_date = folder_name('photos_by_date')
 
-        # 3. Scope gates.
+        # 3. Scope gates — at plan, execute and finalize alike (RUL-geotag_gates, BLD-loop_gates).
         if self._entries(sources):
             blockers.append(f"{sources}/ is not empty — prep leaves it empty after every run; an "
                             "unprocessed dump is waiting. Re-run prep to process it: `photos-cartographer prep plan` then `photos-cartographer prep execute`.")
@@ -728,6 +725,10 @@ class GeotagWorkflow:
             blockers.append(f"{by_date}/ still contains {len(stray)} photo(s) — finish moving them "
                             f"into {by_dest}/ before geotagging: {_named(stray)}.")
 
+        if nonphoto and for_execute:
+            # The leftover of a write this plan makes to a photo is the writer's to judge (BLD-metadata_safe_write),
+            # not a file put among the photos.
+            nonphoto = [(p, mc) for p, mc in nonphoto if not self._planned_write_leftover(p)]
         if nonphoto:
             videos = sorted(p for p, mc in nonphoto if mc == "video")
             others = sorted(p for p, mc in nonphoto if mc != "video")
@@ -739,6 +740,13 @@ class GeotagWorkflow:
                              f"{_named(videos)}")
             blockers.append(f"{by_dest}/ must contain only photos. Found " + " and ".join(parts) +
                             ". Remove or relocate them before geotagging.")
+
+        if for_execute:
+            # Execution and finalize work from the plan, which renamed what it renamed: a photo there that neither
+            # prep recorded nor the plan names is one sorted since (RUL-geotag_gates). Prep's other checks of its
+            # record are the plan's own dependencies here (BLD-loop_gates).
+            self._check_unrecorded_at_execute(handoff, by_dest, by_date, blockers)
+            return blockers, warnings, info
 
         # 4. Re-prep-after-move gate (RUL-prep_records_sort): a prep run must follow the latest by-date→by-dest move.
         self._check_reprep_gate(handoff, by_dest, by_date, blockers)
@@ -821,6 +829,59 @@ class GeotagWorkflow:
                 f"one it recorded has since been removed or changed (e.g. {ex}). Re-run prep to record "
                 "it and refresh the handoff: run `photos-cartographer prep plan` then "
                 "`photos-cartographer prep execute`. Then geotag can proceed.")
+
+    def _planned_paths(self):
+        """(written, named) from photos-24: the workspace-relative paths of the photos its operations write or rename,
+        and every name its renames give them — the final name and a case change's temporary one. None when there is
+        no readable plan: execute and finalize then stop on that themselves (BLD-unreadable_plan)."""
+        if not hasattr(self, "_planned_paths_memo"):
+            try:
+                plan = read_executable_plan(self.workspace_root)
+            except UnreadablePlan:
+                plan = None
+            if not isinstance(plan, dict):
+                self._planned_paths_memo = None
+            else:
+                written, named = set(), set()
+                for d in (plan.get("destinations") or {}).values():
+                    for op in (d.get("operations") or []) if isinstance(d, dict) else []:
+                        rel = op.get("relative_path") if isinstance(op, dict) else None
+                        if not isinstance(rel, str):
+                            continue
+                        written.add(rel)
+                        if op.get("type") == "rename_no_clobber":
+                            for key in ("to", "via"):
+                                if isinstance(op.get(key), str):
+                                    named.add(os.path.join(os.path.dirname(rel), op[key]))
+                self._planned_paths_memo = (written, named)
+        return self._planned_paths_memo
+
+    def _planned_write_leftover(self, rel):
+        """Whether `rel` is `<photo>_exiftool_tmp` beside a photo the plan writes, under its name before or after
+        the plan's rename (BLD-metadata_safe_write)."""
+        base = exiftool_artifact_base(os.path.basename(rel))
+        paths = self._planned_paths() if base else None
+        if not paths:
+            return False
+        photo = os.path.join(os.path.dirname(rel), base)
+        return photo in paths[0] or photo in paths[1]
+
+    def _check_unrecorded_at_execute(self, handoff, by_dest, by_date, blockers):
+        """At execute and finalize: a photo in photos by destination that prep's handoff does not record and the
+        plan's renames do not name was sorted there since — the gate that prep has recorded every photo there
+        (RUL-geotag_gates, BLD-loop_gates). Skipped with no readable plan, which stops the command anyway."""
+        paths = self._planned_paths()
+        if paths is None:
+            return
+        recorded = {f.get("relative_path") for f in (handoff.get("files") or [])} | paths[1]
+        unrecorded = sorted(rel for rel, mc in self._scan_media(by_dest)
+                            if mc in ("image", "raw") and rel not in recorded)
+        if unrecorded:
+            blockers.append(
+                f"Prep's record of {by_dest} is out of date — {len(unrecorded)} photo(s) were put there since the "
+                f"plan was made: {_named(unrecorded)}. Move them back to {by_date}/, or re-run prep to record "
+                "them (`photos-cartographer prep plan` then `photos-cartographer prep execute`) and then "
+                "`geotag plan`.")
 
     @staticmethod
     def _check_derivation_versions(handoff, blockers):

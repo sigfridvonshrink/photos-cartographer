@@ -477,7 +477,8 @@ def test_geotag_position_off_the_track_waits_then_gives_way(tmp_path, monkeypatc
                               "GPSProcessingMethod": "interpolated"}   # what it replaces, for the log
 
 
-@pytest.mark.spec("RUL-decision_revisable", "BLD-original_values_pinned", test="TST-geotag_rerun_markers-changed_offset_after_execute_reaches_the_photo")
+@pytest.mark.spec("RUL-decision_revisable", "RUL-wrong_choice_needs_no_hand_repair", "BLD-original_values_pinned",
+                  test="TST-geotag_rerun_markers-changed_offset_after_execute_reaches_the_photo")
 def test_changed_offset_after_execute_reaches_the_photo(tmp_path, monkeypatch):
     """A wrong offset, once executed, is fixed in the record: the re-run works from the photo's own
     camera time and corrects it once, under the new offset."""

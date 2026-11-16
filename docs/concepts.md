@@ -630,7 +630,11 @@ clock offset applied, now or later, and no evidence of the camera's clock — or
 The question names the time the photo holds, the one geotag wrote and the photo's own, and says so when
 the photo's offset tag disagrees with the timezone.
 
-**Geotag execute and finalize** — a plan no longer current (plan again); a journal, execution summary or
+**Geotag execute and finalize** — the same gates as the plan: `0-sources/` not empty, photos still in
+`5-photos-by-date/`, anything but photos in `6-photos-by-dest/`, or a photo there that neither prep recorded nor
+the plan renamed (take a dump dropped in after the plan out again until geotag is done, or prep it and plan
+again); a
+plan no longer current (plan again); a journal, execution summary or
 earlier plan in `.photos-ingest/` that cannot be read (the stop names it; repair it — it is never taken for
 empty). Execute leaves a photo edited since the plan untouched; finalize refuses while a photo has changed
 since execute. A photo exiftool cannot write (a damaged file, a format it reads and cannot write) is left as
