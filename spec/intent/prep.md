@@ -107,9 +107,10 @@ already did: the folders it made, and the dump already in the inbox.
 :verify: required
 :uses: DEF-strays_folder, DEF-archival_package
 
-A file prep moves to the strays folder SHALL be recorded nowhere but in the plan that moves it and the journal of that
-move — no fingerprint, no row in the workspace database, no entry in the handoff or any log — the archival package
-holding it only as it holds that plan.
+A file prep moves to the strays folder SHALL be recorded nowhere but in the plan that moves it, the journal of that
+move and the record of the workspace's state ({need}`RUL-execution_records_state`) — no fingerprint, no row of the
+files the workspace database describes, no entry in the handoff or any log — the archival package holding it only as it
+holds that plan and that record.
 :::
 
 ## 5. What prep refuses to work on

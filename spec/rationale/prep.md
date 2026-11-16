@@ -100,7 +100,7 @@ and the next simply initializes again.
 
 A stray is a file cartographer does not understand — a document, a sidecar it has no use for. Recorded beside the media,
 it would make cartographer answer for what it cannot reason about; parked whole, it waits for the user to keep or clear
-it, and clearing it costs the record nothing. Moving it is a change like any other, planned and journaled, so the plan
+it, and clearing it is a change the user accepts once, by its code. Moving it is a change like any other, planned and journaled, so the plan
 names it, where it was and where it goes, and that plan is kept with the workspace's records; it is named nowhere it
 would be taken for a photo.
 :::

@@ -1561,10 +1561,15 @@ than any automated move inside a finished workspace.
 :follows_from: RAT-no_automatic_deletion, RAT-sealed_is_final
 :justifies: RUL-sealed_prune_allowed
 
-The quarantine holds only spare copies of duplicates, which a sealed workspace still keeps. Deleting them, with the
-manifests that list them, touches no photo, library file, earlier control record or row of the database, adding
-only its own record of what it removed; what each manifest said is kept in that record, and in the transformation log
-and the package. It neither reprocesses the workspace nor adds a batch to it,
+The quarantine holds what prep set aside: the spare copies of duplicates, the hidden files a dump brought, the
+leftovers of interrupted writes and the JPEG of a RAW the user culled. Not all of it is spare — a leftover may still be
+the only whole copy of something — so what makes a prune safe is not what the quarantine holds but that the user chose
+it: a prune deletes only the runs the user names, by their plan or their age, or all of them only when told so outright,
+and lists every file it would delete
+before it deletes anything, deleting only when told to. Deleting them, with the manifests that list them, touches no
+photo, library file, earlier control record or row of the database but its own entries in the record of the
+workspace's state, adding only its own record of what it removed; what each manifest said is kept in that record, and
+a duplicate's in the transformation log and the package. It neither reprocesses the workspace nor adds a batch to it,
 so the seal's reasons do not reach it, and the space can be reclaimed.
 :::
 
