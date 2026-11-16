@@ -22,7 +22,7 @@ import sys
 
 import pytest
 
-from _handoff import vouched
+from _handoff import recorded, vouched
 from _zone import answer_root_zone
 import photos_1_prep as prep
 import photos_2_geotag as cal
@@ -57,10 +57,11 @@ def _photo(ws, rel, dto, lat, lon):
         "has_timestamp": True, "has_native_gps": True, "GPSLatitude": lat, "GPSLongitude": lon})
 
 
-def _workspace(tmp_path, monkeypatch, extra=()):
-    """Two RAWs in a destination whose native positions put the camera's clock an hour ahead; beside the first, the
-    JPEG prep set aside under its camera time; and the files of `extra` — (relative path, media class, raw partner's
-    relative path or None). Planned through to a ready photos-24. Returns (ws, control dir)."""
+def _workspace(tmp_path, monkeypatch, extra=(), raws=None):
+    """Two RAWs in a destination whose native positions put the camera's clock an hour ahead — or the RAWs `raws`
+    makes of the workspace; beside the first, the JPEG prep set aside under its camera time; and the files of `extra`
+    — (relative path, media class, raw partner's relative path or None). Planned through to a ready photos-24.
+    Returns (ws, control dir)."""
     ws = tmp_path / "ws"; ws.mkdir()
     for d in MANAGED:
         (ws / d).mkdir()
@@ -80,9 +81,10 @@ def _workspace(tmp_path, monkeypatch, extra=()):
     (ctl / "photos-00-config.json").write_text(json.dumps(cfg))
     answer_root_zone(ctl)
 
-    raws = [_photo(ws, f"6-photos-by-dest/T/{AWAY}.arw", "2024:07:03 15:00:00", 50.0, 4.0),
-            _photo(ws, "6-photos-by-dest/T/2024-07-03--16-00-00.arw", "2024:07:03 16:00:00", 51.0, 5.0)]
-    aside = [(f"3-redundant-jpgs/{AWAY}.jpg", "image", f"6-photos-by-dest/T/{AWAY}.arw")] + list(extra)
+    raws = raws(ws) if raws else [
+        _photo(ws, f"6-photos-by-dest/T/{AWAY}.arw", "2024:07:03 15:00:00", 50.0, 4.0),
+        _photo(ws, "6-photos-by-dest/T/2024-07-03--16-00-00.arw", "2024:07:03 16:00:00", 51.0, 5.0)]
+    aside = [(f"3-redundant-jpgs/{AWAY}.jpg", "image", raws[0]["relative_path"])] + list(extra)
     files, log = list(raws), {}
     for rel, media_class, partner in aside:
         rec = _record(ws, rel, media_class, rel.split("/", 1)[0])
@@ -200,6 +202,56 @@ def test_a_held_raw_holds_its_jpeg(tmp_path, monkeypatch):
     monkeypatch.setattr(cal.GeotagWorkflow, "_apply_file", real)
     assert _geotag(monkeypatch, ws, "execute") == 0                  # run again: the pair renamed together
     assert (ws / "3-redundant-jpgs" / f"{HOME}.jpg").exists() and (ws / "6-photos-by-dest" / "T" / f"{HOME}.arw").exists()
+
+
+@pytest.mark.spec("BLD-finalize_preconditions", "RUL-finalize_checks_photos",
+                  test="TST-geotag_set_aside_jpegs-a_renamed_jpeg_changed_stops_finalize")
+def test_a_renamed_jpeg_changed_since_execution_stops_finalize(tmp_path, monkeypatch, capsys):
+    """Finalize checks the JPEG the plan renamed with its RAW as it checks the photos: one changed since execution
+    stops it, named under the folder it is in — not as a photo of photos by destination."""
+    ws, ctl = _workspace(tmp_path, monkeypatch)
+    _tools(monkeypatch, ws)
+    assert _geotag(monkeypatch, ws, "execute") == 0
+    (ws / "3-redundant-jpgs" / f"{HOME}.jpg").write_bytes(b"retouched by hand, another size")
+    recorded(ws)                                   # past the workspace check: finalize's own check meets it
+    capsys.readouterr()
+    assert _geotag(monkeypatch, ws, "finalize") == 2
+    said = capsys.readouterr()
+    said = said.out + said.err
+    assert f"1 file(s) in 3-redundant-jpgs are not as the execution left them (3-redundant-jpgs/{HOME}.jpg)" in said
+    assert not (ctl / "photos-26-finalized-media.json").exists()
+
+
+@pytest.mark.spec("RUL-set_aside_jpeg_catches_up", "BLD-set_aside_jpeg_catches_up", "RUL-set_aside_jpeg_only_renamed",
+                  test="TST-geotag_set_aside_jpegs-a_jpeg_left_behind_takes_its_raws_name")
+def test_a_jpeg_left_behind_takes_the_name_its_corrected_raw_holds(tmp_path, monkeypatch):
+    """An earlier run renamed the RAW without its JPEG: the RAW holds its corrected time and name and geotag's mark,
+    the JPEG is still under the camera's time. The plan renames nothing in photos by destination, and the JPEG to the
+    name its RAW holds — a rename only, after no other — and the pair keeps one name."""
+    def corrected(ws):
+        rec = _record(ws, f"6-photos-by-dest/T/{HOME}.arw", "raw", "6-photos-by-dest", {
+            "DateTimeOriginal": "2024:07:03 14:00:00", "OffsetTimeOriginal": "+02:00",
+            "selected_source_naive_timestamp": "2024:07:03 14:00:00",
+            "selected_source_timestamp_tag": "DateTimeOriginal", "camera_group_key": CAM, "has_timestamp": True,
+            "has_native_gps": True, "GPSLatitude": 50.0, "GPSLongitude": 4.0, "GPSProcessingMethod": "+carto-time"})
+        return [rec]
+    ws, ctl = _workspace(tmp_path, monkeypatch, raws=corrected)
+    ops = _ops(ctl)
+    assert not [o for o in ops if o["type"] == "rename_no_clobber" and o["relative_path"].startswith("6-")]
+    outside = [o for o in ops if not o["relative_path"].startswith("6-photos-by-dest/")]
+    assert [(o["type"], o["relative_path"], o["to"], o["with_raw"], o.get("follows")) for o in outside] == [
+        ("rename_no_clobber", f"3-redundant-jpgs/{AWAY}.jpg", f"{HOME}.jpg", f"6-photos-by-dest/T/{HOME}.arw", None)]
+
+    held = _tools(monkeypatch, ws)
+    jpeg_inode = (ws / "3-redundant-jpgs" / f"{AWAY}.jpg").stat().st_ino
+    assert _geotag(monkeypatch, ws, "execute") == 0
+    assert os.listdir(ws / "3-redundant-jpgs") == [f"{HOME}.jpg"]
+    assert (ws / "3-redundant-jpgs" / f"{HOME}.jpg").stat().st_ino == jpeg_inode and jpeg_inode not in held
+    assert _geotag(monkeypatch, ws, "finalize") == 0               # the rename in the JPEG's own record
+    entry = json.load(open(ctl / "photos-26-complete-log.json"))["photos"][f"fp-3-redundant-jpgs/{AWAY}.jpg"]
+    assert [(s["action"], s.get("to")) for s in entry["journey"] if s["phase"] == "geotag"] == [
+        ("final_rename", f"{HOME}.jpg")]
+    assert entry["geotag_path"] == f"3-redundant-jpgs/{HOME}.jpg"
 
 
 @pytest.mark.spec("RUL-set_aside_jpeg_named_as_raw", "BLD-name_check", "RUL-execution_records_state",

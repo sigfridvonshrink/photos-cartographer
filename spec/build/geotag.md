@@ -39,7 +39,8 @@ Each destination's entry in `photos-21-time-decisions.json`, a container's inclu
 `user_decision.date` — `""`, or `YYYY`, `YYYY-MM` or `YYYY-MM-DD` in ASCII digits naming a day of the calendar, else a
 blocker naming the destination and the value; `effective_date` — `date` as written, `filled`, the day it stands for as
 `YYYY-MM-DD`, a month or day left out being `01`, and `set_at`, the destination it was written at — the one written
-there, else, destinations being built parent first, its nearest ancestor's, named in `inherited_from`, else `null`;
+there, else, destinations being built parent first, its nearest ancestor's, else `null`; `inherited_from`, where an
+ancestor has a date in effect, naming the nearest such, whether or not the destination writes its own;
 `untimed_photos`, the paths of its photos whose `has_timestamp` is false, where it holds any; `requires_user_input`,
 true where it lists one and has no `effective_date`, which leaves photos-21 incomplete; and `stale_user_decision`,
 false. A photo whose `has_timestamp` is false is keyed `NO_IDENTITY_KEY` by `clock_group_key`, so in no group's offset
@@ -90,7 +91,8 @@ execute compares the plan's `metadata_field_set_version` likewise ({need}`BLD-ge
 
 Geotag's `build_file_model` SHALL take, from the handoff, only the records whose `folder_class` is `6-photos-by-dest`
 and whose `media_class` is `image` or `raw`; every operation of `photos-24-executable-plan.json` names one of them, but
-the renames of the JPEGs set aside beside them ({need}`BLD-set_aside_renamed_with_raw`).
+the renames of the JPEGs set aside beside them ({need}`BLD-set_aside_renamed_with_raw`,
+{need}`BLD-set_aside_jpeg_catches_up`).
 :::
 
 ## 6. Human decision field rule
@@ -149,8 +151,8 @@ fixes' times — in the order of their true times: each anchor's camera time plu
 consensus, the track time it matched; each reading's fix time. Where those photos do not already agree (the anchors
 conflict or tie; the readings' offsets lie farther apart than `gpx_anchor_offset_spread_max_seconds`, their fix times
 all different), it tries each place to cut them in two: a cut whose earlier and later photos each agree — a GPX
-consensus over them with no conflicting photo, no tie and no stay; readings within the spread of their first, whose
-offset it is — on offsets farther apart than the spread. Exactly one such cut, the first run's last true time — each
+consensus over them with no conflicting photo, no tie and no stay; readings within the spread of each other, the first's
+offset the run's — on offsets farther apart than the spread. Exactly one such cut, the first run's last true time — each
 photo placed by its own run's consensus — a second or more before the second's first, is recorded on the day's cell
 as `clock_change`: `evidence` (`gpx_self_anchor` or `gps_time`), `runs` — each `offset_seconds`, `photos`, and `first`
 and `last` in true time (`source_file`, `camera_source_naive_time`, `real_utc`) — `unsettled`, and
@@ -234,7 +236,7 @@ executable runs on.
 :realises: RUL-track_points_kept, RUL-unused_points_not_kept, RUL-gone_track_told, RUL-gone_track_not_used, RUL-unlisted_tracks_stop_geotag, RUL-reuse_valid_work
 :uses: BLD-workspace_database, BLD-track_window
 
-`GPXIndex` SHALL keep, in geotag's region of `photos-00-ingest.db`, a catalogue of every `*.gpx` file under `gpx_root` — `gpx_track_files`, one entry per file as it was read: its path under the root, the folder directly under the root it is filed in, the size, modification time and inode it was read at, the SHA-256 of its bytes, the parse version that read it, the first and last of its points' UTC times, the window its kept points cover, its warnings and why it could not be parsed, and whether it is withdrawn — and, in `gpx_track_points`, each entry's points within the window it covers, each with its UTC time, latitude, longitude, point index, track and segment. A file whose size, modification time and inode are its entry's is not read again unless the window has grown into the span from its first point to its last past what the entry covers; a new or changed file, or one the window has grown into, is read and parsed, and becomes the entry for its bytes, its kept points those of the window it covered grown by the new one. Once `geotag plan` has stopped — done, at a decision for the user or at a blocker, never interrupted — each current entry's points outside the window it reached are taken out of the record and what the entry covers narrowed to match, but for its points within the window of each executed plan `gpx_track_use` names it for; a withdrawn entry keeps every point, and the window's own points, and so the fingerprint, are as they were. `geotag plan` writes the catalogue and its points outside the plan's operations, as it writes the resolved-UTC cache: they are what the track files hold, read again while the files are there, and decide nothing by themselves — the parse memo they replace was written the same way; `geotag execute` and `finalize` leave them as they are but for the marks of use ({need}`BLD-withdrawn_track_points`). A file catalogued and no longer under `gpx_root`, or no longer readable, leaves the index; one gone is named in a warning. A folder under `gpx_root` that cannot be listed stops `geotag plan`, exit 2, naming it, before anything is withdrawn, and makes the plan stale at `geotag execute`.
+`GPXIndex` SHALL keep, in geotag's region of `photos-00-ingest.db`, a catalogue of every `*.gpx` file under `gpx_root` — `gpx_track_files`, one entry per file as it was read: its path under the root, the folder directly under the root it is filed in, the size, modification time and inode it was read at, the SHA-256 of its bytes, the parse version that read it, the first and last of its points' UTC times, the window its kept points cover, its warnings and why it could not be parsed, and whether it is withdrawn — and, in `gpx_track_points`, each entry's points within the window it covers, each with its UTC time, latitude, longitude, point index, track and segment. A file whose size, modification time and inode are its entry's is not read again unless the window has grown into the span from its first point to its last past what the entry covers; a new or changed file, or one the window has grown into, is read and parsed, and becomes the entry for its bytes, its kept points those of the window it covered grown by the new one. Once `geotag plan` has stopped — done, at a decision for the user or at a blocker, never interrupted — each current entry's points outside the window it reached are taken out of the record and what the entry covers narrowed to match, but for its points within the window of each executed plan `gpx_track_use` names it for; a withdrawn entry keeps every point, and the window's own points, and so the fingerprint, are as they were. `geotag plan` writes the catalogue and its points outside the plan's operations, as it writes the resolved-UTC cache: they are what the track files hold, read again while the files are there, and decide nothing by themselves — the parse memo they replace was written the same way; `geotag execute` and `finalize` leave them as they are but for the marks of use ({need}`BLD-withdrawn_track_points`). A file catalogued and no longer under `gpx_root`, or no longer readable, leaves the index; one gone is named in a warning. A file is judged readable only when it is read: one whose size, modification time and inode are its entry's is not opened again, its points being already recorded. A folder under `gpx_root` that cannot be listed stops `geotag plan`, exit 2, naming it, before anything is withdrawn, and makes the plan stale at `geotag execute`.
 :::
 
 :::{bld} The window of the tracks
@@ -253,7 +255,7 @@ The tracks' window SHALL be the union of what each reader of the tracks reaches,
 :realises: RUL-withdrawn_track_points_kept
 :uses: BLD-track_catalogue
 
-`geotag execute` SHALL record in `gpx_track_use`, after revalidation and before the first write, the plan's id and its `gpx_window` with each current catalogue entry by which the plan places or times photos: the track a GPS write's provenance names; for each cell of photos-21 whose offset the camera's own GPS gave, the tracks of its anchors within `gpx_anchor_offset_spread_max_seconds` of the offset — of every anchor where none is — and those of its `anchored_by`; and the `tracks` of each cell of photos-22 whose drift offset is in effect. An entry no longer its file's — the file gone, changed, or unreadable — is kept with its points, `withdrawn` 1, when `gpx_track_use` names it, and deleted with them when not. A withdrawn entry is not indexed; the file back with the same bytes makes it its file's again.
+`geotag execute` SHALL record in `gpx_track_use`, after revalidation and the snapshot check and before the first write — a run a required snapshot ends recording nothing — the plan's id and its `gpx_window` with each current catalogue entry by which the plan places or times photos: the track a GPS write's provenance names; for each cell of photos-21 whose offset the camera's own GPS gave, the tracks of its anchors within `gpx_anchor_offset_spread_max_seconds` of the offset — of every anchor where none is — and those of its `anchored_by`; and the `tracks` of each cell of photos-22 whose drift offset is in effect. An entry no longer its file's — the file gone, changed, or unreadable — is kept with its points, `withdrawn` 1, when `gpx_track_use` names it, and deleted with them when not. A withdrawn entry is not indexed; the file back with the same bytes makes it its file's again.
 :::
 
 
@@ -452,7 +454,7 @@ A camera group's bucket with no anchor and no offset shared from the same day el
 :status: ruled
 :realises: RUL-offset_far_from_evidence_asks, RUL-gps_time_far_from_evidence_withheld
 
-After the offsets shared within a day, `build_time_decisions` SHALL withdraw the effective offset of a cell whose proposal is `recorded_offset`, `timezone_naive` or `gps_time` and whose effective source is that proposal's (`recorded_offset_unconfirmed`, `recorded_offset_accepted`, `timezone_unconfirmed`, `timezone_accepted`, `gps_time_auto` or `gps_time_accepted`), the cell asking, where the destination holds a photo of another camera group whose resolved UTC is known — a smartphone's, resolved as `compute_resolved_utc` resolves it, or a camera's not yet corrected whose cell's effective source is `gpx_anchor_auto`, `gpx_anchor_accepted`, `gpx_anchor_chosen`, `gpx_anchor_imprecise`, `same_day_auto`, `same_day_accepted` or `manual` — and every photo of the cell not yet corrected, at the time the proposal gives, lies farther than `gpx_anchor_max_clock_error_seconds` from each such photo's resolved UTC and from every track point. Such a proposal, whatever the cell's decision, holds `far_from_evidence`: `max_clock_error_seconds`, `other_photos` (how many), `nearest_other_photo`, `nearest_other_photo_seconds` and `nearest_track_seconds` (empty with no track).
+After the offsets shared within a day, `build_time_decisions` SHALL withdraw the effective offset of a cell whose proposal is `recorded_offset`, `timezone_naive` or `gps_time` and whose effective source is that proposal's (`recorded_offset_unconfirmed`, `recorded_offset_accepted`, `timezone_unconfirmed`, `timezone_accepted`, `gps_time_auto` or `gps_time_accepted`), the cell asking, where the destination holds a photo of another camera group whose resolved UTC is known — a smartphone's, resolved as `compute_resolved_utc` resolves it, or a camera's not yet corrected whose cell's effective source is `gpx_anchor_auto`, `gpx_anchor_accepted`, `gpx_anchor_chosen`, `gpx_anchor_imprecise`, `same_day_auto`, `same_day_accepted` or `manual` — and every photo of the cell not yet corrected, at the time the proposal gives, lies farther than `gpx_anchor_max_clock_error_seconds` from each such photo's resolved UTC and from every track point. Such a proposal, whatever the cell's decision, holds `far_from_evidence`: `max_clock_error_seconds`, `other_photos` (how many), `nearest_other_photo`, `nearest_other_photo_seconds` and `nearest_track_seconds` (empty with no track). The `gps_time` cells are judged first, in rounds, each round all against the resolved UTCs the rounds before left, until a round withdraws none; then the other cells, all against what the `gps_time` cells left.
 :::
 
 :::{bld} The offset of the day next to it
@@ -514,8 +516,8 @@ and `handoff`, the handoff's content fingerprint ({need}`BLD-handoff_content_fin
 cell — `<group>@<date>` where the destination has one for its date, else `<group>`, and of that day split at a change
 of the clock the part the split gives the photo ({need}`BLD-clock_change_split`) — a corrected offset from
 `photos-22-gps-drift-validation.json` taking its place (`camera_group_offset`); a phone's, where its day there has a
-cell whose `phone.applies_to` is `every_photo` and whose effective source is not `as_recorded`, likewise by that cell's
-offset ({need}`BLD-phone_offset_cell`); else a phone's by the offset recorded with
+cell whose `phone.applies_to` is `every_photo` — or `untagged_photos`, for a photo recording no offset — and whose
+effective source is not `as_recorded`, by that cell, as {need}`BLD-phone_offset_cell` reads it; else a phone's by the offset recorded with
 its time — one written within the time's own value, after the seconds and any fraction of them, else its field's:
 `OffsetTimeOriginal` for `DateTimeOriginal`, `OffsetTimeDigitized` for `CreateDate`, `OffsetTime`
 for `ModifyDate` (`smartphone_native_offset`) — else its destination's timezone (`destination_timezone`); and a time
@@ -797,7 +799,8 @@ a second they record (`sub_second`), a photo recording none after those that do,
 timestamp prep named it by (`source_naive_time`), none first, and their path, each such photo or pair takes by
 `allocate_stem` the first stem of its timestamp, bare or suffixed, that no name taken holds under any extension, each
 member keeping its own extension. Every planned name ends with the photo's extension in lowercase. Execution applies
-these renames, and those of {need}`BLD-set_aside_renamed_with_raw`, and no other, each by a no-clobber move.
+these renames, and those of {need}`BLD-set_aside_renamed_with_raw` and {need}`BLD-set_aside_jpeg_catches_up`, and no
+other, each by a no-clobber move.
 Photos a date fallback times record no fraction and were never named by a timestamp, so among themselves they take
 their suffixes by path alone: in one destination, the file names they hold before the rename, compared as text,
 character by character (`scan10.jpg` before `scan2.jpg`).
@@ -822,11 +825,25 @@ fraction written in its recorded time itself, else the digits of the EXIF sub-se
 For each photo whose `rename_no_clobber` the plan holds, `build_executable_plan` SHALL add a `rename_no_clobber` of each
 handoff record in `3-redundant-jpgs` whose `raw_fingerprint` is the photo's fingerprint
 ({need}`BLD-set_aside_pair_recorded`) and which is on disk at its recorded size and time: to the photo's new name,
-extension aside, with the JPEG's own extension in lowercase; `follows` naming the photo's rename; its preconditions
-among the plan's `media_preconditions`. None is added where the JPEG holds that name, or where another file in
+extension aside, with the JPEG's own extension in lowercase; `with_raw` naming the photo, `follows` its rename; its
+preconditions among the plan's `media_preconditions`. None is added where the JPEG holds that name, or where another file in
 `3-redundant-jpgs` holds it or is given it, case folded: the JPEG is left as it is. Execution applies such a rename
 after every other photo's operations, and only where the rename it follows is confirmed; it writes no tag. Finalize
 records it in the JPEG's own entry of `photos-26`, with the JPEG's `geotag_path`.
+:::
+
+:::{bld} A set-aside JPEG catching up with its RAW
+:id: BLD-set_aside_jpeg_catches_up
+:status: ruled
+:realises: RUL-set_aside_jpeg_catches_up
+:uses: BLD-set_aside_renamed_with_raw, BLD-set_aside_pair_recorded
+
+For each photo holding geotag's mark (`GPSProcessingMethod` a position marker or ending in the time-fixed suffix) whose
+`rename_no_clobber` the plan does not hold, `build_executable_plan` SHALL add the rename of
+{need}`BLD-set_aside_renamed_with_raw` of each JPEG set aside beside it, to the name the photo holds, extension aside —
+as there, but with no `follows`: execution applies it with the other files' operations, the photo's name being already
+its own. None is added where the JPEG holds that name, or where another file in `3-redundant-jpgs` holds it or is given
+it, case folded.
 :::
 
 :::{bld} A change of case alone goes by a temporary name
@@ -892,7 +909,7 @@ A cell's dates SHALL be counted over all its group's photos in the destination, 
 :status: ruled
 :realises: RUL-geotag_execution_resumable, RUL-content_changed_write_held, RUL-execution_only_the_plan, RUL-every_change_journaled, RUL-one_photo_failure_contained, RUL-applied_unrecorded_is_recorded, RUL-engine_checked_before_writes
 
-`geotag execute` SHALL, under the workspace lock: revalidate every dependency of photos-24 — and, when it holds an operation, that the image engine is the handoff's `depends_on.cache.image_engine_version` — and stop before any change if one moved; keep photos-21, -22 and -23 in `executed/<plan id>/`; take the snapshot labelled `geotag`, a required one that fails ending the run as `rejected`; pin and move the own values, single-threaded; then, per photo and under `-j`, skip one whose operations the journal confirms; take one gone from its path with its rename target in place as applied before — its operations recorded, not redone — once the target has the planned fingerprint (or the accepted one) and holds the planned tags, else block; and for one whose size or modification time changed since the plan block if its decoded content differs and is not accepted, else read its tags back — holding the planned values it is counted applied, otherwise, or with only a rename planned, it blocks as edited since the plan. Otherwise it writes the photo's tags in one `exiftool` call ({need}`BLD-metadata_safe_write`), retakes its fingerprint — a changed one, not accepted, or one that cannot be taken, a mismatch that holds the photo's writes and rename back — and renames it, the target checked free. Anything a photo's application raises is that photo's failure and blocker. The results merge in path order into the journal, kept per plan id — each confirmed photo's final path, size and modification time under `media_after` — and photos-25.
+`geotag execute` SHALL, under the workspace lock: revalidate every dependency of photos-24 — and, when it holds an operation, that the image engine is the handoff's `depends_on.cache.image_engine_version` — and stop before any change if one moved; take the snapshot labelled `geotag`, a required one that fails ending the run as `rejected`; keep photos-21, -22 and -23 in `executed/<plan id>/`; pin and move the own values, single-threaded; then, per photo and under `-j`, skip one whose operations the journal confirms; take one gone from its path with its rename target in place as applied before — its operations recorded, not redone — once the target has the planned fingerprint (or the accepted one) and holds the planned tags, else block; and for one whose size or modification time changed since the plan block if its decoded content differs and is not accepted, else read its tags back — holding the planned values it is counted applied, otherwise, or with only a rename planned, it blocks as edited since the plan. Otherwise it writes the photo's tags in one `exiftool` call ({need}`BLD-metadata_safe_write`), retakes its fingerprint — a changed one, not accepted, or one that cannot be taken, a mismatch that holds the photo's writes and rename back — and renames it, the target checked free. Anything a photo's application raises is that photo's failure and blocker. The results merge in path order into the journal, kept per plan id — each confirmed photo's final path, size and modification time under `media_after` — and photos-25.
 :::
 
 :::{bld} How geotag knows a photo holds what it planned
@@ -1027,7 +1044,7 @@ photo, to proceed without it.
 :status: ruled
 :realises: RUL-finalize_requires_success, RUL-finalize_checks_photos, RUL-finalize_reports_placement, RUL-placement_recorded_with_its_track, RUL-finalize_refuses_unplaced
 
-`geotag finalize` SHALL refuse, writing nothing, unless `photos-24-executable-plan.json` is `ready`, `photos-25-execution-summary.json` is `success` for the same `plan_id`, every dependency of the plan but the handoff still holds — the handoff left out because prep, run after execute, records geotag's own writes and renames in it, and the tracks taken as the catalogue keeps them ({need}`BLD-track_window`) — and every photo under `6-photos-by-dest` is one of the plan's, at its final path, with the size and modification time the journal's `media_after` records for it, or the plan's `media_preconditions` for a photo the plan had nothing to do to — none of them holding no position ({need}`BLD-no_photo_unplaced`). It prints the plan's `placement` and writes it into the archive manifest; the log gives each position from the tracks its `gpx_file` and `at_utc`.
+`geotag finalize` SHALL refuse, writing nothing, unless `photos-24-executable-plan.json` is `ready`, `photos-25-execution-summary.json` is `success` for the same `plan_id`, every dependency of the plan but the handoff still holds — the handoff left out because prep, run after execute, records geotag's own writes and renames in it, and the tracks taken as the catalogue keeps them ({need}`BLD-track_window`) — and every photo under `6-photos-by-dest` is one of the plan's, at its final path, with the size and modification time the journal's `media_after` records for it, or the plan's `media_preconditions` for a photo the plan had nothing to do to — none of them holding no position ({need}`BLD-no_photo_unplaced`) — and every JPEG set aside in `3-redundant-jpgs` that the plan renames with its RAW ({need}`BLD-set_aside_renamed_with_raw`, {need}`BLD-set_aside_jpeg_catches_up`) is at its new name with the size and modification time `media_after` records for it. It prints the plan's `placement` and writes it into the archive manifest; the log gives each position from the tracks its `gpx_file` and `at_utc`.
 :::
 
 :::{bld} No photo leaves geotag without a position

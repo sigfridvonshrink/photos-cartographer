@@ -960,6 +960,32 @@ def test_execute_aborts_when_required_snapshot_fails(tmp_path, monkeypatch):
     assert s["blockers"] and "snapshot failed" in s["blockers"][0]
 
 
+@pytest.mark.spec("BLD-geotag_execution", "BLD-withdrawn_track_points", "RUL-withdrawn_track_points_kept",
+                  test="TST-geotag_execution-a_run_the_snapshot_ends_records_no_tracks")
+def test_a_run_a_required_snapshot_ends_keeps_nothing_of_the_plan(tmp_path, monkeypatch):
+    """A required snapshot that fails ends the run before anything is executed: the tracks its plan rests on are not
+    recorded as used, nor its decisions kept as executed. The same plan run once the snapshot is taken records
+    both."""
+    import sqlite3
+    zfs = {"enabled": True, "snapshots_required": True, "snapshot_prefix": "px-",
+           "datasets": {"workspace": "auto", "library": "auto"}}
+    ws, ctl = _ready_ws(tmp_path, monkeypatch, zfs=zfs)
+    plan_id = json.load(open(ctl / "photos-24-executable-plan.json"))["plan_id"]
+
+    def used():
+        con = sqlite3.connect(str(ctl / "photos-00-ingest.db"))
+        try:
+            return con.execute("SELECT COUNT(*) FROM gpx_track_use WHERE plan_id = ?", (plan_id,)).fetchone()[0]
+        finally:
+            con.close()
+    _mock_tools(monkeypatch, ws); _mock_zfs(monkeypatch, fail=True)
+    assert _execute(monkeypatch, ws) == 2
+    assert used() == 0 and not (ctl / "executed" / plan_id).exists()
+    _mock_zfs(monkeypatch)
+    assert _execute(monkeypatch, ws) == 0
+    assert used() > 0 and (ctl / "executed" / plan_id).is_dir()
+
+
 @pytest.mark.spec("BLD-execution_summary_written", "RUL-content_acceptance_stays_open", "RUL-geotag_summary_only_for_execution",
                   test="TST-geotag_execution-summary_written_only_by_a_run_that_executes")
 def test_summary_written_only_by_a_run_that_executes(tmp_path, monkeypatch):

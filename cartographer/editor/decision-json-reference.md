@@ -527,7 +527,7 @@ inside it.
 |-------|------|----------|---------|
 | **`user_decision.date`** | string (`""`) | **yes** | `"YYYY"`, `"YYYY-MM"` or `"YYYY-MM-DD"` — as much as you know. A month or day left out is the first: `"1985"` is 1 January 1985, `"1985-06"` 1 June 1985. `""` = none written here. |
 | `effective_date` | object \| `null` | no | The date in effect: `{ "date": "1985-06", "filled": "1985-06-01", "set_at": "<destination it was written at>" }`. |
-| `inherited_from` | string | no | Present when the date comes from a destination above: the nearest one that had a date in effect. |
+| `inherited_from` | string | no | Present when a destination above has a date in effect, whether or not this one writes its own: the nearest such. |
 | `untimed_photos` | [string] | no | Present where the destination holds photos with no recorded time: their paths. |
 | `requires_user_input` | bool | no | `true` ⇔ `untimed_photos` is there and no date is in effect. geotag stops after writing photos-21, naming the photos, until a date is given (or they are moved out). |
 | `stale_user_decision` | bool | no | Always `false`. |

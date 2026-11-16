@@ -1630,46 +1630,68 @@ class GeotagWorkflow:
         known, and the track points, a cell whose every photo lies farther than `gpx_anchor_max_clock_error_seconds`
         from all of them — there being such a photo — asks for an offset of the user's own; its proposal, still
         shown, says why. A clock reset to its factory date is the case. With no other device's photo there,
-        nothing can tell, and the guess stands as it is."""
-        bound = CONFIG["gpx_anchor_max_clock_error_seconds"]
-        known, track_times = {}, None
-        for (dest, bucket), (group, _g, _p, _a, _rep, _date, _day, sel, _tz) in sorted(recall.items()):
-            cell = destinations[dest]["camera_group_time_decisions"].get(bucket) or {}
-            proposal = cell.get("proposal") or {}
-            if proposal.get("proposal_source") not in self._FAR_CHECKED_PROPOSALS:
-                continue
-            if dest not in known:
-                rows = compute_resolved_utc(by_dest[dest], groups, {"destinations": {dest: destinations[dest]}})
-                # what another device says of when the destination was visited: a phone's photo, by its own
-                # offset or the zone; a camera's, by its cell's settled offset only — never one corrected before,
-                # whose offset no record here vouches for, nor a file naming no device, whose time may be any
-                known[dest] = [(r["camera_group"], r["relative_path"], t) for r in rows
-                               if r["resolved_utc_status"] == "valid" and (t := _parse_utc(r["resolved_utc"]))
-                               and ((cls := (groups.get(r["camera_group"]) or {}).get("camera_group_class"))
-                                    == "smartphone"
-                                    or (cls == "camera" and r["time_rule_used"] == "camera_group_offset"
-                                        and r["resolved_utc_provenance"] in self._SETTLED_SOURCES))]
-            others = [(p, t) for g2, p, t in known[dest] if g2 != group]
-            if not others:
-                continue
-            if track_times is None:
-                track_times = sorted(p.time_utc for p in gpx.points)
-            off = proposal["proposed_offset_seconds"]
-            times = []
-            for f in sel:
-                if (t := _parse_camera_naive(f.get("source_naive_time"))) is not None:
-                    try:
-                        times.append(t.replace(tzinfo=timezone.utc) + timedelta(seconds=off))
-                    except OverflowError:
-                        continue
-            why = far_from_evidence(times, others, track_times, bound)
-            if why is None:
-                continue
-            proposal["far_from_evidence"] = why
-            eff = cell.get("effective_time_anchor")
-            if isinstance(eff, dict) and eff.get("source") in self._FAR_CHECKED_SOURCES:
-                cell["effective_time_anchor"], cell["requires_user_input"] = "", True
-                cell.pop("decision_mode", None)
+        nothing can tell, and the guess stands as it is.
+
+        The fixes' own times are judged first, in rounds, each against what the rounds before left, until a round
+        withdraws none — a phone's fix offset withdrawn is no evidence for a later round; then the guesses, all
+        against what is left (BLD-offset_far_from_evidence)."""
+        checked = [(dest, bucket, entry) for (dest, bucket), entry in sorted(recall.items())
+                   if ((destinations[dest]["camera_group_time_decisions"].get(bucket) or {}).get("proposal") or {})
+                   .get("proposal_source") in self._FAR_CHECKED_PROPOSALS]
+        source = lambda c: destinations[c[0]]["camera_group_time_decisions"][c[1]]["proposal"]["proposal_source"]
+        fixes = [c for c in checked if source(c) == "gps_time"]
+        track_times = sorted(p.time_utc for p in gpx.points) if checked else []
+        while fixes:
+            known = {}
+            withdrawn = [c for c in fixes if self._withhold_if_far(c, destinations, known, by_dest, groups,
+                                                                    track_times)]
+            if not withdrawn:
+                break
+            fixes = [c for c in fixes if c not in withdrawn]
+        known = {}
+        for c in checked:
+            if source(c) != "gps_time":
+                self._withhold_if_far(c, destinations, known, by_dest, groups, track_times)
+
+    def _withhold_if_far(self, checked, destinations, known, by_dest, groups, track_times):
+        """Judge one far-checked cell against its destination's evidence as `known` holds it (worked out once per
+        destination); mark its proposal far, or unmark it, and withdraw an offset it took effect by. True when an
+        offset was withdrawn."""
+        dest, bucket, (group, _g, _p, _a, _rep, _date, _day, sel, _tz) = checked
+        cell = destinations[dest]["camera_group_time_decisions"][bucket]
+        proposal = cell["proposal"]
+        if dest not in known:
+            rows = compute_resolved_utc(by_dest[dest], groups, {"destinations": {dest: destinations[dest]}})
+            # what another device says of when the destination was visited: a phone's photo, by its own
+            # offset or the zone; a camera's, by its cell's settled offset only — never one corrected before,
+            # whose offset no record here vouches for, nor a file naming no device, whose time may be any
+            known[dest] = [(r["camera_group"], r["relative_path"], t) for r in rows
+                           if r["resolved_utc_status"] == "valid" and (t := _parse_utc(r["resolved_utc"]))
+                           and ((cls := (groups.get(r["camera_group"]) or {}).get("camera_group_class"))
+                                == "smartphone"
+                                or (cls == "camera" and r["time_rule_used"] == "camera_group_offset"
+                                    and r["resolved_utc_provenance"] in self._SETTLED_SOURCES))]
+        others = [(p, t) for g2, p, t in known[dest] if g2 != group]
+        off = proposal["proposed_offset_seconds"]
+        times = []
+        for f in sel:
+            if (t := _parse_camera_naive(f.get("source_naive_time"))) is not None:
+                try:
+                    times.append(t.replace(tzinfo=timezone.utc) + timedelta(seconds=off))
+                except OverflowError:
+                    continue
+        why = far_from_evidence(times, others, track_times, CONFIG["gpx_anchor_max_clock_error_seconds"]) \
+            if others else None
+        if why is None:
+            proposal.pop("far_from_evidence", None)
+            return False
+        proposal["far_from_evidence"] = why
+        eff = cell.get("effective_time_anchor")
+        if isinstance(eff, dict) and eff.get("source") in self._FAR_CHECKED_SOURCES:
+            cell["effective_time_anchor"], cell["requires_user_input"] = "", True
+            cell.pop("decision_mode", None)
+            return True
+        return False
 
     def _tracks_by(self, gpx, times, frames):
         """The track points the drift check sets a bucket's photos against: those within
@@ -2585,10 +2607,13 @@ class GeotagWorkflow:
                 else:
                     no_ops.append(rel)
                 # The JPEG prep set aside beside this RAW is renamed with it, and nothing else is done to it: the one
-                # change geotag makes outside photos by destination (RUL-set_aside_jpeg_renamed_with_raw).
+                # change geotag makes outside photos by destination (RUL-set_aside_jpeg_renamed_with_raw). One an earlier
+                # run left behind its corrected RAW takes the name the RAW holds (RUL-set_aside_jpeg_catches_up).
                 raw_rename = next((o for o in fops if o["type"] == "rename_no_clobber"), None)
-                for j in (aside_by_raw.get(f.get("content_fingerprint")) or []) if raw_rename else []:
-                    jop = plan_set_aside_rename(raw_rename, j, aside_taken)
+                raw_name, follows = ((raw_rename["to"], raw_rename["operation_id"]) if raw_rename
+                                     else (os.path.basename(rel), None) if f.get("geotag_marker") else (None, None))
+                for j in (aside_by_raw.get(f.get("content_fingerprint")) or []) if raw_name else []:
+                    jop = plan_set_aside_rename(rel, raw_name, j, aside_taken, follows)
                     if jop is not None:
                         ops.append(jop)
                         media_pre.append({k: j.get(k) for k in ("relative_path", "content_fingerprint", "size",
@@ -2977,11 +3002,6 @@ class GeotagWorkflow:
         # the failures the previous execution of this plan recorded: a write failing again the same way is told
         # with its way out (BLD-repeated_write_failure)
         prior_failures = self._prior_failures(ws, plan["plan_id"])
-        self._keep_executed_decisions(plan)
-        # the tracks this plan places and times photos by stay in the record if they leave gpx_root
-        # (RUL-withdrawn_track_points_kept), their points in its window whatever a later plan's reaches
-        GPXIndex.mark_used(db_path(ws), plan["plan_id"], self._tracks_used(plan),
-                           valid_window((plan.get("depends_on") or {}).get("gpx_window")) or [])
 
         # Optional pre-mutation ZFS snapshot (BLD-geotag_execution), labelled "geotag" so it never collides
         # with prep's "prep-" snapshot. A REQUIRED snapshot that cannot be taken aborts before any
@@ -3004,6 +3024,13 @@ class GeotagWorkflow:
             })
             return {"status": "rejected", "plan_id": plan.get("plan_id"),
                     "stale": [reason], "snapshot": snapshot}
+        # Only a run that goes on to change photos keeps its decisions and records its tracks: one a required snapshot
+        # ended executed nothing (BLD-geotag_execution, BLD-withdrawn_track_points).
+        self._keep_executed_decisions(plan)
+        # the tracks this plan places and times photos by stay in the record if they leave gpx_root
+        # (RUL-withdrawn_track_points_kept), their points in its window whatever a later plan's reaches
+        GPXIndex.mark_used(db_path(ws), plan["plan_id"], self._tracks_used(plan),
+                           valid_window((plan.get("depends_on") or {}).get("gpx_window")) or [])
 
         by_file = {}
         for dd in plan["destinations"].values():
@@ -3266,7 +3293,10 @@ class GeotagWorkflow:
 
         changed = self._changed_since_execution(plan)
         if changed:
-            return [f"{len(changed)} photo(s) in {folder_name('photos_by_dest')} are not as the execution left "
+            # a photo of photos by destination, or a JPEG set aside that the plan renamed with its RAW
+            # (BLD-finalize_preconditions): each named under the folder it is in
+            where = " and ".join(sorted({c.split(os.sep, 1)[0] for c in changed}))
+            return [f"{len(changed)} file(s) in {where} are not as the execution left "
                     f"them ({_named(changed)}) — re-run `geotag plan` and `geotag execute` first (after "
                     "`prep plan` and `prep execute`, if geotag asks)."]
         # No photo leaves geotag without a position (RUL-finalize_refuses_unplaced): checked from what each photo

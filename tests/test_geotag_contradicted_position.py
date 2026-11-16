@@ -124,6 +124,20 @@ def test_a_scattered_position_is_offered_the_tracks(tmp_path):
     assert not any(lo <= t <= hi for lo, hi in cal.GeotagWorkflow.placement_window(files, rows))   # native: not reached
 
 
+@pytest.mark.spec("RUL-contradicted_position_reviewed", "BLD-contradicted_position",
+                  test="TST-geotag_contradicted_position-a_position_no_track_passes_is_not_doubted")
+def test_a_position_no_track_passes_is_not_doubted(tmp_path):
+    """A photo whose own position lies far from every track — a side trip the walk never went near — matches no pass,
+    so says nothing of the offset: only the stray one the tracks contradict is named, and offered their position."""
+    wf = _wf(tmp_path)
+    files = _files() + [_photo("away.arw", 15, 52.0)]                   # some 110 km north of the walk
+    art = _time(wf, files)
+    assert art["destinations"][DEST]["camera_group_time_decisions"][CAM]["positions_contradicted"] == [
+        f"{DEST}/stray.arw"]
+    gps, _, _ = _gps(wf, files, art)
+    assert _item(gps, "away.arw") is None and _item(gps) is not None
+
+
 @pytest.mark.spec("RUL-own_position_replaced_on_answer", "RUL-own_position_kept", "RUL-replaced_own_position_logged",
                   "BLD-contradicted_position", "BLD-placement_order",
                   test="TST-geotag_contradicted_position-the_users_answer_replaces_the_own_position_and_is_logged")

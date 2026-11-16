@@ -269,6 +269,32 @@ def test_alternating_or_agreeing_photos_propose_no_split(tmp_path):
         tmp_path = tmp_path / "x"
 
 
+@pytest.mark.spec("RUL-alternating_runs_no_clock_change", "BLD-clock_change_split",
+                  test="TST-geotag_clock_change-two_places_to_cut_propose_no_split")
+def test_two_places_to_cut_the_day_propose_no_split():
+    """The walk passes one place twice, at 09:00 and at 17:00: a photo taken there agrees with the home-time run before
+    it and with the local-time run after it alike. The day can be cut on either side of it, each cut leaving two runs
+    that agree — not one place where the clock changed, so no split is proposed."""
+    t = lambda h, m=0: datetime(2024, 7, 3, h, m, tzinfo=timezone.utc)
+    here = lambda n: (35.0 + n * 0.01, 135.0)
+    track = [(t(8), 0), (t(8, 30), 1), (t(9), 2), (t(9, 30), 3), (t(16, 30), 4), (t(17), 2), (t(17, 30), 5),
+             (t(18), 6)]
+    pts = [cal.GPXPoint(*here(n), when, "trip.gpx", i) for i, (when, n) in enumerate(track)]
+
+    def photo(name, n, utc, off):
+        lat, lon = here(n)
+        return {"relative_path": f"{DEST}/{name}.arw", "destination": DEST, "camera_group_key": CAM,
+                "native_gps": {"lat": lat, "lon": lon}, "has_native_gps": True, "has_timestamp": True,
+                "source_naive_time": _cam(utc, off), "content_fingerprint": "fp-" + name}
+    photos = [photo("a", 0, t(8), HOME), photo("b", 1, t(8, 30), HOME),
+              photo("m", 2, t(17), HOME),                       # 18:00 on the camera: 17:00 at home time, 09:00 at local
+              photo("y", 5, t(17, 30), LOCAL), photo("z", 6, t(18), LOCAL)]
+    assert cal.clock_change_proposal(photos, photos, _gpx(pts), utils.CONFIG) is None
+    # without the photo both sides take, the one cut is a change
+    rest = [p for p in photos if not p["relative_path"].endswith("m.arw")]
+    assert cal.clock_change_proposal(rest, rest, _gpx(pts), utils.CONFIG) is not None
+
+
 @pytest.mark.spec("RUL-clock_change_needs_gps", "BLD-clock_change_split",
                   test="TST-geotag_clock_change-a_change_is_seen_only_from_the_cameras_gps")
 def test_a_change_is_seen_only_from_the_cameras_gps(tmp_path):
