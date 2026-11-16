@@ -1314,7 +1314,7 @@ The journal — one per plan, `journal-<plan id>.json`, a later execute of the s
 confirmations into it and writing it again whole with each of its own, `updated_at` that execute's start — SHALL record
 each confirmed photo, a re-run taking a place already holding the planned content, fingerprinted again, as done, and
 removing the workspace copy if it remains; a photo whose workspace copy is gone counts as done only once its place is
-fingerprinted again and found to hold it, and is blocked otherwise — the journal is the record of what ran, never what
+checked again ({need}`BLD-placed_bytes_journalled`) and found to hold it, and is blocked otherwise — the journal is the record of what ran, never what
 decides it.
 :::
 
