@@ -411,7 +411,10 @@ log records what it removed. One without is placed by the first of:
 A photo none of these places waits in the editor's GPS worklist, with why the tracks didn't place it,
 until you give it a position or leave it unlocated. Every position geotag writes says in the photo
 (`GPSProcessingMethod`) how it was found — `matched`, `interpolated`, `extrapolated`, or set by you
-(`manual_locked`, `manual_fallback`) — and `geotag finalize` prints the count of each.
+(`manual_locked`, `manual_fallback`) — and `geotag finalize` prints the count of each. A photo whose
+time geotag writes and whose position it leaves as it is gets `+carto-time` appended to that field instead,
+the device's own value kept before it. A photo already holding its true time — a phone keeping the local
+time, say — has nothing written, no mark either: geotag never touches an original that needs nothing.
 
 The tracks are read from `gpx_root`: every `*.gpx` file beneath it. Each file is one device's record,
 and each track in a file a track of its own: no photo is placed, and no clock found, from points of two
@@ -549,7 +552,10 @@ the photo's offset tag disagrees with the timezone.
 **Geotag execute and finalize** — a plan no longer current (plan again); a journal, execution summary or
 earlier plan in `.photos-ingest/` that cannot be read (the stop names it; repair it — it is never taken for
 empty). Execute leaves a photo edited since the plan untouched; finalize refuses while a photo has changed
-since execute.
+since execute. A photo exiftool cannot write (a damaged file, a format it reads and cannot write) is left as
+it was, with exiftool's own message in the execution summary's `failures`, and the execution stays partial;
+when it fails the same way again, execute says so and names the way out — move it from `6-photos-by-dest/`
+back into `5-photos-by-date/`, then run `prep plan`, `prep execute` and `geotag plan` again.
 
 **Merge** — geotag not finalized, or `6-photos-by-dest/` changed since; a hidden file or folder among
 the photos; a photo with no fingerprint; a library folder without its mark (run `merge init-library`), or

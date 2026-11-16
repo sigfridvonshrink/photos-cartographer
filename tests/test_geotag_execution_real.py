@@ -48,7 +48,7 @@ def test_exif_write_preserves_content_fingerprint(tmp_path):
     before = utils.ContentHasher.fingerprint_image(str(img))
     assert before["status"] == "valid"
     assert cal.GeotagWorkflow(str(tmp_path))._exiftool_write(
-        str(img), {"DateTimeOriginal": "2024:07:03 14:12:21", "GPSLatitude": 50.8467, "GPSLongitude": 4.3525})
+        str(img), {"DateTimeOriginal": "2024:07:03 14:12:21", "GPSLatitude": 50.8467, "GPSLongitude": 4.3525}) is True
     after = utils.ContentHasher.fingerprint_image(str(img))
     assert after["value"] == before["value"]                          # decoded content unchanged
     got = subprocess.run(["exiftool", "-s3", "-DateTimeOriginal", str(img)],
@@ -70,7 +70,7 @@ def test_planned_gps_write_lands_a_readable_fix(tmp_path, lat, lon, refs):
                             "2024-07-03T12:12:21Z", "Europe/Brussels", "gpx_interpolation",
                             {"lat": lat, "lon": lon}, None)
     writes = next(o for o in ops if o["type"] == "metadata_gps_write")["writes"]
-    assert cal.GeotagWorkflow(str(tmp_path))._exiftool_write(str(img), writes)
+    assert cal.GeotagWorkflow(str(tmp_path))._exiftool_write(str(img), writes) is True
 
     raw = subprocess.run(["exiftool", "-n", "-s3", "-EXIF:GPSLatitudeRef", "-EXIF:GPSLongitudeRef", str(img)],
                          capture_output=True, text=True).stdout.split()
@@ -163,9 +163,9 @@ def test_a_written_photo_reads_back_as_its_planned_values(tmp_path, lat, lon):
     for o in ops:
         writes.update(o.get("writes") or {})
     wf = cal.GeotagWorkflow(str(tmp_path))
-    assert wf._exiftool_write(str(img), writes)
+    assert wf._exiftool_write(str(img), writes) is True
     assert cal._holds_writes(wf._exiftool_read(str(img), sorted(writes)), writes)
-    assert wf._exiftool_write(str(img), {"DateTimeOriginal": "2024:07:03 09:00:00"})        # edited elsewhere
+    assert wf._exiftool_write(str(img), {"DateTimeOriginal": "2024:07:03 09:00:00"}) is True  # edited elsewhere
     assert not cal._holds_writes(wf._exiftool_read(str(img), sorted(writes)), writes)
 
 
@@ -202,7 +202,7 @@ def test_the_other_time_fields_are_rewritten_in_a_real_photo(tmp_path):
         f = _model_file(img, before)
         (op,) = [o for o in cal.plan_file_ops(f, "2026-05-15T09:32:29Z", "Asia/Tokyo", "preserve_native", None, None)
                  if o["type"] == "metadata_time_write"]
-        assert wf._exiftool_write(str(img), op["writes"])
+        assert wf._exiftool_write(str(img), op["writes"]) is True
         assert cal._holds_writes(wf._exiftool_read(str(img), sorted(op["writes"])), op["writes"])
         after = _prep_read(img)
         assert (after["DateTimeOriginal"], after["OffsetTimeOriginal"]) == ("2026:05:15 18:32:29", "+09:00")
@@ -222,3 +222,15 @@ def test_the_other_time_fields_are_rewritten_in_a_real_photo(tmp_path):
     assert "2026-05-15T18:32:29.58+09:00" in raw                                  # ISO in the file itself
     b = _prep_read(bare)
     assert (b["XMP:DateCreated"], b["IPTC:DateCreated"], b["IPTC:TimeCreated"]) == (None, None, None)
+
+
+@pytest.mark.spec("RUL-failed_write_reason_recorded", "BLD-write_failure_reason",
+                  test="TST-geotag_execution_real-a_photo_exiftool_cannot_write_gives_its_reason")
+def test_a_photo_exiftool_cannot_write_gives_its_reason(tmp_path):
+    """The real exiftool, given a file it cannot write: the write returns exiftool's own message, the file is left
+    as it was and nothing is left beside it."""
+    bad = tmp_path / "bad.jpg"
+    bad.write_bytes(b"not a picture at all")
+    said = cal.GeotagWorkflow(str(tmp_path))._exiftool_write(str(bad), {"DateTimeOriginal": "2024:07:03 14:00:00"})
+    assert isinstance(said, str) and said.startswith("Error: ") and "bad.jpg" in said
+    assert bad.read_bytes() == b"not a picture at all" and os.listdir(tmp_path) == ["bad.jpg"]

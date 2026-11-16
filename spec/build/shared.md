@@ -718,13 +718,16 @@ case folded, is one of `destination_distribution_subfolders`, case folded.
 :::{bld} Geotag marks what it wrote
 :id: BLD-rerun_recognition
 :status: ruled
-:realises: RUL-geotag_rerun_keeps_settled, RUL-position_carries_its_method
+:realises: RUL-geotag_rerun_keeps_settled, RUL-position_carries_its_method, RUL-only_corrected_time_marked
 
 Geotag SHALL record what it wrote in the file's `GPSProcessingMethod`: the bare value beside each position it writes —
 `matched`, `interpolated` or `extrapolated` for one from the tracks, within the direct-match window of a track point,
-between two or past a track's end, `manual_locked` or `manual_fallback` for one the user set — and, when it fixes the time and writes no position, the suffix
-`+carto-time` appended once to whatever the field held, keeping the device's own value. Any other value is the device's
-own, and the GPS beside it native.
+between two or past a track's end, `manual_locked` or `manual_fallback` for one the user set — and, on a photo whose
+time it writes — a `metadata_time_write` in the plan — or whose field already carries its mark from an earlier run, and
+to which it writes no position, the suffix `+carto-time` appended once to whatever the field held, keeping the device's
+own value. A photo whose time is resolved to what it holds, with no mark, gets no suffix; with no position written
+either, no `gps_marker_write` is planned for it but one clearing a no-fix position. Any other value is the device's own,
+and the GPS beside it native.
 :::
 
 :::{bld} A file's own values are pinned before geotag first writes it

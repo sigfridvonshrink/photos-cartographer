@@ -96,7 +96,7 @@ def _ready_ws(tmp_path, monkeypatch, *, zfs=None):
     return ws, ctl
 
 
-def _mock_tools(monkeypatch, ws, *, write_ok=True, content_changed=False):
+def _mock_tools(monkeypatch, ws, *, write_ok=True, content_changed=False, refusal="Error: Not a valid ARW"):
     """Stand-ins for exiftool and the image fingerprint that behave as the real ones do across a rename: a
     photo keeps its fingerprint and the tags written to it whatever its name becomes (kept by inode)."""
     first_name, held = {}, {}
@@ -104,7 +104,8 @@ def _mock_tools(monkeypatch, ws, *, write_ok=True, content_changed=False):
     def write(self, p, tags):
         if write_ok:
             held.setdefault(os.stat(p).st_ino, {}).update(tags)
-        return write_ok
+            return True
+        return refusal                                  # exiftool's own words when it will not write
     monkeypatch.setattr(cal.GeotagWorkflow, "_exiftool_write", write)
     monkeypatch.setattr(cal.GeotagWorkflow, "_exiftool_read",
                         lambda self, p, keys: {k: v for k, v in held.get(os.stat(p).st_ino, {}).items() if k in keys})
@@ -192,6 +193,78 @@ def test_exiftool_failure_records_failure(tmp_path, monkeypatch):
     # every write fails and nothing is applied/already-satisfied -> total failure (BLD-execution_summary);
     # two files, each a time write and its time-fixed mark
     assert s["status"] == "failed" and len(s["failures"]) == 4 and s["totals"]["metadata_time_writes"] == 0
+
+
+@pytest.mark.spec("RUL-failed_write_reason_recorded", "BLD-write_failure_reason",
+                  test="TST-geotag_execution-a_failed_write_keeps_exiftools_reason")
+def test_a_failed_write_keeps_exiftools_reason(tmp_path, monkeypatch):
+    """Each failure in photos-25 carries, beside the photo and the operation, the kind of operation and exiftool's
+    own message — what tells a damaged file from a passing trouble."""
+    ws, ctl = _ready_ws(tmp_path, monkeypatch)
+    _mock_tools(monkeypatch, ws, write_ok=False, refusal="Error: Not a valid ARW - a.arw")
+    assert _execute(monkeypatch, ws) == 3
+    s = _summary(ctl)
+    assert s["failures"] and all(f["error"] == "Error: Not a valid ARW - a.arw" for f in s["failures"])
+    assert {f["relative_path"] for f in s["failures"]} == {"6-photos-by-dest/T/a.arw", "6-photos-by-dest/T/b.arw"}
+    assert {f["type"] for f in s["failures"]} == {"metadata_time_write", "gps_marker_write"}
+    assert s["repeated_failures"] == []                   # the first execution: nothing failed before
+
+
+@pytest.mark.spec("RUL-repeated_write_failure_way_out", "BLD-repeated_write_failure", "RUL-moved_back_passes",
+                  test="TST-geotag_execution-a_write_failing_again_the_same_way_names_the_way_out")
+def test_a_write_failing_again_the_same_way_names_the_way_out(tmp_path, monkeypatch, capsys):
+    """The same photo failing the same way on a second execution of the same plan will not mend by running again:
+    the summary and execute's output say so for it, naming the way out — back into photos by date, a move the
+    workspace check passes, then prep and `geotag plan` again. The exit status stays that of a partial run."""
+    ws, ctl = _ready_ws(tmp_path, monkeypatch)
+    _mock_tools(monkeypatch, ws, write_ok=False, refusal="Error: Not a valid ARW")
+    assert _execute(monkeypatch, ws) == 3
+    capsys.readouterr()
+    assert _execute(monkeypatch, ws) == 3                 # the exit status is unchanged
+    said = capsys.readouterr()
+    rep = _summary(ctl)["repeated_failures"]
+    assert [r["relative_path"] for r in rep] == ["6-photos-by-dest/T/a.arw", "6-photos-by-dest/T/b.arw"]
+    for r in rep:
+        assert r["error"] == "Error: Not a valid ARW"
+        assert r["types"] == ["gps_marker_write", "metadata_time_write"]
+        assert "from 6-photos-by-dest into 5-photos-by-date" in r["way_out"]
+        assert "`prep plan`, `prep execute` and `geotag plan`" in r["way_out"]
+    out = said.out + said.err
+    assert "6-photos-by-dest/T/a.arw: its write failed again" in out and "into 5-photos-by-date" in out
+    # the move it names passes the workspace check with no acceptance
+    [c] = utils.compare_workspace({"6-photos-by-dest/T/a.arw": {"size": 1, "mtime_ns": 2, "inode": 3}},
+                                  {"5-photos-by-date/2024/a.arw": (1, 2, 3)})
+    assert c["kind"] == "moved_back" and c["kind"] not in utils._UNEXPECTED_KINDS
+
+
+@pytest.mark.spec("RUL-repeated_write_failure_way_out", "BLD-repeated_write_failure",
+                  test="TST-geotag_execution-only_the_same_failure_of_the_same_plan_repeats")
+def test_only_the_same_failure_of_the_same_plan_repeats(tmp_path, monkeypatch):
+    """A failure is told as repeated only against the previous execution of the same plan, with the same operations
+    and the same reason: another reason, or another plan's summary, is no repetition; a run rejected before it tried
+    the photos is passed over for the one before it, kept under -NNN."""
+    ws, ctl = _ready_ws(tmp_path, monkeypatch)
+    plan_id = json.load(open(ctl / "photos-24-executable-plan.json"))["plan_id"]
+    _mock_tools(monkeypatch, ws, write_ok=False, refusal="Error: first reason")
+    assert _execute(monkeypatch, ws) == 3
+    _mock_tools(monkeypatch, ws, write_ok=False, refusal="Error: another reason")
+    assert _execute(monkeypatch, ws) == 3
+    assert _summary(ctl)["repeated_failures"] == []       # another reason: not the same failure
+    last = _summary(ctl)["failures"]
+    wf = cal.GeotagWorkflow(str(ws))
+    assert wf._prior_failures(str(ws), "another-plan") == []                       # another plan's: none
+    # a rejected run (a required snapshot that failed) wrote the latest summary: the one before it is read
+    summary_p = ctl / "photos-25-execution-summary.json"
+    utils.write_versioned_json(str(summary_p), {"plan_id": plan_id, "status": "rejected", "failures": []})
+    assert wf._prior_failures(str(ws), plan_id) == last
+    # a kept summary that cannot be read is never taken for none (RUL-unreadable_execution_record_stops)
+    sorted(ctl.glob("photos-25-execution-summary-*.json"))[-1].write_text("{torn")
+    with pytest.raises(cal.UnreadableRecord):
+        wf._prior_failures(str(ws), plan_id)
+    assert cal.repeated_write_failures(
+        [{"relative_path": "x", "type": "metadata_time_write", "error": "E"}],
+        [{"relative_path": "x", "type": "metadata_time_write", "error": "E"},
+         {"relative_path": "x", "type": "metadata_gps_write", "error": "E"}]) == []    # other operations then
 
 
 # --- resume / idempotency ----------------------------------------------------
@@ -414,10 +487,10 @@ def test_target_occupied_recheck(tmp_path):
 
 # --- unit: _exiftool_write seam --------------------------------------------
 
-def _fake_exiftool(calls=None, rc=0, new=b"rewritten"):
+def _fake_exiftool(calls=None, rc=0, new=b"rewritten", stderr=""):
     """Stands in for exiftool: writes the new file where `-o` says, as the real one does."""
     class _R:
-        def __init__(self, rc): self.returncode = rc
+        def __init__(self, rc): self.returncode, self.stdout, self.stderr = rc, "", stderr
     def _run(cmd, **k):
         if calls is not None:
             calls.append(cmd)
@@ -443,11 +516,13 @@ def test_exiftool_write_invocation(tmp_path, monkeypatch):
     assert photo.read_bytes() == b"rewritten" and not (tmp_path / "x.jpg_exiftool_tmp").exists()
     assert os.stat(photo).st_mode & 0o777 == 0o640
     photo.write_bytes(b"orig")
-    monkeypatch.setattr(cal.subprocess, "run", _fake_exiftool(rc=1))
-    assert wf._exiftool_write(str(photo), {}) is False                # non-zero exit
+    monkeypatch.setattr(cal.subprocess, "run", _fake_exiftool(rc=1, stderr="Error: Not a valid JPG - x.jpg\n"))
+    assert wf._exiftool_write(str(photo), {}) == "Error: Not a valid JPG - x.jpg"    # non-zero exit: its words
+    monkeypatch.setattr(cal.subprocess, "run", _fake_exiftool(rc=2))
+    assert wf._exiftool_write(str(photo), {}) == "exiftool exited with status 2"     # and none said
     def _boom(*a, **k): raise OSError("no exiftool")
     monkeypatch.setattr(cal.subprocess, "run", _boom)
-    assert wf._exiftool_write(str(photo), {}) is False                # tool missing
+    assert wf._exiftool_write(str(photo), {}) == "OSError: no exiftool"            # tool missing
     assert photo.read_bytes() == b"orig" and os.listdir(tmp_path) == ["x.jpg"]
 
 
@@ -545,7 +620,7 @@ def test_an_interrupted_metadata_write_leaves_the_photo_whole(tmp_path, monkeypa
     with monkeypatch.context() as m:
         m.setenv("PERL5LIB", str(tmp_path))
         m.setenv("PERL5OPT", "-MCartoKillAtOutput")
-        assert wf._exiftool_write(str(photo), tags) is False             # killed mid-write
+        assert wf._exiftool_write(str(photo), tags) is not True         # killed mid-write
     assert photo.read_bytes() == original                                # the photo, intact
     assert wf._exiftool_write(str(photo), tags) is True                  # the write done again
     assert not (tmp_path / "a.jpg_exiftool_tmp").exists()

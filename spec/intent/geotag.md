@@ -2078,6 +2078,29 @@ A destination whose inherited fallback the user accepted SHALL take the fallback
 
 ## 17. The corrected time
 
+:::{def} A corrected time
+:id: DEF-corrected_time
+:status: ruled
+:uses: DEF-geotag, DEF-recorded_time
+
+A photo's time is **corrected** when geotag writes its true time into the photo, the photo holding another, and stays
+corrected once written: a time geotag wrote on an earlier run is a corrected one. A true time the photo already holds
+is resolved, not corrected.
+:::
+
+:::{rul} Only a corrected time is marked
+:id: RUL-only_corrected_time_marked
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+:refines: RUL-mutate_on_difference
+:uses: DEF-geotag, DEF-corrected_time
+
+Geotag SHALL NOT record in a photo that its time was corrected unless the time is corrected: a photo already holding
+its true time, its position and its name gets no operation.
+:::
+
 :::{rul} The corrected time is written as the destination's local time
 :id: RUL-corrected_time_written_local
 :status: ruled
@@ -2270,6 +2293,31 @@ A photo whose planned changes cannot be made SHALL fail alone: every other photo
 :refines: RUL-one_photo_failure_contained
 
 A photo whose planned changes cannot be made SHALL be reported by name.
+:::
+
+:::{rul} A failed write is recorded with the tool's reason
+:id: RUL-failed_write_reason_recorded
+:status: ruled
+:criticality: med
+:verify: required
+:refines: RUL-failed_photo_named
+:uses: DEF-geotag
+
+A photo whose metadata write fails SHALL be recorded with the reason the writing tool gave, beside the photo and each
+operation that failed.
+:::
+
+:::{rul} A write failing again the same way names the way out
+:id: RUL-repeated_write_failure_way_out
+:status: ruled
+:criticality: med
+:verify: required
+:refines: RUL-failed_write_reason_recorded
+:uses: DEF-geotag, DEF-managed_folders, RUL-moved_back_passes
+
+A photo whose metadata write fails in an execution as it failed in the previous execution of the same plan — the same
+operations, the same reason — SHALL be reported so, in the run's output and its record, with the way out: moving it
+back into photos by date, then running prep and planning geotag again.
 :::
 
 :::{rul} What an interrupted run changed is recorded by the next

@@ -754,6 +754,12 @@ next summary with its answer.
 **By hand:** set `"accept_fingerprint_change": true` in the photo's entry, then run `geotag execute` again. In the
 editor: the **Execute** view lists each, with a preview of the photo.
 
+**A photo exiftool cannot write** is no question: it is listed in `failures`, one entry per operation, each with its
+`type` and exiftool's own message as `error`; the photo is left as it was. When it fails the same way in the next
+execution of the same plan, it is also listed in `repeated_failures`, with its `way_out` — running again will not
+mend it: move it from `6-photos-by-dest/` back into `5-photos-by-date/` (the workspace check lets that move pass),
+then run `prep plan`, `prep execute` and `geotag plan` again. There is no accepting it as it is.
+
 ---
 
 ## 5c. A new camera group's class — `photos-00-config.json`
