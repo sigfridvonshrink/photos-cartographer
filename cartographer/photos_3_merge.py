@@ -608,15 +608,16 @@ class MergeWorkflow:
                 claimed_lower[lib_dest] = {n.lower() for n in (os.listdir(d) if os.path.isdir(d) else [])}
             return claimed_lower[lib_dest]
 
-        def _case_variant(target):
-            """A library file whose name differs from the target's only in case — the first in sorted order, the one
-            file compared with the photo when none holds its own name (BLD-one_library_file_compared) — or None."""
+        def _at_place(target):
+            """Every library file at the target's place (BLD-one_library_file_compared): the one under its own name
+            first, where there is one, then, in sorted order, those whose names differ from it only in case."""
             d, name = os.path.split(target)
             try:
-                return next((os.path.join(d, n) for n in sorted(os.listdir(d))
-                             if n.lower() == name.lower() and n != name), None)
+                variants = [os.path.join(d, n) for n in sorted(os.listdir(d))
+                            if n.lower() == name.lower() and n != name]
             except OSError:
-                return None
+                variants = []
+            return ([target] if os.path.exists(target) else []) + variants
 
         def _alloc_renamed(e, collision):
             """Suffix-allocate a safe destination name (append-at-max+1, case-insensitive) and return
@@ -674,11 +675,14 @@ class MergeWorkflow:
                                              "now": {"content_fingerprint": new, "image_engine_version": now}}
                     cmp_fp = new
             cl = _claimed(e["lib_dest"])
-            # The library file in the way: at the target itself, or under a name differing only in case —
-            # one place on a case-insensitive library, and the same photo perhaps on any. Either is settled
-            # by content, never renamed around unseen.
-            in_way = target if os.path.exists(target) else _case_variant(target)
-            if in_way is None:
+            # The library files at the place: the target itself and those under a name differing from it only in
+            # case — one place on a case-insensitive library, and the same photo perhaps under any of them on any.
+            # Each is compared, never renamed around unseen (BLD-one_library_file_compared): the photo is already in
+            # the library where one holds it byte for byte; one that cannot be fingerprinted or compared, or holds
+            # the same picture in other bytes, blocks it; and only a place none of whose files is the photo gives it
+            # a name of its own.
+            at_place = _at_place(target)
+            if not at_place:
                 if e["final_name"].lower() not in cl:
                     rec.update({"disposition": "placed_new", "library_target": target,
                                 "resolved_name": e["final_name"], "renamed_for_library": False})
@@ -689,43 +693,49 @@ class MergeWorkflow:
                     rec.update(_alloc_renamed(e, {"path": None, "reason": "case-insensitive name clash"}))
                     totals["renamed_for_library"] += 1
             else:
-                lib_fp, fp_err = self._library_fingerprint(in_way, cache)
-                if lib_fp is None:
-                    reason = f"library file at {in_way} could not be fingerprinted: {fp_err}"
-                    rec.update({"disposition": "blocked", "library_target": target,
-                                "resolved_name": e["final_name"], "renamed_for_library": False,
-                                "blocked_reason": reason})
-                    totals["blocked"] += 1
-                    blockers.append(reason + " — left in by-dest.")
-                elif lib_fp == cmp_fp:
+                present = block = other = None
+                for in_way in at_place:
+                    lib_fp, fp_err = self._library_fingerprint(in_way, cache)
+                    if lib_fp is None:
+                        reason = f"library file at {in_way} could not be fingerprinted: {fp_err}"
+                        block = block or ({"blocked_reason": reason}, reason + " — left in by-dest.")
+                        continue
+                    if lib_fp != cmp_fp:
+                        other = other or {"path": in_way, "fingerprint": lib_fp}
+                        continue
                     # The same pixels make the photo already present only where the library's file is it byte for
                     # byte; the same picture in other bytes — other metadata, e.g. the library's copy without the
                     # time and position geotag wrote — is blocked, both files kept, for removing either would
                     # lose what only it holds (RUL-same_pixels_other_file_blocks).
                     try:
-                        identical, reason = _same_bytes(src_abs, in_way), None
+                        identical = _same_bytes(src_abs, in_way)
                     except OSError as err:
-                        identical = None
                         reason = (f"{e['by_dest_relpath']} could not be compared byte for byte with the library "
                                   f"file at {in_way}: {err} — left in by-dest.")
+                        block = block or ({"blocked_reason": reason}, reason)
+                        continue
                     if identical:
-                        rec.update({"disposition": "already_present", "library_target": in_way,
-                                    "resolved_name": os.path.basename(in_way), "renamed_for_library": False,
-                                    "library_match": "bytes"})
-                        totals["already_present"] += 1
-                        cl.add(e["final_name"].lower())
-                    else:
-                        if identical is False:      # the record carries both paths and sizes
-                            same = _same_picture(e["by_dest_relpath"], st.st_size, in_way)
-                            reason = _same_picture_reason(same)
-                            rec.update({"library_match": "pixels", "same_picture": same})
-                        rec.update({"disposition": "blocked", "library_target": target,
-                                    "resolved_name": e["final_name"], "renamed_for_library": False,
-                                    "blocked_reason": reason})
-                        totals["blocked"] += 1
-                        blockers.append(reason)
+                        present = in_way
+                        break
+                    # the record carries both paths and sizes
+                    same = _same_picture(e["by_dest_relpath"], st.st_size, in_way)
+                    reason = _same_picture_reason(same)
+                    block = block or ({"library_match": "pixels", "same_picture": same, "blocked_reason": reason},
+                                      reason)
+                if present is not None:
+                    rec.update({"disposition": "already_present", "library_target": present,
+                                "resolved_name": os.path.basename(present), "renamed_for_library": False,
+                                "library_match": "bytes"})
+                    totals["already_present"] += 1
+                    cl.add(e["final_name"].lower())
+                elif block is not None:
+                    fields, blocker = block
+                    rec.update({"disposition": "blocked", "library_target": target,
+                                "resolved_name": e["final_name"], "renamed_for_library": False, **fields})
+                    totals["blocked"] += 1
+                    blockers.append(blocker)
                 else:
-                    rec.update(_alloc_renamed(e, {"path": in_way, "fingerprint": lib_fp}))
+                    rec.update(_alloc_renamed(e, other))
                     totals["renamed_for_library"] += 1
             dests.setdefault(e["lib_dest"], {"files": []})["files"].append(rec)
 

@@ -1247,14 +1247,15 @@ An incoming photo whose name is taken by different content SHALL take, in the sh
 folder, passing over one taken there without regard to case; the library's own name keeps its bare form.
 :::
 
-:::{bld} One library file is compared per photo
+:::{bld} Every library file at a photo's place is compared
 :id: BLD-one_library_file_compared
 :status: ruled
-:realises: RUL-collision_by_content
+:realises: RUL-collision_by_content, RUL-collision_same_content, RUL-same_pixels_other_file_blocks
 
-Merge SHALL compare one library file with each photo: the one under the photo's own name where there is one, otherwise
-the first, in sorted order, of those whose names differ from it only in case — so that a photo the library holds under
-another of those names is not found there, and takes a name of its own beside it.
+Merge SHALL compare with each photo every library file at its place — the one under the photo's own name, then,
+in sorted order, those whose names differ from it only in case (`_at_place`): the photo is already in the library
+where any of them holds it byte for byte; it is blocked where none does and one cannot be fingerprinted or compared, or
+holds the same picture in other bytes; and only where none is the photo does it take a name of its own beside them.
 :::
 
 :::{bld} The library's mark
