@@ -231,9 +231,6 @@ def valid_iana_timezone(tz) -> bool:
         return False
 
 
-_COUNTRY_TABLE = None
-
-
 def _zone_database_file(name):
     """The text of one of the zone database's tables (`zone.tab`, `iso3166.tab`), from where this Python
     reads its zones — the system's database, else the `tzdata` package — or None where neither has it."""
@@ -251,25 +248,228 @@ def _zone_database_file(name):
         return None
 
 
-def country_table() -> dict:
-    """{ISO 3166 code: {"name": English name, "zones": [its timezones, sorted]}} from the zone database's
-    own tables — every country a timezone belongs to, and so every country of more than one. {} where the
-    host's zone database ships without them. Read once."""
-    global _COUNTRY_TABLE
-    if _COUNTRY_TABLE is None:
-        zones, names = {}, {}
-        for line in (_zone_database_file("zone.tab") or "").splitlines():
-            cols = line.split("\t")
-            if line.startswith("#") or len(cols) < 3:
+# The table of countries (BLD-country_table): the host's zone database's own, else the copy the user let prep
+# download for the workspace (BLD-zone_table_download), else the copy carried inside the package.
+ZONE_TABLE_ARTIFACT = "photos-02-zone-table.json"
+ZONE_TABLE_URL = "https://data.iana.org/time-zones/tzdata-latest.tar.gz"
+ZONE_TABLE_TIMEOUT_S = 20
+ZONE_TABLE_MAX_BYTES = 8 * 1024 * 1024
+# The request names the tool and nothing else: no workspace, host or user (RUL-zone_table_request_bare).
+ZONE_TABLE_USER_AGENT = "photos-cartographer"
+_ZONE_TAB_ROW = re.compile(r"[A-Z]{2}\t[+-]\d{4}(?:\d{2})?[+-]\d{5}(?:\d{2})?\t[A-Za-z0-9_+-]+(?:/[A-Za-z0-9_+-]+)*"
+                           r"(?:\t[^\t]*)?")
+_ISO3166_ROW = re.compile(r"[A-Z]{2}\t[^\t]*\S[^\t]*")
+_ZONE_TABLES = {}                       # sha256 of the texts -> the table parsed from them
+
+
+def zone_table_path(ws: str) -> str:
+    """The workspace's record of the question of the table of countries, and of a copy downloaded (BLD-zone_table_question)."""
+    return os.path.join(ws, CONTROL_DIR, ZONE_TABLE_ARTIFACT)
+
+
+def host_has_zone_table() -> bool:
+    """Whether the host's zone database, as this Python reads it, has its table of countries (`zone.tab`)."""
+    return _zone_database_file("zone.tab") is not None
+
+
+def bundled_zone_table() -> dict:
+    """The copy of `zone.tab` and `iso3166.tab` carried inside the package, with the tzdata release it is from."""
+    from importlib import resources
+    root = resources.files("cartographer").joinpath("zone_table")
+    return {"zone_tab": root.joinpath("zone.tab").read_text(encoding="utf-8"),
+            "iso3166_tab": root.joinpath("iso3166.tab").read_text(encoding="utf-8"),
+            "tzdata_version": root.joinpath("version").read_text(encoding="utf-8").strip()}
+
+
+def check_zone_table_text(zone_tab, iso3166_tab) -> None:
+    """Raise ValueError unless both texts are well-formed tables of the zone database: every line a comment or a row
+    of its form, and at least one row each (RUL-zone_table_checked)."""
+    for name, text, row in (("zone.tab", zone_tab, _ZONE_TAB_ROW), ("iso3166.tab", iso3166_tab, _ISO3166_ROW)):
+        if not isinstance(text, str):
+            raise ValueError(f"{name} is missing")
+        rows = 0
+        for n, line in enumerate(text.splitlines(), 1):
+            if not line.strip() or line.startswith("#"):
                 continue
-            if valid_iana_timezone(cols[2]):
-                zones.setdefault(cols[0], set()).add(cols[2])
-        for line in (_zone_database_file("iso3166.tab") or "").splitlines():
-            cols = line.split("\t")
-            if not line.startswith("#") and len(cols) >= 2:
-                names[cols[0]] = cols[1].strip()
-        _COUNTRY_TABLE = {c: {"name": names.get(c, c), "zones": sorted(z)} for c, z in sorted(zones.items())}
-    return _COUNTRY_TABLE
+            if not row.fullmatch(line):
+                raise ValueError(f"{name} line {n} is not a row of the table: {line[:60]!r}")
+            rows += 1
+        if not rows:
+            raise ValueError(f"{name} holds no row")
+
+
+def _download_zone_archive(url, timeout) -> bytes:
+    """The bytes at `url`, at most ZONE_TABLE_MAX_BYTES of them — the one network access of the tool. The seam the
+    tests replace: no test reaches the network."""
+    import urllib.request
+    req = urllib.request.Request(url, headers={"User-Agent": ZONE_TABLE_USER_AGENT})
+    with urllib.request.urlopen(req, timeout=timeout) as r:
+        data = r.read(ZONE_TABLE_MAX_BYTES + 1)
+    if len(data) > ZONE_TABLE_MAX_BYTES:
+        raise ValueError(f"the archive is larger than {ZONE_TABLE_MAX_BYTES} bytes")
+    return data
+
+
+def fetch_zone_table(url=ZONE_TABLE_URL) -> dict:
+    """Download the zone database's latest release and take `zone.tab`, `iso3166.tab` and `version` out of it in
+    memory — nothing of the archive is written to disk — checked strictly (BLD-zone_table_download). Raises on any
+    failure: unreachable, too slow, not an archive, a table missing or malformed."""
+    import io
+    import tarfile
+    data = _download_zone_archive(url, ZONE_TABLE_TIMEOUT_S)
+    try:
+        with tarfile.open(fileobj=io.BytesIO(data), mode="r:gz") as tf:
+            def member(name, required=True):
+                try:
+                    m = tf.getmember(name)
+                except KeyError:
+                    if required:
+                        raise ValueError(f"the archive holds no {name}")
+                    return None
+                if not m.isfile():
+                    raise ValueError(f"{name} in the archive is not a file")
+                return tf.extractfile(m).read().decode("utf-8")
+            zone_tab, iso3166_tab, version = member("zone.tab"), member("iso3166.tab"), member("version", False)
+    except (tarfile.TarError, EOFError, OSError, UnicodeDecodeError) as e:
+        raise ValueError(f"not a readable archive of the zone database ({e})")
+    check_zone_table_text(zone_tab, iso3166_tab)
+    version = (version or "").strip()
+    return {"source_url": url, "tzdata_version": version if re.fullmatch(r"\d{4}[a-z]+", version) else None,
+            "zone_tab": zone_tab, "iso3166_tab": iso3166_tab}
+
+
+def read_zone_table_record(ws) -> dict:
+    """The workspace's answer to the question of the table and the copy it downloaded, or None where none is
+    recorded or the record cannot be read as one."""
+    if not ws:
+        return None
+    try:
+        with open(zone_table_path(ws), encoding="utf-8") as f:
+            rec = json.load(f)
+    except (OSError, ValueError):
+        return None
+    return rec if isinstance(rec, dict) and rec.get("download") in ("accepted", "declined") else None
+
+
+def _workspace_zone_copy(ws):
+    """The copy downloaded for the workspace, still well-formed, or None."""
+    copy = (read_zone_table_record(ws) or {}).get("copy")
+    if not isinstance(copy, dict):
+        return None
+    try:
+        check_zone_table_text(copy.get("zone_tab"), copy.get("iso3166_tab"))
+    except ValueError:
+        return None
+    return copy
+
+
+def _parse_country_table(zone_tab, iso3166_tab) -> dict:
+    """{ISO 3166 code: {"name", "zones"}} from the two texts; a zone the host's zone database does not know is no
+    country's (RUL-zone_table_zone_known)."""
+    zones, names = {}, {}
+    for line in (zone_tab or "").splitlines():
+        cols = line.split("\t")
+        if line.startswith("#") or len(cols) < 3:
+            continue
+        if valid_iana_timezone(cols[2]):
+            zones.setdefault(cols[0], set()).add(cols[2])
+    for line in (iso3166_tab or "").splitlines():
+        cols = line.split("\t")
+        if not line.startswith("#") and len(cols) >= 2:
+            names[cols[0]] = cols[1].strip()
+    return {c: {"name": names.get(c, c), "zones": sorted(z)} for c, z in sorted(zones.items())}
+
+
+def zone_table(ws=None) -> dict:
+    """The table of countries a run reads (BLD-country_table): {"source": "host" | "web" | "bundled", "sha256": of the
+    table as read, "countries": {ISO 3166 code: {"name": English name, "zones": [its timezones, sorted]}}} — every
+    country a timezone belongs to, and so every country of more than one. The host's own table where its zone
+    database has one; else the copy downloaded for the workspace `ws`; else the copy carried in the package."""
+    zone_tab = _zone_database_file("zone.tab")
+    if zone_tab is not None:
+        source, iso3166_tab = "host", _zone_database_file("iso3166.tab")
+    else:
+        copy = _workspace_zone_copy(ws)
+        source, copy = ("web", copy) if copy else ("bundled", bundled_zone_table())
+        zone_tab, iso3166_tab = copy["zone_tab"], copy["iso3166_tab"]
+    key = sha256_text(json.dumps([zone_tab, iso3166_tab]))
+    if key not in _ZONE_TABLES:
+        countries = _parse_country_table(zone_tab, iso3166_tab)
+        _ZONE_TABLES[key] = (countries, sha256_text(json.dumps(countries, sort_keys=True)))
+    countries, sha = _ZONE_TABLES[key]
+    return {"source": source, "sha256": sha, "countries": countries}
+
+
+def country_table(ws=None) -> dict:
+    """{ISO 3166 code: {"name", "zones"}}: the countries of `zone_table(ws)`."""
+    return zone_table(ws)["countries"]
+
+
+def zone_table_question_pending(ws) -> bool:
+    """Whether the question of downloading the table of countries is still to be asked of this workspace: the host has
+    no table of its own and no answer is recorded (RUL-zone_table_asked_once)."""
+    return not host_has_zone_table() and read_zone_table_record(ws) is None
+
+
+def add_zone_table_argument(parser) -> None:
+    """`--download-zone-table yes|no` on `prep plan` (BLD-zone_table_question): the answer to the question of
+    downloading the table of countries, where the host's zone database has none."""
+    parser.add_argument("--download-zone-table", dest="download_zone_table", choices=("yes", "no"),
+                        help="where this host's zone database has no table of countries (zone.tab): yes downloads "
+                             "the current one from IANA once, into the workspace; no uses the copy carried inside "
+                             "photos-cartographer, which may be stale")
+
+
+def zone_table_question(bundled_version) -> str:
+    """The question put to the user before any download (RUL-zone_table_refusal_told)."""
+    return ("This host's zone database has no table of countries (zone.tab), which geotag needs to offer a "
+            f"country's timezones. Download the current one from IANA ({ZONE_TABLE_URL}) once, now, and keep it in "
+            "this workspace? If you refuse, the copy carried inside photos-cartographer (tzdata "
+            f"{bundled_version}) is used — it may be stale.")
+
+
+def settle_zone_table(ws, answer, reporter) -> None:
+    """Act on the answer to the question of the table of countries, on a `prep plan` (BLD-zone_table_question):
+    `answer` is "yes", "no" or None — not answered. Where the host has its own table nothing is asked or recorded.
+    "no" records the refusal; "yes" downloads the table once, now, and records it — or, where the download fails,
+    records the answer and warns, the carried copy (or a copy downloaded earlier) staying in use. Unanswered with
+    nothing recorded says how to answer: prep is never stopped by the question (RUL-zone_table_never_stops_prep)."""
+    version = bundled_zone_table()["tzdata_version"]
+    if host_has_zone_table():
+        if answer is not None:
+            reporter.log("This host's zone database has its own table of countries: nothing to download.")
+        return
+    prior = read_zone_table_record(ws)
+    if answer is None:
+        if prior is None:
+            reporter.warn(f"Note: this host's zone database has no table of countries (zone.tab); geotag uses the "
+                          f"copy carried inside photos-cartographer (tzdata {version}), which may be stale. To "
+                          f"download the current one from IANA once, into this workspace, run `prep plan "
+                          f"--download-zone-table yes` — or `--download-zone-table no` to keep the carried copy.")
+        return
+    record = {"artifact_name": ZONE_TABLE_ARTIFACT, "schema_version": 1,
+              "download": "accepted" if answer == "yes" else "declined"}
+    if answer == "no":
+        write_versioned_json(zone_table_path(ws), record)
+        reporter.log(f"The table of countries will be the copy carried inside photos-cartographer (tzdata {version}), "
+                     f"which may be stale; the answer is kept in {ZONE_TABLE_ARTIFACT}.")
+        return
+    try:
+        record["copy"] = dict(fetch_zone_table(), fetched_at=datetime.now(timezone.utc).isoformat())
+    except Exception as e:
+        kept = _workspace_zone_copy(ws)
+        reporter.warn(f"Warning: the table of countries could not be downloaded ({e}); "
+                      + ("the copy downloaded earlier stays in use." if kept else
+                         f"the copy carried inside photos-cartographer (tzdata {version}), which may be stale, is "
+                         "used instead."))
+        if kept:
+            return                                  # nothing else changes: the earlier copy and its record stand
+        record["failure"] = str(e)
+        write_versioned_json(zone_table_path(ws), record)
+        return
+    write_versioned_json(zone_table_path(ws), record)
+    reporter.log(f"Downloaded the table of countries from IANA (tzdata {record['copy']['tzdata_version'] or '?'}); "
+                 f"kept in {ZONE_TABLE_ARTIFACT}.")
 
 
 def selected_gpx_root() -> str:

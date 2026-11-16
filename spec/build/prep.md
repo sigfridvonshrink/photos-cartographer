@@ -36,6 +36,40 @@ holds `initialized`, `tool` and `initialized_by_run`, the initializing plan's id
 records as the workspace's identity ({need}`BLD-archive_manifest`).
 :::
 
+:::{bld} The question of the table of countries, asked by `prep plan`
+:id: BLD-zone_table_question
+:status: ruled
+:realises: RUL-zone_table_download_on_word, RUL-zone_table_download_where_missing, RUL-zone_table_refusal_told, RUL-zone_table_asked_once, RUL-zone_table_never_stops_prep
+
+`prep plan` SHALL take its answer to whether to download the table of countries from `--download-zone-table yes|no`;
+given none, while `zone_table_question_pending` — `host_has_zone_table` false (no `zone.tab` where this Python reads
+its zones, `zoneinfo.TZPATH` then the `tzdata` package) and no answer recorded — it asks `zone_table_question`, which
+names the carried copy's tzdata release and that refusing leaves it in use, possibly stale, as a y/N question before
+its scan, where its standard input is a terminal and it reports to the terminal, not to the console; else it has no answer. Once the plan
+is saved, `settle_zone_table` acts on it: where the host has its own table nothing is recorded or fetched; no answer
+with none recorded warns how to give one and records nothing, the carried copy in use, the plan unaffected; `no`
+records `{"download": "declined"}` and `yes` fetches ({need}`BLD-zone_table_download`) and records
+`{"download": "accepted", "copy": …}`, both in `photos-02-zone-table.json` through `write_versioned_json`. A recorded
+answer is not asked again; an answer given on a later `prep plan` is acted on as the first was. The console's prep Plan
+asks the same question while its state's `zone_table` holds it, and sends the answer as `zone_table`, which it passes
+to the run as `--download-zone-table`.
+:::
+
+:::{bld} The download of the table of countries
+:id: BLD-zone_table_download
+:status: ruled
+:realises: RUL-zone_table_downloaded_once, RUL-zone_table_copy_kept, RUL-zone_table_checked, RUL-zone_table_failure_told, RUL-zone_table_request_bare
+
+`fetch_zone_table` SHALL fetch `https://data.iana.org/time-zones/tzdata-latest.tar.gz` once, over HTTPS with the
+standard library, within `ZONE_TABLE_TIMEOUT_S` (20 s) and `ZONE_TABLE_MAX_BYTES`, its one header beyond the
+library's own the User-Agent `photos-cartographer`; open it in memory and take out `zone.tab`, `iso3166.tab` and
+`version`, writing nothing of the archive to disk; and refuse it unless `check_zone_table_text` finds each table a row of
+its form on every line not a comment and at least one row. The copy taken is recorded as `copy` (`source_url`,
+`tzdata_version`, `fetched_at`, `zone_tab`, `iso3166_tab`) in `photos-02-zone-table.json`, which is archived and sealed
+with the other control records. A fetch that fails or is refused warns, naming why: with a copy fetched earlier, that
+copy and its record stand; else the answer is recorded with `failure` and the carried copy is in use.
+:::
+
 :::{bld} A taken inbox path takes the next `-NNN`
 :id: BLD-init_move_suffix
 :status: ruled

@@ -164,7 +164,8 @@ function renderActions() {
     b.textContent = label;
     b.dataset.cmd = cmd;
     b.onclick = kind === "gate" ? openGate : kind === "initlib" ? openInitLib
-      : kind === "prune" ? openPrune : () => trigger(cmd);
+      : kind === "prune" ? openPrune
+      : (currentPhase === "prep" && cmd === "plan") ? prepPlan : () => trigger(cmd);
     wrap.appendChild(b);
   }
 }
@@ -222,6 +223,7 @@ async function refreshState() {
   if (s.sealed) { lock.textContent = "● sealed"; lock.style.color = "var(--muted)"; }
   else if (!running && s.lock_owner) { lock.textContent = "● locked (another run)"; lock.style.color = "var(--warn)"; }
 
+  zoneQuestion = s.zone_table || null;
   for (const [p, v] of Object.entries(s.phases || {})) phasePlanIds[p] = v.plan_id || null;
   const ph = (s.phases && s.phases[currentPhase]) || {};
   // status chip for the current phase (plan-exists / blockers / staleness / ready)
@@ -289,6 +291,28 @@ async function postRun(body) {
 async function trigger(command) {
   await postRun({ phase: currentPhase, command, jobs: jobsValue() });
 }
+
+// --- prep plan: the question of the table of countries ----------------------
+// Where the host's zone database has no table of countries and the workspace has not answered, prep plan asks before
+// downloading one; the console asks the same question here and sends the answer with the run — the CLI's
+// `--download-zone-table` (BLD-zone_table_question; docs/design/decisions.md). Cancel runs nothing.
+let zoneQuestion = null;   // { question } while the workspace has it unanswered, from the last state poll
+const zoneOverlay = $("#zone-overlay");
+async function prepPlan() {
+  await refreshState();
+  if (!zoneQuestion) return trigger("plan");
+  $("#zone-question").textContent = zoneQuestion.question;
+  zoneOverlay.hidden = false;
+}
+function closeZone() { zoneOverlay.hidden = true; }
+async function answerZone(answer) {
+  closeZone();
+  await postRun({ phase: "prep", command: "plan", zone_table: answer, jobs: jobsValue() });
+}
+$("#zone-cancel").onclick = closeZone;
+$("#zone-no").onclick = () => answerZone("no");
+$("#zone-yes").onclick = () => answerZone("yes");
+zoneOverlay.onclick = (e) => { if (e.target === zoneOverlay) closeZone(); };
 
 // --- a run stopped on changes to the workspace -----------------------------
 // Every checking command first compares the workspace with the state the last execution left it in, and stops on a

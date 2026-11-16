@@ -376,6 +376,11 @@ offset is whole seconds, so they still hold. A destination gets its zone from:
   (New York and Detroit; Phoenix and Los Angeles in summer) leave it asking. A country said again inside another is taken out by the next run, which tells
   you.
 
+  The countries and their zones come from the zone database's own table: the host's, where it has one; else a
+  copy downloaded from IANA for the workspace, if you said yes when the first `prep plan` asked (it is kept with
+  the workspace's records, archived and sealed with them); else the copy carried inside photos-cartographer, which
+  may be stale. Geotag's plan names the table it was made from, so another one makes the plan stale.
+
 Your configured `default_folder_timezone` is only **offered** to a destination with nothing to inherit —
 one click in the editor — and never applied without you.
 

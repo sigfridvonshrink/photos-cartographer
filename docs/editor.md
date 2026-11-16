@@ -169,7 +169,8 @@ asked (a zone there would reach nothing), and the folders inside it are.
   zone applies itself, badged `from its photos`. A country is said **once, at the
   top of its tree**: below a folder that has one, the choice is locked and says where it was made, and
   choosing a country on a folder removes any country chosen inside it (the editor says which). The
-  choice appears only when the host's timezone database lists countries.
+  countries are the host's timezone database's own table — or, on a host without one, a copy downloaded for the
+  workspace when `prep plan` asked, else the copy carried inside photos-cartographer.
 - **The configured default** (`default_folder_timezone`) is only **offered**: a destination with nothing
   to inherit shows it with a **use** button, but it never applies by itself — so a place abroad is never
   timed in your home zone. Inside a country, it is offered only if it is one of that country's zones.

@@ -296,6 +296,29 @@ other than place: it is taken out, aloud, rather than left to contradict the one
 one of places, and this is the one place the tool can hold it to that.
 :::
 
+:::{rat} The table of countries is found wherever the host lacks one, and fetched only when the user says so
+:id: RAT-zone_table_where_host_lacks
+:status: ruled
+:forced: no
+:follows_from: RAT-country_said_not_guessed, RAT-tracks_kept_with_workspace
+:justifies: RUL-zone_table_host_first, RUL-zone_table_zone_known, RUL-zone_table_download_on_word, RUL-zone_table_download_where_missing, RUL-zone_table_refusal_told, RUL-zone_table_asked_once, RUL-zone_table_downloaded_once, RUL-zone_table_copy_kept, RUL-zone_table_never_stops_prep, RUL-zone_table_checked, RUL-zone_table_failure_told, RUL-zone_table_request_bare, RUL-zone_table_restales_plan
+
+A country is picked from the zone database's own list, and some hosts' zone databases ship without it: there the
+choice of a country would be refused. The owner asked: *"can we use OS one if available and some sort of master copy
+from web if not, and a bundled version if master copy on web is not available?"* — then ruled: *"build including
+download but get permission from user before downloading - this should be during the workspace init. And tell the user
+that if he refuses it will use a potentially stale bundled copy"*. The host's own table comes first: it is the one its
+zones are read from, and where it has one nothing is asked. Fetching is new for this tool, which otherwise never
+reaches the network, so it is done only on the user's word, asked once when the workspace is made, carrying nothing
+of the workspace or its user; the answer is kept so the question is not asked again, and the table fetched is kept
+with the records — a choice of country rests on it, and a sealed workspace must show what it rested on, as it does the
+track points. A table fetched is only taken whole and well formed; a failed fetch, a refusal or no one there to answer
+leaves the carried copy in use, said aloud, for the question matters only to a choice of country and must never stop
+prep. A zone the host cannot read is no country's, whichever table names it. And a choice made from one table may be
+wrong by another, so the plan names the table it was made from: another one makes it stale, as a changed decision
+does.
+:::
+
 :::{rat} The clock is the camera's for the day, not the folder's
 :id: RAT-clock_is_the_cameras_for_the_day
 :status: ruled

@@ -54,6 +54,8 @@ _KNOWN = {
     ("geotag plan", "--accept-changes"), ("geotag execute", "--accept-changes"),
     ("geotag finalize", "--accept-changes"),
     ("merge plan", "--accept-changes"), ("merge dry-run", "--accept-changes"), ("merge execute", "--accept-changes"),
+    # the answer to whether to download the table of countries (BLD-zone_table_question) — yes or no, never a place
+    ("prep plan", "--download-zone-table"),
 }
 
 

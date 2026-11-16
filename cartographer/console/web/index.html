@@ -87,6 +87,20 @@
     </div>
   </div>
 
+  <div id="zone-overlay" class="gate-overlay" hidden>
+    <div class="gate" role="dialog" aria-modal="true" aria-labelledby="zone-title">
+      <p class="gate-title" id="zone-title">Download the table of countries?</p>
+      <div id="zone-question" class="gate-sum"></div>
+      <p class="gate-warn">Asked once for this workspace: the answer is kept in
+        <code>photos-02-zone-table.json</code>.</p>
+      <div class="gate-act">
+        <button id="zone-cancel" class="btn">Cancel</button>
+        <button id="zone-no" class="btn">Use the carried copy</button>
+        <button id="zone-yes" class="btn primary">Download once</button>
+      </div>
+    </div>
+  </div>
+
   <div id="prune-overlay" class="gate-overlay" hidden>
     <div class="gate" role="dialog" aria-modal="true" aria-labelledby="prune-title">
       <p class="gate-title" id="prune-title">Prune quarantine</p>

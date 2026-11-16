@@ -379,6 +379,7 @@ The control records SHALL be these files in `.photos-ingest/` ({need}`DEF-archiv
   photos-00-ingest.db              SQLite identity/metadata cache + derived caches (live working DB, BLD-workspace_database)
   photos-00-plan-memo.db           prep-phase scratch: plan memo, what planning read of each media file (disposable, NOT part of the record)
   photos-01-accepted-changes.json  the changes to the workspace the user accepted, each by its code (BLD-accept_changes); an earlier one kept under -NNN
+  photos-02-zone-table.json        the answer to whether to download the table of countries, and the copy downloaded (BLD-zone_table_question); an earlier one kept under -NNN
   photos-15-prep-ingest.db         prep-phase artifact: DB backup snapshot, end of prep (BLD-database_images)
   journal-*.json                   execution journals
   photos-10-prep-plan.json         prep-phase artifact: prep plan (written by `plan`, consumed by `dry-run`/`execute`; see "Canonical plan persistence" below)

@@ -137,8 +137,8 @@ progress and to know when the file is "done". (Both are system-owned; don't set 
     "<destination_path>": { /* §4.2 */ }
   },
   "countries": {                           // SYSTEM: the countries a destination can be said to lie in, as
-    "<ISO 3166 code>": { "name": "Belgium", "zones": ["Europe/Brussels"] }   // the zone database read
-  },                                       //   this run has them ({} where it ships no such table)
+    "<ISO 3166 code>": { "name": "Belgium", "zones": ["Europe/Brussels"] }   // the table of countries read
+  },                                       //   this run has them
   "depends_on": {                          // SYSTEM fingerprints
     "handoff": { … }, "camera_time_policy_fingerprint": "…", "gpx_fingerprint": "…",
     "camera_group_key_version": …
@@ -148,7 +148,11 @@ progress and to know when the file is "done". (Both are system-owned; don't set 
 ```
 
 `countries` is what `user_decision.country` (§4.3) is chosen from: its keys are the valid codes, each
-with its English `name` and its `zones` (sorted).
+with its English `name` and its `zones` (sorted) — only zones the host's zone database knows. The table is the host's
+zone database's own (`zone.tab`, `iso3166.tab`) where it has one; else the copy downloaded for the workspace, kept in
+`photos-02-zone-table.json` (where the user said yes when `prep plan` asked); else the copy carried inside
+photos-cartographer. The executable plan's `depends_on.country_table` names which (`source`: `host`, `web` or
+`bundled`) and its `sha256`: another table makes the plan stale.
 
 ### 4.2 A destination
 
@@ -958,7 +962,7 @@ Mirror these client-side; a value that fails makes geotag reject the whole artif
 
 | Field(s) | Rule |
 |----------|------|
-| `country` | `""` (= none), or a code that is a key of the top-level `countries` table; any other value is a blocker, as is any value where the host's zone database has no table of countries (`countries` is `{}`). One chosen inside another country's destination is not a blocker: the next run writes it back `""` (`country_removed`). |
+| `country` | `""` (= none), or a code that is a key of the top-level `countries` table; any other value is a blocker. One chosen inside another country's destination is not a blocker: the next run writes it back `""` (`country_removed`). |
 | `manual_iana_timezone` | Must resolve as a real IANA zone in the zone database geotag runs with — never a name standing for the host (`localtime`, `posixrules`, `Factory`). With a country in effect (`country_zones` present), it must be one of `country_zones`. `""` allowed (= unset). |
 | `confirmed_despite_recorded_offsets` | A list of whole numbers of seconds; `[]` (or `null`, or the field absent) = not given. |
 | `keep_as_recorded` | `true` or `false` on a phone's cell (absent or `null` reads as `false`); anything else a blocker. |
