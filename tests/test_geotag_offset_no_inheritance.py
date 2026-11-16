@@ -543,7 +543,7 @@ def test_a_country_of_one_timezone_gives_it_and_one_of_several_gives_none(tmp_pa
     assert kyoto["decision_mode"] == "auto_resolved" and not kyoto["requires_user_input"]
     assert tz[f"{y}/Japonia"]["effective_iana_timezone"] == "Asia/Tokyo" and "country_from" not in tz[f"{y}/Japonia"]
     sua = tz[f"{y}/SUA"]                                                  # several zones: none of its own, none given down
-    assert sua["effective_iana_timezone"] == "" and not sua["requires_user_input"]       # a container never waits
+    assert sua["effective_iana_timezone"] == "" and not sua["requires_user_input"]       # a zone there reaches nothing
     for d in (f"{y}/SUA/Arizona/Canyon", f"{y}/SUA/Oregon"):
         assert tz[d]["effective_iana_timezone"] == "" and tz[d]["requires_user_input"]   # not Bucharest, from above
         assert tz[d]["proposal_source"] == "none" and tz[d]["country"] == "US" and tz[d]["country_from"] == f"{y}/SUA"

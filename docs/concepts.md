@@ -181,8 +181,8 @@ Any folder that **directly holds photos** is a destination — including an inte
 `Brussels` holds both sub-destinations *and* a loose photo, so it's a normal destination for that photo
 **and** a parent its children inherit from. A folder that holds **no photos of its own** (purely
 sub-folders, like `2026` or `Belgium` here) is a **container**: it carries a country, a timezone or a
-GPS-fallback decision that flows down to everything inside (see *What cascades*, below), and never waits
-for an answer itself.
+GPS-fallback decision that flows down to everything inside (see *What cascades*, below). The one thing it
+asks is a timezone, while a place inside it has none — answered there, everything inside takes it.
 
 **Why a hierarchy helps:** the timezone and the folder GPS fallback inherit *downward* through this
 tree. Say once that `Belgium` is in Belgium and every place beneath it has Brussels time; drop a GPS
@@ -376,6 +376,10 @@ offset is whole seconds, so they still hold. A destination gets its zone from:
 
 Your configured `default_folder_timezone` is only **offered** to a destination with nothing to inherit —
 one click in the editor — and never applied without you.
+
+A destination with no zone is asked for one, and so is every folder above it with none, wherever a zone written there
+would reach it: answer at the level the zone is true, and the questions below it go. A folder in a country of several
+timezones is not asked — the folders inside it are.
 
 A destination has one timezone, so its photos are checked against it: a phone records its offset from
 UTC with each photo, and where a photo's recorded offset is not the zone's at that moment (a phone left

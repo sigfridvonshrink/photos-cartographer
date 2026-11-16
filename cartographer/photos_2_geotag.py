@@ -987,6 +987,9 @@ class GeotagWorkflow:
         # to (code, the destination it was chosen at) for itself and everything inside it.
         eff_country, table = {}, country_table()
         self.country_removals = []
+        # where a zone written above stops reaching down: a folder with a zone written, or a country chosen
+        # (RUL-zone_asked_at_every_level)
+        zone_stops = set()
         self.unreadable_offset_tags = []
         self.kept_tag_disagreements = []
         ordered, containers = _expand_destinations(by_dest)
@@ -1032,6 +1035,8 @@ class GeotagWorkflow:
             written = prior_ud.get("manual_iana_timezone")
             candidate = written if written and _valid_iana(written) else (inherited_tz[1] if inherited_tz else None)
             against = _offsets_against_zone(by_dest[dest], groups, candidate) if candidate and not is_container else None
+            if written or own_country:
+                zone_stops.add(dest)
             tz_block = self._timezone_decision(dest, prior_d.get("destination_timezone") or {},
                                                blockers, inherited_tz, file_less=is_container, against=against,
                                                country=country, zones=zones, own_country=own_country,
@@ -1132,6 +1137,7 @@ class GeotagWorkflow:
                     destinations[dest]["unidentified_files"] = self._unidentified_cell(
                         dest, nameless, tz, prior_d.get("unidentified_files") or {}, blockers)
             self.coordinator.increment_completed(1)
+        _ask_zone_at_containers(destinations, containers, zone_stops)
         self._share_offsets_within_a_day(destinations, recall, gpx, blockers)
         self._offer_neighbour_days(destinations, recall, gpx, blockers)
         self._withhold_far_offsets(destinations, recall, by_dest, groups, gpx)
@@ -1672,7 +1678,8 @@ class GeotagWorkflow:
             "user_decision": {"manual_iana_timezone": manual, "country": own_country,
                               "confirmed_despite_recorded_offsets": [int(o) for o in despite]},
             "effective_iana_timezone": effective,
-            "requires_user_input": effective == "" and not file_less,   # a container never blocks
+            # a container asks only for the destinations waiting within it (_ask_zone_at_containers)
+            "requires_user_input": effective == "" and not file_less,
             # a word given for other offsets than the photos now record is kept as written, and speaks for none
             "stale_user_decision": bool(despite) and bool(unanswered),
         }

@@ -444,7 +444,8 @@ such.
 :justifies: RUL-container_never_waits
 
 A folder holding only other destinations has no photo to correct: it exists so a timezone or a fallback position can be
-set once and reach every destination beneath it. If it asked for anything, it would add work instead of saving it.
+set once and reach every destination beneath it. Asked for what nothing beneath it waits on, it would add work instead
+of saving it; a timezone a destination beneath it waits for is the one question it is the cheaper place to answer.
 :::
 
 
@@ -692,6 +693,23 @@ The configured default is the zone the user usually lives in, and a trip is wher
 trip abroad, it would name every photo in home time and turn the times of photos that record no offset by the hours
 between the two zones — written into the originals, with no sign anything is off. Offered instead, it costs one answer
 per trip, at the trip's folder, everything beneath inheriting it; a trip at home takes it in one click.
+:::
+
+:::{rat} A timezone is asked wherever an answer would reach, and asked no more once given
+:id: RAT-zone_asked_at_every_level
+:status: ruled
+:forced: no
+:follows_from: RAT-decisions_cascade, RAT-nearest_timezone, RAT-home_zone_offered
+:justifies: RUL-zone_asked_at_every_level, RUL-zone_not_asked_where_one_reaches, RUL-editor_answer_ends_zone_asking
+
+Asked only where photos lie, a country of three cities asks three times, unless the user knows to answer on the folder
+that asks nothing. The tool cannot tell which folder is the place a zone holds for — a country, a region, a trip — so it
+asks at each folder above a destination that waits, and the user answers where it is true; the owner: *"the user should
+be asked at every level and any choice should propagate to children, with the caveat of multiple timezone countries"*.
+An answer passes down to everything below, so the questions it settles go with it: *"This should not multiply choices -
+once a time zone is set, children destinations should not ask any longer"*. A folder whose answer would reach nothing —
+one said to be in a country of several zones, or one above a zone written lower down — is not asked: its question would
+be one no answer settles.
 :::
 
 :::{rat} The destination is an input to the time

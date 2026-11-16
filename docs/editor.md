@@ -152,6 +152,12 @@ offers an "In country" choice.*
 A destination has **one timezone** for all its photos. You answer it once, high in the tree; everything
 beneath inherits it.
 
+Where a destination has no zone, every folder above it with none asks too, naming the destinations inside that wait:
+answer at whichever level the zone is true — the country, a region, the place itself. An answer passes down to
+everything below, so the questions it settles there turn **resolved** at once, before any re-run; answer each
+destination instead and the folders above stop asking. A folder said to be in a country of several timezones is not
+asked (a zone there would reach nothing), and the folders inside it are.
+
 - **Inherited** — a destination with no zone of its own takes the one of its nearest ancestor that has
   one, badged `inherited ⟵ <ancestor>`. It applies itself; the badge updates live as you edit
   ancestors.

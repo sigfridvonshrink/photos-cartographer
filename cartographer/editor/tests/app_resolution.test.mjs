@@ -111,8 +111,11 @@ test("previewTz / previewFallback inherit from the nearest resolved ancestor", (
 
 test("timezone: an inherited zone applies itself, the configured default is only proposed", () => {
   const dest = "6-photos-by-dest/Japan", ref = { file: "time", dest, kind: "timezone" };
-  const mk = (cell) => setWork({ time: { destinations: { [dest]: { destination_timezone: { user_decision: {}, ...cell } } } } });
-  mk({ proposed_iana_timezone: "Asia/Tokyo", proposal_source: "inherited" });  assert.equal(app.wouldResolve(ref), true);
+  const mk = (cell, above = {}) => setWork({ time: { destinations: {
+    "6-photos-by-dest": { file_less: true, destination_timezone: { user_decision: above } },
+    [dest]: { destination_timezone: { user_decision: {}, ...cell } } } } });
+  mk({ proposed_iana_timezone: "Asia/Tokyo", proposal_source: "inherited" }, { manual_iana_timezone: "Asia/Tokyo" });
+  assert.equal(app.wouldResolve(ref), true);
   mk({ proposed_iana_timezone: "Europe/Brussels", proposal_source: "config_default" });
   assert.equal(app.wouldResolve(ref), false);                 // home zone offered, not taken for a trip abroad
   assert.equal(app.previewTz(dest), null);                    // and nothing beneath inherits it

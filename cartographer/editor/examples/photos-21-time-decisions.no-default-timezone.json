@@ -1672,10 +1672,13 @@
       "camera_group_time_decisions": {},
       "destination_path": "6-photos-by-dest",
       "destination_timezone": {
+        "asked_for": [
+          "6-photos-by-dest/Nowhere"
+        ],
         "effective_iana_timezone": "",
         "proposal_source": "none",
         "proposed_iana_timezone": null,
-        "requires_user_input": false,
+        "requires_user_input": true,
         "stale_user_decision": false,
         "user_decision": {
           "confirmed_despite_recorded_offsets": [],

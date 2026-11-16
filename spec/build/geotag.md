@@ -99,7 +99,7 @@ An offset cell's `user_decision` SHALL hold `accept_proposal`, `accepted_offset_
 
 A photo's destination SHALL be the `dirname` of its path; the container destinations are every ancestor of a
 destination within `6-photos-by-dest` that is not one, `6-photos-by-dest` included, each marked `file_less: true` in the
-decision records, its timezone and fallback cells never requiring input and its `camera_group_time_decisions` empty;
+decision records, its fallback cell never requiring input, its timezone cell only as {need}`BLD-zone_asked_at_containers` says, and its `camera_group_time_decisions` empty;
 destinations are processed parents first.
 :::
 
@@ -342,6 +342,14 @@ first, then by rank: its candidate in the proposed cluster, else its own best �
 pass, the count `multi_anchor_auto_apply` and `single_anchor_auto_apply` are read by ({need}`BLD-auto_apply_settings`).
 A cell's `anchored_by` names the track files of the anchors within the spread of its offset
 ({need}`BLD-day_offset_kept`).
+:::
+
+:::{bld} A timezone asked at the folders above a destination waiting for one
+:id: BLD-zone_asked_at_containers
+:status: ruled
+:realises: RUL-zone_asked_at_every_level, RUL-zone_not_asked_where_one_reaches, RUL-container_never_waits
+
+A container destination's timezone cell with no `effective_iana_timezone`, where no `manual_iana_timezone` is written and no `country` is chosen, SHALL hold `asked_for` — each destination within it whose timezone cell requires input, where no folder below the container on the way down to it, it included, has a `manual_iana_timezone` written or a `country` chosen — and require input while that list is not empty; every other container's timezone cell requires none. Computed after every destination's cell is built, from the cells of that run.
 :::
 
 :::{bld} The country a destination is in

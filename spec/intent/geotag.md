@@ -672,7 +672,8 @@ gave by themselves that day in another destination.
 :verify: required
 :uses: DEF-container_destination
 
-A container destination's decisions SHALL never wait for the user.
+A container destination's decisions SHALL never wait for the user, save a timezone asked of it for the destinations
+waiting within it ({need}`RUL-zone_asked_at_every_level`).
 :::
 
 :::{rul} An answer follows its day
@@ -1254,6 +1255,31 @@ offset as holding wrong positions.
 
 A destination's proposed timezone SHALL be the one in effect at the nearest destination it lies in that has one —
 however it was reached there.
+:::
+
+:::{rul} A timezone is asked at every folder above a destination waiting for one
+:id: RUL-zone_asked_at_every_level
+:status: ruled
+:criticality: med
+:verify: required
+:refines: RUL-no_timezone_to_inherit_waits
+:uses: DEF-container_destination, DEF-decision
+
+A container destination with no timezone, written or inherited, SHALL ask for one while a destination within it waits
+for one that a timezone written at the container would reach.
+:::
+
+:::{rul} A container a timezone reaches is not asked for one
+:id: RUL-zone_not_asked_where_one_reaches
+:status: ruled
+:criticality: med
+:anti: yes
+:verify: required
+:refines: RUL-zone_asked_at_every_level
+:uses: DEF-container_destination
+
+A container destination with a timezone, written there or inherited, or where a country of several timezones is said,
+SHALL NOT be asked for one.
 :::
 
 :::{rul} A moved photo is decided where it now is

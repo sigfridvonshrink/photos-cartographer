@@ -128,6 +128,7 @@ __all__ = [
     '_walk_ancestors',
     '_nearest_ancestor',
     '_expand_destinations',
+    '_ask_zone_at_containers',
     '_dest_label',
     'destination_local_basename',
     'plan_renames',
@@ -1794,6 +1795,30 @@ def _expand_destinations(by_dest):
                 containers.add(anc)
     ordered = sorted(real | containers, key=lambda d: (d.count('/'), d))
     return ordered, containers
+
+
+def _ask_zone_at_containers(destinations, containers, stops):
+    """Ask a timezone at every container destination with none, written or inherited, above a destination that waits
+    for one a zone written at the container would reach (RUL-zone_asked_at_every_level, BLD-zone_asked_at_containers):
+    the container's cell names those destinations in `asked_for` and requires input while it names any. A zone written
+    there stops at a folder in `stops` — one with a zone written, or a country chosen — and passes nothing from a
+    container where a country of several timezones is chosen. Answered there, or each destination answered below, the
+    question is gone on the next run. Mutates the cells of `destinations`."""
+    for c in containers:
+        cell = destinations[c]["destination_timezone"]
+        if cell["effective_iana_timezone"] or c in stops:
+            continue                     # a zone reaches it, or one written or a country chosen here answers for it
+        asked = []
+        for d, v in destinations.items():
+            if (d in containers or not d.startswith(c + "/")
+                    or not v["destination_timezone"]["requires_user_input"]):
+                continue
+            way = [d] + [a for a in _walk_ancestors(d) if a.startswith(c + "/")]
+            if not any(a in stops for a in way):
+                asked.append(d)
+        if asked:
+            cell["asked_for"] = sorted(asked)
+            cell["requires_user_input"] = True
 
 
 def _dest_label(dest):

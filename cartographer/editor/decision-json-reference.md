@@ -187,10 +187,13 @@ emitted as a destination, flagged `"file_less": true`, so you can author timezon
 it that propagate **downward** to its children. A container carries timezone and fallback cells (which
 inherit), but **no offset cells at all** — `camera_group_time_decisions` is empty, because clock offsets
 neither cascade down nor roll up and a file-less folder has no media to time-correct. Having no media to
-act on, **none of a container's cells ever block**: each `requires_user_input` is `false` and an unset
-timezone cell **auto-resolves by inheritance** (`decision_mode: "auto_resolved"`) while staying editable — or, with
-nothing to inherit, is offered the configured default without asking for it.
-The editor badges these destinations as `container` and keeps them off the to-do list.
+act on, a container's fallback cell never asks, and an unset timezone cell **auto-resolves by inheritance**
+(`decision_mode: "auto_resolved"`) while staying editable. The one question a container asks is its timezone, where it
+has none and a destination inside it waits for one that a zone written on the container would reach: its timezone
+cell then lists those destinations in `asked_for` and has `requires_user_input: true` (offered the configured default,
+if any). Answer it there and everything inside takes it; answer each destination inside instead and the container's
+question is gone on the next run — the editor drops it at once.
+The editor badges these destinations as `container`.
 
 ### 4.3 `destination_timezone` cell
 
@@ -206,7 +209,8 @@ The editor badges these destinations as `container` and keeps them off the to-do
 | **`user_decision.confirmed_despite_recorded_offsets`** | array of int | **yes** | The user's word that the zone holds for photos recording another offset (a phone left on another zone): the `recorded_offsets` it is given for. It holds while it lists every offset the contradicting photos record; a photo with yet another offset asks again (`stale_user_decision`). `[]` = not given. |
 | **`user_decision.manual_iana_timezone`** | string (`""`) | **yes** | A human-entered IANA zone (e.g. `"Asia/Tokyo"`); with a country in effect, one of `country_zones`. |
 | `effective_iana_timezone` | string (`""` if unresolved) | no | The resolved zone. |
-| `requires_user_input` | bool | no | `true` ⇔ `effective_iana_timezone == ""` on a destination that is not a container — no valid zone written by hand and none to inherit (a configured `default_folder_timezone` is only offered, `proposal_source: "config_default"`, and takes effect once written as `manual_iana_timezone`), or a zone the destination's own photos contradict unanswered (`contradicted_by`). |
+| `asked_for` | array of string | no | On a container only, present while it asks (§4.2): the destinations inside it whose timezone cell asks and that a zone written here would reach — none below the container on the way to it, it included, has a `manual_iana_timezone` written or a `country` chosen. Never on a container with a zone, one written here, or a country chosen here: a country of several zones passes none down, so the folders inside it are asked instead. |
+| `requires_user_input` | bool | no | On a destination holding photos, `true` ⇔ `effective_iana_timezone == ""` — no valid zone written by hand and none to inherit (a configured `default_folder_timezone` is only offered, `proposal_source: "config_default"`, and takes effect once written as `manual_iana_timezone`), or a zone the destination's own photos contradict unanswered (`contradicted_by`). On a container, `true` ⇔ `asked_for` is present. |
 | `decision_mode` | `"auto_resolved"` | no | Present on **any** destination (container *or* real) whose proposal took effect without the user: an inherited zone (`proposal_source: "inherited"`) or a one-zone country's zone (`proposal_source: "country"`). Never for the configured default, which is only offered, nor when a manual zone is written. |
 | `stale_user_decision` | bool | no | `true` when `confirmed_despite_recorded_offsets` is given but no longer covers every one of `contradicted_by.recorded_offsets` (a photo now records an offset the user did not speak for): kept as written, it takes no effect and the cell asks. Else `false`. |
 
