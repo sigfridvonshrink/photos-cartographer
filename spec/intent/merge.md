@@ -19,15 +19,42 @@ Under an ImageMagick version other than the one prep's fingerprints were taken b
 fingerprint again before comparing it with the library's.
 :::
 
-:::{rul} A photo whose fingerprint changed is left unmerged
+:::{rul} A photo whose fingerprint changed is merged under its new value
+:id: RUL-merge_merges_changed_fingerprint
+:status: ruled
+:criticality: high
+:verify: required
+:refines: RUL-merge_rechecks_under_new_engine
+:uses: DEF-fingerprint, DEF-library, DEF-finalize, RUL-retaken_fingerprint_same_photo
+
+A photo whose fingerprint, taken again by merge, has changed SHALL be merged under its new value where it is the very
+file finalize recorded and its old value and its new are one to one — neither value another photo's under either
+version.
+:::
+
+:::{rul} Merge records each changed fingerprint, old value to new
+:id: RUL-changed_fingerprint_mapping_recorded
+:status: ruled
+:criticality: high
+:verify: required
+:refines: RUL-merge_merges_changed_fingerprint
+:uses: DEF-fingerprint, RUL-phase_writes_own_records
+
+For each photo merged under a changed fingerprint, merge's own records SHALL hold its old value and its new, each with
+the ImageMagick version that took it.
+:::
+
+:::{rul} A changed fingerprint not proven one to one is left unmerged
 :id: RUL-merge_changed_fingerprint_unmerged
 :status: ruled
 :criticality: high
 :verify: required
 :refines: RUL-merge_rechecks_under_new_engine
-:uses: DEF-fingerprint, DEF-library
+:uses: DEF-fingerprint, DEF-library, RUL-merge_merges_changed_fingerprint
 
-A photo whose fingerprint, taken again by merge, has changed SHALL be left in photos by destination, unmerged.
+A photo whose fingerprint, taken again by merge, has changed, and which {need}`RUL-merge_merges_changed_fingerprint`
+does not merge — and a photo whose unchanged value such a photo's new value equals — SHALL be left in photos by
+destination, unmerged.
 :::
 
 ## 2. Preconditions

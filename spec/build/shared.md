@@ -385,6 +385,7 @@ The control records SHALL be these files in `.photos-ingest/` ({need}`DEF-archiv
   photos-30-merge-plan.json        merge-phase artifact: merge plan (written by `plan`, consumed by `dry-run`/`execute`)
   photos-31-merge-summary.json     merge-phase artifact: library-merge summary (BLD-merge_records)
   photos-35-merge-log.json         merge-phase artifact: full transformation log (prep+geotag+merge, BLD-phase_logs)
+  photos-35-fingerprint-map.json   merge-phase artifact: each fingerprint another ImageMagick changed, old value to new (BLD-fingerprint_map)
   photos-35-merge-ingest.db        merge-phase artifact: DB backup snapshot, end of merge (BLD-database_images)
   photos-35-archive-manifest.json  merge-phase artifact: the re-sealed package's manifest, superseding photos-26's (BLD-merge_success_sequence)
   photos-35-archive.tar.gz         merge-phase artifact: the re-sealed archival package (BLD-merge_success_sequence)
@@ -407,7 +408,7 @@ The numbered artifacts SHALL follow this scheme:
 0X  workspace infrastructure (phase-neutral): config, guard, live database
 1X  prep-phase artifacts        (currently: 10 = prep plan, 11 = handoff, 15 = prep audit log + prep DB snapshot, 16 = prune record)
 2X  geotag-phase artifacts        (currently: 21–26; 26 = complete log + geotag DB snapshot + archive manifest)
-3X  merge-phase artifacts        (currently: 30 = merge plan, 31 = merge summary, 35 = merge log + merge DB snapshot + archive manifest)
+3X  merge-phase artifacts        (currently: 30 = merge plan, 31 = merge summary, 35 = merge log + fingerprint map + merge DB snapshot + archive manifest)
 ```
 
 The first digit means only the producing phase. The second is a sequence number within the phase with no
@@ -415,7 +416,7 @@ further meaning: an absent number is not reserved, not headroom and not missing,
 gap. Sibling end-of-phase records that differ only by extension MAY share a number — `photos-15-prep-log.json` and
 `photos-15-prep-ingest.db` are both the end-of-prep record, one the human-readable log and one the database image;
 likewise `photos-26-complete-log.json`, `photos-26-geotag-ingest.db` and `photos-26-archive-manifest.json`, and the
-three `photos-35` files. The full filename — number, name and
+`photos-35` files. The full filename — number, name and
 extension — is the identifier, never the number alone; `photos-0X-*` (and `1X`, `2X`, `3X`) names a band. The
 bands are unrelated to the numbered media folders `0-sources`…`6-photos-by-dest`.
 :::
@@ -1331,7 +1332,7 @@ geotag plan and execution ids, the photos it newly moved and those an earlier ru
 :realises: RUL-merge_reseals, RUL-seal_on_success_only, RUL-reseal_rederives_nothing, RUL-empty_merge_seals
 
 Only on success — every photo placed or already present, none left, a plan of no photo among them — SHALL merge then,
-in order, write `photos-35-merge-log.json`, `photos-35-merge-ingest.db`, the package's
+in order, write `photos-35-merge-log.json`, `photos-35-fingerprint-map.json`, `photos-35-merge-ingest.db`, the package's
 `photos-35-archive-manifest.json` and `photos-35-archive.tar.gz`, and last the seal.
 :::
 

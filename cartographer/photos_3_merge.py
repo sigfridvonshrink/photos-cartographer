@@ -65,6 +65,9 @@ MERGE_PLAN_ARTIFACT = "photos-30-merge-plan.json"
 MERGE_SUMMARY_ARTIFACT = "photos-31-merge-summary.json"
 MERGE_LOG_ARTIFACT = "photos-35-merge-log.json"
 MERGE_DB_SNAPSHOT = "photos-35-merge-ingest.db"
+# Each photo merged under a fingerprint another ImageMagick changed: its value under prep's version and under
+# merge's (BLD-fingerprint_map).
+FINGERPRINT_MAP_ARTIFACT = "photos-35-fingerprint-map.json"
 MERGE_PLAN_SCHEMA_VERSION = 1
 
 
@@ -98,6 +101,10 @@ def merge_summary_path(ws):
 
 def merge_log_path(ws):
     return _cd(ws, MERGE_LOG_ARTIFACT)
+
+
+def fingerprint_map_path(ws):
+    return _cd(ws, FINGERPRINT_MAP_ARTIFACT)
 
 
 def merge_db_snapshot_path(ws):
@@ -328,10 +335,8 @@ class MergeWorkflow:
         edit after finalize — a metadata write that leaves the pixels, and so the fingerprint, alone —
         would otherwise reach the library unseen (RUL-merge_refuses_changed_since_finalize). A photo gone is merge's
         resume case."""
-        try:
-            with open(finalized_media_path(ws)) as f:
-                media = (json.load(f) or {}).get("media") or {}
-        except (OSError, ValueError, AttributeError):
+        media = _finalized_media(ws)
+        if media is None:
             blockers.append(f"The finalized record {FINALIZED_MEDIA_ARTIFACT} is missing or unreadable — run "
                             "`photos-cartographer geotag finalize` before merging.")
             return
@@ -342,8 +347,7 @@ class MergeWorkflow:
                 st = os.stat(os.path.join(ws, rel))
             except OSError:
                 continue
-            rec = media.get(rel) or {}
-            if (rec.get("size"), rec.get("mtime_ns")) != (st.st_size, st.st_mtime_ns):
+            if not _as_finalized(media, rel, st):
                 changed.append(rel)
         if changed:
             blockers.append(f"{len(changed)} photo(s) changed since the workspace was finalized (e.g. {changed[0]}) "
@@ -579,6 +583,7 @@ class MergeWorkflow:
         dests, blockers = {}, []
         totals = {"placed_new": 0, "already_present": 0, "renamed_for_library": 0, "blocked": 0}
         engine_change = self._engine_change()
+        retaken = self._retake_fingerprints(ws, entries, engine_change) if engine_change else {}
         for e in entries:
             src_abs = os.path.join(ws, e["by_dest_relpath"])
             if not os.path.exists(src_abs):
@@ -594,17 +599,14 @@ class MergeWorkflow:
                    "preconditions": {"size": st.st_size, "mtime_ns": st.st_mtime_ns,
                                      "content_fingerprint": e["content_fingerprint"]}}
             target = e["library_target"]
+            cmp_fp = e["content_fingerprint"]       # the value compared with the library's
             if engine_change:
                 # Prep's fingerprint was taken by another ImageMagick: compared with a library file's taken
-                # now, it could call the same photo different. Taken again; kept if it still matches.
-                self.engine_rechecks += 1
-                fp = self._fingerprint_library_file(src_abs)
-                if not (fp.get("status") == "valid" and fp.get("value") == e["content_fingerprint"]):
-                    was, now = engine_change
-                    reason = (f"{e['by_dest_relpath']}: its fingerprint under ImageMagick {now} is not the one "
-                              f"prep took under {was or 'an unrecorded version'}" if fp.get("status") == "valid"
-                              else f"{e['by_dest_relpath']} could not be fingerprinted: "
-                                   f"{fp.get('error') or 'fingerprint failed'}")
+                # now, it could call the same photo different. Taken again: kept if it still matches; a new value
+                # mapped from the old where it is proven one to one, else the photo left
+                # (BLD-changed_fingerprint_mapped).
+                new, reason = retaken[e["by_dest_relpath"]]
+                if reason:
                     rec.update({"disposition": "blocked", "library_target": target,
                                 "resolved_name": e["final_name"], "renamed_for_library": False,
                                 "blocked_reason": reason})
@@ -612,6 +614,11 @@ class MergeWorkflow:
                     blockers.append(reason + " — left in by-dest.")
                     dests.setdefault(e["lib_dest"], {"files": []})["files"].append(rec)
                     continue
+                if new != cmp_fp:
+                    was, now = engine_change
+                    rec["engine_mapping"] = {"was": {"content_fingerprint": cmp_fp, "image_engine_version": was},
+                                             "now": {"content_fingerprint": new, "image_engine_version": now}}
+                    cmp_fp = new
             cl = _claimed(e["lib_dest"])
             # The library file in the way: at the target itself, or under a name differing only in case —
             # one place on a case-insensitive library, and the same photo perhaps on any. Either is settled
@@ -636,7 +643,7 @@ class MergeWorkflow:
                                 "blocked_reason": reason})
                     totals["blocked"] += 1
                     blockers.append(reason + " — left in by-dest.")
-                elif lib_fp == e["content_fingerprint"]:
+                elif lib_fp == cmp_fp:
                     # The same pixels make the photo already present only where the library's file is it byte for
                     # byte; the same picture in other bytes — other metadata, e.g. the library's copy without the
                     # time and position geotag wrote — is blocked, both files kept, for removing either would
@@ -721,8 +728,9 @@ class MergeWorkflow:
         library this plan names; otherwise a blocker naming why. A place in a library the setting has since
         been pointed away from does not count (RUL-earlier_place_in_this_library): the workspace would seal
         naming the new library while the photo sits in the old. Moved by hand to its place in the new
-        library — the same path under it — it is carried forward from there."""
-        fp = e["content_fingerprint"]
+        library — the same path under it — it is carried forward from there. The library's file is checked by the
+        value the earlier plan placed the photo under: its value under that plan's ImageMagick
+        (BLD-changed_fingerprint_mapped)."""
         if not earlier:
             reason = (f"{e['by_dest_relpath']} is no longer in the workspace and no earlier merge plan "
                       "placed it in the library")
@@ -730,7 +738,7 @@ class MergeWorkflow:
             outside = []          # (plan id, earlier record outside this library, its place in this library)
             for pid, rec in earlier:
                 if _lies_inside(rec["library_target"], library_root):
-                    if self._verify_fp(rec["library_target"], fp):
+                    if self._verify_fp(rec["library_target"], _library_value(rec)):
                         return dict(rec, carried_from_plan=pid)
                 else:
                     name = rec.get("resolved_name") or e["final_name"]
@@ -738,10 +746,10 @@ class MergeWorkflow:
                             else os.path.join(library_root, name))
                     outside.append((pid, rec, here))
             for pid, rec, here in outside:                # moved by hand into this library's place
-                if self._verify_fp(here, fp):
+                if self._verify_fp(here, _library_value(rec)):
                     return dict(rec, library_target=here, carried_from_plan=pid)
             held = next(((rec, here) for _pid, rec, here in outside
-                         if self._verify_fp(rec["library_target"], fp)), None)
+                         if self._verify_fp(rec["library_target"], _library_value(rec))), None)
             if held:
                 rec, here = held
                 reason = (f"{e['by_dest_relpath']} was moved by an earlier merge plan to {rec['library_target']}, "
@@ -756,6 +764,63 @@ class MergeWorkflow:
         return {"by_dest_source": e["by_dest_relpath"], "content_fingerprint": e["content_fingerprint"],
                 "disposition": "blocked", "library_target": e["library_target"],
                 "resolved_name": e["final_name"], "renamed_for_library": False, "blocked_reason": reason}
+
+    def _retake_fingerprints(self, ws, entries, engine_change):
+        """{by-dest path: (value now, None) or (None, why it stays)} for each finalized photo still in by-dest,
+        fingerprinted again under the ImageMagick now in use (RUL-merge_rechecks_under_new_engine). A value that
+        changed is the same photo's (RUL-retaken_fingerprint_same_photo) and is merged under it
+        (RUL-merge_merges_changed_fingerprint) only where it is proven one to one with the old: the photo the very
+        file finalize recorded, at its path with its size and modification time; its new value no other photo's new
+        value; and neither its new value any other photo's old one in prep's handoff, nor its old value another
+        photo's new one. Otherwise it stays in by-dest (RUL-merge_changed_fingerprint_unmerged) — and so does a photo
+        whose unchanged value another's new value meets, prep's duplicate decision being in question for both."""
+        was, now = engine_change
+        was = was or "an unrecorded version"
+        media = _finalized_media(ws) or {}
+        values = {}                                  # by-dest path -> the fingerprint result now
+        for e in entries:
+            src = os.path.join(ws, e["by_dest_relpath"])
+            if os.path.exists(src):
+                self.engine_rechecks += 1
+                values[e["by_dest_relpath"]] = self._fingerprint_library_file(src)
+        prep_values = {_record_fingerprint(r) for r in (self.handoff or {}).get("files") or []} - {None}
+        holders = {}                                 # value now -> the photos holding it
+        for e in entries:
+            fp = values.get(e["by_dest_relpath"])
+            if fp and fp.get("status") == "valid" and fp.get("value"):
+                holders.setdefault(fp["value"], []).append(e)
+        changed_now = {v for v, es in holders.items() for e in es if v != e["content_fingerprint"]}
+        out = {}
+        for e in entries:
+            rel, old = e["by_dest_relpath"], e["content_fingerprint"]
+            if rel not in values:
+                continue
+            fp = values[rel]
+            if not (fp.get("status") == "valid" and fp.get("value")):
+                out[rel] = (None, f"{rel} could not be fingerprinted: {fp.get('error') or 'fingerprint failed'}")
+                continue
+            new = fp["value"]
+            # Others holding this value now, where a value changed: two photos prep held unchanged as one value stay
+            # prep's business, as under its own version.
+            others = [o["by_dest_relpath"] for o in holders[new]
+                      if o is not e and (new != old or new != o["content_fingerprint"])]
+            if others:
+                out[rel] = (None, f"{rel}: its fingerprint under ImageMagick {now} is also that of {others[0]}, "
+                                  f"which prep under {was} told apart from it")
+            elif new != old and new in prep_values:
+                out[rel] = (None, f"{rel}: its fingerprint under ImageMagick {now} is the one prep took of another "
+                                  f"photo under {was}")
+            elif new == old:
+                out[rel] = (new, None)
+            elif old in changed_now:
+                out[rel] = (None, f"{rel}: the fingerprint prep took of it under {was} is another photo's under "
+                                  f"ImageMagick {now}")
+            elif not _as_finalized(media, rel, os.stat(os.path.join(ws, rel))):
+                out[rel] = (None, f"{rel}: its fingerprint under ImageMagick {now} is not the one prep took under "
+                                  f"{was}, and it is not the file finalize recorded at its path")
+            else:
+                out[rel] = (new, None)
+        return out
 
     def _engine_change(self):
         """(prep's ImageMagick version, the current one) when they differ, else None. A change is a reason
@@ -840,6 +905,10 @@ class MergeWorkflow:
         if self.engine_rechecks:
             reporter.log(f"  ImageMagick differs from prep's: {self.engine_rechecks} photo(s) fingerprinted again "
                          "to check prep's fingerprints.", stream="stdout")
+            mapped = sum(1 for d in plan["destinations"].values() for f in d["files"] if f.get("engine_mapping"))
+            if mapped:
+                reporter.log(f"  {mapped} of them have a new fingerprint, merged under it; the seal records each "
+                             f"old value with its new in {FINGERPRINT_MAP_ARTIFACT}.", stream="stdout")
         c = self.library_fp_counts
         if c["cached"] or c["read"]:
             reporter.log(f"  Library files fingerprinted: {c['read']} read, {c['cached']} reused from the cache.",
@@ -952,13 +1021,17 @@ class MergeWorkflow:
         src_rel = rec["by_dest_source"]
         src_abs = os.path.join(ws, src_rel)
         target = rec["library_target"]
-        fp = rec["content_fingerprint"]
+        # Compared with the library by its value under the plan's ImageMagick, recorded by prep's
+        # (BLD-changed_fingerprint_mapped).
+        fp = _library_value(rec)
         disp = rec["disposition"]
         # The plan that placed the photo: an earlier one for a photo this plan only carried forward
         # (BLD-merge_carry_forward), so its merge step names that run (RUL-log_step_names_run).
-        out = {"by_dest_source": src_rel, "library_path": target, "content_fingerprint": fp,
+        out = {"by_dest_source": src_rel, "library_path": target, "content_fingerprint": rec["content_fingerprint"],
                "final_kind": None, "removed": False, "newly": False, "blocker": None,
                "placed_by_plan": rec.get("carried_from_plan")}
+        if rec.get("engine_mapping"):
+            out["engine_mapping"] = rec["engine_mapping"]
 
         if disp == "blocked":                             # plan-time per-item blocker (un-fingerprintable)
             out["final_kind"] = "blocked"
@@ -1200,6 +1273,10 @@ class MergeWorkflow:
         re-runs cleanly. Runs only when status == success (no blockers, by-dest empty of photos)."""
         # 1. Merge log (copy photos-26 forward + per-file merge step).
         write_json_artifact(merge_log_path(ws), self._build_merge_log(ws, results, plan.get("plan_id")))
+        # 1a. The fingerprints another ImageMagick changed, old value to new, beside the records keyed by the old
+        # — geotag's sealed ones never rewritten (BLD-fingerprint_map).
+        fp_map = _build_fingerprint_map(results)
+        write_json_artifact(fingerprint_map_path(ws), fp_map)
         # 2. End-of-merge DB snapshot of the live workspace DB (captures the library-fingerprint cache).
         cache = WorkspaceCache(ws)
         try:
@@ -1212,7 +1289,8 @@ class MergeWorkflow:
             execution_id=execution_id, merge_run_id=execution_id, generated_at=now_iso)
         # 4. Seal — the LAST write of the run; afterwards every phase hard-stops on this workspace.
         write_sealed_marker(ws, execution_id, library_root)
-        return {"sealed": True, "merge_log": MERGE_LOG_ARTIFACT, "db_snapshot": MERGE_DB_SNAPSHOT,
+        return {"sealed": True, "merge_log": MERGE_LOG_ARTIFACT, "fingerprint_map": FINGERPRINT_MAP_ARTIFACT,
+                "mapped": len(fp_map["photos"]), "db_snapshot": MERGE_DB_SNAPSHOT,
                 "archive_manifest": "photos-35-archive-manifest.json", "manifest_sha256": manifest_sha}
 
     def _build_summary(self, ws, plan, library_root, results, snapshot, status, now_iso,
@@ -1371,6 +1449,10 @@ class MergeWorkflow:
             reporter.log("Blocked files were left in by-dest; resolve them and re-run `execute`.")
             emit_next_step(reporter, "resolve the blocked file(s) above, then re-run `merge execute`.")
             return 3
+        mapped = (result.get("finalized") or {}).get("mapped")
+        if mapped:
+            reporter.log(f"{mapped} photo(s) merged under a fingerprint this ImageMagick changed; each old value is "
+                         f"mapped to its new one in {FINGERPRINT_MAP_ARTIFACT}.", stream="stdout")
         reporter.log(f"Wrote {MERGE_LOG_ARTIFACT} and {MERGE_DB_SNAPSHOT}; re-sealed the archive "
               f"(photos-35-archive-manifest.json); sealed the workspace (photos-00-sealed.json). "
               "No library file was renamed or overwritten — the workspace is now terminal; "
@@ -1444,6 +1526,46 @@ def _record_fingerprint(rec):
         return json.loads(rec.get("content_hash")).get("value")
     except Exception:
         return None
+
+
+def _build_fingerprint_map(results):
+    """photos-35-fingerprint-map.json (BLD-fingerprint_map): each photo merged under a fingerprint the ImageMagick in
+    use changed, keyed by its value now — one to one with the old by construction — with its value under prep's
+    version, both versions, where it was in the workspace and where it is in the library. Empty where none changed."""
+    photos = {}
+    for r in sorted(results, key=lambda x: x["by_dest_source"]):
+        m = r.get("engine_mapping")
+        if r["final_kind"] == "blocked" or not m:
+            continue
+        photos[m["now"]["content_fingerprint"]] = {"was": m["was"], "now": m["now"], "from": r["by_dest_source"],
+                                                   "library_path": r["library_path"]}
+    return {"artifact_type": "fingerprint_map", "artifact_name": FINGERPRINT_MAP_ARTIFACT, "schema_version": 1,
+            "photos": photos}
+
+
+def _finalized_media(ws):
+    """photos-26-finalized-media.json's `media` — each by-dest photo's size and modification time as finalize found
+    it, by its workspace path (BLD-finalized_media) — or None when the record is missing or unreadable."""
+    try:
+        with open(finalized_media_path(ws)) as f:
+            media = (json.load(f) or {}).get("media")
+    except (OSError, ValueError, AttributeError):
+        return None
+    return media if isinstance(media, dict) else None
+
+
+def _as_finalized(media, rel, st):
+    """True iff the file at workspace path `rel`, of stat `st`, has the size and modification time finalize recorded
+    for that path: the very file geotag treated (BLD-finalized_media)."""
+    rec = media.get(rel) or {}
+    return (rec.get("size"), rec.get("mtime_ns")) == (st.st_size, st.st_mtime_ns)
+
+
+def _library_value(rec):
+    """The fingerprint a plan record's photo is compared with in the library by: its value under the ImageMagick
+    the plan was made under where that differs from prep's (BLD-changed_fingerprint_mapped), else prep's."""
+    now = (rec.get("engine_mapping") or {}).get("now") or {}
+    return now.get("content_fingerprint") or rec.get("content_fingerprint")
 
 
 def _lies_inside(path, root):

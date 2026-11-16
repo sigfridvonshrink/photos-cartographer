@@ -13,8 +13,36 @@ tools and steps. Each item `realises` the intent it implements. *Why* a choice w
 
 Merge's plan SHALL compare the ImageMagick version now in use with the handoff's `depends_on.cache.image_engine_version`
 — a handoff recording none counting as another — and, where they differ and the current one is known, fingerprint each
-by-dest photo it plans to place, blocking one whose value is not the handoff's; the plan records the version in its
-`depends_on.image_engine_version`, and a plan made under another is stale, at dry run and execute alike.
+by-dest photo it plans to place, one whose value is not the handoff's mapped or blocked ({need}`BLD-changed_fingerprint_mapped`);
+the plan records the version in its `depends_on.image_engine_version`, and a plan made under another is stale, at dry
+run and execute alike.
+:::
+
+:::{bld} A changed fingerprint is mapped in the plan where it is one to one
+:id: BLD-changed_fingerprint_mapped
+:status: ruled
+:realises: RUL-merge_merges_changed_fingerprint, RUL-merge_changed_fingerprint_unmerged, RUL-retaken_fingerprint_same_photo
+:uses: BLD-merge_engine_recheck, BLD-finalized_media, BLD-library_file_fingerprinted
+
+Merge's plan SHALL give a by-dest photo whose value taken again differs from the handoff's an `engine_mapping` — `was`
+and `now`, each its `content_fingerprint` and `image_engine_version` — its `content_fingerprint` still the handoff's,
+only where its path, size and modification time are those `photos-26-finalized-media.json` recorded, no other by-dest
+photo holds its new value now, no file of the handoff held it, and no other by-dest photo's new value is its old; and
+otherwise block it, naming why, together with a photo whose unchanged value its new value equals. A photo so mapped is
+compared with the library's files — fingerprinted under the same version — by its new value: in the plan, at execute,
+and when a later plan carries it forward ({need}`BLD-merge_carry_forward`).
+:::
+
+:::{bld} Merge's package maps each changed fingerprint, old value to new
+:id: BLD-fingerprint_map
+:status: ruled
+:realises: RUL-changed_fingerprint_mapping_recorded, RUL-phase_writes_own_records
+:uses: BLD-changed_fingerprint_mapped, BLD-merge_success_sequence
+
+A whole merge SHALL write `photos-35-fingerprint-map.json` — `artifact_type` `fingerprint_map`, its `artifact_name`,
+`schema_version` 1, and under `photos`, keyed by its new value, each photo merged with an `engine_mapping`: that
+mapping's `was` and `now`, its by-dest path as `from` and its `library_path` — empty where none was; geotag's records,
+the log copied forward, are left keyed by the old value, and none is rewritten.
 :::
 
 ## 2. Preconditions

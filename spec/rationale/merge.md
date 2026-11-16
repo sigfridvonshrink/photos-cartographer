@@ -15,9 +15,31 @@ items it `justifies`, under the same section numbers. Where the two differ, the 
 Merge compares prep's fingerprint of a photo with one it takes now of the library file in its way. Taken by two
 versions of ImageMagick, two fingerprints of the same pixels may differ: the photo would be called new and placed again,
 renamed, beside itself — a duplicate in the library, which merge must never make. Taken again under the version now in
-use, prep's fingerprint is confirmed and the comparison holds. A photo whose fingerprint did change waits in photos by
-destination: what geotag recorded of it is keyed by the old value, and merging it would carry a record that names no
-photo into the library's history.
+use, prep's fingerprint is confirmed and the comparison holds. A photo whose fingerprint did change is compared by its
+new value, which is the one the library's files are fingerprinted under ({need}`RAT-changed_fingerprint_mapped`).
+:::
+
+:::{rat} The archive outlives any one ImageMagick
+:id: RAT-changed_fingerprint_mapped
+:status: ruled
+:forced: no
+:follows_from: RAT-one_version_per_comparison, RAT-new_version_may_change_nothing
+:justifies: RUL-merge_merges_changed_fingerprint, RUL-changed_fingerprint_mapping_recorded, RUL-merge_changed_fingerprint_unmerged
+
+What prep and geotag recorded of a photo is keyed by its fingerprint under the ImageMagick that prepped the workspace,
+and finalize sealed those records into the package. A newer ImageMagick may read the same photo to another value; held
+back for that alone, the photo could reach the library only under the version that prepped it, which in time is gone.
+The archive outlives any one ImageMagick. So merge does not rewrite what is sealed — geotag's records stay as finalize
+left them, keyed by the old value — and writes, in its own package, the old value beside the new, each with its
+version: the records stay readable from either side. The owner, ruling it (2026-11-16): *"Merge records the mapping
+and rewrites nothing."*
+
+A mapping is only as good as the proof that the two values are one photo's. Finalize's record of each photo's path,
+size and modification time proves the file merge reads is the one geotag treated, and a new value that no other photo
+holds, now or under prep's version, leaves every record pointing at one photo. Where two photos' values meet under the
+new version, or one's new value is another's old one, prep's duplicate decisions would not be the same under it: no
+mapping can settle which photo a value names, and those photos wait in photos by destination, as any photo merge
+cannot prove.
 :::
 
 ## 2. Preconditions

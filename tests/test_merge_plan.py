@@ -544,12 +544,13 @@ def test_entries_not_carried():
 
 @pytest.mark.parametrize("value_changed", [False, True])
 @pytest.mark.spec("RUL-merge_rechecks_under_new_engine", "RUL-engine_change_is_checked", "BLD-merge_engine_recheck",
-                  "RUL-merge_changed_fingerprint_unmerged", "RUL-retaken_fingerprint_same_photo",
+                  "RUL-retaken_fingerprint_same_photo", "RUL-merge_merges_changed_fingerprint", "BLD-changed_fingerprint_mapped",
                   test="TST-merge_plan-another_imagemagick_has_prep_fingerprints_checked")
 def test_another_imagemagick_has_prep_fingerprints_checked(tmp_path, monkeypatch, capsys, value_changed):
-    """Under an ImageMagick other than prep's, merge takes each photo's fingerprint again: one that still
-    matches prep's is merged as ever — here found already in the library — and one that does not is
-    blocked, left in by-dest, rather than called a different photo and placed again beside itself."""
+    """Under an ImageMagick other than prep's, merge takes each photo's fingerprint again and compares that value
+    with the library's, taken under the same version: the photo is found already in the library whether its value is
+    prep's or a new one — a new value mapped from prep's, the photo the file finalize recorded — never called a
+    different photo and placed again beside itself."""
     ws, lib, fp = _build_ws(tmp_path, [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"}],
                             library_files=[{"fp": "A2" if value_changed else "A", "dest": "Trip", "name": "a.jpg",
                                             "bytes": b"img-0"}])
@@ -558,16 +559,68 @@ def test_another_imagemagick_has_prep_fingerprints_checked(tmp_path, monkeypatch
     _patch_fp(monkeypatch, fp)
     monkeypatch.setattr(merge, "get_imagemagick_version", lambda: "newer")
     capsys.readouterr()
-    merge._run_locked_workflow("plan", str(ws))
+    assert merge._run_locked_workflow("plan", str(ws)) == 0
     plan = _plan_of(ws)
     [f] = _files(plan)
+    assert f["disposition"] == "already_present" and not plan["blockers"]
+    assert f["content_fingerprint"] == "A"                         # still keyed by prep's value
     if value_changed:
-        assert f["disposition"] == "blocked" and plan["totals"]["renamed_for_library"] == 0
-        assert "under ImageMagick newer is not the one prep took under test" in f["blocked_reason"]
+        assert f["engine_mapping"] == {"was": {"content_fingerprint": "A", "image_engine_version": "test"},
+                                       "now": {"content_fingerprint": "A2", "image_engine_version": "newer"}}
     else:
-        assert f["disposition"] == "already_present" and not plan["blockers"]
+        assert "engine_mapping" not in f
     assert "1 photo(s) fingerprinted again" in capsys.readouterr().out
     assert plan["depends_on"]["image_engine_version"] == "newer"
+
+
+@pytest.mark.parametrize("now, blocked", [
+    ({"a": "X", "b": "X"}, {"a", "b"}),          # two photos' new values coincide
+    ({"a": "B", "b": "B"}, {"a", "b"}),          # a's new value is b's, unchanged
+    ({"a": "B", "b": "C"}, {"a", "b"}),          # a's new value is b's old one, b's changed too
+    ({"a": "A2", "b": "B"}, set()),              # one to one: a mapped, b kept
+])
+@pytest.mark.spec("RUL-merge_changed_fingerprint_unmerged", "RUL-merge_merges_changed_fingerprint",
+                  "BLD-changed_fingerprint_mapped", test="TST-merge_plan-a_new_fingerprint_not_one_to_one_is_left_unmerged")
+def test_a_new_fingerprint_not_one_to_one_is_left_unmerged(tmp_path, monkeypatch, now, blocked):
+    """A new value merge maps from prep's must be one to one with it: where two photos' values now coincide, or a
+    photo's new value is another's value under prep's ImageMagick, prep's duplicate decision would differ under the
+    new one, and those photos stay in photos by destination, each with its reason; the others are merged."""
+    ws, lib, fp = _build_ws(tmp_path, [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"},
+                                       {"fp": "B", "dest": "Trip", "final_name": "b.jpg"}])
+    for name, value in now.items():
+        fp[str(ws / "6-photos-by-dest" / "Trip" / f"{name}.jpg")] = value
+    _patch_fp(monkeypatch, fp)
+    monkeypatch.setattr(merge, "get_imagemagick_version", lambda: "newer")
+    merge._run_locked_workflow("plan", str(ws))
+    plan = _plan_of(ws)
+    by_name = {os.path.basename(f["by_dest_source"])[0]: f for f in _files(plan)}
+    assert {n for n, f in by_name.items() if f["disposition"] == "blocked"} == blocked
+    assert len(plan["blockers"]) == len(blocked)
+    assert all("ImageMagick newer" in by_name[n]["blocked_reason"] for n in blocked)
+    if not blocked:
+        assert by_name["a"]["engine_mapping"]["now"]["content_fingerprint"] == "A2"
+        assert by_name["b"]["disposition"] == "placed_new" and "engine_mapping" not in by_name["b"]
+
+
+@pytest.mark.spec("RUL-merge_changed_fingerprint_unmerged", "BLD-changed_fingerprint_mapped",
+                  test="TST-merge_plan-a_new_fingerprint_on_a_file_finalize_did_not_record_is_left_unmerged")
+def test_a_new_fingerprint_on_a_file_finalize_did_not_record_is_left_unmerged(tmp_path, monkeypatch):
+    """A new value is mapped from prep's only for the very file finalize recorded — its path, size and modification
+    time; a photo not so proven stays in photos by destination with its reason, the map built for none."""
+    ws, lib, fp = _build_ws(tmp_path, [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"}])
+    src = ws / "6-photos-by-dest" / "Trip" / "a.jpg"
+    fp[str(src)] = "A2"
+    _patch_fp(monkeypatch, fp)
+    monkeypatch.setattr(merge, "get_imagemagick_version", lambda: "newer")
+    st = os.stat(src)
+    os.utime(src, ns=(st.st_atime_ns, st.st_mtime_ns + 10**9))     # not the file finalize recorded
+    wf = merge.MergeWorkflow(str(ws))
+    wf.handoff = json.load(open(utils.handoff_path(str(ws))))
+    calib = json.load(open(merge.executable_plan_path(str(ws))))
+    plan = wf.build_merge_plan(str(ws), calib, str(lib), None)
+    [f] = _files(plan)
+    assert f["disposition"] == "blocked" and "engine_mapping" not in f
+    assert "not the file finalize recorded" in f["blocked_reason"]
 
 
 @pytest.mark.spec("BLD-merge_engine_recheck", test="TST-merge_plan-a_plan_made_under_another_imagemagick_is_stale")
