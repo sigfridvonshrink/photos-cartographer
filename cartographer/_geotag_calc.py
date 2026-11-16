@@ -1003,40 +1003,65 @@ def _naive_key(time_text, path):
 
 def clock_change_proposal(frames, photos, gpx, cfg):
     """Where the camera's clock was changed during the day (BLD-clock_change_split): the photos its own GPS anchors —
-    on the tracks (`infer_anchor_proposal`), else by their fixes' times (`gps_readings`) — taken in camera-time order,
-    form two consecutive runs, each agreeing within itself on an offset of its own — a run on the tracks proposing with
-    no photo against it, no tie and no stay; a run of fix times within `gpx_anchor_offset_spread_max_seconds` of its
-    first — the two offsets farther apart than that spread. Nothing changes where the day's photos already agree, where
-    no split, or more than one, makes two such runs, as three or more alternating runs never do, or where the runs meet
-    within one second. Returns None, or the proposal: `evidence` (`gpx_self_anchor` or `gps_time`), `runs` — each its
-    `offset_seconds`, `photos` (how many) and its `first` and `last` (`source_file`, `camera_source_naive_time`) —
-    `between` — each of `photos` that is none of the runs' and was taken after the last of the first run and before
-    the first of the second, in camera-time order — and `acceptance_tolerance_seconds`."""
+    on the tracks (`infer_anchor_proposal`), else by their fixes' times (`gps_readings`) — taken in the order of the
+    true time their GPS gives each — the track time its anchor matched, else its fix's time — form two consecutive
+    runs, each agreeing within itself on an offset of its own — a run on the tracks proposing with no photo against it,
+    no tie and no stay; a run of fix times within `gpx_anchor_offset_spread_max_seconds` of its first — the two offsets
+    farther apart than that spread. A clock set back, its two runs interleaved in camera time, shows so as one set
+    forward does. Nothing changes where the day's photos already agree, where no split, or more than one, makes two
+    such runs, as three or more alternating runs never do, or where the runs, each photo at the true time its own run's
+    offset gives it, do not follow one another a second or more apart.
+
+    Returns None, or (proposal, settled). The proposal: `evidence` (`gpx_self_anchor` or `gps_time`), `runs` — each its
+    `offset_seconds`, `photos` (how many) and its `first` and `last` in true time (`source_file`,
+    `camera_source_naive_time`, `real_utc`) — `unsettled` — each of `photos` that is none of the runs' and whose part
+    the runs do not settle, in camera-time order — and `acceptance_tolerance_seconds`. `settled` gives the part, 1 or 2,
+    of every other photo of `photos` holding a camera time: a run's photo its run's; another the one part that could
+    have taken it — the first where the first run's offset puts it before the second run's first photo, the second
+    where the second run's offset puts it after the first run's last; a photo either part could have taken, or
+    neither, is unsettled."""
     spread = cfg["gpx_anchor_offset_spread_max_seconds"]
     by_frame, skipped = _anchor_candidates(frames, gpx, cfg) if gpx is not None and gpx.points else ([], None)
     if by_frame:
         whole = _anchor_consensus(by_frame, skipped, cfg)
         if not (whole["conflicting_count"] or whole["tied"]):
             return None                                 # the day's photos agree: no change
-        items = sorted(by_frame, key=lambda cs: _naive_key(cs[0]["camera_source_naive_time"], cs[0]["source_file"]))
-        stamp = lambda cs: (cs[0]["source_file"], cs[0]["camera_source_naive_time"])
         none = {"no_nearby_track": 0, "outside_time_window": 0, "examples": []}
+
+        def true_times(proposal):
+            # each anchor's true time: the track time it matched — its camera time and its offset
+            return {a["source_file"]: _parse_camera_naive(a["camera_source_naive_time"])
+                    + timedelta(seconds=a["proposed_offset_seconds"]) for a in proposal["anchors"]}
+        matched = true_times(whole)
+        items = sorted(by_frame, key=lambda cs: (matched[cs[0]["source_file"]], cs[0]["source_file"] or ""))
+        path = lambda cs: cs[0]["source_file"]
+        naive_text = lambda cs: cs[0]["camera_source_naive_time"]
 
         def agreed(run):
             p = _anchor_consensus(_reindexed(run), none, cfg)
             return None if p["conflicting_count"] or p["tied"] or p["imprecise_seconds"] else p["proposed_offset_seconds"]
+
+        def placed(run):
+            # each photo of a run at the track time of its pass that agrees with the run's offset
+            return true_times(_anchor_consensus(_reindexed(run), none, cfg))
         evidence = "gpx_self_anchor"
     else:
-        items = gps_readings(frames)
-        offs = [r["offset_seconds"] for r in items]
-        fix_times = [r["gps_utc"] for r in items]
-        if len(items) < 2 or len(set(fix_times)) < len(fix_times) or max(offs) - min(offs) <= spread:
+        readings = gps_readings(frames)
+        offs = [r["offset_seconds"] for r in readings]
+        fix_times = [r["gps_utc"] for r in readings]
+        if len(readings) < 2 or len(set(fix_times)) < len(fix_times) or max(offs) - min(offs) <= spread:
             return None                                 # a stale fix, or readings that agree: no change seen
-        stamp = lambda r: (r["source_file"], r["camera_source_naive_time"])
+        fix = lambda r: _parse_utc(r["gps_utc"]).replace(tzinfo=None)
+        items = sorted(readings, key=lambda r: (fix(r), r["source_file"]))
+        path = lambda r: r["source_file"]
+        naive_text = lambda r: r["camera_source_naive_time"]
 
         def agreed(run):
             o = [r["offset_seconds"] for r in run]
             return o[0] if max(o) - min(o) <= spread else None
+
+        def placed(run):
+            return {r["source_file"]: fix(r) for r in run}
         evidence = "gps_time"
     splits = []
     for k in range(1, len(items)):
@@ -1046,36 +1071,60 @@ def clock_change_proposal(frames, photos, gpx, cfg):
     if len(splits) != 1:
         return None                                     # no two runs, or no one place they meet
     k, a, b = splits[0]
-    last = stamp(items[k - 1])
-    first = stamp(items[k])
-    lo, hi = _parse_camera_naive(last[1]), _parse_camera_naive(first[1])
-    if lo is None or hi is None or hi <= lo:
-        return None                                     # the runs meet within a second: no time between to split at
-    anchored = {stamp(cs)[0] for cs in items}
-    between = sorted(({"source_file": f["relative_path"], "camera_source_naive_time": f.get("source_naive_time")}
-                      for f in photos if f["relative_path"] not in anchored
-                      and (t := _parse_camera_naive(f.get("source_naive_time"))) is not None and lo < t < hi),
-                     key=lambda x: _naive_key(x["camera_source_naive_time"], x["source_file"]))
-    run = lambda off, part: {"offset_seconds": off, "photos": len(part),
-                             "first": dict(zip(("source_file", "camera_source_naive_time"), stamp(part[0]))),
-                             "last": dict(zip(("source_file", "camera_source_naive_time"), stamp(part[-1])))}
-    return {"evidence": evidence, "runs": [run(a, items[:k]), run(b, items[k:])], "between": between,
-            "acceptance_tolerance_seconds": cfg["gpx_anchor_decision_tolerance_seconds"]}
+    sides = (items[:k], items[k:])
+    at = [placed(side) for side in sides]
+    lo, hi = max(at[0].values()), min(at[1].values())   # the first run's last photo, the second's first, in true time
+    if hi <= lo:
+        return None                                     # the runs do not follow one another: no change between them
+    # each photo the runs' GPS places, by its run: a reading of the fixes' times stands for every photo giving it
+    run_of = {path(x): n + 1 for n, side in enumerate(sides) for x in side}
+    if evidence == "gps_time":
+        reading = {(r["gps_utc"], _parse_camera_naive(r["camera_source_naive_time"])): run_of[r["source_file"]]
+                   for r in items}
+        for f in frames:
+            gps, naive = _parse_utc(f.get("gps_utc")), _parse_camera_naive(f.get("source_naive_time"))
+            if f.get("has_native_gps") and gps is not None and naive is not None:
+                n = reading.get((gps.strftime("%Y-%m-%dT%H:%M:%SZ"), naive))
+                if n is not None:
+                    run_of.setdefault(f["relative_path"], n)
+    settled, unsettled = {}, []
+    for f in photos:
+        rel, t = f["relative_path"], _parse_camera_naive(f.get("source_naive_time"))
+        if rel in run_of:
+            settled[rel] = run_of[rel]
+            continue
+        if t is None:
+            continue
+        could = [n for n, fits in ((1, t + timedelta(seconds=a) < hi), (2, t + timedelta(seconds=b) > lo)) if fits]
+        if len(could) == 1:
+            settled[rel] = could[0]                     # only one part could have taken it
+        else:
+            unsettled.append({"source_file": rel, "camera_source_naive_time": f.get("source_naive_time")})
+    unsettled.sort(key=lambda x: _naive_key(x["camera_source_naive_time"], x["source_file"]))
+
+    def run(off, side, times):
+        ordered = sorted(side, key=lambda x: (times[path(x)], path(x) or ""))
+        end = lambda x: {"source_file": path(x), "camera_source_naive_time": naive_text(x),
+                         "real_utc": times[path(x)].strftime("%Y-%m-%dT%H:%M:%SZ")}
+        return {"offset_seconds": off, "photos": len(side), "first": end(ordered[0]), "last": end(ordered[-1])}
+    proposal = {"evidence": evidence, "runs": [run(a, sides[0], at[0]), run(b, sides[1], at[1])],
+                "unsettled": unsettled, "acceptance_tolerance_seconds": cfg["gpx_anchor_decision_tolerance_seconds"]}
+    return proposal, settled
 
 
-def offset_cell_key(cells, group, naive_text):
-    """The key of the offset cell a camera's photo of `group` at camera time `naive_text` is read by, among a
+def offset_cell_key(cells, group, naive_text, path=None):
+    """The key of the offset cell a camera's photo `path` of `group` at camera time `naive_text` is read by, among a
     destination's `cells` (BLD-offset_buckets): `<group>@<date>` where the destination has one for its date, else
-    `<group>`; and where that day's cell is split at a clock change (BLD-clock_change_split), the part its camera time
-    falls in — the second from the time the first photo after the change was taken."""
+    `<group>`; and where that day's cell is split at a clock change (BLD-clock_change_split), the part the split gives
+    the photo (`effective_split.photo_parts`) — none given, the day's own, which offsets nothing."""
     cells = cells or {}
     date = _naive_date(naive_text)
     key = f"{group}@{date}" if f"{group}@{date}" in cells else group
     split = ((cells.get(key) or {}).get("clock_change") or {}).get("effective_split")
     if isinstance(split, dict):
-        t, at = _parse_camera_naive(naive_text), _parse_camera_naive(split.get("first_after_change"))
-        if t is not None and at is not None:
-            key = split["parts"][1] if t >= at else split["parts"][0]
+        n = (split.get("photo_parts") or {}).get(path)
+        if n in (1, 2):
+            key = split["parts"][n - 1]
     return key
 
 
@@ -1423,7 +1472,7 @@ def _resolve_one(f, d, cls, naive, tz, key, dest, overrides):
             # per-date offset bucket: a destination split over >1 naive date keys cells
             # `group@YYYY-MM-DD`; the single-date common case keeps the bare `group` key.
             cells = d.get("camera_group_time_decisions") or {}
-            bucket_key = offset_cell_key(cells, key, f.get("source_naive_time"))   # a split day: its part
+            bucket_key = offset_cell_key(cells, key, f.get("source_naive_time"), f["relative_path"])   # a split day: its part
             scope = bucket_key                         # the cell this photo's offset comes from
             cell = cells.get(bucket_key) or {}
             eff = cell.get("effective_time_anchor")
@@ -2139,7 +2188,7 @@ def offset_decision_pointer(row, dest, cells):
     """Where the clock offset applied to a photo was decided: its exact (camera group, destination[,
     day]) cell in photos-21, or — when the drift check's validated offset replaced it — the matching
     confirmation in photos-22 (BLD-log_format)."""
-    bucket = offset_cell_key(cells, row.get("camera_group"), row.get("source_naive_time"))
+    bucket = offset_cell_key(cells, row.get("camera_group"), row.get("source_naive_time"), row.get("relative_path"))
     if row.get("resolved_utc_provenance") == "gps_drift_validated":
         return f"photos-22 destinations.{dest}.drift_decisions.{bucket}"
     return f"photos-21 destinations.{dest}.camera_group_time_decisions.{bucket}"

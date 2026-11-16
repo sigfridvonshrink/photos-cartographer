@@ -265,7 +265,7 @@ def scenario_offset_variants():
         _file(f"{R}/r.arw", CAM_REV, "2024:07:04 14:00:00", gps={"lat": 56.0, "lon": 10.0}),
         _file(f"{CK}/k1.raf", CAM_CLK, "2024:07:03 10:00:00", gps={"lat": 57.0, "lon": 11.0}),
         _file(f"{CK}/k2.raf", CAM_CLK, "2024:07:03 10:30:00", gps={"lat": 57.01, "lon": 11.0}),
-        _file(f"{CK}/k-between.raf", CAM_CLK, "2024:07:03 11:30:00"),             # no GPS: which side of the change?
+        _file(f"{CK}/k-between.raf", CAM_CLK, "2024:07:03 11:30:00"),             # no GPS: either part could take it
         _file(f"{CK}/k3.raf", CAM_CLK, "2024:07:03 13:00:00", gps={"lat": 57.02, "lon": 11.0}),
         _file(f"{CK}/k4.raf", CAM_CLK, "2024:07:03 13:30:00", gps={"lat": 57.03, "lon": 11.0}),
     ]
@@ -281,10 +281,11 @@ def scenario_offset_variants():
         rev = d[R]["camera_group_time_decisions"][CAM_REV]
         assert rev["proposal"]["tied"] is True, rev["proposal"]
         rev["user_decision"]["manual_offset_seconds"] = rev["proposal"]["groups"][1]["offset_seconds"]
-        # ClockChange: the split accepted, the photo between said to be the first after the change
+        # ClockChange: the split accepted, the photo without GPS in the hour the clock set back shows twice said to be
+        # the second part's
         ck = d[CK]["camera_group_time_decisions"][CAM_CLK]
-        assert ck["clock_change"]["between"], ck
-        ck["user_decision"].update(accept_clock_change=True, first_after_change="2024:07:03 11:30:00",
+        assert [u["source_file"] for u in ck["clock_change"]["unsettled"]] == [f"{CK}/k-between.raf"], ck
+        ck["user_decision"].update(accept_clock_change=True, photo_parts={f"{CK}/k-between.raf": 2},
                                    accepted_change_offsets_seconds=[r["offset_seconds"] for r in ck["clock_change"]["runs"]])
         return a
 

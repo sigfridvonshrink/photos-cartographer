@@ -21,37 +21,46 @@ import * as app from "../web/app.js";
 const setWork = (work) => { app.state.work = work; app.state.base = JSON.parse(JSON.stringify(work)); };
 const DEST = "6-photos-by-dest/Kyoto";
 
-const runs = [{ offset_seconds: -3600, photos: 3, first: { source_file: `${DEST}/a.arw`, camera_source_naive_time: "2024:07:03 09:00:00" },
-  last: { source_file: `${DEST}/c.arw`, camera_source_naive_time: "2024:07:03 10:00:00" } },
-{ offset_seconds: -32400, photos: 3, first: { source_file: `${DEST}/d.arw`, camera_source_naive_time: "2024:07:03 21:30:00" },
-  last: { source_file: `${DEST}/f.arw`, camera_source_naive_time: "2024:07:03 22:30:00" } }];
+// a clock set back an hour: the second run's camera times repeat the first's last hour
+const runs = [{ offset_seconds: -32400, photos: 4,
+  first: { source_file: `${DEST}/a.arw`, camera_source_naive_time: "2024:07:03 17:00:00", real_utc: "2024-07-03T08:00:00Z" },
+  last: { source_file: `${DEST}/d.arw`, camera_source_naive_time: "2024:07:03 18:30:00", real_utc: "2024-07-03T09:30:00Z" } },
+{ offset_seconds: -28800, photos: 4,
+  first: { source_file: `${DEST}/e.arw`, camera_source_naive_time: "2024:07:03 18:00:00", real_utc: "2024-07-03T10:00:00Z" },
+  last: { source_file: `${DEST}/h.arw`, camera_source_naive_time: "2024:07:03 19:30:00", real_utc: "2024-07-03T11:30:00Z" } }];
+const Q1 = `${DEST}/q1.arw`, Q2 = `${DEST}/q2.arw`;
 const change = { evidence: "gpx_self_anchor", runs, acceptance_tolerance_seconds: 120,
-  between: [{ source_file: `${DEST}/q.arw`, camera_source_naive_time: "2024:07:03 11:30:00" }] };
+  unsettled: [{ source_file: Q1, camera_source_naive_time: "2024:07:03 18:15:00" },
+    { source_file: Q2, camera_source_naive_time: "2024:07:03 18:45:00" }] };
 const dayCell = () => ({ camera_group: "C", clock_change: JSON.parse(JSON.stringify(change)),
-  proposal: { proposal_source: "gpx_self_anchor", proposed_offset_seconds: -3600 },
+  proposal: { proposal_source: "gpx_self_anchor", proposed_offset_seconds: -32400 },
   user_decision: { accept_proposal: false, accepted_offset_seconds: "", manual_offset_seconds: "", accept_clock_change: false,
-    accepted_change_offsets_seconds: "", first_after_change: "" }, requires_user_input: true });
+    accepted_change_offsets_seconds: "", photo_parts: {} }, requires_user_input: true });
 
-test("a clock changed during the day: the split is accepted once, naming its offsets and, where asked, the first photo after", () => {
+test("a clock changed during the day: the split is accepted once, naming its offsets and each unsettled photo's part", () => {
   const cell = dayCell();
   assert.equal(app.clockChangeHolds(cell), false);
   const on = { ...cell, user_decision: { ...cell.user_decision, ...app.clockChangeFields(cell, true) } };
-  assert.deepEqual(on.user_decision.accepted_change_offsets_seconds, [-3600, -32400]);
-  assert.equal(app.clockChangeHolds(on), false);                       // a photo lies between: which was first after?
-  on.user_decision.first_after_change = "2024:07:03 11:30:00";
+  assert.deepEqual(on.user_decision.accepted_change_offsets_seconds, [-32400, -28800]);
+  assert.equal(app.clockChangeHolds(on), false);                       // two photos either part could have taken
+  on.user_decision.photo_parts = app.clockChangePart(on, Q1, 1);
+  assert.deepEqual(on.user_decision.photo_parts, { [Q1]: 1 });
+  assert.equal(app.clockChangePartsGiven(on), false);                  // one still to give
+  on.user_decision.photo_parts = app.clockChangePart(on, Q2, 2);
+  assert.deepEqual(on.user_decision.photo_parts, { [Q1]: 1, [Q2]: 2 });
   assert.equal(app.clockChangeHolds(on), true);
-  on.user_decision.first_after_change = "2024:07:03 21:30:00";         // none of them: the second run's first
-  assert.equal(app.clockChangeAt(on), "2024:07:03 21:30:00");
-  on.user_decision.first_after_change = "2024:07:03 08:00:00";         // not between the runs
+  on.user_decision.photo_parts = app.clockChangePart(on, Q2, 3);       // a part that is neither
   assert.equal(app.clockChangeHolds(on), false);
-  const none = { ...on, clock_change: { ...change, between: [] }, user_decision: { ...on.user_decision, first_after_change: "" } };
+  const none = { ...on, clock_change: { ...change, unsettled: [] }, user_decision: { ...on.user_decision, photo_parts: {} } };
   assert.equal(app.clockChangeHolds(none), true);                      // nothing to ask
-  none.user_decision.accepted_change_offsets_seconds = [-3600, -36000];
+  none.user_decision.accepted_change_offsets_seconds = [-32400, -36000];
   assert.equal(app.clockChangeHolds(none), false);                     // accepted for other offsets
-  none.user_decision.accepted_change_offsets_seconds = [-3600, -32400];
-  none.user_decision.manual_offset_seconds = -3600;                     // one offset written for the whole day outranks
+  none.user_decision.accepted_change_offsets_seconds = [-32400, -28800];
+  none.user_decision.manual_offset_seconds = -32400;                    // one offset written for the whole day outranks
   assert.equal(app.clockChangeHolds(none), false);
-  assert.deepEqual(app.clockChangeFields(cell, false), { accept_clock_change: false, accepted_change_offsets_seconds: "", first_after_change: "" });
+  assert.deepEqual(app.clockChangeFields(cell, false), { accept_clock_change: false, accepted_change_offsets_seconds: "", photo_parts: {} });
+  // ticking the split again keeps the parts already given
+  assert.deepEqual(app.clockChangeFields(cell, true, { [Q1]: 2 }).photo_parts, { [Q1]: 2 });
 });
 
 test("photos agreeing with no group: the interim sub-folder advice is gone — a split, a review, or another body", () => {
@@ -89,7 +98,7 @@ test("a day offered the day next to it: accepted as any proposal, by the offset 
 
 test("the split resolves the day's offset cell, and its parts are shown on their day, never as rows of their own", () => {
   const cell = dayCell();
-  Object.assign(cell.user_decision, app.clockChangeFields(cell, true, "2024:07:03 11:30:00"));
+  Object.assign(cell.user_decision, app.clockChangeFields(cell, true, { [Q1]: 1, [Q2]: 2 }));
   setWork({ time: { destinations: { [DEST]: { camera_group_time_decisions: { C: cell,
     "C#1": { camera_group: "C", clock_change_part: { of: "C", part: 1 }, user_decision: {} } } } } } });
   const ref = { file: "time", dest: DEST, kind: "offset", key: "C" };

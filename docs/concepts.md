@@ -309,12 +309,15 @@ guess for one day applies only to that day, never to a sibling day or a neighbou
 
 **A clock changed during the day.** Set to local time at lunch, or reset, a camera has two offsets that day, and
 no single one fits. Only the camera's own GPS can show it — its positions on the tracks, or its fixes' times; the
-photos' own times run on whatever the clock said. Where the day's photos with a position, in camera-time order,
-fall into two runs each agreeing on an offset of its own, geotag proposes **splitting the day at the change**.
-Accept it once and the day is decided as two parts, each corrected by its own photos. Where photos without GPS lie
-between the two runs, nothing says on which side of the change they were taken: you say which was the first after
-the change. Offsets that go back and forth — three runs or more — are no clock change: they are positions gone
-wrong, or two bodies in one group.
+photos' own times run on whatever the clock said. Where the day's photos with a position, taken in the order of
+their true times (when the tracks or the fixes say they were taken), fall into two runs each agreeing on an offset of
+its own, geotag proposes **splitting the day at the change**. A clock set back shows an hour twice, so in camera time
+the two runs interleave; in true time they still follow one another, and the split is found all the same. Accept it
+once and the day is decided as two parts, each corrected by its own photos. A photo without GPS that only one part
+could have taken — read by that part's offset, it falls on that part's side of the change — goes to it unasked. One
+that either part could have taken (a photo of the hour a clock set back shows twice), or neither, is asked: you say
+for each whether it was taken before the change or after it. Offsets that go back and forth — three runs or more —
+are no clock change: they are positions gone wrong, or two bodies in one group.
 
 ---
 
