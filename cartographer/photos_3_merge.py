@@ -35,6 +35,7 @@ import concurrent.futures
 import glob
 import json
 import os
+import shutil
 import sys
 from datetime import datetime, timezone
 
@@ -839,6 +840,10 @@ class MergeWorkflow:
         reporter.log(f"  Plan saved to {mpp}", stream="stdout")
         if _mp_bak:
             reporter.log(f"  Previous plan backed up to {_mp_bak}", stream="stdout")
+        # What execute would find of the library's free space, said now, the plan written all the same
+        # (RUL-library_space_warned_at_plan).
+        for m in _space_shortfalls(ws, plan, library_root):
+            reporter.warn(f"  Warning: {m} — execute will refuse to start until there is room.")
         for b in plan["blockers"]:
             reporter.error(f"  Blocker: {b}")
         if plan["blockers"]:
@@ -1062,6 +1067,13 @@ class MergeWorkflow:
                     raise UnreadableRecord(jpath, "its operations are not a JSON object")
             except UnreadableRecord as e:
                 return {"status": "unreadable", "error": e}
+
+        # The library's free space, where it lies on another filesystem, against the photos still to move into it —
+        # before the snapshots and the first move, so a shortage stops the run with nothing moved
+        # (RUL-library_space_short_stops).
+        short = _space_shortfalls(ws, plan, library_root)
+        if short:
+            return {"status": "rejected", "plan_id": plan.get("plan_id"), "space_refusal": short}
 
         # Pre-mutation snapshots (BLD-merge_snapshots), labelled "merge": the workspace, and
         # the library beside it — merge removes what it places from the workspace, so a snapshot of the
@@ -1321,6 +1333,13 @@ class MergeWorkflow:
             reporter.log(f"No {MERGE_PLAN_ARTIFACT} — run `plan` first.")
             emit_next_step(reporter, "`merge plan` first to build the plan.")
             return 2
+        if st == "rejected" and result.get("space_refusal"):
+            # Not a stale plan either: the library's filesystem needs room before anything can move.
+            reporter.error("\nExecution refused before any change — the library has too little free space:")
+            for m in result["space_refusal"]:
+                reporter.log(f"  - {m}")
+            emit_next_step(reporter, "free space in the library (or move fewer photos), then re-run `merge execute`.")
+            return 2
         if st == "rejected" and result.get("snapshot_refusal"):
             # A snapshot refusal is not a stale plan: re-planning would not cure it.
             reporter.error(f"\nExecution refused before any change — {result['snapshot_refusal']}.")
@@ -1454,6 +1473,62 @@ def _same_picture_reason(same):
             "and the photo is left in by-dest. To merge it, replace the library's copy with it by hand (it may "
             "carry the time and position geotag wrote) and re-run `merge plan`; to keep the library's copy, take "
             "the photo out of by-dest and run prep, then geotag plan, execute and finalize again.")
+
+
+def _free_bytes(path):
+    """The space free to this user on the filesystem `path` lies on."""
+    return shutil.disk_usage(path).free
+
+
+def _device(path):
+    """The filesystem (device) `path` lies on."""
+    return os.stat(path).st_dev
+
+
+def _size_text(n):
+    for unit in ("bytes", "KiB", "MiB", "GiB", "TiB"):
+        if n < 1024 or unit == "TiB":
+            return f"{n} {unit}" if unit == "bytes" else f"{n:.1f} {unit}"
+        n /= 1024
+
+
+def _space_shortfalls(ws, plan, library_root):
+    """Where the photos still to move lie on another filesystem than the workspace, a message for each such
+    filesystem whose free space is less than their total size (RUL-library_space_checked); [] otherwise. The photos
+    still to move are those placed new or renamed whose copy is still in the workspace and whose place is free; each
+    counts against the filesystem of the nearest folder of its place that exists. On the workspace's own filesystem a
+    move is a rename and takes no space: nothing is checked there."""
+    ws_dev = _device(ws)
+    need, dev_of = {}, {}
+    for dest in (plan.get("destinations") or {}).values():
+        for rec in dest.get("files") or []:
+            if rec.get("disposition") not in ("placed_new", "renamed_incoming"):
+                continue
+            target = rec.get("library_target") or ""
+            try:
+                size = os.path.getsize(os.path.join(ws, rec["by_dest_source"]))
+            except (OSError, KeyError):
+                continue                                  # moved by an earlier run: it takes no more space
+            if not target or os.path.lexists(target):
+                continue
+            folder = os.path.dirname(target)
+            while folder not in dev_of and not os.path.isdir(folder) and os.path.dirname(folder) != folder:
+                folder = os.path.dirname(folder)
+            if folder not in dev_of:
+                dev_of[folder] = _device(folder)
+            if dev_of[folder] == ws_dev:
+                continue
+            entry = need.setdefault(dev_of[folder], [folder, 0])
+            entry[1] += size
+    lib_dev = _device(library_root) if os.path.isdir(library_root) else None
+    out = []
+    for dev, (folder, total) in sorted(need.items(), key=lambda kv: kv[1][0]):
+        where = library_root if dev == lib_dev else folder
+        free = _free_bytes(where)
+        if free < total:
+            out.append(f"the library's filesystem at {where} has {_size_text(free)} free, but the photos to move "
+                       f"into it need {_size_text(total)}")
+    return out
 
 
 def _in_workspace(ws):

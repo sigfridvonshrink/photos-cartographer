@@ -14,10 +14,13 @@
 
 """What cartographer needs of a filesystem, asked at every run's start: the workspace on a local filesystem
 (RUL-workspace_local_filesystem), each requirement of RUL-filesystem_agnostic tried on scratch files in the workspace
-and, for merge, in the library (RUL-filesystem_requirements_tried, RUL-library_requirements_tried).
+and, for merge, in the library (RUL-filesystem_requirements_tried, RUL-library_requirements_tried); and the library's
+free space where merge copies into another filesystem (RUL-library_space_checked).
 
-The filesystem's type is faked through `photos_utils._mount_table`, and a failing requirement by patching the one call
-the trial makes for it — nothing is mounted."""
+The filesystem's type is faked through `photos_utils._mount_table`, a failing requirement by patching the one call the
+trial makes for it, another filesystem by `photos_3_merge._device` and its free space by `photos_3_merge._free_bytes` —
+no disk is filled, nothing is mounted."""
+import json
 import os
 import types
 
@@ -28,7 +31,7 @@ import photos_2_geotag as geotag
 import photos_3_merge as merge
 import photos_utils as utils
 from test_cli import _EVERY_COMMAND, _ws as _cli_ws
-from test_merge_execute import _ws as _merge_ws, _content_fingerprint, _fp_bytes  # noqa: F401
+from test_merge_execute import _ws as _merge_ws, _content_fingerprint, _fp_bytes, _src, _summary  # noqa: F401
 
 
 def _mounted(monkeypatch, *table):
@@ -266,3 +269,68 @@ def test_a_library_on_a_network_filesystem_is_merged_into(tmp_path, monkeypatch)
     assert open(os.path.join(str(lib), "Trip", "a.jpg"), "rb").read() == _fp_bytes("A")
     assert not any(n.startswith(utils.FS_TRIAL_PREFIX) for n in os.listdir(lib))
 
+
+# --- the library's free space ---------------------------------------------------------------------------------------
+
+def _library_elsewhere(monkeypatch, lib, free):
+    """Make the library lie on another filesystem than the workspace, with `free` bytes free on it."""
+    real = merge._device
+    lib = os.path.realpath(str(lib))
+    monkeypatch.setattr(merge, "_device", lambda p: -7 if os.path.realpath(p).startswith(lib) else real(p))
+    asked = []
+    monkeypatch.setattr(merge, "_free_bytes", lambda p: asked.append(p) or free)
+    return asked
+
+
+_TWO = [{"fp": "A" * 40, "dest": "Trip", "final_name": "a.jpg"}, {"fp": "B" * 40, "dest": "Trip", "final_name": "b.jpg"}]
+_NEED = 2 * len(_fp_bytes("A" * 40))                                 # 86 bytes: both photos
+
+
+@pytest.mark.spec("RUL-library_space_checked", "RUL-library_space_short_stops", "RUL-library_space_short_named",
+                  test="TST-filesystem_checks-execute_stops_short_of_room")
+def test_execute_stops_with_nothing_moved_when_the_library_is_short_of_room(tmp_path, monkeypatch, capsys):
+    ws, lib = _merge_ws(tmp_path, _TWO)
+    assert merge._run_locked_workflow("plan", str(ws)) == 0
+    asked = _library_elsewhere(monkeypatch, lib, _NEED - 1)
+    lib_before = _state(lib, but=(".photos-merge.lock",))
+    assert merge._run_locked_workflow("execute", str(ws)) == 2
+    out = capsys.readouterr()
+    assert f"{_NEED - 1} bytes free" in out.err + out.out and f"need {_NEED} bytes" in out.err + out.out
+    assert asked == [str(lib)]
+    assert _state(lib, but=(".photos-merge.lock",)) == lib_before   # nothing moved
+    assert os.path.exists(_src(ws, "Trip", "a.jpg")) and os.path.exists(_src(ws, "Trip", "b.jpg"))
+    assert not os.path.exists(merge.merge_summary_path(str(ws)))
+
+
+@pytest.mark.spec("RUL-library_space_checked", test="TST-filesystem_checks-execute_counts_only_what_is_left")
+def test_execute_counts_only_the_photos_still_to_move(tmp_path, monkeypatch):
+    """A photo an earlier run moved, or whose place already holds a file, takes no room: with room for the one
+    left, execute goes on and places it."""
+    ws, lib = _merge_ws(tmp_path, _TWO)
+    assert merge._run_locked_workflow("plan", str(ws)) == 0
+    os.makedirs(lib / "Trip")
+    os.rename(_src(ws, "Trip", "a.jpg"), lib / "Trip" / "a.jpg")    # as an interrupted run left it
+    _library_elsewhere(monkeypatch, lib, _NEED // 2)
+    assert merge._run_locked_workflow("execute", str(ws)) == 0
+    assert _summary(ws)["status"] == "success"
+    assert open(lib / "Trip" / "b.jpg", "rb").read() == _fp_bytes("B" * 40)
+
+
+@pytest.mark.spec("RUL-library_space_warned_at_plan", test="TST-filesystem_checks-plan_warns_short_of_room")
+def test_the_plan_warns_of_a_library_short_of_room_and_is_written(tmp_path, monkeypatch, capsys):
+    ws, lib = _merge_ws(tmp_path, _TWO)
+    _library_elsewhere(monkeypatch, lib, 10)
+    assert merge._run_locked_workflow("plan", str(ws)) == 0
+    out = capsys.readouterr()
+    assert "Warning" in out.err and "10 bytes free" in out.err and f"need {_NEED} bytes" in out.err
+    plan = json.loads(open(merge.merge_plan_path(str(ws))).read())
+    assert plan["totals"]["placed_new"] == 2
+
+
+@pytest.mark.spec("RUL-library_space_checked", test="TST-filesystem_checks-same_filesystem_not_checked")
+def test_on_the_workspaces_own_filesystem_no_room_is_asked(tmp_path, monkeypatch, capsys):
+    ws, lib = _merge_ws(tmp_path, _TWO)
+    monkeypatch.setattr(merge, "_free_bytes", lambda p: pytest.fail("free space asked on one filesystem"))
+    assert merge._run_locked_workflow("plan", str(ws)) == 0
+    assert merge._run_locked_workflow("execute", str(ws)) == 0
+    assert "Warning" not in capsys.readouterr().err

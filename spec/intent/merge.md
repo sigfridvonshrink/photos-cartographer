@@ -160,6 +160,49 @@ Merge SHALL NOT refuse a library for the kind of filesystem it lies on, a networ
 filesystem does what merge needs of it.
 :::
 
+:::{rul} A library on another filesystem is checked for room before anything moves
+:id: RUL-library_space_checked
+:status: ruled
+:criticality: med
+:verify: required
+:uses: DEF-merge, DEF-library
+
+Where the library lies on another filesystem than the workspace, merge's execution SHALL compare, before its first
+move, the library's free space with the total size of the photos it is about to move into it.
+:::
+
+:::{rul} A library short of room stops the execution
+:id: RUL-library_space_short_stops
+:status: ruled
+:criticality: med
+:anti: yes
+:verify: required
+:refines: RUL-library_space_checked
+
+An execution that finds the library's free space short of the photos it is about to move SHALL stop with nothing
+moved.
+:::
+
+:::{rul} The stop names the room needed and the room free
+:id: RUL-library_space_short_named
+:status: ruled
+:criticality: low
+:verify: required
+:refines: RUL-library_space_short_stops
+
+The report of a library short of room SHALL name the space the photos need and the space free.
+:::
+
+:::{rul} Merge's plan warns of a library short of room
+:id: RUL-library_space_warned_at_plan
+:status: ruled
+:criticality: low
+:verify: required
+:refines: RUL-library_space_checked
+
+Merge's plan SHALL warn of a library its execution would find short of room, the plan written all the same.
+:::
+
 ## 4. Destination-to-library mapping
 
 :::{rul} The library mirrors the destination tree
