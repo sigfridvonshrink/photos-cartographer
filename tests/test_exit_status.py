@@ -204,3 +204,44 @@ def test_a_refused_prune_ends_as_a_refusal(tmp_path, monkeypatch, argv):
         prep.main()
     assert e.value.code == 2
     assert (run / "x.jpg").exists()
+
+
+@pytest.mark.parametrize("phase", ["prep", "geotag", "merge", "cli"])
+@pytest.mark.spec("RUL-exit_status_says_how_it_ended", "BLD-exit_statuses",
+                  test="TST-exit_status-an_unforeseen_error_ends_with_a_status_of_its_own")
+def test_an_unforeseen_error_ends_with_a_status_of_its_own(tmp_path, monkeypatch, capsys, phase):
+    """An error no command foresaw ends prep, geotag, merge — and any command run through the combined entry — with
+    4, never 1, which says the workspace is locked; it is named, and the workspace's lock is free again after."""
+    import photos_3_merge as merge
+    from cartographer import cli
+    from cartographer.editor import server as editor
+
+    def boom(*a, **k):
+        raise RuntimeError("an error no one foresaw")
+    if phase == "prep":
+        ws = _prep_ws(tmp_path)
+        monkeypatch.setattr(prep.WorkspacePrepWorkflow, "plan", boom)
+        code = _prep(monkeypatch, ws, "plan")
+    else:
+        ws = _ws(tmp_path)
+        monkeypatch.chdir(ws)
+        try:
+            if phase == "geotag":
+                monkeypatch.setattr(cal.GeotagWorkflow, "preflight", lambda self, for_execute=False: ([], [], {}))
+                monkeypatch.setattr(cal, "prep_log_blocker", lambda ws, handoff: None)
+                monkeypatch.setattr(cal.GeotagWorkflow, "execute_plan", boom)
+                cal.run(types.SimpleNamespace(command="execute", jobs=1))
+            elif phase == "merge":
+                monkeypatch.setattr(merge, "_run_locked_workflow", boom)
+                merge.run(types.SimpleNamespace(command="plan", jobs=None, accept_changes=None))
+            else:
+                monkeypatch.setattr(editor, "run", boom)
+                cli.main(["edit"])
+            code = 0
+        except SystemExit as e:
+            code = e.code
+    assert code == utils.UNFORESEEN_ERROR_EXIT == 4
+    assert "an error no one foresaw" in capsys.readouterr().err
+    lock = utils.WorkspaceLock(str(ws), create=False)
+    assert lock.acquire() is True
+    lock.release()

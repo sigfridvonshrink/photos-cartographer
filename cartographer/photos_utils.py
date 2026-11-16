@@ -1362,6 +1362,31 @@ _CHANGE_TITLES = {"changed": "changed in place", "appeared": "appeared", "remove
                   "interrupted_run": "left by the interrupted execution"}
 
 
+# An error the build did not foresee ends a command with an exit status of its own (BLD-exit_statuses): never 1,
+# which says the workspace or the library is locked, so a crash is never read as a run to try again.
+UNFORESEEN_ERROR_EXIT = 4
+
+
+def ends_unforeseen_error_apart(run):
+    """Wrap a command's `run(args)` so that an error it did not foresee ends it with `UNFORESEEN_ERROR_EXIT`, named
+    with where it arose (RUL-exit_status_says_how_it_ended). An exit the command chose, and an interrupt, pass as
+    they are; its own `finally` clauses have released its locks by the time this reports."""
+    import functools
+    import traceback
+
+    @functools.wraps(run)
+    def wrapped(args):
+        try:
+            return run(args)
+        except Exception as err:
+            from .reporting import get_reporter
+            reporter = get_reporter()
+            reporter.error(f"Error: {err}")
+            reporter.log(traceback.format_exc().rstrip())
+            sys.exit(UNFORESEEN_ERROR_EXIT)
+    return wrapped
+
+
 def add_accept_changes_argument(parser) -> None:
     """`--accept-changes <code>` on every checking command (BLD-accept_changes): accept once the unexpected changes
     the check listed, the code printed with them."""

@@ -25,6 +25,7 @@ import argparse
 from . import __version__, photos_1_prep, photos_2_geotag, photos_3_merge
 from .editor import server as editor
 from .console import server as console
+from .photos_utils import ends_unforeseen_error_apart
 
 OVERALL_BLURB = (
     "photos-cartographer — safely turn a raw photo dump into a calibrated, geotagged, merged library.\n\n"
@@ -74,7 +75,9 @@ def main(argv=None):
     if hasattr(args, "command") and args.command is None:   # a phase with subcommands, none given -> its blurb
         args._parser.print_help()
         return 0
-    return args._run(args)                           # leaf phase (edit) or a chosen subcommand
+    # Leaf phase (edit) or a chosen subcommand. An error none of them foresaw ends with a status of its own
+    # (BLD-exit_statuses), as each phase's own `run` ends one.
+    return ends_unforeseen_error_apart(args._run)(args)
 
 
 if __name__ == "__main__":

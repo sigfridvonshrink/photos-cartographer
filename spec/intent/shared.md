@@ -61,7 +61,7 @@ sorted by destination, into the library.
 
 Prep's plan, dry run, execute and prune, and each of geotag's and merge's commands, SHALL end with an exit status of its own
 for each way a run can end: having done what it was asked; finding the workspace or the library locked; refusing,
-having changed nothing; executing with work left undone; and interrupted.
+having changed nothing; executing with work left undone; ending on an error it did not foresee; and interrupted.
 :::
 
 :::{rul} A plan that reports a blocker ends as a refusal

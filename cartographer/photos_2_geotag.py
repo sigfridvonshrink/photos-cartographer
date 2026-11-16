@@ -47,7 +47,7 @@ import xml.etree.ElementTree as ET
 import zoneinfo
 from datetime import datetime, timedelta, timezone
 
-from .photos_utils import (fingerprint_method_blocker, links_under, replace_durably,
+from .photos_utils import (ends_unforeseen_error_apart, fingerprint_method_blocker, links_under, replace_durably,
     country_table, zone_table_record_error,
     zone_table,
     code_fingerprint,
@@ -3829,6 +3829,7 @@ def _stop_unless_prep_plan_records_only(workspace_root, reporter):
     sys.exit(2)
 
 
+@ends_unforeseen_error_apart        # an error not foreseen ends with a status of its own (BLD-exit_statuses)
 def run(args):
     workspace_root = os.getcwd()
     reporter = get_reporter()

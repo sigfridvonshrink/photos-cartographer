@@ -40,7 +40,7 @@ import errno
 # CONFIGURATION BLOCK
 # ==============================================================================
 from .photos_utils import CONFIG, CAMERA_IDENTITY_FIELDS, folder_name, managed_folder_names, dedup_priority, is_track_file, missing_managed_folders, misplaced_top_level_entries, FOLDER_ROLES, UNTIMED_PREFIX, untimed_stem, carries_stem, filename_format_changed, code_fingerprint, hidden_folder_holds_files
-from .photos_utils import (add_accept_changes_argument, add_zone_table_argument, check_workspace, read_workspace_record, write_workspace_record,
+from .photos_utils import (add_accept_changes_argument, ends_unforeseen_error_apart, add_zone_table_argument, check_workspace, read_workspace_record, write_workspace_record,
                           forget_in_workspace_record, note_execution_begun)
 from .reporting import get_reporter, emit_next_step
 from .photos_utils import (replace_durably, _move_no_clobber, _move_link_unlink, _get_renameat2,
@@ -3322,6 +3322,7 @@ def _zone_table_answer(args, workspace_root, reporter):
     return "yes" if said.strip().lower() in ("y", "yes") else "no"
 
 
+@ends_unforeseen_error_apart        # an error not foreseen ends with a status of its own (BLD-exit_statuses)
 def run(args):
     workspace_root = os.getcwd()
 
@@ -3363,9 +3364,6 @@ def run(args):
         # 130 instead of dumping a traceback. The `finally` below still releases the lock.
         reporter.log("\nInterrupted; aborting. Nothing was partially applied — safe to rerun.")
         sys.exit(130)
-    except Exception as e:
-        reporter.error(f"Error: {e}")
-        sys.exit(1)
     finally:
         run_lock.release()
         reporter.log("Lock released.")

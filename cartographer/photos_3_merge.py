@@ -40,7 +40,7 @@ import shutil
 import sys
 from datetime import datetime, timezone
 
-from .photos_utils import (links_under, fingerprint_method_blocker, 
+from .photos_utils import (ends_unforeseen_error_apart, links_under, fingerprint_method_blocker, 
     CONFIG, CONTROL_DIR, FINALIZED_MEDIA_ARTIFACT, finalized_media_path, config_path, handoff_path, guard_path, is_sealed,
     validate_config, load_config, validate_merge_config, library_place_error, library_workspace_error, code_fingerprint, sha256_file, sha256_text, media_class_for_ext,
     folder_name, FOLDER_ROLES, missing_managed_folders, top_level_links, misplaced_top_level_entries, handoff_content_fingerprint, handoff_filename_format_blocker,
@@ -2053,6 +2053,7 @@ def add_arguments(parser):
     parser.set_defaults(_run=run, _parser=parser)
 
 
+@ends_unforeseen_error_apart        # an error not foreseen ends with a status of its own (BLD-exit_statuses)
 def run(args):
     ws = os.getcwd()
     if args.command == "init-library":
