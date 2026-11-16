@@ -2511,7 +2511,8 @@ def _zfs_snapshot_exists(snap: str) -> bool:
 FIELD_SET_VERSION = 4
 # 2: a file's recorded time is the first field holding a valid time, not the first present.
 METADATA_SCHEMA_VERSION = 2
-CAMERA_GROUP_KEY_VERSION = 1
+# 2: a key of empty parts alone (every identity field held blank) is NO_IDENTITY_KEY, a file naming no camera.
+CAMERA_GROUP_KEY_VERSION = 2
 
 # -G0 names each value's group, so prep — not exiftool's own priority — chooses which group a field is
 # taken from; -a keeps a tag present in several groups once per group.
@@ -3265,7 +3266,9 @@ class MetadataReader:
             v = parsed.get(k)
             if v is not None:
                 ident_parts.append(str(v).strip())
-        parsed["camera_group_key"] = "|".join(ident_parts) if ident_parts else NO_IDENTITY_KEY
+        # A key of empty parts alone — every identity field the file holds blank — names no camera, as a file
+        # holding none of them does (BLD-camera_identity_values).
+        parsed["camera_group_key"] = "|".join(ident_parts) if any(ident_parts) else NO_IDENTITY_KEY
 
         # Passive boolean helper checks
 
