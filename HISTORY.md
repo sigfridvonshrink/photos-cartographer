@@ -2,6 +2,22 @@
 
 *What was decided and why, newest first. A record: never corrected forward. Per-commit detail is `git log`.*
 
+## 2026-11-16 — a clock changed mid-day, a wrong own position, a midnight mid-shoot, two bodies (BACKLOG 15, 16, 23, 39)
+
+One offset per camera, destination and day fails four ways. Ruled *"rest is ok"*, with the owner on 15 (*"15 can only
+be detected using GPS, the photos themselves are not enough. Correct?"* — yes) and on 39:
+
+- **a clock changed during the day** is seen from the camera's GPS — its track matches, its fixes' times — ordered by
+  each photo's true time, so a clock set back shows as well as one set forward; the day is proposed split at the
+  change, each part anchored by its own photos, and a photo either part could have taken is asked its part.
+- **a photo whose own position the day's offset contradicts** is offered the track's position as a review item; a
+  photo's own position is replaced only on the user's answer, the old one logged.
+- **a day with no anchor** is offered the anchored day next to it, asked once — at the drift check where tracks lie by
+  it, accepted in the time decisions where none do (*"Both ok"*; built first asking twice).
+- **two bodies in one camera group** — *"this needs a workspace setting, default being that it's just one camera. If the
+  setting says multiple cameras, then do the recommended"*: `several_bodies_groups` names them; such a group's GPS
+  offset is only ever proposed, never split, never read as wrong positions.
+
 ## 2026-11-15 — every question answerable in the editor, and by hand (BACKLOG 52)
 
 The owner: *"the user should be able to answer all questions in the editor"* — and *"the editor is not the only
