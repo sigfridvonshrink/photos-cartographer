@@ -744,7 +744,7 @@ def test_a_photo_whose_fingerprint_changed_keeps_its_own_values(tmp_path, monkey
     assert _originals(ws) == {"fp-new": pinned}                               # the pin followed the value
 
 
-@pytest.mark.spec("RUL-own_values_follow_new_fingerprint", "BLD-original_values_follow_fingerprint",
+@pytest.mark.spec("RUL-fingerprint_mapping_one_to_one", "BLD-original_values_follow_fingerprint",
                   test="TST-geotag_rerun_markers-a_fingerprint_mapping_not_one_to_one_stops_geotag")
 def test_a_fingerprint_mapping_not_one_to_one_stops_geotag(tmp_path, monkeypatch):
     ws = _executed_round(tmp_path, monkeypatch)

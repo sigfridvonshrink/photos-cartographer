@@ -391,7 +391,7 @@ def test_a_tracks_folder_none_of_whose_files_is_read_stops_geotag(tmp_path, monk
     assert _main(monkeypatch, ws) == 0
 
 
-@pytest.mark.spec("RUL-unreadable_tracks_stop_geotag", "BLD-track_points",
+@pytest.mark.spec("RUL-track_link_never_followed", "RUL-track_link_named", "BLD-track_points",
                   test="TST-geotag_model-a_linked_folder_of_tracks_is_named_not_followed")
 def test_a_linked_folder_of_tracks_is_named_not_followed(tmp_path):
     """A folder under gpx_root that is a link to tracks elsewhere is not followed — its tracks are not read — and

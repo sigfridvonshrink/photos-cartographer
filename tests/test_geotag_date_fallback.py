@@ -98,7 +98,8 @@ def test_a_date_that_is_no_date_is_refused_naming_it(tmp_path, bad):
     assert repr(bad) in blockers[0]
 
 
-@pytest.mark.spec("RUL-date_fallback_from_nearest", "RUL-untimed_photo_stops_geotag", "BLD-date_fallback_cell",
+@pytest.mark.spec("RUL-date_fallback_from_nearest", "RUL-date_fallback_applies_itself", "RUL-untimed_photo_stops_geotag",
+                  "BLD-date_fallback_cell",
                   test="TST-geotag_date_fallback-the_nearest_date_up_covers_it")
 def test_the_date_given_nearest_up_covers_a_folder_and_no_acceptance_is_asked(tmp_path):
     """Given at `Scans`, a container, the date covers `Scans/1985` inside it unasked; one given at `Scans/1985` itself
