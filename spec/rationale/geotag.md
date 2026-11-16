@@ -1183,6 +1183,34 @@ photos there anyway, and is the last phase to touch them before the library: lef
 the library too, and a name is the same name on every filesystem and in every tool.
 :::
 
+:::{rat} A burst is read in the order of its names
+:id: RAT-names_in_capture_order
+:status: ruled
+:forced: no
+:follows_from: RAT-geotag_finishes_extension_spelling
+:justifies: RUL-suffix_in_capture_order, RUL-pair_named_as_one
+
+Within one second, the suffix is all a folder listing has to order a burst by. Given in path order, where `-` sorts
+before `.`, `T`, `T-001` and `T-002` become `T'-002`, `T'` and `T'-001`: the burst rotates. The fraction of a second a
+camera records is its own order of the frames, and the suffix prep gave is the order prep had them in; either keeps the
+burst as it was shot. A RAW and its JPEG, a HEIC and the other file of its shot, are one shot: named apart, one half
+lands beside another frame's other half, and the pair shows a shot that never was — as would a new name another photo
+holds under another extension.
+:::
+
+:::{rat} A name is the time the place showed
+:id: RAT-names_local_in_repeated_hour
+:status: ruled
+:forced: no
+:follows_from: RAT-time_written_as_lived
+:justifies: RUL-names_local_in_repeated_hour
+
+A photo's name is the time its destination's clocks showed — the time of a ticket, a timetable, a diary. In the hour a
+zone repeats as its clocks go back, those clocks run back, and names taken from them sort against the true order for
+that hour. A name of true time — UTC, or an offset in every name — would mislabel every other hour to fix that one.
+The true order is kept where it can be read: in the metadata, each time with its offset beside it.
+:::
+
 
 ## 19. The executable plan
 

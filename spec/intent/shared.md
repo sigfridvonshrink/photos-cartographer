@@ -3380,6 +3380,18 @@ The filename format SHALL make a part of a name that is never empty and is safe 
 and no character a filename may not hold.
 :::
 
+:::{rul} The filename format reads no timezone
+:id: RUL-filename_format_zone_free
+:status: ruled
+:criticality: med
+:anti: yes
+:verify: required
+:uses: RUL-one_filename_format
+:refines: RUL-checked_filename_format
+
+The filename format SHALL hold no field that reads a time differently with a timezone than without one.
+:::
+
 :::{rul} A number is of the right kind and in range
 :id: RUL-checked_numbers
 :status: ruled

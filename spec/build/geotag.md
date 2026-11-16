@@ -688,16 +688,30 @@ A position write of photos-24 whose placement has `lower_tracks` SHALL carry the
 :::{bld} How renames are planned
 :id: BLD-rename_planning
 :status: ruled
-:realises: RUL-suffix_no_clobber, RUL-uncorrected_keeps_its_name, RUL-geotag_name_final, RUL-geotag_extension_lowercase
+:realises: RUL-suffix_no_clobber, RUL-uncorrected_keeps_its_name, RUL-geotag_name_final, RUL-geotag_extension_lowercase, RUL-suffix_in_capture_order, RUL-pair_named_as_one
 
 For each destination, `plan_renames` SHALL count every current name of its photos as taken, case folded, and never
-freed by a rename it plans — two photos that would trade names both take a suffix — then, in path order, leave a photo
-whose name already carries its timestamp, suffix and all, and ends with a lowercase extension, as it is; give one whose
-name carries its timestamp but whose extension is not lowercase that name with its extension lowercased, unless
-another photo there holds the name case folded; and give any other the first free name of its timestamp by
-`allocate_suffix`, adding it to the names taken. Every planned name ends with the photo's extension in lowercase.
-Execution applies these renames, and those of {need}`BLD-set_aside_renamed_with_raw`, and no other, each by a
-no-clobber move.
+freed by a rename it plans — two photos that would trade names both take a suffix — then leave a photo whose name
+already carries its timestamp, suffix and all, and ends with a lowercase extension, as it is; give one whose name
+carries its timestamp but whose extension is not lowercase that name with its extension lowercased, unless another
+photo there holds the name case folded; and give the others new names. Those that share a name, extension aside, and a
+timestamp, and no two of one extension, are named as one. In order of their timestamp, their true time, the fraction of
+a second they record (`sub_second`), a photo recording none after those that do, the suffix their name holds after the
+timestamp prep named it by (`source_naive_time`), none first, and their path, each such photo or pair takes by
+`allocate_stem` the first stem of its timestamp, bare or suffixed, that no name taken holds under any extension, each
+member keeping its own extension. Every planned name ends with the photo's extension in lowercase. Execution applies
+these renames, and those of {need}`BLD-set_aside_renamed_with_raw`, and no other, each by a no-clobber move.
+:::
+
+:::{bld} The fraction of a second a photo records
+:id: BLD-sub_second_read
+:status: ruled
+:realises: RUL-suffix_in_capture_order
+
+`build_file_model` SHALL take a photo's `sub_second` from its record in the handoff, by `recorded_sub_second`: the
+fraction written in its recorded time itself, else that of the sub-second field prep reads beside it —
+`SubSecTimeOriginal` beside `DateTimeOriginal`, `SubSecCreateDate` beside `CreateDate`, `SubSecModifyDate` beside
+`ModifyDate` — its digits, or the fraction of the whole time it holds; none where neither holds one.
 :::
 
 :::{bld} A set-aside JPEG renamed with its RAW

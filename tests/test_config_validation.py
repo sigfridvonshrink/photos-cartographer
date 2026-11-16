@@ -172,6 +172,33 @@ def test_config_without_merge_block_still_valid():
     utils.validate_config({"gpx_root": ""})        # legacy config (no merge key) is accepted
 
 
+@pytest.mark.spec("RUL-filename_format_zone_free", "BLD-filename_format_zone_checked",
+                  test="TST-config_validation-a_format_reading_a_zone_refused")
+def test_a_format_reading_a_zone_refused(tmp_path):
+    """A filename format holding a field that reads a timezone is refused as the configuration is read — by prep as it
+    seeds and reads it, by geotag and merge as they load it — with what is wrong in plain words; the date and time
+    fields alone pass."""
+    zoned = ["%Y-%m-%d--%H-%M-%S%z", "%Y%m%d_%H%M%S_%Z"]
+    try:
+        utils.datetime(2001, 1, 1).strftime("%:z")
+        zoned.append("%Y-%m-%d--%H-%M-%S%:z")         # Python 3.12 and later
+    except ValueError:
+        pass
+    for fmt in zoned:
+        with pytest.raises(ValueError, match="reads a timezone") as ei:
+            utils.validate_config(_cfg(filename_timestamp_format=fmt))
+        assert "prep" in str(ei.value) and "geotag" in str(ei.value)
+    for fmt in ("%Y-%m-%d--%H-%M-%S", "%Y%m%d_%H%M%S", "%d.%m.%Y %Hh%M'%S"):
+        utils.validate_config(_cfg(filename_timestamp_format=fmt))
+    ws = tmp_path / "ws"
+    (ws / ".photos-ingest").mkdir(parents=True)
+    with open(utils.config_path(str(ws)), "w") as f:
+        json.dump(_cfg(filename_timestamp_format=zoned[0]), f)
+    for read in (utils.load_or_seed_config, utils.load_config):     # prep's read; geotag's and merge's
+        with pytest.raises(ValueError, match="reads a timezone"):
+            read(str(ws))
+
+
 @pytest.mark.spec("RUL-invalid_value_stops")
 def test_load_or_seed_config_rejects_bad_value(tmp_path):
     ws = tmp_path / "ws"

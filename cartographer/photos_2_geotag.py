@@ -767,6 +767,8 @@ class GeotagWorkflow:
                 "camera_group_key": md.get("camera_group_key") or parsed.get("camera_group_key") or NO_IDENTITY_KEY,
                 "source_naive_time": parsed.get("selected_source_naive_timestamp"),
                 "source_time_tag": parsed.get("selected_source_timestamp_tag"),
+                # the fraction of a second it records: the order of a burst's names (RUL-suffix_in_capture_order)
+                "sub_second": recorded_sub_second(parsed),
                 "raw_times": {k: parsed.get(k) for k in
                               ("DateTimeOriginal", "CreateDate", "ModifyDate",
                                "OffsetTimeOriginal", "OffsetTimeDigitized", "OffsetTime", "TimeZone")
@@ -2353,7 +2355,8 @@ class GeotagWorkflow:
             tz = ((t_dests.get(dest, {}).get("destination_timezone")) or {}).get("effective_iana_timezone") or ""
             rename_inputs = [{"relative_path": f["relative_path"],
                               "resolved_utc": (utc_by_path.get(f["relative_path"]) or {}).get("resolved_utc"),
-                              "destination_timezone": tz} for f in by_dest[dest]]
+                              "destination_timezone": tz, "sub_second": f.get("sub_second"),
+                              "source_naive_time": f.get("source_naive_time")} for f in by_dest[dest]]
             renames = {r["relative_path"]: r for r in plan_renames(rename_inputs, fmt)}
 
             ops, no_ops = [], []

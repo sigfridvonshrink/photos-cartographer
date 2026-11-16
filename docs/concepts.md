@@ -393,6 +393,17 @@ Prep names a file by the time its camera recorded — a provisional name. Geotag
 corrects to its corrected time, in its destination's local time, with a `-001`, `-002`, … suffix where
 another photo has that name.
 
+- **Photos of one second keep the order they were taken in.** Their suffixes go by the fraction of a
+  second each records (`SubSecTimeOriginal`, where the camera writes one), then by the suffix prep gave
+  them — so a burst named `T`, `T-001`, `T-002` keeps that order under its new time.
+- **A pair takes one name.** Photos of a destination that share a name, extension aside — a RAW and its
+  JPEG, a HEIC and its partner — and have one corrected time get one new name and one suffix, each its
+  own extension. No new name is one another photo holds under another extension, so a RAW never lands
+  beside another frame's JPEG. Two files of one name whose corrected times differ (two cameras) are two
+  photos, each named by its own time.
+- **In the hour a zone repeats**, as clocks go back, names are the local time the clocks showed: a photo
+  taken at 02:45 summer time sorts after one taken half an hour later at 02:15 winter time. The true
+  order is in the metadata, each time with its offset.
 - **A JPEG set aside beside its RAW** (in `3-redundant-jpgs/`) is renamed with its RAW, to the RAW's new
   name with its own `.jpg`: a rename only, nothing written into it, the one change geotag makes outside
   `6-photos-by-dest/`. Prep records which RAW each JPEG was set aside beside when it sets it aside, so the
@@ -516,7 +527,9 @@ Areas that matter for the concepts above:
 - **`gpx_track_precedence`** — the folders under `gpx_root` your devices' tracks are filed in, best
   first ([placing each photo](#placing-each-photo)); empty ranks every track alike.
 - **`filename_timestamp_format`** — fixed once the workspace's files carry it: changing it afterwards
-  stops every phase.
+  stops every phase. Fields of the date and time only: a field that reads a timezone (`%z`, `%Z`) is
+  refused, since prep names files from the camera's time, which has none, and geotag from the corrected
+  time, which has one — the two would name one moment differently.
 
 Config is **fingerprinted**: any edit makes every saved plan stale, so you re-plan before executing; but
 the costly results — fingerprints, parsed tracks, resolved times — are redone only where the area they

@@ -2185,6 +2185,42 @@ Each photo in photos by destination SHALL end with its extension in lowercase on
 already carries its timestamp renamed for its extension alone.
 :::
 
+:::{rul} The photos of one second keep the order they were taken in
+:id: RUL-suffix_in_capture_order
+:status: ruled
+:criticality: med
+:verify: required
+:refines: RUL-suffix_deterministic
+:uses: DEF-timestamp_name
+
+Geotag SHALL give the photos of a destination that take new names of one timestamp their suffixes in the order they
+were taken: by the fraction of a second each records, where it records one, then by the suffix its name already holds,
+none first.
+:::
+
+:::{rul} A pair takes one name
+:id: RUL-pair_named_as_one
+:status: ruled
+:criticality: med
+:verify: required
+:refines: RUL-suffix_choice_by_phase
+:uses: DEF-timestamp_name
+
+Photos of a destination that share a name, extension aside, and take new names of one timestamp SHALL be given one new
+name, each keeping its extension, that no other photo there holds under any extension.
+:::
+
+:::{rul} In the hour a zone repeats, names are its local time
+:id: RUL-names_local_in_repeated_hour
+:status: ruled
+:criticality: low
+:verify: required
+:refines: RUL-geotag_name_final
+
+In the hour a destination's zone repeats as its clocks go back, geotag SHALL name each photo by its local time there,
+so that the names of that hour sort by local time and not by true time.
+:::
+
 
 ## 19. The executable plan
 

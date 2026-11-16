@@ -309,6 +309,17 @@ Validating the configuration SHALL check, among others, that a path resolves san
 syntactically valid snapshot component, and that an IANA timezone is a real zone.
 :::
 
+:::{bld} A filename format reading a zone is refused
+:id: BLD-filename_format_zone_checked
+:status: ruled
+:realises: RUL-filename_format_zone_free
+:uses: BLD-authored_checks_by_phase
+
+`validate_config` SHALL refuse a `filename_timestamp_format` that formats one time differently without a zone and with
+a UTC offset of +05:30 — one holding `%z`, `%:z` or `%Z` — saying that prep names files from a time without a zone and
+geotag from one with a zone; every phase reads the configuration through it before anything else.
+:::
+
 ## 4. The control records, apart from the media
 
 :::{bld} The control directory's contents
@@ -540,10 +551,10 @@ collision, `<timestamp>-002.ext` for the second, and so on.
 :::{bld} Geotag's final name, step by step
 :id: BLD-geotag_final_name
 :status: ruled
-:realises: RUL-geotag_name_final
+:realises: RUL-geotag_name_final, RUL-names_local_in_repeated_hour
 
 Geotag SHALL compute the final name as resolved UTC → the destination's civil timezone → a local naive datetime → the
-format.
+format. Two instants of the hour a zone repeats give one local time, and the name is that local time for both.
 :::
 
 :::{bld} The `UNKN_` mark
