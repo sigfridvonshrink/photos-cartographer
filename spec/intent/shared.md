@@ -3312,6 +3312,17 @@ Every question geotag asks of the user SHALL be answerable by hand, in a field o
 group's class, in the configuration.
 :::
 
+:::{rul} A timezone answered in the editor ends the asking below it
+:id: RUL-editor_answer_ends_zone_asking
+:status: ruled
+:criticality: med
+:verify: required
+:uses: DEF-decision
+
+The decision editor SHALL stop asking for a timezone, as soon as one is answered in it, at every destination that
+answer reaches and at every container destination asking for no other.
+:::
+
 :::{rul} The decision editor saves nothing into a sealed workspace
 :id: RUL-editor_refuses_sealed_save
 :status: ruled

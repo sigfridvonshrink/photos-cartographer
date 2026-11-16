@@ -240,7 +240,8 @@ A timezone the user writes for a destination SHALL take effect over the one it i
 :refines: RUL-timezone_auto_resolves
 :uses: DEF-geotag, DEF-decision
 
-A destination with no timezone to inherit SHALL wait for the user.
+A destination with no timezone to inherit SHALL wait for the user, save one its photos give within its country
+({need}`RUL-zone_from_photos_in_country`).
 :::
 
 :::{rul} An inherited timezone yields to the destination's own photos
@@ -312,6 +313,31 @@ answering for themselves.
 A timezone answered for a destination in a country of several timezones SHALL be one of that country's timezones.
 :::
 
+:::{rul} In a country of several timezones, the photos' offsets propose the one that fits
+:id: RUL-zone_from_photos_in_country
+:status: ruled
+:criticality: high
+:verify: required
+:refines: RUL-country_of_several_gives_none
+:uses: DEF-geotag, DEF-decision
+
+A destination in a country of several timezones, with no timezone written or inherited, SHALL be proposed the one
+timezone of that country whose offset at the time of each of its photos read by the offset recorded with its time is
+that offset — where exactly one is, and at least one photo records an offset.
+:::
+
+:::{rul} A timezone the photos give within their country applies itself
+:id: RUL-zone_from_photos_applies
+:status: ruled
+:criticality: high
+:verify: required
+:refines: RUL-zone_from_photos_in_country
+:uses: DEF-geotag, DEF-decision
+
+A timezone proposed from the offsets a destination's photos record within its country SHALL take effect without the
+user's answer.
+:::
+
 :::{rul} A country is said once, at the top of its tree
 :id: RUL-country_chosen_once
 :status: ruled
@@ -353,8 +379,8 @@ timezone for the offsets those photos record.
 :verify: required
 :refines: RUL-timezone_auto_resolves
 
-The configured default timezone SHALL be offered to a destination with no zone to inherit, never applied without the
-user's answer.
+The configured default timezone SHALL be offered to a destination with no zone to inherit nor one its photos give,
+never applied without the user's answer.
 :::
 
 :::{rul} A proposal waits for the user's acceptance
@@ -672,7 +698,8 @@ gave by themselves that day in another destination.
 :verify: required
 :uses: DEF-container_destination
 
-A container destination's decisions SHALL never wait for the user.
+A container destination's decisions SHALL never wait for the user, save a timezone asked of it for the destinations
+waiting within it ({need}`RUL-zone_asked_at_every_level`).
 :::
 
 :::{rul} An answer follows its day
@@ -1254,6 +1281,31 @@ offset as holding wrong positions.
 
 A destination's proposed timezone SHALL be the one in effect at the nearest destination it lies in that has one —
 however it was reached there.
+:::
+
+:::{rul} A timezone is asked at every folder above a destination waiting for one
+:id: RUL-zone_asked_at_every_level
+:status: ruled
+:criticality: med
+:verify: required
+:refines: RUL-no_timezone_to_inherit_waits
+:uses: DEF-container_destination, DEF-decision
+
+A container destination with no timezone, written or inherited, SHALL ask for one while a destination within it waits
+for one that a timezone written at the container would reach.
+:::
+
+:::{rul} A container a timezone reaches is not asked for one
+:id: RUL-zone_not_asked_where_one_reaches
+:status: ruled
+:criticality: med
+:anti: yes
+:verify: required
+:refines: RUL-zone_asked_at_every_level
+:uses: DEF-container_destination
+
+A container destination with a timezone, written there or inherited, or where a country of several timezones is said,
+SHALL NOT be asked for one.
 :::
 
 :::{rul} A moved photo is decided where it now is

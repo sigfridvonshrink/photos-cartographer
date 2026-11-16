@@ -272,11 +272,7 @@ const chip = (k, t) => el("span", { class: `chip ${k}` }, t);
 function wouldResolve(ref) {
   const c = workCell(ref); if (!c) return false;
   const u = c.user_decision || {}, p = c.proposal || {};
-  if (ref.kind === "timezone")
-    return ((!!u.manual_iana_timezone && validTz(u.manual_iana_timezone))
-      || tzOwnDecision(ref.dest)?.source === "country"                         // a country of one timezone gives it
-      || (!!c.proposed_iana_timezone && c.proposal_source === "inherited"))   // an inherited zone applies itself...
-      && zoneSpokenFor(c);                                                     // ...unless the photos here say otherwise
+  if (ref.kind === "timezone") return zoneSettled(ref.dest);
   if (ref.kind === "offset")
     return (u.manual_offset_seconds !== "" && u.manual_offset_seconds != null && validOffset(u.manual_offset_seconds))
       || keepHolds(c)                                           // a phone kept as it records itself
@@ -300,13 +296,20 @@ function wouldResolve(ref) {
   return (u.manual_lat !== "" && u.manual_lat != null && u.manual_lon !== "" && u.manual_lon != null)
     || (c.reason === "no_reliable_gps_source" && !!fbOwnDecision(ref.dest));   // its folder's fallback places it
 }
-function statusChip(ref) {
+// A cell's status as [kind, label], or null: the last run's, unless the decisions being edited settle it. Pure.
+function statusOf(ref) {
   if (isDirty(ref)) {                          // a pending edit supersedes the last run's status
     if (refInvalid(ref)) return null;          // the ✗ invalid chip (tags) already speaks
-    if (wouldResolve(ref)) return chip("ok", "resolved");
-    if (ref.kind === "fallback") return chip("none", "none");  // a cleared/empty working fallback is "none", not the old base status
+    if (wouldResolve(ref)) return ["ok", "resolved"];
+    if (ref.kind === "fallback") return ["none", "none"];  // a cleared/empty working fallback is "none", not the old base status
   }
-  const s = cellStatus(baseCell(ref));
+  // a timezone the decisions being edited now give it — answered here or above, or, on a container, at every
+  // destination it asks for — asks no more (BLD-editor_zone_asking)
+  if (ref.kind === "timezone" && baseCell(ref)?.requires_user_input && zoneSettled(ref.dest)) return ["ok", "resolved"];
+  return cellStatus(baseCell(ref));
+}
+function statusChip(ref) {
+  const s = statusOf(ref);
   return s ? chip(s[0], s[1]) : null;
 }
 
@@ -423,6 +426,7 @@ function previewEffective(ref) {
     if (u.manual_iana_timezone) return validTz(u.manual_iana_timezone) ? u.manual_iana_timezone : "✗ invalid zone";
     const pv = previewTz(ref.dest);
     if (pv && pv.source === "inherited") return `${pv.tz} (inherited ⟵ ${leaf(pv.from)}, preview)`;
+    if (pv && pv.source === "photos") return `${pv.tz} (the one zone of the country its photos' offsets fit)`;
     if (c.proposal_source === "config_default" && c.proposed_iana_timezone)
       return `— (proposed: ${c.proposed_iana_timezone}, the configured default — use it or pick another)`;
     return "— (needs input)";
@@ -555,12 +559,29 @@ function tzWalk(dest) {
         if (a && a.tz) { got = { tz: a.tz, source: "inherited", from: anc }; break; }
       }
     }
+    // nothing reaching it, in a country of several timezones: the one zone of the country its photos' recorded offsets
+    // fit, as the last run found it, applies itself (BLD-zone_from_photos_in_country) — while that country stands
+    const c = tzCell(dest);
+    if (!got && c && c.proposal_source === "photos_in_country" && k && k.zones.length > 1
+        && k.zones.includes(c.proposed_iana_timezone))
+      got = { tz: c.proposed_iana_timezone, source: "photos" };
   }
   return got && zoneWaits(dest, got.tz) ? TZ_WAITS : got;   // the configured default is proposed, never in effect
 }
 function previewTz(dest) {
   const r = tzWalk(dest);
   return r === TZ_WAITS ? null : r;
+}
+// Is the timezone question at `dest` settled by the decisions being edited (BLD-editor_zone_asking)? A destination is
+// once they give it a valid zone its photos are not known to speak against — its own, a one-zone country's, or one
+// reaching it from above, as geotag passes it down; a container also once every destination it asks for
+// (`asked_for`) is. The next run checks the zone against the photos, and may ask again.
+function zoneSettled(dest) {
+  const c = tzCell(dest); if (!c) return false;
+  const pv = previewTz(dest);
+  if (pv && validTz(pv.tz) && !(pv.source === "manual" && refInvalid({ file: "time", dest, kind: "timezone" }))) return true;
+  const asked = c.asked_for || [];
+  return asked.length > 0 && asked.every(zoneSettled);
 }
 // Same advisory walk for the GPS folder-fallback: a destination with no own fallback shows the one it
 // would inherit from its nearest resolved ancestor (e.g. a parent/container you just set), updating live.
@@ -600,6 +621,7 @@ function tags(ref) {
   if (ref.kind === "timezone") {
     const pv = previewTz(ref.dest);                       // live preview, updates as ancestors change
     if (pv && pv.source === "inherited") out.push(chip("inherited", `inherited ⟵ ${leaf(pv.from)}`));
+    if (pv && pv.source === "photos") out.push(chip("inherited", "from its photos"));
   } else if (ref.kind === "fallback") {
     const pv = previewFallback(ref.dest);                 // live preview, updates as ancestors change
     if (pv && pv.source === "inherited") out.push(chip("inherited", `inherited ⟵ ${leaf(pv.from)}`));
@@ -1098,6 +1120,12 @@ function controls(ref) {
       wrap.append(checkbox(`keep ${c.contradicted_by.timezone} for these photos — their device was set to another zone`, said,
         (v) => edit(ref, "confirmed_despite_recorded_offsets", zoneDespiteFields(c, v).confirmed_despite_recorded_offsets)));
     }
+    // a container asks for the destinations inside it that wait for a zone an answer here reaches
+    // (RUL-zone_asked_at_every_level): name those still waiting
+    const waiting = (c.asked_for || []).filter((d) => !zoneSettled(d));
+    if (waiting.length && !zoneSettled(ref.dest)) wrap.append(el("div", { class: "hint" },
+      `${waiting.length} destination${waiting.length === 1 ? "" : "s"} inside wait${waiting.length === 1 ? "s" : ""} for a timezone ` +
+      `(${waiting.map((d) => d.slice(ref.dest.length + 1)).join(", ")}): answered here, each takes it — or answer each where it is.`));
     const offer = zoneOffer(c);
     if (offer) wrap.append(el("button", { class: "mini", onclick: () => edit(ref, "manual_iana_timezone", offer) }, `use ${offer}`));
     // The country this folder is in — whatever it is called. Said once, at the top of its tree: inside a country
@@ -2134,7 +2162,7 @@ if (typeof document !== "undefined") main();
 export {
   isNum, validTz, setHostZones, validOffset, validLat, validLon, bothOrNeither,
   fmtOffset, camNaiveMs, dtLocalToMs, msToDtLocal, utcStrToMs, fmtLocal, fmtDT, offsetImpact,
-  cellAt, cellStatus, wouldResolve, previewTz, previewFallback, refInvalid, isDirty, state,
+  cellAt, cellStatus, statusOf, wouldResolve, zoneSettled, previewTz, previewFallback, refInvalid, isDirty, state,
   offsetGroups, dateRange, fmtDate, peerKeys, parseLatLon, coordText, contiguousRange,
   groupChoice, chosenOffset, inConflict, proposalTaken, proposalNotes, driftConfirmHolds, driftConfirmFields, driftCorrectionFields, driftTracksHold, driftStaleReason, acceptFields, acceptHolds, tracksNote,
   zoneContradiction, offsetCellNotes, zoneSpokenFor, zoneDespiteFields, effectiveCountry, clearCountriesInside,

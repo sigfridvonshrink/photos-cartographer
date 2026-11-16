@@ -543,7 +543,7 @@ def test_a_country_of_one_timezone_gives_it_and_one_of_several_gives_none(tmp_pa
     assert kyoto["decision_mode"] == "auto_resolved" and not kyoto["requires_user_input"]
     assert tz[f"{y}/Japonia"]["effective_iana_timezone"] == "Asia/Tokyo" and "country_from" not in tz[f"{y}/Japonia"]
     sua = tz[f"{y}/SUA"]                                                  # several zones: none of its own, none given down
-    assert sua["effective_iana_timezone"] == "" and not sua["requires_user_input"]       # a container never waits
+    assert sua["effective_iana_timezone"] == "" and not sua["requires_user_input"]       # a zone there reaches nothing
     for d in (f"{y}/SUA/Arizona/Canyon", f"{y}/SUA/Oregon"):
         assert tz[d]["effective_iana_timezone"] == "" and tz[d]["requires_user_input"]   # not Bucharest, from above
         assert tz[d]["proposal_source"] == "none" and tz[d]["country"] == "US" and tz[d]["country_from"] == f"{y}/SUA"
@@ -587,3 +587,52 @@ def test_nothing_inside_a_country_chooses_a_country(tmp_path, monkeypatch, capsy
     # said once: the next run finds nothing to remove
     art2, _ = wf.build_time_decisions(files, BOTH, art, _gpx([]))
     assert wf.country_removals == [] and "country_removed" not in art2["destinations"][f"{root}/Hawaii"]["destination_timezone"]
+
+
+@pytest.mark.spec("RUL-zone_from_photos_in_country", "RUL-zone_from_photos_applies", "BLD-zone_from_photos_in_country",
+                  "RUL-no_timezone_to_inherit_waits", "RUL-zone_against_photos_needs_word",
+                  test="TST-geotag_offset_no_inheritance-a_country_of_several_proposes_the_zone_its_photos_fit")
+def test_a_country_of_several_proposes_the_zone_its_photos_fit(tmp_path):
+    """Inside a country of several timezones, a destination nothing gives a zone is proposed the one zone of the
+    country whose offset at each photo's time is the one the photo records — and it applies itself, passing down as
+    any zone does. Where no photo records an offset, or several zones fit, or none does, it asks as before; a zone
+    reaching it from a folder inside the country comes first, and is held to the photos as ever."""
+    wf = _wf(tmp_path)
+    us = f"{BYDEST}/SUA"
+    la, ny, az, mix, cam = f"{us}/LA", f"{us}/NY", f"{us}/Arizona", f"{us}/Mixed", f"{us}/Cam"
+    files = [_phone(f"{la}/a.jpg", la, "2024:01:10 10:00:00", "-08:00"),          # Pacific winter: Los Angeles alone
+             _phone(f"{la}/Pier/b.jpg", f"{la}/Pier", "2024:01:10 15:00:00", "-08:00"),
+             _file(f"{la}/Pier/c.arw", f"{la}/Pier", naive="2024:01:10 15:00:00"),
+             _phone(f"{ny}/d.jpg", ny, "2024:01:12 10:00:00", "-05:00"),          # New York, Detroit, Indiana…: several
+             _phone(f"{az}/e.jpg", az, "2024:07:10 10:00:00", "-07:00"),          # summer: Phoenix and Los Angeles
+             _phone(f"{mix}/f.jpg", mix, "2024:01:10 10:00:00", "-08:00"),        # one fits Los Angeles...
+             _phone(f"{mix}/h.jpg", mix, "2024:01:10 11:00:00", "+02:00"),        # ...one no zone of the US: none fits both
+             _file(f"{cam}/g.arw", cam)]                                          # a camera's offset tag says nothing
+    prior = {"destinations": {us: _country("US")}}
+    art, blk = wf.build_time_decisions(files, BOTH, prior, _gpx([]))
+    assert not blk, blk
+    tz = {d: v["destination_timezone"] for d, v in art["destinations"].items()}
+    assert tz[la]["proposal_source"] == "photos_in_country" and tz[la]["proposed_iana_timezone"] == "America/Los_Angeles"
+    assert tz[la]["effective_iana_timezone"] == "America/Los_Angeles" and tz[la]["decision_mode"] == "auto_resolved"
+    assert not tz[la]["requires_user_input"] and "contradicted_by" not in tz[la]
+    pier = tz[f"{la}/Pier"]                                                    # passed down like any zone in effect
+    assert pier["proposal_source"] == "inherited" and pier["inherited_from"] == la
+    assert pier["effective_iana_timezone"] == "America/Los_Angeles"
+    for d in (ny, az, mix, cam):
+        assert tz[d]["proposal_source"] == "none" and tz[d]["effective_iana_timezone"] == "" and tz[d]["requires_user_input"], d
+    assert "asked_for" not in tz[us] and not tz[us]["requires_user_input"]   # a country of several: not asked
+    # a zone written inside the country comes first, held to the photos as ever
+    prior["destinations"][la] = _tz("America/Phoenix")
+    art, blk = wf.build_time_decisions(files, BOTH, prior, _gpx([]))
+    la_tz = art["destinations"][la]["destination_timezone"]
+    assert la_tz["effective_iana_timezone"] == "" and la_tz["contradicted_by"]["timezone"] == "America/Phoenix"
+    # a zone from a folder inside the country reaches it before its photos are asked
+    files2 = [_phone(f"{us}/West/LA/a.jpg", f"{us}/West/LA", "2024:01:10 10:00:00", "-08:00")]
+    prior2 = {"destinations": {us: _country("US"), f"{us}/West": _tz("America/Los_Angeles")}}
+    art, _ = wf.build_time_decisions(files2, BOTH, prior2, _gpx([]))
+    assert art["destinations"][f"{us}/West/LA"]["destination_timezone"]["proposal_source"] == "inherited"
+    # where the country is said at the destination itself, its photos still propose
+    files3 = [_phone(f"{BYDEST}/Perth/a.jpg", f"{BYDEST}/Perth", "2024:03:01 10:00:00", "+08:00")]
+    art, _ = wf.build_time_decisions(files3, BOTH, {"destinations": {f"{BYDEST}/Perth": _country("AU")}}, _gpx([]))
+    perth = art["destinations"][f"{BYDEST}/Perth"]["destination_timezone"]
+    assert perth["effective_iana_timezone"] == "Australia/Perth" and perth["proposal_source"] == "photos_in_country"

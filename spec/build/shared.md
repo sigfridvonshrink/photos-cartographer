@@ -115,6 +115,18 @@ there is written as `manual_offset_seconds`, the user's own offset, which keeps 
 ({need}`RUL-chosen_offset_not_withheld`) — never as an acceptance, which geotag withholds there again.
 :::
 
+:::{bld} The editor's timezone questions, as the working decisions settle them
+:id: BLD-editor_zone_asking
+:status: ruled
+:realises: RUL-editor_answer_ends_zone_asking
+
+The editor SHALL show a timezone cell that requires input as settled once the decisions being edited give it a zone —
+a `manual_iana_timezone` written there, a country of one timezone in effect there, or a zone reaching it from the
+folders above as geotag passes one down ({need}`BLD-timezone_cell`, {need}`BLD-country_choice`) — and a container's,
+once each destination of its `asked_for` is so settled, or it is given a zone itself.
+Settled so, a cell whose photos then speak against the zone asks again on the next run.
+:::
+
 :::{bld} The editor's own lock, held for its session
 :id: BLD-editor_session_lock
 :status: ruled

@@ -211,7 +211,8 @@ collected — and introduces the document's central trade.
 :follows_from: RAT-minimal_cascading_asks
 
 A place's decisions **cascade**: *one far-reaching choice high in the tree is traded for many short-reaching ones* — a
-timezone, a fallback position, set once at the top of a place's folders and inherited unless overridden, remembered across re-runs.
+timezone, a fallback position, set once on the folder of the place it holds for — a country, a city — and inherited by
+the places inside it unless overridden, remembered across re-runs.
 (This is where "far-reaching" comes from — a chosen trade, not an inherent property.) A clock offset does not: it is
 the camera's for that day, wherever its photos were sorted, and each day's is found from that day's own evidence.
 :::
