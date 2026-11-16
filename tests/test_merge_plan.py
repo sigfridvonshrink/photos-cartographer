@@ -602,7 +602,7 @@ def test_a_new_fingerprint_not_one_to_one_is_left_unmerged(tmp_path, monkeypatch
         assert by_name["b"]["disposition"] == "placed_new" and "engine_mapping" not in by_name["b"]
 
 
-@pytest.mark.spec("RUL-merge_changed_fingerprint_unmerged", "BLD-changed_fingerprint_mapped",
+@pytest.mark.spec("RUL-merge_changed_fingerprint_unmerged", "RUL-merge_merges_changed_fingerprint", "BLD-changed_fingerprint_mapped",
                   test="TST-merge_plan-a_new_fingerprint_on_a_file_finalize_did_not_record_is_left_unmerged")
 def test_a_new_fingerprint_on_a_file_finalize_did_not_record_is_left_unmerged(tmp_path, monkeypatch):
     """A new value is mapped from prep's only for the very file finalize recorded — its path, size and modification
