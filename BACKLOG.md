@@ -4,7 +4,7 @@
 
 - **What this is:** [`README.md`](README.md). **The record:** [`HISTORY.md`](HISTORY.md).
 
-*Open items: **13** — 7, 11, 14, 22, 28, 30 to 32, 40, 47, 49, 53, 55.* 🛑 Numbers are never reused; the next is **56**.
+*Open items: **12** — 7, 11, 22, 28, 30 to 32, 40, 47, 49, 53, 55.* 🛑 Numbers are never reused; the next is **56**.
 
 ---
 
@@ -71,21 +71,6 @@ duplicate decisions.
 **When:** any time — the conversion is done; geotag's pinned values are done (`BLD-original_values_pinned`).
 
 ---
-
-### 14. Propose a destination's timezone from its photos' positions
-
-**Why:** a destination's timezone is proposed only from the destination it lies in, or from the configured default
-(`RUL-timezone_from_nearest`). The photos' own positions — native GPS, or placed from the tracks — say where they were
-taken, and so which timezone; the original geotag spec described this as the first of the proposals, never built. A trip's root
-would then need no zone set by hand, and a destination that crosses into another zone than its parent's would be
-caught.
-
-**What to do:** derive a zone from the positions of a destination's photos — through a timezone-boundary database, a
-new dependency — and propose it ahead of the inherited one, with a `proposal_source` of its own; decide whether such a
-proposal applies itself like the inherited one, or waits for acceptance, since unlike the tree it can disagree with
-the parent's zone.
-
-**When:** any time — the conversion is done.
 
 ### 22. A date fallback per destination, for photos with no recorded time
 
@@ -199,11 +184,19 @@ names keep the camera's clock (stated as final by BACKLOG 43), they carry no pos
 the library. A trip's videos are as much the trip as its photos. The owner wants them sorted into destinations and
 geotagged as photos are (2026-11-16).
 
-**Open:** whether videos are sorted into photos by destination beside the photos or into a destination tree of
-their own; which time and position tags a video holds that exiftool writes safely, per container (MP4, MOV, MTS,
-AVI), and whether a video it cannot write is held as a photo is (BACKLOG 25's way out); whether a video's own clock
-is the photo camera's (the same body) or its own camera group; how a video's span (start to end) is placed — at its
-start, as one point; and what merge does with them.
+**Ruled 2026-11-16 (the shape; to be built with the London trip's videos as test data):**
+- Sorted beside the photos, in the same destination folder: `RUL-sort_photos_only` is reversed.
+- MOV and MP4 only, written through exiftool's QuickTime tags; an MTS or AVI sorted into a destination stops geotag,
+  its way out being to move it back to videos by date.
+- A video's clock is its body's: the photos' camera group when the model and serial match, a group of its own
+  otherwise.
+- Its time is QuickTime CreateDate, read as UTC as the format says, with a per-camera setting for bodies that write
+  local time.
+- Its position is its start, as one point.
+- Merge takes it into the library beside the photos.
+
+**Open:** split into buildable items once the London trip's videos are in hand — what each step changes in prep's
+sorting check, geotag's write path and merge.
 
 ### 55. Sub-second times for photos timed by CreateDate or ModifyDate
 
