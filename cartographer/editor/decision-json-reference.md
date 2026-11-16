@@ -72,7 +72,10 @@ Everything the editor must guarantee, in five rules:
    partially apply). Validate client-side so the human never has to round-trip through a rejection.
    The structure must hold too: every container on the way to a `user_decision` (`destinations`, each
    destination, its cells, each `user_decision`) must be an object, `review_items` a list of objects each
-   with its `relative_path` — a broken one is a located blocker.
+   with its `relative_path` — a broken one is a located blocker. And a `user_decision` holds only the
+   fields its decision has, as each section below lists them: any other — a misspelt `acept_proposal`, a
+   field from an older version — is a blocker naming it, never passed over (the editor shows such a record
+   as one it cannot read).
 4. **`""` (empty string) means "no decision".** That is how every `user_decision` text/number field is
    left unset. Clearing a field = setting it back to `""`. Booleans default to `false`; the one list,
    `confirmed_despite_recorded_offsets`, defaults to `[]`.

@@ -3568,7 +3568,7 @@ A value from a fixed set — a device group's class among them — SHALL be one 
 A decision's structure SHALL be whole: a decision whose structure is broken is an error, never ignored.
 :::
 
-:::{rul} A photo's position decision holds only its own fields
+:::{rul} A decision holds only its own fields
 :id: RUL-unknown_decision_field_refused
 :status: ruled
 :criticality: med
@@ -3577,7 +3577,7 @@ A decision's structure SHALL be whole: a decision whose structure is broken is a
 :refines: RUL-checked_decision_structure
 :uses: DEF-decision
 
-A field written into a photo's position decision that the decision does not have SHALL be an error, naming the field.
+A field written into a decision that the decision does not have SHALL be an error, naming the field.
 :::
 
 :::{rul} An invalid value stops the phase before it changes anything

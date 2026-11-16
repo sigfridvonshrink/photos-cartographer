@@ -280,33 +280,73 @@ def _decision_shape_blockers(prior, kind):
                     out.append(f"{dest}: gps_decisions.review_items[{i}] must be an object with its relative_path.")
                 else:
                     obj(ri, "user_decision", f"{dest}/{os.path.basename(ri['relative_path'])}: user_decision")
-    if kind == "gps":
-        out += unknown_review_fields(prior)
+    out += unknown_decision_fields(prior, kind)
     return out
 
 
 # The fields of a photo's position decision in photos-23 (BLD-geotag_checks_decisions): a position the user sets for it.
 REVIEW_DECISION_FIELDS = ("manual_lat", "manual_lon")
 
+# The fields each kind of decision has, by the record (`kind`) and the block or cell family that holds its
+# `user_decision` (RUL-unknown_decision_field_refused): those geotag lays out and reads, every variant of the block's
+# included — a phone's `keep_as_recorded`, a day's clock-change answer — so a cell whose variant changed is never
+# refused for a field its earlier one had.
+DECISION_FIELDS = {
+    "time": {
+        "destination_timezone": ("a destination's timezone decision",
+                                 ("manual_iana_timezone", "country", "confirmed_despite_recorded_offsets")),
+        "camera_group_time_decisions": ("a camera's clock-offset decision",
+                                        ("accept_proposal", "accepted_offset_seconds", "manual_offset_seconds",
+                                         "keep_as_recorded") + CLOCK_CHANGE_FIELDS),
+        "local_time_readings": ("a photo's reading of its local time", ("utc_offset_seconds",)),
+        "changed_times": ("a changed time's answer", ("keep", "answered_for")),
+        "unidentified_files": ("the decision of the files naming no camera", ("accept_proposal", "accepted_timezone")),
+        "date_fallback": ("a destination's date fallback", ("date",)),
+    },
+    "drift": {
+        "drift_decisions": ("a drift validation", ("confirmed", "corrected_offset_seconds", "confirmed_offset_seconds",
+                                                   "confirmed_against_tracks")),
+    },
+    "gps": {
+        "folder_fallback": ("a destination's fallback position", ("fallback_lat", "fallback_lon")),
+        "gps_decisions": ("a photo's position decision", REVIEW_DECISION_FIELDS),
+    },
+}
+# The blocks of one decision per destination; the others are cell families, one decision per cell.
+_SINGLE_DECISION_BLOCKS = ("destination_timezone", "unidentified_files", "date_fallback", "folder_fallback")
 
-def unknown_review_fields(gps_record):
-    """Where a photos-23 review item's `user_decision` holds a field it does not have, one located blocker per field,
-    naming it (RUL-unknown_decision_field_refused): a field geotag does not read, left in, would say what geotag does
-    not do — `accept_unlocated`, from when a photo could be left without a position, among them. The decision editor
-    shows such a record as one it cannot read."""
+
+def unknown_decision_fields(record, kind):
+    """Where a `user_decision` of a decision record holds a field its decision does not have, one located blocker per
+    field, naming it (RUL-unknown_decision_field_refused): a field geotag does not read, left in, would say what
+    geotag does not do — a misspelt `acept_proposal` read as no answer, or `accept_unlocated`, from when a photo could
+    be left without a position. `kind` is "time" (photos-21), "drift" (photos-22) or "gps" (photos-23). A structure
+    broken on the way is left to `_decision_shape_blockers`; the decision editor shows a record holding such a field
+    as one it cannot read."""
     out = []
-    dests = (gps_record or {}).get("destinations") if isinstance(gps_record, dict) else None
+    dests = record.get("destinations") if isinstance(record, dict) else None
     for dest, d in (dests.items() if isinstance(dests, dict) else ()):
-        items = ((d.get("gps_decisions") if isinstance(d, dict) else None) or {})
-        items = items.get("review_items") if isinstance(items, dict) else None
-        for ri in items if isinstance(items, list) else ():
-            ud = ri.get("user_decision") if isinstance(ri, dict) else None
-            if not isinstance(ud, dict):
+        if not isinstance(d, dict):
+            continue
+        for block, (what, fields) in DECISION_FIELDS[kind].items():
+            held = d.get(block)
+            if not isinstance(held, dict):
                 continue
-            for k in sorted(k for k in ud if k not in REVIEW_DECISION_FIELDS):
-                out.append(f"{dest}/{os.path.basename(str(ri.get('relative_path')))}: user_decision.{k} is not a "
-                           f"field of a photo's position decision (only {' and '.join(REVIEW_DECISION_FIELDS)}) "
-                           "— remove it.")
+            if block in _SINGLE_DECISION_BLOCKS:
+                found = [(f"{dest}: {block}", held)]
+            elif block == "gps_decisions":
+                items = held.get("review_items")
+                found = [(f"{dest}/{os.path.basename(str(ri.get('relative_path')))}", ri)
+                         for ri in (items if isinstance(items, list) else ()) if isinstance(ri, dict)]
+            else:
+                found = [(f"{dest}: {block}[{cell}]", c) for cell, c in held.items() if isinstance(c, dict)]
+            for where, decision in found:
+                ud = decision.get("user_decision")
+                if not isinstance(ud, dict):
+                    continue
+                only = fields[0] if len(fields) == 1 else f"{', '.join(fields[:-1])} and {fields[-1]}"
+                for k in sorted(k for k in ud if k not in fields):
+                    out.append(f"{where}: user_decision.{k} is not a field of {what} (only {only}) — remove it.")
     return out
 
 

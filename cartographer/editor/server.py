@@ -235,13 +235,18 @@ def _parse_record(raw, name):
         art = json.loads(raw)
     except ValueError as e:
         return {"_error": f"could not read {name}: {e}"}
-    if name == GPS_NAME:
-        # A photo's position decision holding a field it does not have — `accept_unlocated` among them — is refused
-        # as geotag refuses it (RUL-unknown_decision_field_refused): shown as a record that cannot be read, named.
-        unknown = photos_2_geotag.unknown_review_fields(art)
+    kind = _DECISION_KINDS.get(name)
+    if kind is not None:
+        # A decision holding a field it does not have — a photo's `accept_unlocated` among them — is refused as geotag
+        # refuses it (RUL-unknown_decision_field_refused): shown as a record that cannot be read, named.
+        unknown = photos_2_geotag.unknown_decision_fields(art, kind)
         if unknown:
             return {"_error": f"could not read {name}: {' '.join(unknown)}"}
     return art
+
+
+# The decision records, by the kind geotag checks each as (photos_2_geotag.DECISION_FIELDS).
+_DECISION_KINDS = {TIME_NAME: "time", DRIFT_NAME: "drift", GPS_NAME: "gps"}
 
 
 _HOST_ZONES = None

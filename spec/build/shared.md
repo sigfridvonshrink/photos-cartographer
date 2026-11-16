@@ -1424,9 +1424,10 @@ existing folder neither inside the workspace nor holding it.
 Geotag SHALL check the decisions in `photos-21`, `photos-22` and `photos-23` as it reads them: each blocker names the
 artifact, the destination, the cell or the file, and the field, and an artifact holding one is left as
 it is, its plan not written. A decision artifact that cannot be read, does not parse as JSON or is not a JSON object is
-such a blocker, located to where parsing failed — never taken as absent. So is a `photos-23` review item's
-`user_decision` holding a field other than `manual_lat` and `manual_lon` (`unknown_review_fields`), one blocker per
-field, naming it; the decision editor shows such a `photos-23` as a record it cannot read, with those blockers.
+such a blocker, located to where parsing failed — never taken as absent. So is a `user_decision` of
+`photos-21`, `photos-22` or `photos-23` holding a field its decision does not have — those `DECISION_FIELDS` lists
+for its block or cell, a review item's `manual_lat` and `manual_lon` among them (`unknown_decision_fields`) — one
+blocker per field, naming it; the decision editor shows such a record as one it cannot read, with those blockers.
 :::
 
 ## 15. Nothing overwritten, nothing left half-done
