@@ -807,7 +807,35 @@ Each names the file. A file that is not there is none.
 :status: ruled
 :realises: RUL-content_changed_write_held, RUL-failure_recorded, RUL-content_acceptance_is_of_that_content
 
-`photos-25-execution-summary.json` SHALL record the plan and execution ids, the SHA-256 of photos-24 and the dependencies it was validated against, counts per destination and in total, what was newly applied and what found satisfied, failures and blockers, `fingerprint_mismatches` — each with its expected and actual fingerprint and `user_decision.accept_fingerprint_change`, the one field a later execution reads — the snapshot, and run metadata apart; its `status` is `success`, `partial` (anything outstanding, a mismatch always), `failed` (nothing applied) or `rejected` (stopped before any change). An acceptance is read only from the summary of the same `plan_id` and holds for the `actual_fingerprint` it stands beside; a mismatch whose photo a later run of that plan finds still blocked is carried into the new summary as written. It is never a dependency.
+`photos-25-execution-summary.json` SHALL record the plan and execution ids, the SHA-256 of photos-24 and the dependencies it was validated against, counts per destination and in total, what was newly applied and what found satisfied, `failures` — each with its photo, operation id, operation `type` and the `error` that stopped it ({need}`BLD-write_failure_reason`) — `repeated_failures` ({need}`BLD-repeated_write_failure`) and blockers, `fingerprint_mismatches` — each with its expected and actual fingerprint and `user_decision.accept_fingerprint_change`, the one field a later execution reads — the snapshot, and run metadata apart; its `status` is `success`, `partial` (anything outstanding, a mismatch always), `failed` (nothing applied) or `rejected` (stopped before any change). An acceptance is read only from the summary of the same `plan_id` and holds for the `actual_fingerprint` it stands beside; a mismatch whose photo a later run of that plan finds still blocked is carried into the new summary as written. It is never a dependency.
+:::
+
+:::{bld} The reason a write failed
+:id: BLD-write_failure_reason
+:status: ruled
+:realises: RUL-failed_write_reason_recorded
+:uses: BLD-metadata_safe_write, BLD-execution_summary
+
+`_exiftool_write` SHALL return `True` for a write it made and, for one it could not, the reason: exiftool's standard
+error, else its standard output, its whitespace collapsed — else `exiftool exited with status <n>` — or, for an error
+that stopped the write itself, its type and message. Each of the photo's write operations then fails with that text as
+its `error` in `failures` of photos-25; a failed rename carries the error of the move, and a photo whose application
+raised, the error raised.
+:::
+
+:::{bld} A write that failed the same way before
+:id: BLD-repeated_write_failure
+:status: ruled
+:realises: RUL-repeated_write_failure_way_out
+:uses: BLD-execution_summary, BLD-write_failure_reason, BLD-workspace_check
+
+`geotag execute` SHALL read, with the records of its earlier runs and before any change, the `failures` of the latest
+of `photos-25-execution-summary.json` and its `-NNN` copies, newest first, that is not `rejected` — none when that one
+is another plan's; one that cannot be read stops the run as {need}`BLD-unreadable_execution_records` does. Each photo
+whose metadata write operations fail with the same set of operation types and errors as there is listed in
+`repeated_failures` of the new summary — its path, `types`, `error` and `way_out` — and execute prints it with its way
+out: move the photo from photos by destination into photos by date, a `moved_back` {need}`BLD-workspace_check` passes
+with no acceptance, then run `prep plan`, `prep execute` and `geotag plan` again. The exit status is that of the run.
 :::
 
 

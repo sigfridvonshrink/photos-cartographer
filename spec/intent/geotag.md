@@ -2272,6 +2272,31 @@ A photo whose planned changes cannot be made SHALL fail alone: every other photo
 A photo whose planned changes cannot be made SHALL be reported by name.
 :::
 
+:::{rul} A failed write is recorded with the tool's reason
+:id: RUL-failed_write_reason_recorded
+:status: ruled
+:criticality: med
+:verify: required
+:refines: RUL-failed_photo_named
+:uses: DEF-geotag
+
+A photo whose metadata write fails SHALL be recorded with the reason the writing tool gave, beside the photo and each
+operation that failed.
+:::
+
+:::{rul} A write failing again the same way names the way out
+:id: RUL-repeated_write_failure_way_out
+:status: ruled
+:criticality: med
+:verify: required
+:refines: RUL-failed_write_reason_recorded
+:uses: DEF-geotag, DEF-managed_folders, RUL-moved_back_passes
+
+A photo whose metadata write fails in an execution as it failed in the previous execution of the same plan — the same
+operations, the same reason — SHALL be reported so, in the run's output and its record, with the way out: moving it
+back into photos by date, then running prep and planning geotag again.
+:::
+
 :::{rul} What an interrupted run changed is recorded by the next
 :id: RUL-applied_unrecorded_is_recorded
 :status: ruled

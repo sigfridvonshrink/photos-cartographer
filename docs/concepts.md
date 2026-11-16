@@ -549,7 +549,10 @@ the photo's offset tag disagrees with the timezone.
 **Geotag execute and finalize** — a plan no longer current (plan again); a journal, execution summary or
 earlier plan in `.photos-ingest/` that cannot be read (the stop names it; repair it — it is never taken for
 empty). Execute leaves a photo edited since the plan untouched; finalize refuses while a photo has changed
-since execute.
+since execute. A photo exiftool cannot write (a damaged file, a format it reads and cannot write) is left as
+it was, with exiftool's own message in the execution summary's `failures`, and the execution stays partial;
+when it fails the same way again, execute says so and names the way out — move it from `6-photos-by-dest/`
+back into `5-photos-by-date/`, then run `prep plan`, `prep execute` and `geotag plan` again.
 
 **Merge** — geotag not finalized, or `6-photos-by-dest/` changed since; a hidden file or folder among
 the photos; a photo with no fingerprint; a library folder without its mark (run `merge init-library`), or

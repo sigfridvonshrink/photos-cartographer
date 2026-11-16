@@ -2485,8 +2485,9 @@ class GeotagWorkflow:
         """Apply a file's batched tag writes so that an interruption at any moment — a kill or a power cut — leaves
         the photo as it was or wholly rewritten (BLD-metadata_safe_write): exiftool writes the new file beside the
         photo as `<file>_exiftool_tmp`, never touching the photo; that file is synced to disk, then renamed over the
-        photo, then the folder synced. Returns True on success. The single seam the tests mock to avoid invoking
-        exiftool."""
+        photo, then the folder synced. Returns True on success; otherwise the reason it could not write — exiftool's
+        own message, or the error that stopped it — kept beside the photo's failure (BLD-write_failure_reason). The
+        single seam the tests mock to avoid invoking exiftool."""
         # An interrupted earlier write can have left `<file>_exiftool_tmp`. Geotag re-applies every un-confirmed
         # file on resume, and the only file that can hold one is the one interrupted mid-write (never confirmed, so
         # revisited here) — so removing the leftover for THIS target right before rewriting it cleans exactly the one
@@ -2499,8 +2500,16 @@ class GeotagWorkflow:
             pass  # absent (the normal case) or unremovable — exiftool refuses an output that exists
         cmd = (["exiftool", "-n"] + [f"-{k}={v}" for k, v in sorted(tags.items())] + ["-o", tmp, abs_path])
         try:
-            if subprocess.run(cmd, capture_output=True, text=True, stdin=subprocess.DEVNULL).returncode != 0:
-                raise OSError("exiftool refused the write")
+            out = subprocess.run(cmd, capture_output=True, text=True, stdin=subprocess.DEVNULL)
+            if out.returncode != 0:
+                # exiftool's own words, which tell a damaged file from a passing trouble (BLD-write_failure_reason)
+                said = " ".join(((out.stderr or "").strip() or (out.stdout or "").strip()).split())
+                failure = said or f"exiftool exited with status {out.returncode}"
+                try:
+                    os.remove(tmp)
+                except OSError:
+                    pass
+                return failure
             st = os.stat(abs_path)
             os.chmod(tmp, stat.S_IMODE(st.st_mode))          # the photo keeps the permissions it had
             try:
@@ -2509,12 +2518,12 @@ class GeotagWorkflow:
                 pass                                         # not ours to give: the photo becomes the user's own
             replace_durably(tmp, abs_path)
             return True
-        except Exception:
+        except Exception as e:
             try:
                 os.remove(tmp)
             except OSError:
                 pass
-            return False
+            return f"{type(e).__name__}: {e}"
 
     def _exiftool_read(self, abs_path, keys):
         """The file's current values of `keys`, numeric (-n), as exiftool reports them; {} if it cannot be read.
@@ -2654,6 +2663,7 @@ class GeotagWorkflow:
                     _move_no_clobber(via_abs, final_abs)
                 except Exception as e:
                     res["failed"].append(via["operation_id"])
+                    res["error"] = f"{type(e).__name__}: {e}"
                     res["blocker"] = f"{rel}: rename failed ({e})"
                     return res
                 res["found"] = [o["operation_id"] for o in ops if o is not via]
@@ -2686,8 +2696,10 @@ class GeotagWorkflow:
         if write_ops and already_written:
             res["applied"].extend(o["operation_id"] for o in write_ops)
         elif write_ops:
-            if not self._exiftool_write(abs_path, tags):
+            written = self._exiftool_write(abs_path, tags)
+            if written is not True:
                 res["failed"] = [o["operation_id"] for o in write_ops]
+                res["error"] = written              # exiftool's reason, kept beside the failure (BLD-write_failure_reason)
                 return res                          # tool failure: leave file as-is, never confirm
             new_fp = (ContentHasher.fingerprint_image(abs_path) or {}).get("value")
             # a fingerprint that cannot be taken proves nothing: the write is not confirmed by it
@@ -2716,6 +2728,7 @@ class GeotagWorkflow:
                 res["applied"].append(o["operation_id"])
             except Exception as e:
                 res["failed"].append(o["operation_id"])
+                res["error"] = f"{type(e).__name__}: {e}"
                 res["blocker"] = f"{rel}: rename failed ({e})"
                 return res
         return done(final_abs)
@@ -2730,6 +2743,7 @@ class GeotagWorkflow:
         except Exception as e:
             return {"relative_path": rel, "applied": [], "skipped": [], "mismatch": None,
                     "failed": [o["operation_id"] for o in ops if journal.get(o["operation_id"]) != "confirmed"],
+                    "error": f"{type(e).__name__}: {e}",
                     "blocker": f"{rel}: could not be applied ({type(e).__name__}: {e})"}
 
     def execute_plan(self, jobs, now_iso, execution_id, workspace_changes=()):
@@ -2752,6 +2766,9 @@ class GeotagWorkflow:
         _j = _read_record(jpath) or {}
         journal, media_after = _j.get("operations") or {}, _j.get("media_after") or {}
         accepted = self._accepted_mismatches(ws, plan["plan_id"])
+        # the failures the previous execution of this plan recorded: a write failing again the same way is told
+        # with its way out (BLD-repeated_write_failure)
+        prior_failures = self._prior_failures(ws, plan["plan_id"])
         self._keep_executed_decisions(plan)
         # the tracks this plan places and times photos by stay in the record if they leave gpx_root
         # (RUL-withdrawn_track_points_kept), their points in its window whatever a later plan's reaches
@@ -2770,7 +2787,7 @@ class GeotagWorkflow:
             write_versioned_json(execution_summary_path(ws), {
                 "artifact_type": "execution_summary", "artifact_name": EXECUTION_SUMMARY_ARTIFACT,
                 "schema_version": 1, "plan_id": plan.get("plan_id"), "status": "rejected",
-                "snapshot": snapshot, "blockers": [reason], "failures": [],
+                "snapshot": snapshot, "blockers": [reason], "failures": [], "repeated_failures": [],
                 # the mismatches still open, the user's acceptances with them, stay readable where the next run
                 # looks for them (BLD-execution_summary_written, RUL-content_acceptance_stays_open)
                 "fingerprint_mismatches": self._prior_mismatches(ws, plan.get("plan_id")),
@@ -2790,8 +2807,8 @@ class GeotagWorkflow:
         # this plan's journal (BLD-interrupted_run_recognised); the record the finally writes clears the note.
         note_execution_begun(ws, "geotag", plan["plan_id"])
         try:
-            return self._apply_plan(plan, gpx, journal, media_after, jpath, accepted, by_file, results, snapshot,
-                                    jobs, now_iso, execution_id, workspace_changes)
+            return self._apply_plan(plan, gpx, journal, media_after, jpath, accepted, prior_failures, by_file, results,
+                                    snapshot, jobs, now_iso, execution_id, workspace_changes)
         finally:
             # The state this run leaves, whether or not each photo was applied (RUL-execution_records_state): geotag's
             # writes give a photo a new inode, size and time, and its renames a new name — recorded, they are no change
@@ -2799,8 +2816,8 @@ class GeotagWorkflow:
             write_workspace_record(ws, carried={r["after"]["relative_path"]: r["relative_path"]
                                                 for r in results if r.get("after")})
 
-    def _apply_plan(self, plan, gpx, journal, media_after, jpath, accepted, by_file, results, snapshot, jobs,
-                    now_iso, execution_id, workspace_changes):
+    def _apply_plan(self, plan, gpx, journal, media_after, jpath, accepted, prior_failures, by_file, results, snapshot,
+                    jobs, now_iso, execution_id, workspace_changes):
         """execute_plan's part that changes the photos — its originals pinned, each photo's operations applied and
         journaled, the summary written — into `results`, which the caller reads whatever happens here."""
         ws = self.workspace_root
@@ -2869,7 +2886,7 @@ class GeotagWorkflow:
 
         # The journal was persisted incrementally as each file completed (above); nothing more to flush.
         summary = self._build_summary(plan, results, now_iso, execution_id, jobs,
-                                      self._prior_mismatches(ws, plan["plan_id"]))
+                                      self._prior_mismatches(ws, plan["plan_id"]), prior_failures)
         summary["snapshot"] = snapshot                                   # the pre-mutation ZFS record (or None)
         # the changes by hand this run's check named or accepted (BLD-workspace_changes_logged)
         summary["workspace_changes"] = list(workspace_changes or [])
@@ -2887,6 +2904,26 @@ class GeotagWorkflow:
             return []
         return [m for m in (prior.get("fingerprint_mismatches") or []) if isinstance(m, dict)]
 
+    @staticmethod
+    def _prior_failures(ws, plan_id):
+        """The failures the previous execution of THIS plan recorded (BLD-repeated_write_failure): the latest summary
+        — photos-25, else the copies set aside under -NNN, newest first — that tried the photos, a `rejected` one passed
+        over; none when the latest that did is another plan's. One that cannot be read raises UnreadableRecord
+        (RUL-unreadable_execution_record_stops)."""
+        path = execution_summary_path(ws)
+        stem, ext = os.path.splitext(path)
+        kept = sorted((p for p in glob.glob(glob.escape(stem) + "-[0-9][0-9][0-9]*" + ext)
+                       if p[len(stem) + 1:-len(ext)].isdigit()),
+                      key=lambda p: int(p[len(stem) + 1:-len(ext)]), reverse=True)
+        for p in [path] + kept:
+            prior = _read_record(p)
+            if prior is None or prior.get("status") == "rejected":
+                continue
+            if prior.get("plan_id") != plan_id:
+                return []
+            return [f for f in (prior.get("failures") or []) if isinstance(f, dict)]
+        return []
+
     @classmethod
     def _accepted_mismatches(cls, ws, plan_id):
         """{path: accepted fingerprint} for the mismatches of this plan the user accepted: an acceptance
@@ -2896,7 +2933,7 @@ class GeotagWorkflow:
                 if (m.get("user_decision") or {}).get("accept_fingerprint_change") is True
                 and m.get("actual_fingerprint")}
 
-    def _build_summary(self, plan, results, now_iso, execution_id, jobs, prior_mismatches=()):
+    def _build_summary(self, plan, results, now_iso, execution_id, jobs, prior_mismatches=(), prior_failures=()):
         ws = self.workspace_root
         op_type, op_dest = {}, {}
         for dest, dd in plan["destinations"].items():
@@ -2924,7 +2961,9 @@ class GeotagWorkflow:
                 if d in per_dest:
                     per_dest[d]["skipped"] += 1
             skipped_n += len(r["skipped"])
-            failures.extend({"operation_id": oid, "relative_path": r["relative_path"]} for oid in r["failed"])
+            # each failure with its operation's kind and the reason it failed (BLD-write_failure_reason)
+            failures.extend({"operation_id": oid, "relative_path": r["relative_path"], "type": op_type.get(oid),
+                             "error": r.get("error")} for oid in r["failed"])
             if r["mismatch"]:
                 mismatches.append({**r["mismatch"], "user_decision": {"accept_fingerprint_change": False}})
             if r["blocker"]:
@@ -2953,7 +2992,8 @@ class GeotagWorkflow:
             "totals": totals,
             "destinations": {d: per_dest[d] for d in sorted(per_dest)},   # per-destination breakdown
             "resume": {"newly_applied": newly, "already_satisfied_skipped": skipped_n},
-            "failures": failures, "blockers": blockers, "fingerprint_mismatches": mismatches,
+            "failures": failures, "repeated_failures": repeated_write_failures(failures, prior_failures),
+            "blockers": blockers, "fingerprint_mismatches": mismatches,
             "status": status,
             "run_metadata": {"execution_id": execution_id, "started_at": now_iso, "finished_at": now_iso, "jobs": jobs},
         }
@@ -3827,6 +3867,10 @@ def run(args):
                   f"mismatch(es), {len(summary['failures'])} failure(s)). Wrote {EXECUTION_SUMMARY_ARTIFACT}.",
                   stream="stdout")
             if summary["status"] != "success":
+                for f in summary.get("repeated_failures") or []:
+                    # failed twice the same way: running again will not mend it (BLD-repeated_write_failure)
+                    reporter.error(f"{f['relative_path']}: its write failed again as in the previous execution "
+                                   f"({f['error']}); running again will not mend it — {f['way_out']}.")
                 if summary["fingerprint_mismatches"]:
                     # the one question of photos-25, answerable in the editor and by hand (RUL-every_question_in_editor)
                     reporter.log(f"{len(summary['fingerprint_mismatches'])} photo(s) changed content when written: "

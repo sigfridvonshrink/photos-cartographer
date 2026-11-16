@@ -1203,6 +1203,23 @@ photo's identity is at stake, so only the user can take the new content for it.
 The journal is what later says which run changed which photo. A run that falls over on one photo while others are in flight, or is killed between a write and its record, leaves photos changed and unrecorded; a next run that merely finds them done and moves on leaves them so for good, and the log built from the journals then shows a photo holding a position no pass ever gave it. So one photo's failure stays its own, and what is found done is checked and written down. The image engine is checked first for the same reason: with another one every write would be made and then held as changed, a whole plan of photos half applied.
 :::
 
+:::{rat} A photo that cannot be written is taken out, not let through
+:id: RAT-unwritable_photo_taken_out
+:status: ruled
+:forced: no
+:follows_from: RAT-record_covers_broken_runs, CHC-photos_matter
+:justifies: RUL-failed_write_reason_recorded, RUL-repeated_write_failure_way_out
+
+A photo the metadata tool will not write — a damaged file, a format it reads and cannot write — fails every execution
+the same way; the execution stays partial, and finalize waits on it with every other photo. The tool's own reason is
+what tells such a photo from a passing trouble, so it is kept beside the failure. A failure seen twice the same way
+will not mend by running again, and nothing else names the way out: take the photo out of what geotag works on — back
+into photos by date, a move the workspace check lets pass — and plan again, the rest going on without it. Ruled
+2026-11-16: no acceptance of such a photo as it is, and no sidecar. A photo must not reach the library holding a time
+or a position other than the one the plan decided for it; and a sidecar is a second record of the photo that digiKam
+reads only when set to, while the photo itself goes on holding the old values wherever it is taken.
+:::
+
 
 :::{rat} A record that cannot be read is not an empty one
 :id: RAT-unreadable_record_not_empty

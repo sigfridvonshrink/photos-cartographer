@@ -139,6 +139,7 @@ __all__ = [
     'plan_file_ops',
     'build_complete_log',
     'geotag_execution_status',
+    'repeated_write_failures',
 ]
 
 def haversine(lat1, lon1, lat2, lon2):
@@ -2416,5 +2417,27 @@ def geotag_execution_status(newly, skipped_n, failures, mismatches, blockers):
     if mismatches or newly > 0 or skipped_n > 0:
         return "partial"
     return "failed"
+
+
+_WRITE_OP_TYPES = ("metadata_time_write", "metadata_gps_write", "gps_marker_write")
+
+
+def repeated_write_failures(failures, prior_failures):
+    """The photos whose metadata write failed in this execution as in the previous execution of the same plan — the
+    same operation kinds, the same reason (BLD-repeated_write_failure) — each with the way out: running again will not
+    mend it, so the photo goes back into photos by date, a move the workspace check passes (`moved_back`,
+    BLD-workspace_check), and prep and geotag are planned again without it."""
+    def by_photo(fs):
+        out = {}
+        for f in fs:
+            if f.get("type") in _WRITE_OP_TYPES and f.get("error"):
+                out.setdefault(f.get("relative_path"), set()).add((f["type"], f["error"]))
+        return out
+    now, before = by_photo(failures), by_photo(prior_failures)
+    way_out = (f"move it from {folder_name('photos_by_dest')} into {folder_name('photos_by_date')}, then run "
+               "`prep plan`, `prep execute` and `geotag plan` again")
+    return [{"relative_path": rel, "types": sorted(t for t, _ in kinds), "error": sorted(e for _, e in kinds)[0],
+             "way_out": way_out}
+            for rel, kinds in sorted(now.items()) if before.get(rel) == kinds]
 
 
