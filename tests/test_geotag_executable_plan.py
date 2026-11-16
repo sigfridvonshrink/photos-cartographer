@@ -255,7 +255,8 @@ def test_time_first_gps_and_rename_gated_on_resolved_time(tmp_path):
     assert bad["destinations"][f"{BYDEST}/T"]["operations"] == []
 
 
-@pytest.mark.spec("BLD-gps_decisions_record")
+@pytest.mark.spec("BLD-gps_decisions_record", "RUL-own_position_replaced_on_answer",
+                  test="TST-geotag_executable_plan-automatic_gps_rederived_from_inputs")
 def test_automatic_gps_rederived_from_inputs_not_photos23_text(tmp_path):
     """BLD-gps_decisions_record (anti): photos-24 re-derives every AUTOMATIC GPS decision from its own validated
     inputs — never by trusting what photos-23 records. A native frame's automatic decision is preserve_native

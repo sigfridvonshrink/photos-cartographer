@@ -83,8 +83,8 @@ def test_an_untagged_photo_is_read_by_the_zone_where_its_tagged_siblings_show_th
     assert (r["time_rule_used"], r["resolved_utc"]) == ("destination_timezone", "2024-07-03T09:00:00Z")
 
 
-@pytest.mark.spec("RUL-untagged_phone_photo_asked", "BLD-phone_offset_cell", "RUL-proposals_need_acceptance",
-                  test="TST-geotag_untagged_photos-asked_where_nothing_settles_it")
+@pytest.mark.spec("RUL-untagged_phone_photo_asked", "RUL-untagged_phone_photo_read_as_siblings", "BLD-phone_offset_cell",
+                  "RUL-proposals_need_acceptance", test="TST-geotag_untagged_photos-asked_where_nothing_settles_it")
 def test_an_untagged_photo_with_nothing_to_settle_it_is_asked(tmp_path):
     """No tagged sibling, no position, no track: the zone's reading is proposed for the phone's untagged photos of the
     day and waits for acceptance; accepted, each photo is read by the zone at its own time — the phone's clock follows
@@ -104,7 +104,8 @@ def test_an_untagged_photo_with_nothing_to_settle_it_is_asked(tmp_path):
     assert rows[f"{DEST}/b.heic"]["resolved_utc"] == "2024-10-27T08:00:00Z"
 
 
-@pytest.mark.spec("RUL-untagged_phone_photo_asked", "BLD-phone_offset_cell", "BLD-recorded_offset_proposal",
+@pytest.mark.spec("RUL-untagged_phone_photo_asked", "RUL-untagged_phone_photo_read_as_siblings", "BLD-phone_offset_cell",
+                  "BLD-recorded_offset_proposal",
                   test="TST-geotag_untagged_photos-tagged_siblings_on_another_zone_propose_theirs")
 def test_tagged_siblings_on_another_zone_propose_their_offset(tmp_path):
     """The phone's tagged photos record +01:00 where Brussels is at +02:00 (kept despite them): its untagged photo is

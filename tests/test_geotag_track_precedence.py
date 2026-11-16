@@ -160,7 +160,8 @@ def _frame(lat, lon, seconds):
                   test="TST-geotag_track_precedence-a_lower_track_anchors_only_where_the_higher_recorded_nothing")
 def test_a_lower_track_anchors_only_where_the_higher_recorded_nothing():
     """A camera photo taken where the receiver passed at 12:05 — when the phone, recording, was 5 km away: the
-    receiver anchors nothing then. Where the phone recorded nothing, the receiver anchors."""
+    receiver anchors nothing then. Where the phone recorded nothing — projecting past its end is no record — the
+    receiver anchors."""
     phone = _track("phone/p.gpx", 50.0 + 5 * KM, 4.0, 0, 700)
     receiver = _track("receiver/r.gpx", 50.0, 4.0, 0, 700)
     photo = _frame(50.0, 4.0, 300)
@@ -171,6 +172,14 @@ def test_a_lower_track_anchors_only_where_the_higher_recorded_nothing():
     late_phone = _track("phone/p.gpx", 50.0 + 5 * KM, 4.0, 5000, 6000)        # recording only later
     got = cal.frame_candidates(photo, _gpx(late_phone + receiver), CFG)
     assert [c["gpx_file"] for c in got] == ["receiver/r.gpx"]
+    # the receiver passing the place at 12:05 only; the phone stopped two minutes before — it could only project past
+    # its end to then, which records nothing there
+    passing = [cal.GPXPoint(50.0 + (t - 300) * 0.01 * KM, 4.0, _at(t), "receiver/r.gpx", i)
+               for i, t in enumerate(range(0, 700, 10))]
+    ended_phone = _track("phone/p.gpx", 50.0 + 5 * KM, 4.0, -600, 181)
+    assert cal.place_gps(_at(300), _gpx(ended_phone), CFG)["method"] == "extrapolated"
+    got = cal.frame_candidates(photo, _gpx(ended_phone + passing), CFG)
+    assert [(c["gpx_file"], c["gpx_time"]) for c in got] == [("receiver/r.gpx", _at(300))]
 
 
 # --- what is recorded and told ---------------------------------------------------------------------------------

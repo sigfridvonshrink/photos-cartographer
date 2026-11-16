@@ -1052,6 +1052,28 @@ def test_execute_marks_the_tracks_it_times_photos_by(tmp_path, monkeypatch):
                             "USING (track_id) GROUP BY f.track_id") == [(1, 2)]
 
 
+@pytest.mark.spec("RUL-gone_track_not_used", "RUL-sealing_needs_no_tracks", "BLD-withdrawn_track_points",
+                  test="TST-geotag_finalize-a_used_track_changed_seals_on_its_current_points")
+def test_a_used_track_changed_since_execute_seals_on_its_current_points(tmp_path, monkeypatch):
+    """The track the executed plan rests on is changed — a point of another year added — and catalogued again as a plan
+    does: its earlier entry stays in the record, withdrawn, beside the current one, the window's points alike in both.
+    Finalize indexes the current entry alone: the tracks are as the plan was made from, and it seals them once."""
+    ws, ctl = _ready_ws(tmp_path, monkeypatch)
+    _to_executed(monkeypatch, ws, ctl)
+    plan = json.load(open(ctl / "photos-24-executable-plan.json"))
+    t = os.path.join(cal.selected_gpx_root(), "t.gpx")
+    with open(t) as f:
+        text = f.read()
+    with open(t, "w") as f:
+        f.write(text.replace("</trkseg>", '<trkpt lat="40.0" lon="3.0"><time>2019-05-01T10:00:00Z</time></trkpt>'
+                                          "</trkseg>"))
+    cal.GeotagWorkflow(str(ws)).plan_tracks(plan, keep=True)
+    assert _track_rows(ctl, "SELECT f.withdrawn, COUNT(*) FROM gpx_track_points JOIN gpx_track_files f "
+                            "USING (track_id) GROUP BY f.track_id ORDER BY f.withdrawn") == [(0, 2), (1, 2)]
+    assert _run(monkeypatch, ws, "finalize") == 0
+    assert (ctl / "photos-26-archive.tar.gz").exists()
+
+
 @pytest.mark.spec("RUL-sealing_needs_no_tracks", "RUL-finalize_requires_plan_still_holds", "BLD-track_window",
                   test="TST-geotag_finalize-finalize_seals_without_the_tracks_folder")
 def test_finalize_seals_without_the_tracks_folder(tmp_path, monkeypatch):
