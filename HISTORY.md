@@ -2,6 +2,37 @@
 
 *What was decided and why, newest first. A record: never corrected forward. Per-commit detail is `git log`.*
 
+## 2026-11-16 — the corpus audited against itself
+
+Every node of the corpus was checked, reading the corpus alone, against the nodes it links to and is linked from and
+against the whole: some three hundred findings. A first sorting read the code to settle them and took, where two
+nodes disagreed, the side the code follows; the owner stopped that — *"I asked you to assess the corpus without
+reference to code"* — and the contradictions are being sorted again with the spec as the authority. What did not
+choose between two statements was applied. The owner's decisions:
+
+- **An unforeseen error ends with a status of its own**, 4, never 1, which says the workspace was locked.
+- **A file whose camera fields are all blank names no camera**, rather than making a camera group of its own.
+- **An unknown field in any decision is refused**, in the time and drift decisions as in the GPS ones.
+- **Merge compares a photo with every library file at its place**, each case variant of its name, so one the library
+  holds byte for byte is never placed again.
+- **A country said inside a folder already in another is taken out** — kept, and now stated as the one exception to
+  nothing overwriting what the user wrote: the folder lies inside the other country.
+- **Deleting a stray by hand stops the next run until accepted**, and the corpus now says so throughout.
+- **Merge records a refusal for a library short of room** as it does for a failed required snapshot.
+- **The prune of the quarantine rests on being the user's explicit, listed choice**, not on the quarantine holding
+  only spare copies — an interrupted write's leftover may be the only whole copy.
+- **An offset the photos' own GPS times gave is kept for the day's later photos** while the photos it came from are
+  there and no new GPS evidence disagrees — as the rule the owner ruled already said.
+- **Choices that change nothing that counts are not rules.** On whether the console's summary before an execution
+  belongs in the rules: *"this does not affect the behaviour that counts in the sense that it can happen before or
+  after without affecting what matters. Such choices are build choices and should be ruled under a separate heading
+  as my preferences."*
+
+Applied with them: definitions for the handoff, the quarantine, the dump, a blocker, a media class, an anchor, a
+recorded offset, a photo's own values and the filesystem's requirements; a build item for the workspace lock, which
+had none; some hundred missing links between the build and the rules it carries out; an exception linked as one,
+not as a refinement; the editor and the workspace's filesystem in sections of their own.
+
 ## 2026-11-16 — a second walk of the code against the corpus
 
 The code changed since v3.0.0 — some 9,700 lines, built rule first — was walked against the corpus again, and each
