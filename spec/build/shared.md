@@ -1604,8 +1604,8 @@ record's id is therefore an execution begun since that record and never recorded
 or `photos-30`, or the version a re-plan kept under `-NNN` — and its journal `journal-<plan id>.json`, and takes into
 the record it compares with, over a copy of it: for prep, each file its move, rename and quarantine operations take,
 followed through them in plan order, found at exactly one place they take it with the recorded file's size, time and
-inode — or, from the inbox, the plan's preconditioned size and time — gone from where it was and at a place no recorded
-file holds, and `<quarantine>/<plan id>/manifest.json` where it holds only entries of the plan's quarantine operations;
+inode — or, from the inbox, the plan's preconditioned size and time — gone from where it was (an inbox path looked
+for on disk, the inbox being in no record) and at a place no recorded file holds, and `<quarantine>/<plan id>/manifest.json` where it holds only entries of the plan's quarantine operations;
 for geotag, each photo whose rename target (or own path) the journal's `media_after` notes, found there with exactly
 that size and time, gone from its recorded path where renamed; for merge, each photo of the plan gone from photos by
 destination that the journal confirms, or whose `library_target` has its recorded size and time. Each is returned as

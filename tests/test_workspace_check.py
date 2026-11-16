@@ -761,6 +761,20 @@ def test_a_hard_killed_merge_execution_is_recognised(tmp_path, monkeypatch):
 
 
 @pytest.mark.spec("RUL-interrupted_work_exact", "RUL-unexpected_change_stops", "BLD-interrupted_run_recognised",
+                  test="TST-workspace_check-a_file_still_in_the_inbox_is_no_work_of_the_killed_run")
+def test_a_file_still_in_the_inbox_is_no_work_of_the_killed_run(tmp_path, monkeypatch):
+    """After a hard kill, a photo the killed run filed from the inbox that is in the inbox again — copied back with its
+    size and time kept — is not gone from where it was: the file at the plan's place is no work of that run, and the
+    command stops naming it."""
+    ws, _rid, moved = _killed_prep(monkeypatch, tmp_path)
+    filed = next(m for m in moved if m.startswith(BY_DATE) and (ws / m).read_bytes() == b"DDDD")
+    shutil.copy2(ws / filed, ws / "0-sources" / "d.jpg")          # back where it was, as `cp -p` leaves it
+    rc, said, stop = _prep(monkeypatch, ws, "plan")
+    assert rc == 2 and stop is not None, said
+    assert filed in "\n".join(stop.lines), stop.lines
+
+
+@pytest.mark.spec("RUL-interrupted_work_exact", "RUL-unexpected_change_stops", "BLD-interrupted_run_recognised",
                   test="TST-workspace_check-a_change_the_killed_run_did_not_leave_still_stops")
 def test_a_change_the_killed_run_did_not_leave_still_stops(tmp_path, monkeypatch):
     """After a hard kill, a file not as the killed run's records say it left it — prep's photo with another

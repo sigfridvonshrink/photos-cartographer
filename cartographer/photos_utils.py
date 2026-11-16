@@ -1550,8 +1550,9 @@ def _prep_own_work(ws, plan, journal, work, cur):
 
     def apply(ch):
         src, exp = ch["from"], ch["exp"]
-        if src in cur:
-            return False                                  # still where it was, or another file there now
+        if src in cur or (exp[2] is None and os.path.lexists(os.path.join(ws, src))):
+            return False                                  # still where it was, or another file there now — in the
+                                                          # inbox, which the entries leave out, seen on disk
         hits = [(p, fp) for p, fp in ch["places"] if p in cur and p not in work and cur[p][:2] == exp[:2]
                 and (exp[2] is None or cur[p][2] == exp[2])]
         if len(hits) != 1 or (exp[2] is not None and src not in work):
