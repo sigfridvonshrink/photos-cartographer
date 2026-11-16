@@ -452,8 +452,8 @@ show of its clock in the morning is the best evidence there is for the afternoon
 local hour. So a destination with no position of its own that day is offered the offset found elsewhere that day —
 applied by itself only where it was sure enough to apply itself there. And where the camera's positions give two
 offsets for one day that cannot both be right, one of them rests on a wrong match; neither is written until the user
-says which. An offset the user wrote, or accepted on a guess, is not passed on: it is their word about one place, not
-evidence. Another day's offset is never passed on by itself either — clocks are set again overnight; the day next to
+says which. An offset the user wrote apart from what the camera's positions support, or accepted on a guess, is not passed
+on: it is their word about one place, not evidence. Another day's offset is never passed on by itself either — clocks are set again overnight; the day next to
 one with no evidence is only offered ({need}`RAT-neighbour_day_offered`).
 :::
 
@@ -1476,9 +1476,11 @@ have run it, the torn copy is still a record finalize cannot read, and it stops.
 :justifies: RUL-geotag_summary_only_for_execution
 
 Geotag's summary is what merge's is: the record of an execution, and the one place the user's acceptance of a
-changed picture is kept. A run turned away at the door executed nothing, and the terminal has said why; a summary
-written for it would put a record of nothing over the last execution's — and with it the acceptances finalize and the
-next run read. An interrupted run reached no end to record: its journal holds what it confirmed, and the run that
+changed picture is kept. A run turned away at the door executed nothing, and the terminal has said why; a run that took its plan as current
+and then could not take the snapshot it requires was refused for what the machine lacked, not turned away at the door:
+its summary records the refusal, carrying the acceptances of the summary it sets aside, so that none is lost. A summary
+written for a run turned away would put a record of nothing over the last execution's — and with it the acceptances
+finalize and the next run read. An interrupted run reached no end to record: its journal holds what it confirmed, and the run that
 finishes it writes the summary.
 :::
 
@@ -1505,21 +1507,6 @@ library.
 :justifies: RUL-finalize_checks_photos, RUL-finalize_reports_placement
 
 Merge refuses a photo changed since finalize, on the strength of what finalize recorded. If finalize records whatever it finds, an edit made between execute and finalize becomes the baseline, and the library receives a photo the log describes as something else. Finalize is given once the user judges the work done, so it is also where they are told how done: how every photo came by its position, and by what means.
-:::
-
-:::{rat} What a run reported stays on the record
-:id: RAT-run_records_outlive_the_next
-:status: ruled
-:forced: yes
-:follows_from: RAT-superseded_plans_recoverable
-:justifies: RUL-geotag_run_records_kept, RUL-prep_journal_kept
-
-An execution's summary is the one account of what that run did — what it applied, what failed, which pictures came
-out changed — and a package is what was handed on for keeping. The next execution, or a finalize run again after a
-further pass, would otherwise replace them, and with them a failure not yet looked at or the package already copied
-to storage, which the workspace could then no longer show as it was. A prep journal is the same account of an attempt: a plan
-executed again after a failed or interrupted attempt would otherwise replace the record of what that attempt did. Set
-aside, as a superseded plan is, they cost a file each and lose nothing.
 :::
 
 :::{rat} A command needs only the tools it runs

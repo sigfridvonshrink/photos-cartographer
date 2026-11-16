@@ -415,6 +415,21 @@ Setting the prior artifact aside keeps a superseded plan and any authored decisi
 unchanged re-run means the iterative decision-editing loop does not accumulate redundant backups.
 :::
 
+:::{rat} What a run reported stays on the record
+:id: RAT-run_records_outlive_the_next
+:status: ruled
+:forced: yes
+:follows_from: RAT-superseded_plans_recoverable
+:justifies: RUL-geotag_run_records_kept, RUL-prep_journal_kept
+
+An execution's summary is the one account of what that run did — what it applied, what failed, which pictures came
+out changed — and a package is what was handed on for keeping. The next execution, or a finalize run again after a
+further pass, would otherwise replace them, and with them a failure not yet looked at or the package already copied
+to storage, which the workspace could then no longer show as it was. A prep journal is the same account of an attempt: a plan
+executed again after a failed or interrupted attempt would otherwise replace the record of what that attempt did. Set
+aside, as a superseded plan is, they cost a file each and lose nothing.
+:::
+
 :::{rat} Set aside by copy, so the record is never absent
 :id: RAT-record_never_absent
 :status: ruled

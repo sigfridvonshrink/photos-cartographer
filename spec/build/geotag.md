@@ -105,8 +105,10 @@ the renames of the JPEGs set aside beside them ({need}`BLD-set_aside_renamed_wit
 A GPX self-anchor offset SHALL be set as `effective_time_anchor` with `decision_mode: "auto_resolved"` when its
 anchors do not conflict and `camera_time_and_timezone_policy.multi_anchor_auto_apply` holds for two or more anchors,
 or `single_anchor_auto_apply` for one — a phone's one anchor never ({need}`BLD-phone_offset_cell`); a destination's `inherited` timezone proposal is set as its
-`effective_iana_timezone` likewise, a `config_default` one never; a `recorded_offset`, `timezone_naive` or `neighbour_day` offset proposal
-becomes effective only with `accept_proposal: true`.
+`effective_iana_timezone` without the user's answer, whatever these settings say, a `config_default` one never; a
+`recorded_offset`, `timezone_naive` or `neighbour_day` offset proposal takes effect only as
+{need}`BLD-timezone_naive_offset` says — confirmed at the drift check where track points lie by its photos, else with
+`accept_proposal: true`.
 :::
 
 :::{bld} How an offset is accepted
@@ -251,7 +253,7 @@ executable runs on.
 :status: ruled
 :realises: RUL-missing_tracks_stop_geotag, RUL-no_tracks_no_stop, RUL-tracks_never_joined
 
-`geotag plan` SHALL stop before its first record, exit 2, when `gpx_root` is set and is not a directory — `geotag execute` then finds its plan stale; an empty `gpx_root`, or one holding no track, plans without tracks. The index keeps each file's points as a track of its own (`GPXIndex.tracks()`) and its SHA-256 (`file_sha`); placement and anchoring read the tracks one by one.
+`geotag plan` SHALL stop before its first record, exit 2, when `gpx_root` is set and is not a directory — `geotag execute` then finds its plan stale; an empty `gpx_root`, or one holding no track, plans without tracks. The index keeps each `<trk>` of each file as a track of its own (`GPXIndex.tracks()`), with the file's SHA-256 (`file_sha`); placement and anchoring read the tracks one by one.
 :::
 
 :::{bld} How tracks are ranked
@@ -788,7 +790,7 @@ decimal places, and then no position is written ({need}`BLD-executable_plan`).
 :status: ruled
 :realises: RUL-photo_decision_follows_the_photo, RUL-unplaced_photo_listed, RUL-disagreeing_tracks_place_nothing, RUL-moved_photo_position_decided_anew, RUL-unplaced_photo_says_why
 
-Each of photos-23's `review_items` SHALL carry its photo's `content_fingerprint`, and a photo's earlier decision is the item, among its own destination's earlier `review_items` alone, with its fingerprint, or with the fingerprint its own values are pinned under, else — for an item carrying none — the item at its path. An item of a photo the tracks did not place carries `tracks`: the `reason` (`no_tracks`, `outside_track`, `track_gap`, `track_jump`, `tracks_disagree`) with `seconds_from_track`, `gap_seconds`, `jump_meters` or the `gpx_files` and `apart_meters` that go with it. The record's `track_disagreements` lists each pair of tracks that placed photos apart and how many, which `geotag plan` also warns of.
+Each of photos-23's `review_items` SHALL carry its photo's `content_fingerprint`, and a photo's earlier decision is the item, among its own destination's earlier `review_items` alone, with its fingerprint, or with the fingerprint its own values are pinned under, else — for an item carrying none — the item at its path. An item of a photo the tracks did not place carries `tracks`: the `reason` (`no_tracks`, `outside_track`, `track_gap`, `track_jump`, `tracks_disagree`, `time_from_date_fallback` ({need}`BLD-date_fallback_cell`)) with `seconds_from_track`, `gap_seconds`, `jump_meters` or the `gpx_files` and `apart_meters` that go with it — `time_from_date_fallback` with none. The record's `track_disagreements` lists each pair of tracks that placed photos apart and how many, which `geotag plan` also warns of.
 :::
 
 :::{bld} What a lower-ranked track said
@@ -1009,7 +1011,7 @@ is: the next `geotag plan` sets it aside under `-NNN` as it sets aside any plan 
 :status: ruled
 :realises: RUL-content_changed_write_held, RUL-failure_recorded, RUL-content_acceptance_is_of_that_content, RUL-content_acceptance_under_its_plan, RUL-failed_photo_named
 
-`photos-25-execution-summary.json` SHALL record the plan and execution ids, the SHA-256 of photos-24 and the dependencies it was validated against, counts per destination and in total, what was newly applied and what found satisfied, `failures` — each with its photo, operation id, operation `type` and the `error` that stopped it ({need}`BLD-write_failure_reason`) — `repeated_failures` ({need}`BLD-repeated_write_failure`) and blockers, `fingerprint_mismatches` — each with its expected and actual fingerprint and `user_decision.accept_fingerprint_change`, the one field a later execution reads — the snapshot, and run metadata apart; its `status` is `success`, `partial` (anything outstanding, a mismatch always), `failed` (nothing applied) or `rejected` (stopped before any change). An acceptance is read only from the summary of the same `plan_id` and holds for the `actual_fingerprint` it stands beside; a mismatch whose photo a later run of that plan finds still blocked is carried into the new summary as written. It is never a dependency.
+`photos-25-execution-summary.json` SHALL record the plan and execution ids, the SHA-256 of photos-24 and the dependencies it was validated against, counts per destination and in total, what was newly applied and what found satisfied, `failures` — each with its photo, operation id, operation `type` and the `error` that stopped it ({need}`BLD-write_failure_reason`) — `repeated_failures` ({need}`BLD-repeated_write_failure`) and blockers, `fingerprint_mismatches` — each with its expected and actual fingerprint and `user_decision.accept_fingerprint_change`, which the user writes and a later execution of the same plan reads, as it reads `failures` ({need}`BLD-repeated_write_failure`) — the snapshot, and run metadata apart; its `status` is `success`, `partial` (anything outstanding, a mismatch always), `failed` (nothing applied) or `rejected` (stopped before any change). An acceptance is read only from the summary of the same `plan_id` and holds for the `actual_fingerprint` it stands beside; a mismatch whose photo a later run of that plan finds still blocked is carried into the new summary as written. It is never a dependency.
 :::
 
 :::{bld} The reason a write failed
