@@ -354,7 +354,18 @@ time before the workspace is sealed — prep's next plan SHALL quarantine that J
 
 Prep SHALL NOT take a set-aside JPEG with a RAW unless it recorded the two as a pair, no file in the managed folders
 holds the RAW's fingerprint, and a comparison with a recorded state found the RAW deleted by hand — so a RAW moved or
-renamed, under any name, is never taken for culled.
+renamed within the workspace, under any name, is never taken for culled.
+:::
+
+:::{rul} A RAW moved out of the workspace is culled
+:id: RUL-culled_raw_moved_out
+:status: ruled
+:criticality: med
+:verify: required
+:refines: RUL-culled_raw_takes_its_jpeg
+:uses: DEF-managed_folders
+
+A RAW the user moves out of the workspace, kept whole elsewhere, SHALL take its set-aside JPEG as one deleted does.
 :::
 
 :::{rul} Prep's log says the JPEG went with its culled RAW

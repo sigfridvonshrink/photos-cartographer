@@ -262,7 +262,7 @@ a JPEG names neither.
 :::{bld} A culled RAW, found by its fingerprint
 :id: BLD-culled_raw_found
 :status: ruled
-:realises: RUL-culled_raw_takes_its_jpeg, RUL-culled_raw_known_by_content, RUL-culled_raw_jpeg_logged, RUL-culled_raw_jpeg_recorded
+:realises: RUL-culled_raw_takes_its_jpeg, RUL-culled_raw_known_by_content, RUL-culled_raw_jpeg_logged, RUL-culled_raw_jpeg_recorded, RUL-culled_raw_moved_out
 :uses: BLD-set_aside_pair_recorded, BLD-workspace_changes_logged
 
 At plan, after duplicates are set aside and before any name is checked, prep SHALL plan a `quarantine_move` of kind
@@ -270,7 +270,8 @@ At plan, after duplicates are set aside and before any name is checked, prep SHA
 ({need}`BLD-set_aside_pair_recorded`) no file prep scanned holds — the inbox and `6-photos-by-dest` among them — and
 which a workspace check found `deleted`: this run's, an earlier prep run's as `workspace_changes` of
 `photos-15-prep-log.json` keeps it, or a geotag execution's as `photos-25-execution-summary.json` or a `-NNN` copy of it
-keeps it ({need}`BLD-workspace_changes_logged`). The move carries the JPEG's `content_fingerprint`, and the RAW's
+keeps it ({need}`BLD-workspace_changes_logged`); a RAW moved out of the workspace is one, the check comparing only
+the files inside it. The move carries the JPEG's `content_fingerprint`, and the RAW's
 `raw_path` — the path the check found it deleted at — and `raw_fingerprint`, into the quarantine manifest; the JPEG's
 entry in the prep log gains the step `raw_culled` with `from`, `to`, `raw_path` and `raw_fingerprint`, its `prep_path`
 the quarantine path; and the execution's workspace record holds the JPEG in the quarantine like any file prep

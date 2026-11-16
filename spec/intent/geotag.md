@@ -2492,6 +2492,20 @@ Geotag's execution and finalize SHALL NOT take a record of an earlier execution 
 stop before they change or write anything, naming it.
 :::
 
+:::{rul} A kept plan no execution ran is passed over unread
+:id: RUL-unread_plan_never_run_passed
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+:refines: RUL-unreadable_plan_replanned
+:uses: DEF-geotag
+
+Finalize SHALL NOT pass over a plan set aside that it cannot read unless the records show no execution ran it — no
+execution's summary names it, and no execution's journal can be its — so that a plan made again for one torn before it
+ran ends in a finalize that needs no hand on the torn copy.
+:::
+
 :::{rul} A plan that cannot be read is made again
 :id: RUL-unreadable_plan_replanned
 :status: ruled

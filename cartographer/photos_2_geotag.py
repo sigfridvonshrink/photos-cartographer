@@ -3307,12 +3307,8 @@ class GeotagWorkflow:
         were set aside) whose journal shows it ran (BLD-geotag_log_steps). A kept plan or journal that cannot be read
         raises UnreadableRecord: a pass is never left out of the log unsaid (RUL-unreadable_execution_record_stops)."""
         ws = self.workspace_root
-        stem = os.path.splitext(EXECUTABLE_PLAN_ARTIFACT)[0]
-        backups = sorted(glob.glob(os.path.join(ws, CONTROL_DIR, f"{stem}-[0-9][0-9][0-9]*.json")),
-                         key=lambda p: int(os.path.basename(p)[len(stem) + 1:-len(".json")] or 0))
         out, seen = [], {current_plan_id}
-        for p in backups:
-            plan = _read_record(p) or {}
+        for plan in self._kept_plans(current_plan_id):
             pid = plan.get("plan_id")
             jp = journal_path(ws, pid) if pid else None
             if pid in seen or not jp or not os.path.exists(jp):
@@ -3326,18 +3322,61 @@ class GeotagWorkflow:
         """Ids of geotag passes whose journal shows they ran but whose plan is neither current nor kept
         — their steps cannot be rebuilt (BLD-partial_log_marked). A geotag journal maps operation ids to their status;
         prep's lists its operations."""
-        ws = self.workspace_root
-        stem = os.path.splitext(EXECUTABLE_PLAN_ARTIFACT)[0]
-        known = {current_plan_id}
-        for p in glob.glob(os.path.join(ws, CONTROL_DIR, f"{stem}-[0-9][0-9][0-9]*.json")):
-            known.add((_read_record(p) or {}).get("plan_id"))
+        known = {current_plan_id} | {plan.get("plan_id") for plan in self._kept_plans(current_plan_id)}
+        return self._journals_outside(known)
+
+    def _journals_outside(self, known):
+        """Plan ids of the geotag journals with a confirmed operation whose plan is not in `known`. A journal that
+        cannot be read raises UnreadableRecord (RUL-unreadable_execution_record_stops)."""
         missing = []
-        for jp in sorted(glob.glob(os.path.join(ws, CONTROL_DIR, "journal-*.json"))):
+        for jp in sorted(glob.glob(os.path.join(self.workspace_root, CONTROL_DIR, "journal-*.json"))):
             j = _read_record(jp) or {}
             ops = j.get("operations")
             if isinstance(ops, dict) and any(st == "confirmed" for st in ops.values()) and j.get("plan_id") not in known:
                 missing.append(j.get("plan_id"))
         return missing
+
+    def _kept_plans(self, current_plan_id):
+        """The plans set aside under -NNN, in the order they were set aside, as read. One that cannot be read is
+        passed over only when no execution ran it (RUL-unread_plan_never_run_passed, BLD-unexecuted_kept_plan_passed):
+        no execution summary — photos-25 or a copy kept under -NNN — names its SHA-256, and every geotag journal with
+        a confirmed operation is the current plan's or a readable kept plan's, so not even a run cut off before its
+        summary can be its. Otherwise it raises UnreadableRecord, as does a summary that cannot be read
+        (RUL-unreadable_execution_record_stops)."""
+        ws = self.workspace_root
+        stem = os.path.splitext(EXECUTABLE_PLAN_ARTIFACT)[0]
+        backups = sorted(glob.glob(os.path.join(ws, CONTROL_DIR, f"{stem}-[0-9][0-9][0-9]*.json")),
+                         key=lambda p: int(os.path.basename(p)[len(stem) + 1:-len(".json")] or 0))
+        plans, unread = [], []
+        for p in backups:
+            try:
+                plans.append(_read_record(p) or {})
+            except UnreadableRecord as e:
+                unread.append((p, e))
+        if unread:
+            ran = self._executed_plan_shas()
+            cut_off = self._journals_outside({current_plan_id} | {plan.get("plan_id") for plan in plans})
+            for p, e in unread:
+                try:
+                    sha = sha256_file(p)
+                except OSError:
+                    raise e
+                if cut_off or sha in ran:
+                    raise e
+        return plans
+
+    def _executed_plan_shas(self):
+        """The SHA-256 of photos-24 each execution summary — photos-25 and the copies kept under -NNN — records it
+        ran (BLD-execution_summary). One that cannot be read raises UnreadableRecord."""
+        path = execution_summary_path(self.workspace_root)
+        stem, ext = os.path.splitext(path)
+        shas = set()
+        for p in [path] + glob.glob(glob.escape(stem) + "-[0-9][0-9][0-9]*" + ext):
+            s = _read_record(p) or {}
+            sha = ((s.get("summarizes") or {}).get(EXECUTABLE_PLAN_ARTIFACT) or {}).get("sha256")
+            if isinstance(sha, str):
+                shas.add(sha)
+        return shas
 
     def _finalized_media(self, files, plan):
         """Each by-dest photo as geotag left it — its final path, size and modification time — for merge

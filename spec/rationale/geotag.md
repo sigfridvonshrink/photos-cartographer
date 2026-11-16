@@ -1330,12 +1330,17 @@ at; stopping and naming it keeps it as it is until they have.
 :status: ruled
 :forced: yes
 :follows_from: RAT-unreadable_record_not_empty
-:justifies: RUL-unreadable_plan_replanned
+:justifies: RUL-unreadable_plan_replanned, RUL-unread_plan_never_run_passed
 
 The executable plan holds nothing of its own: geotag makes it from the decision records, the photos and the tracks, all
 still there, so planning again makes it whole and nothing is lost — unlike a journal or a summary, which hold what only
 a run saw. Read in part, a plan would be carried out in part, or summarised and merged on as if whole; stopped on, it
-points the user to the one command that makes it anew.
+points the user to the one command that makes it anew. Planning again sets the torn plan aside, as it sets aside every
+plan it replaces, and finalize reads the plans set aside for the passes they ran; a torn one there would stop it again,
+a second step for a file that recorded nothing. A plan no execution ran is no record of an execution: when every
+summary names the plan it ran by its content and every journal belongs to a plan that can be read — so not even a run
+cut off before its summary can have been the torn one's — finalize passes it over, and it stays kept and archived.
+Where an execution may have run it, the torn copy is still a record finalize cannot read, and it stops.
 :::
 
 :::{rat} Geotag's summary, too, records an execution

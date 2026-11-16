@@ -16,6 +16,7 @@
 complete log (prep carried forward + geotag steps), the DB snapshot, and the manifest.
 Non-destructive. exiftool-write + fingerprint mocked. From conftest.py.
 """
+import hashlib
 import json
 from _handoff import recorded
 from _zone import answer_root_zone, with_root_zone
@@ -859,6 +860,10 @@ def test_finalize_stops_on_an_unreadable_record_of_a_pass(tmp_path, monkeypatch,
            "other_journal": ctl / "journal-0123456789abcdef.json",
            "list_not_object": ctl / "journal-0123456789abcdef.json"}[record]
     bad.write_text("[]" if record == "list_not_object" else "{not json")
+    if record == "kept_plan":                                              # one an execution ran, by its summary
+        (ctl / "photos-25-execution-summary-009.json").write_text(json.dumps(
+            {"plan_id": "0123456789abcdef", "status": "success",
+             "summarizes": {"photos-24-executable-plan.json": {"sha256": hashlib.sha256(b"{not json").hexdigest()}}}))
     capsys.readouterr()
     assert _run(monkeypatch, ws, "finalize") == 2
     out = capsys.readouterr()
@@ -926,6 +931,41 @@ def test_a_plan_made_again_after_an_unreadable_one_executes(tmp_path, monkeypatc
     assert [p.read_text() for p in ctl.glob("photos-24-executable-plan-*.json")] == ["[]"]
     assert _run(monkeypatch, ws, "execute") == 0
     assert json.load(open(ctl / "photos-25-execution-summary.json"))["status"] == "success"
+    assert _run(monkeypatch, ws, "finalize") == 0                         # the copy no execution ran: passed over
+    assert [p.read_text() for p in ctl.glob("photos-24-executable-plan-*.json")] == ["[]"]
+    listed = json.load(open(ctl / "photos-26-archive-manifest.json"))["contents"]
+    assert any(n.startswith("photos-24-executable-plan-") for n in listed)   # and kept, archived
+
+
+@pytest.mark.spec("RUL-unread_plan_never_run_passed", "BLD-unexecuted_kept_plan_passed",
+                  "RUL-unreadable_execution_record_stops",
+                  test="TST-geotag_finalize-an_unreadable_kept_plan_is_passed_over_only_if_never_run")
+@pytest.mark.parametrize("ran", ["never", "by_summary", "cut_off"])
+def test_an_unreadable_kept_plan_is_passed_over_only_if_never_run(tmp_path, monkeypatch, capsys, ran):
+    """A kept plan that cannot be read stops finalize unless no execution ran it: one a summary names by its SHA-256,
+    or one that may be the plan of a journal with a confirmed operation and no plan finalize can read — a run cut off
+    before its summary — still stops it, naming the copy; one neither can be is passed over, and the package
+    written."""
+    ws, ctl = _ready_ws(tmp_path, monkeypatch)
+    _to_executed(monkeypatch, ws, ctl)
+    torn = ctl / "photos-24-executable-plan-007.json"
+    torn.write_text('{"plan_id": "0123456789abcdef", "destinations": {')
+    if ran == "by_summary":
+        (ctl / "photos-25-execution-summary-009.json").write_text(json.dumps(
+            {"plan_id": "0123456789abcdef", "status": "partial",
+             "summarizes": {"photos-24-executable-plan.json": {"sha256": hashlib.sha256(torn.read_bytes()).hexdigest()}}}))
+    elif ran == "cut_off":
+        (ctl / "journal-0123456789abcdef.json").write_text(json.dumps(
+            {"plan_id": "0123456789abcdef", "operations": {"op-1": "confirmed"}}))
+    capsys.readouterr()
+    code = _run(monkeypatch, ws, "finalize")
+    said = "".join(capsys.readouterr())
+    if ran == "never":
+        assert code == 0 and (ctl / "photos-26-archive-manifest.json").exists()
+    else:
+        assert code == 2 and str(torn) in said and "cannot be read" in said
+        assert not list(ctl.glob("photos-26-*"))
+    assert torn.read_text() == '{"plan_id": "0123456789abcdef", "destinations": {'
 
 
 @pytest.mark.spec("RUL-geotag_run_records_kept", "BLD-geotag_records_versioned",

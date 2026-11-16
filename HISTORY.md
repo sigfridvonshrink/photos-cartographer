@@ -14,9 +14,12 @@
   size?"* — `merge.library_space_margin_percent`, 5 by default. The plan warns of it.
 - **A plan that cannot be read** sends the user to plan again, never a traceback. **The editor's save** writes its
   records in the order each depends on the one before — a save cut short keeps a leading part, no answer standing on
-  one left unsaved — and keeps each record it replaces as a `-NNN` copy, in one series with a re-plan's.
+  one left unsaved — and keeps each record it replaces as a `-NNN` copy, in one series with a re-plan's. Finalize
+  passes over a torn plan so set aside when no execution ran it — no summary names its SHA-256 and every journal is a
+  readable plan's — so the way out is one step; one an execution may have run still stops it.
 - **A RAW the user culls takes its set-aside JPEG into the quarantine** on the next prep run, noted in the prep log
-  with the RAW it went with, and recorded as the run's own change. A video is never a pair.
+  with the RAW it went with, and recorded as the run's own change — a RAW moved out of the workspace as well as one
+  deleted. A video is never a pair.
 
 ## 2026-11-16 — no photo leaves geotag without a position (BACKLOG 21)
 

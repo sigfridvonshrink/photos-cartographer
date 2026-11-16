@@ -832,8 +832,22 @@ an interrupted run's confirmations are in its journal.
 `geotag execute` SHALL stop, exit 2, once its plan is revalidated and before it keeps a decision, takes a snapshot or
 writes anything, when the plan's `journal-<plan id>.json` or `photos-25-execution-summary.json` is there and cannot be
 opened or parsed as a JSON object; `geotag finalize` refuses likewise, writing nothing, on the summary, the plan's
-journal, a kept plan `photos-24-executable-plan-NNN.json` or any `journal-*.json` it reads to find the earlier passes.
+journal, a kept plan `photos-24-executable-plan-NNN.json` — but one {need}`BLD-unexecuted_kept_plan_passed` passes
+over — or any `journal-*.json` it reads to find the earlier passes.
 Each names the file. A file that is not there is none.
+:::
+
+:::{bld} A kept plan no execution ran, passed over
+:id: BLD-unexecuted_kept_plan_passed
+:status: ruled
+:realises: RUL-unread_plan_never_run_passed
+:uses: BLD-execution_summary, BLD-unreadable_execution_records
+
+`geotag finalize` SHALL pass over a kept plan `photos-24-executable-plan-NNN.json` that cannot be read when its
+SHA-256 is the `summarizes` SHA-256 of photos-24 in neither `photos-25-execution-summary.json` nor any `-NNN` copy of
+it, and every `journal-*.json` with a `confirmed` operation is that of the current plan or of a kept plan it can read;
+otherwise the kept plan stops it as {need}`BLD-unreadable_execution_records` says, as does a summary it reads for this
+that cannot be read.
 :::
 
 :::{bld} An executable plan that cannot be read

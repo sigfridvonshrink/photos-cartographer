@@ -187,6 +187,34 @@ def test_a_raw_moved_and_renamed_takes_nothing(tmp_path, monkeypatch):
     assert _find(ws, "3-redundant-jpgs", b"JPG1") and _find(ws, "3-redundant-jpgs", b"JPG3")
 
 
+@pytest.mark.spec("RUL-culled_raw_moved_out", "RUL-culled_raw_takes_its_jpeg", "BLD-culled_raw_found",
+                  test="TST-culled_raw-a_raw_moved_out_of_the_workspace_takes_its_jpeg")
+@pytest.mark.parametrize("folder", ["5-photos-by-date", "6-photos-by-dest"])
+def test_a_raw_moved_out_of_the_workspace_takes_its_jpeg(tmp_path, monkeypatch, folder):
+    """A RAW moved out of the workspace — kept whole elsewhere, under its own inode — is culled as surely as one
+    deleted: the check finds it gone, no file prep scans holds it, and its set-aside JPEG goes to the quarantine."""
+    ws = _dumped(tmp_path, monkeypatch)
+    raw = _find(ws, "5-photos-by-date", b"RAW1")
+    if folder == "6-photos-by-dest":
+        (ws / "6-photos-by-dest" / "Trip").mkdir()
+        name = raw.rsplit("/", 1)[-1]
+        os.rename(ws / raw, ws / "6-photos-by-dest" / "Trip" / name)     # sorted first
+        raw = "6-photos-by-dest/Trip/" + name
+        _run(ws, _check(ws))
+    outside = tmp_path / "elsewhere"
+    outside.mkdir()
+    inode = os.stat(ws / raw).st_ino
+    os.rename(ws / raw, outside / "kept.arw")                      # moved out, not deleted
+    assert os.stat(outside / "kept.arw").st_ino == inode
+
+    changes = _check(ws)
+    plan = _run(ws, changes)
+    [op] = _culled_ops(plan)
+    assert (ws / op.destination).read_bytes() == b"JPG1" and not _find(ws, "3-redundant-jpgs", b"JPG1")
+    assert (op.verification["raw_path"], op.verification["raw_fingerprint"]) == (raw, _sig(b"RAW1"))
+    assert (outside / "kept.arw").read_bytes() == b"RAW1"          # the RAW itself is never touched
+
+
 @pytest.mark.spec("RUL-culled_raw_takes_its_jpeg", "RUL-culled_raw_known_by_content", "BLD-culled_raw_found",
                   test="TST-culled_raw-a_raw_gone_unseen_by_a_check_takes_nothing")
 def test_a_raw_gone_unseen_by_a_check_takes_nothing(tmp_path, monkeypatch):
