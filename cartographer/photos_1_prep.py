@@ -3495,7 +3495,13 @@ def _run_locked(args, workspace_root, reporter):
 
         # Where the host's zone database has no table of countries, the user is asked — once, before anything is
         # downloaded — whether to download it (BLD-zone_table_question); asked here, before the scan, so the answer
-        # is not waited for at its end. Settled once the plan is saved, the control directory then there.
+        # is not waited for at its end. Settled once the plan is saved, the control directory then there. A record of
+        # an earlier answer that cannot be read stops the plan, naming it (RUL-unreadable_zone_table_record_stops).
+        from .photos_utils import zone_table_record_error
+        _zone_err = zone_table_record_error(workspace_root)
+        if _zone_err:
+            reporter.error(f"\n{_zone_err} Nothing was planned or changed.")
+            sys.exit(2)
         _zone_answer = _zone_table_answer(args, workspace_root, reporter)
 
         cache = WorkspaceCache(workspace_root, read_only=True)

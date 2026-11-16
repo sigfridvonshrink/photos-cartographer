@@ -245,10 +245,11 @@ def test_the_request_names_only_the_tool(tmp_path, monkeypatch):
 
     payload = _archive(GOOD)
 
-    def urlopen(req, timeout=None):
-        seen.append((req, timeout))
-        return Resp(payload)
-    monkeypatch.setattr(urllib.request, "urlopen", urlopen)
+    class Opener:
+        def open(self, req, timeout=None):
+            seen.append((req, timeout))
+            return Resp(payload)
+    monkeypatch.setattr(utils, "_https_only_opener", Opener)
     assert _REAL_DOWNLOAD(utils.ZONE_TABLE_URL, utils.ZONE_TABLE_TIMEOUT_S) == payload
     (req, timeout), = seen
     assert req.full_url == "https://data.iana.org/time-zones/tzdata-latest.tar.gz" and timeout == 20
@@ -318,3 +319,77 @@ def test_the_console_asks_the_same_question(tmp_path, monkeypatch, server):
     js = console._asset("app.js").decode()
     assert "zone_table: answer" in js and "s.zone_table" in js
     assert 'id="zone-overlay"' in console._asset("/").decode()
+
+
+@pytest.mark.spec("RUL-unreadable_zone_table_record_stops", "BLD-zone_table_question", "BLD-exit_statuses",
+                  test="TST-zone_table-an_unreadable_record_stops_the_run")
+@pytest.mark.parametrize("held", ["{torn", '"accepted"', '{"download": "maybe"}'])
+def test_an_unreadable_record_stops_the_run(tmp_path, monkeypatch, no_host_table, server, held):
+    """A record of the answer that is there and cannot be read is not no answer: `prep plan` and a geotag command stop
+    on it, naming it, nothing planned, asked, downloaded or written over; the console asks nothing."""
+    from cartographer.console import server as console
+    import photos_2_geotag as cal
+    ws = tmp_path / "ws"
+    for d in MANAGED:
+        (ws / d).mkdir(parents=True)
+    (ws / ".photos-ingest").mkdir()
+    (ws / ".photos-ingest" / "photos-00-workspace-guard").touch()
+    rec = ws / ".photos-ingest" / utils.ZONE_TABLE_ARTIFACT
+    rec.write_text(held)
+    prep.CONFIG["zfs"] = {"enabled": False}
+    monkeypatch.chdir(ws)
+    monkeypatch.setattr("builtins.input", lambda prompt="": pytest.fail("asked"))
+    for phase, args in ((prep, dict(command="plan", jobs=1, download_zone_table="yes")),
+                        (cal, dict(command="plan", jobs=1, accept_changes=None))):
+        cap = CaptureSink()
+        with use_reporter(Reporter([cap])):
+            with pytest.raises(SystemExit) as e:
+                phase.run(types.SimpleNamespace(**args))
+        said = "\n".join(x.msg for x in cap.logs())
+        assert e.value.code == 2 and utils.ZONE_TABLE_ARTIFACT in said and "cannot be read" in said, said
+    assert not os.path.exists(utils.prep_plan_path(str(ws))) and server.calls == []
+    assert rec.read_text() == held and os.listdir(ws / ".photos-ingest").count(utils.ZONE_TABLE_ARTIFACT) == 1
+    assert console._zone_table_state(str(ws), False) is None
+
+
+@pytest.mark.spec("BLD-zone_table_download", "RUL-zone_table_failure_told",
+                  test="TST-zone_table-a_redirect_off_https_is_refused")
+def test_a_redirect_off_https_is_refused(monkeypatch):
+    """The download follows a redirect only to another HTTPS address: one to plain HTTP is refused, the plain address
+    never opened; one to HTTPS is followed. An address not HTTPS is refused before anything is opened."""
+    import email.message
+    import urllib.request
+    import urllib.response
+    opened, real_opener = [], utils._https_only_opener
+
+    def server(redirect_to):
+        class Fake(urllib.request.BaseHandler):
+            handler_order = 100                                    # before the library's own HTTP(S) handlers
+
+            def _answer(self, req):
+                opened.append(req.full_url)
+                headers = email.message.Message()
+                moved = req.full_url == utils.ZONE_TABLE_URL
+                if moved:
+                    headers["Location"] = redirect_to
+                resp = urllib.response.addinfourl(io.BytesIO(b"" if moved else b"the archive"), headers,
+                                                  req.full_url, 302 if moved else 200)
+                resp.msg = "Found" if moved else "OK"
+                return resp
+            https_open = http_open = _answer
+        return lambda: (lambda o: (o.add_handler(Fake()), o)[1])(real_opener())
+
+    monkeypatch.setattr(utils, "_https_only_opener", server("http://mirror.example/tzdata-latest.tar.gz"))
+    with pytest.raises(Exception, match="not HTTPS"):
+        _REAL_DOWNLOAD(utils.ZONE_TABLE_URL, 5)
+    assert opened == [utils.ZONE_TABLE_URL]                        # the plain address never opened
+
+    opened.clear()
+    monkeypatch.setattr(utils, "_https_only_opener", server("https://mirror.example/tzdata-latest.tar.gz"))
+    assert _REAL_DOWNLOAD(utils.ZONE_TABLE_URL, 5) == b"the archive"
+    assert opened == [utils.ZONE_TABLE_URL, "https://mirror.example/tzdata-latest.tar.gz"]
+
+    opened.clear()
+    with pytest.raises(ValueError, match="not an HTTPS address"):
+        _REAL_DOWNLOAD("http://data.iana.org/time-zones/tzdata-latest.tar.gz", 5)
+    assert opened == []

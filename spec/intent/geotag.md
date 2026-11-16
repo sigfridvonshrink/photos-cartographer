@@ -549,6 +549,19 @@ A workspace's answer to whether to download the table of countries SHALL be kept
 again.
 :::
 
+:::{rul} An unreadable record of the answer stops the run
+:id: RUL-unreadable_zone_table_record_stops
+:status: ruled
+:criticality: med
+:anti: yes
+:verify: required
+:refines: RUL-zone_table_asked_once
+:uses: DEF-control_records
+
+A run that reads a workspace's record of the answer to whether to download the table of countries SHALL stop, before
+any change and naming the record, where it exists and cannot be read — never taking it for no answer.
+:::
+
 :::{rul} A permission downloads the table once
 :id: RUL-zone_table_downloaded_once
 :status: ruled

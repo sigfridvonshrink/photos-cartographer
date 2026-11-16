@@ -298,12 +298,31 @@ def check_zone_table_text(zone_tab, iso3166_tab) -> None:
             raise ValueError(f"{name} holds no row")
 
 
-def _download_zone_archive(url, timeout) -> bytes:
-    """The bytes at `url`, at most ZONE_TABLE_MAX_BYTES of them — the one network access of the tool. The seam the
-    tests replace: no test reaches the network."""
+def _https_only_opener():
+    """An opener of the standard library that follows a redirect only to another `https` address, refusing any other
+    (BLD-zone_table_download): the download stays over HTTPS wherever the server sends it."""
+    import urllib.error
+    import urllib.parse
     import urllib.request
+
+    class HttpsOnlyRedirect(urllib.request.HTTPRedirectHandler):
+        def redirect_request(self, req, fp, code, msg, headers, newurl):
+            if urllib.parse.urlsplit(newurl).scheme.lower() != "https":
+                raise urllib.error.HTTPError(newurl, code, f"redirected to {newurl}, which is not HTTPS; refused",
+                                             headers, fp)
+            return super().redirect_request(req, fp, code, msg, headers, newurl)
+    return urllib.request.build_opener(HttpsOnlyRedirect)
+
+
+def _download_zone_archive(url, timeout) -> bytes:
+    """The bytes at `url`, at most ZONE_TABLE_MAX_BYTES of them — the one network access of the tool, over HTTPS
+    only, a redirect elsewhere refused. The seam the tests replace: no test reaches the network."""
+    import urllib.parse
+    import urllib.request
+    if urllib.parse.urlsplit(url).scheme.lower() != "https":
+        raise ValueError(f"{url} is not an HTTPS address; refused")
     req = urllib.request.Request(url, headers={"User-Agent": ZONE_TABLE_USER_AGENT})
-    with urllib.request.urlopen(req, timeout=timeout) as r:
+    with _https_only_opener().open(req, timeout=timeout) as r:
         data = r.read(ZONE_TABLE_MAX_BYTES + 1)
     if len(data) > ZONE_TABLE_MAX_BYTES:
         raise ValueError(f"the archive is larger than {ZONE_TABLE_MAX_BYTES} bytes")
@@ -340,15 +359,36 @@ def fetch_zone_table(url=ZONE_TABLE_URL) -> dict:
 
 def read_zone_table_record(ws) -> dict:
     """The workspace's answer to the question of the table and the copy it downloaded, or None where none is
-    recorded or the record cannot be read as one."""
+    recorded. One that is there and cannot be read as one raises ValueError naming it: it is never taken for no answer
+    (RUL-unreadable_zone_table_record_stops)."""
     if not ws:
         return None
-    try:
-        with open(zone_table_path(ws), encoding="utf-8") as f:
-            rec = json.load(f)
-    except (OSError, ValueError):
+    p = zone_table_path(ws)
+    if not os.path.lexists(p):
         return None
-    return rec if isinstance(rec, dict) and rec.get("download") in ("accepted", "declined") else None
+    try:
+        with open(p, encoding="utf-8") as f:
+            rec = json.load(f)
+        if not isinstance(rec, dict) or rec.get("download") not in ("accepted", "declined"):
+            raise ValueError("it holds no answer, accepted or declined")
+    except (OSError, ValueError) as e:
+        raise ValueError(f"{ZONE_TABLE_ARTIFACT} cannot be read ({e}); the answer to whether to download the table "
+                         "of countries, and the copy downloaded, would be taken for none. Restore it, or move it out "
+                         f"of {CONTROL_DIR}/ to be asked again.")
+    return rec
+
+
+def zone_table_record_error(ws):
+    """Why the workspace's record of the table of countries cannot be read, naming it — None where it can, where there
+    is none, or where the host has its own table and so it is not read (RUL-unreadable_zone_table_record_stops,
+    BLD-zone_table_question)."""
+    if host_has_zone_table():
+        return None
+    try:
+        read_zone_table_record(ws)
+    except ValueError as e:
+        return str(e)
+    return None
 
 
 def _workspace_zone_copy(ws):
@@ -407,8 +447,14 @@ def country_table(ws=None) -> dict:
 
 def zone_table_question_pending(ws) -> bool:
     """Whether the question of downloading the table of countries is still to be asked of this workspace: the host has
-    no table of its own and no answer is recorded (RUL-zone_table_asked_once)."""
-    return not host_has_zone_table() and read_zone_table_record(ws) is None
+    no table of its own and no answer is recorded (RUL-zone_table_asked_once). A record there that cannot be read is
+    not none: the run that reads it stops on it (RUL-unreadable_zone_table_record_stops), nothing asked."""
+    if host_has_zone_table():
+        return False
+    try:
+        return read_zone_table_record(ws) is None
+    except ValueError:
+        return False
 
 
 def add_zone_table_argument(parser) -> None:

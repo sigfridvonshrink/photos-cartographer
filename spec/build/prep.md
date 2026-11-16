@@ -39,7 +39,7 @@ records as the workspace's identity ({need}`BLD-archive_manifest`).
 :::{bld} The question of the table of countries, asked by `prep plan`
 :id: BLD-zone_table_question
 :status: ruled
-:realises: RUL-zone_table_download_on_word, RUL-zone_table_download_where_missing, RUL-zone_table_refusal_told, RUL-zone_table_asked_once, RUL-zone_table_never_stops_prep
+:realises: RUL-zone_table_download_on_word, RUL-zone_table_download_where_missing, RUL-zone_table_refusal_told, RUL-zone_table_asked_once, RUL-zone_table_never_stops_prep, RUL-unreadable_zone_table_record_stops
 
 `prep plan` SHALL take its answer to whether to download the table of countries from `--download-zone-table yes|no`;
 given none, while `zone_table_question_pending` — `host_has_zone_table` false (no `zone.tab` where this Python reads
@@ -50,7 +50,10 @@ is saved, `settle_zone_table` acts on it: where the host has its own table nothi
 with none recorded warns how to give one and records nothing, the carried copy in use, the plan unaffected; `no`
 records `{"download": "declined"}` and `yes` fetches ({need}`BLD-zone_table_download`) and records
 `{"download": "accepted", "copy": …}`, both in `photos-02-zone-table.json` through `write_versioned_json`. A recorded
-answer is not asked again; an answer given on a later `prep plan` is acted on as the first was. The console's prep Plan
+answer is not asked again; an answer given on a later `prep plan` is acted on as the first was. Where the host has no table of its own and
+`photos-02-zone-table.json` exists and is not a JSON object whose `download` is `accepted` or `declined`
+(`zone_table_record_error`), `prep plan` stops with status 2 before its question and scan, and each geotag command
+after its workspace check, naming the file; the console's state then asks nothing. The console's prep Plan
 asks the same question while its state's `zone_table` holds it, and sends the answer as `zone_table`, which it passes
 to the run as `--download-zone-table`.
 :::
@@ -61,7 +64,7 @@ to the run as `--download-zone-table`.
 :realises: RUL-zone_table_downloaded_once, RUL-zone_table_copy_kept, RUL-zone_table_checked, RUL-zone_table_failure_told, RUL-zone_table_request_bare
 
 `fetch_zone_table` SHALL fetch `https://data.iana.org/time-zones/tzdata-latest.tar.gz` once, over HTTPS with the
-standard library, within `ZONE_TABLE_TIMEOUT_S` (20 s) and `ZONE_TABLE_MAX_BYTES`, its one header beyond the
+standard library — a redirect followed only to another `https` address, any other refused as a failed fetch — within `ZONE_TABLE_TIMEOUT_S` (20 s) and `ZONE_TABLE_MAX_BYTES`, its one header beyond the
 library's own the User-Agent `photos-cartographer`; open it in memory and take out `zone.tab`, `iso3166.tab` and
 `version`, writing nothing of the archive to disk; and refuse it unless `check_zone_table_text` finds each table a row of
 its form on every line not a comment and at least one row. The copy taken is recorded as `copy` (`source_url`,
