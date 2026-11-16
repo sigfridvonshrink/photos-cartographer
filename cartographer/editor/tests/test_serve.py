@@ -274,13 +274,61 @@ def test_apply_edits_fallback_and_review():
         {"dest": dest, "kind": "fallback",
          "user_decision": {"accept_proposal": False, "fallback_lat": 35.0, "fallback_lon": 139.0}},
         {"dest": dest, "kind": "review", "path": review_path,
-         "user_decision": {"accept_unlocated": False, "manual_lat": 35.6, "manual_lon": 139.7}},
+         "user_decision": {"manual_lat": 35.6, "manual_lon": 139.7}},
     ])
     assert n == 2
     d = art["destinations"][dest]
     assert d["folder_fallback"]["user_decision"]["fallback_lat"] == 35.0
     item = next(r for r in d["gps_decisions"]["review_items"] if r["relative_path"] == review_path)
     assert item["user_decision"]["manual_lat"] == 35.6
+
+
+@pytest.mark.spec("BLD-chosen_position", "BLD-editor_answers_every_question", "RUL-save_only_what_was_shown",
+                  test="TST-serve-a_position_chosen_for_a_placed_photo_is_saved_as_its_entry")
+def test_a_position_chosen_for_a_placed_photo_is_saved_as_its_entry(tmp_path):
+    """A position set in the editor for a photo the tracks place is written as the entry a hand would write — the
+    photo's path, `chosen_by_user`, the position — into its destination's review items; saved again, that entry is
+    changed, never doubled. A photo photos-23 does not list as placed is refused, nothing written."""
+    ws = _workspace_with_fixtures(tmp_path)
+    dest, rel = "6-photos-by-dest/Japan", "6-photos-by-dest/Japan/interp.arw"
+    gps = os.path.join(ws, serve.CONTROL, serve.GPS_NAME)
+    placed = json.load(open(gps))["destinations"][dest]["gps_decisions"]["placed_photos"]
+    assert {"relative_path": rel, "content_fingerprint": f"fp-{rel}", "placed_by": "tracks"} in placed
+    for lat in (35.1, 35.2):
+        res = serve._save(ws, {"gps": [{"dest": dest, "kind": "chosen", "path": rel,
+                                        "user_decision": {"manual_lat": lat, "manual_lon": 135.7}}],
+                               "hashes": _loaded(ws)})
+        assert res["ok"] is True and res["written"] == [serve.GPS_NAME]
+        d = json.load(open(gps))["destinations"][dest]["gps_decisions"]
+        assert [r for r in d["review_items"] if r["relative_path"] == rel] == [
+            {"relative_path": rel, "content_fingerprint": f"fp-{rel}", "reason": "chosen_by_user",
+             "user_decision": {"manual_lat": lat, "manual_lon": 135.7}, "requires_user_input": False,
+             "stale_user_decision": False}]
+        assert d["placed_photos"] == placed                       # the list itself is left as geotag wrote it
+    before = open(gps, "rb").read()
+    res = serve._save(ws, {"gps": [{"dest": dest, "kind": "chosen", "path": f"{dest}/blocked-a.arw",
+                                    "user_decision": {"manual_lat": 35.0, "manual_lon": 135.7}}],
+                           "hashes": _loaded(ws)})
+    assert res["ok"] is False and open(gps, "rb").read() == before
+
+
+@pytest.mark.spec("RUL-unknown_decision_field_refused", "BLD-geotag_checks_decisions",
+                  test="TST-serve-a_photos_23_holding_leave_unlocated_shows_as_unreadable")
+def test_a_photos_23_holding_leave_unlocated_shows_as_unreadable(tmp_path):
+    """A photos-23 whose photo's decision still holds `accept_unlocated` — a field it does not have — is shown as a
+    record that cannot be read, naming the field, as geotag refuses it; and nothing is saved into it."""
+    ws = _workspace_with_fixtures(tmp_path)
+    gps = os.path.join(ws, serve.CONTROL, serve.GPS_NAME)
+    art = json.load(open(gps))
+    art["destinations"]["6-photos-by-dest/Japan"]["gps_decisions"]["review_items"][0]["user_decision"][
+        "accept_unlocated"] = True
+    open(gps, "w").write(json.dumps(art))
+    shown = serve._load_artifacts(ws)["gps"]
+    assert set(shown) == {"_error"} and "user_decision.accept_unlocated is not a field" in shown["_error"]
+    res = serve._save(ws, {"gps": [{"dest": "6-photos-by-dest/Japan", "kind": "fallback",
+                                    "user_decision": {"fallback_lat": 35.0, "fallback_lon": 139.0}}],
+                           "hashes": _loaded(ws)})
+    assert res["ok"] is False and "cannot read" in res["error"]
 
 
 @pytest.mark.spec("RUL-every_question_in_editor", "BLD-editor_answers_every_question",

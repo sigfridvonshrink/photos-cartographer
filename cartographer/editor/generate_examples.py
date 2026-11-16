@@ -159,9 +159,10 @@ def scenario_trip():
         _file(f"{JP}/anchor-1.arw", CAM_A, "2024:07:03 14:00:00", gps={"lat": 50.0, "lon": 4.0}),
         _file(f"{JP}/anchor-2.arw", CAM_A, "2024:07:03 14:10:00", gps={"lat": 50.0, "lon": 4.002}),
         _file(f"{JP}/interp.arw", CAM_A, "2024:07:03 14:05:30"),                          # -> interpolation
+        _file(f"{JP}/interp-chosen.arw", CAM_A, "2024:07:03 14:06:30"),                   # -> a position chosen
         _file(f"{JP}/extrap.arw", CAM_A, "2024:07:03 14:11:30"),                          # -> extrapolation
         _file(f"{JP}/blocked-a.arw", CAM_A, "2024:07:03 22:00:00"),                       # -> review (manual)
-        _file(f"{JP}/blocked-b.arw", CAM_A, "2024:07:03 23:00:00"),                       # -> review (unlocated)
+        _file(f"{JP}/blocked-b.arw", CAM_A, "2024:07:03 23:00:00"),                       # -> review (folder fallback)
         _file(f"{BE}/bel-cam.arw", CAM_B, "2024:07:03 13:00:00"),                         # -> folder fallback
         _file(f"{BE}/bel-phone.jpg", PHONE, "2024:07:03 13:30:00",
               gps={"lat": 51.0, "lon": 4.3}, raw_times={"OffsetTimeOriginal": "+02:00"}),
@@ -211,8 +212,13 @@ def scenario_trip():
             if ri["relative_path"].endswith("blocked-a.arw"):
                 ri["user_decision"]["manual_lat"] = 35.0116
                 ri["user_decision"]["manual_lon"] = 135.7681
-            elif ri["relative_path"].endswith("blocked-b.arw"):
-                ri["user_decision"]["accept_unlocated"] = True
+        # blocked-b by Japan's folder fallback (which blocked-a's own position outranks) ...
+        d[JP]["folder_fallback"]["user_decision"]["fallback_lat"] = 35.6762
+        d[JP]["folder_fallback"]["user_decision"]["fallback_lon"] = 139.6503
+        # ... and the tracks' position of interp-chosen.arw replaced by one chosen for it alone (BLD-chosen_position)
+        d[JP]["gps_decisions"]["review_items"].append(
+            {"relative_path": f"{JP}/interp-chosen.arw", "reason": "chosen_by_user",
+             "user_decision": {"manual_lat": 35.0, "manual_lon": 135.75}})
         return a
 
     gps_comp, blk = wf.build_gps_decisions(files, rows, gpx, fill_gps(_copy(gps_req)), rfp)
@@ -395,7 +401,8 @@ def _verify():
         '"source": "timezone_accepted"', '"source": "manual"', '"source": "gpx_anchor_chosen"', '"tied": true',
         '"confidence": "high"', '"confidence": "medium"', '"confidence": "review_required"',
         '"stale_user_decision": true',
-        '"reason": "no_reliable_gps_source"', '"reason": "manual_locked"', '"reason": "accepted_unlocated"',
+        '"reason": "no_reliable_gps_source"', '"reason": "manual_locked"',
+        '"placed_by": "tracks"', '"placed_by": "folder_fallback"',
         '"effective_split"', '"clock_change_part"',
     ]
     missing = [m for m in required if m not in blob]

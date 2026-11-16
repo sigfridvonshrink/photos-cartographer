@@ -2883,6 +2883,51 @@ def has_own_position(lat, lon):
         return True             # not a number, yet held: only the zero point is no fix
 
 
+def photos_without_position(handoff, plan):
+    """The photos under photos by destination that hold no position once geotag's `plan` is executed
+    (BLD-no_photo_unplaced): each photo's position is the one the plan writes it (`metadata_gps_write`), none where the
+    plan clears it (a `gps_marker_write` emptying `GPSLatitude`), else the one its handoff record holds — prep's reading
+    of the photo — judged by the one own-position test (BLD-own_position_test), so latitude 0 and longitude 0 is none.
+    A record is joined to the plan's operations by its content fingerprint, which a metadata write and geotag's rename
+    leave as it was — by its path only where it holds none. Read from the records, never by a tool run on a photo: finalize runs none
+    (RUL-finalize_needs_no_metadata_tool). Their paths as the handoff records them, sorted."""
+    by_dest = folder_name('photos_by_dest')
+    written = {}                                # fingerprint or path -> (lat, lon) the plan leaves, or None
+    for dd in ((plan or {}).get("destinations") or {}).values():
+        for op in dd.get("operations") or []:
+            w = op.get("writes") or {}
+            if op.get("type") == "metadata_gps_write":
+                pos = (w.get("GPSLatitude"), w.get("GPSLongitude"))
+            elif op.get("type") == "gps_marker_write" and w.get("GPSLatitude") == "":
+                pos = None
+            else:
+                continue
+            key = (op.get("preconditions") or {}).get("content_fingerprint") or op.get("relative_path")
+            if pos is not None or key not in written:     # a position written outranks a clear
+                written[key] = pos
+    out = []
+    for rec in (handoff or {}).get("files") or []:
+        if rec.get("folder_class") != by_dest or rec.get("media_class") not in ("image", "raw"):
+            continue
+        rel = rec.get("relative_path")
+        try:
+            fp = json.loads(rec.get("content_hash")).get("value")
+        except Exception:
+            fp = None
+        key = fp if fp else rel
+        if key in written:
+            pos = written[key]
+        else:
+            try:
+                parsed = json.loads((rec.get("metadata_status") or {}).get("parsed_json") or "{}")
+            except ValueError:
+                parsed = {}
+            pos = (parsed.get("GPSLatitude"), parsed.get("GPSLongitude")) if isinstance(parsed, dict) else None
+        if pos is None or not has_own_position(*pos):
+            out.append(rel)
+    return sorted(out)
+
+
 def recorded_time(parsed):
     """A file's recorded time: `(tag, value)` of the first of RECORDED_TIME_TAGS whose value holds a valid
     time, or `(None, None)`."""

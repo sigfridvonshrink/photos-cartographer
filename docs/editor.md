@@ -371,7 +371,13 @@ marks every position it writes from the tracks as `matched`, `interpolated` or `
 photo itself, so a rough position is never taken for a precise one.
 
 Photos are placed in this order: the photo's own GPS → a coordinate you set for it → the tracks → the
-folder fallback → left unlocated, if you said so → otherwise blocked.
+folder fallback → otherwise blocked. No photo leaves geotag without a position: a blocked photo waits —
+no plan is made — until you give its folder a fallback or it a coordinate, and finalize and merge refuse a
+photo that holds none.
+
+**A blocked photo** offers its **folder's fallback first**: **set the folder's fallback** opens that
+destination's fallback, and one coordinate there places every photo of the folder nothing else places
+(and, once they accept it, the folders inside it). Below it, **or a position for this photo alone**.
 
 **Folder GPS fallback** — a single coordinate that places any photo in that destination nothing above
 it could. It cascades downward like the timezone (badged `inherited ⟵ <ancestor>`), but unlike the
@@ -413,8 +419,12 @@ name in the worklist for a larger preview):
 - **Copy / paste a location** between photos — "copy location" stashes the coordinate (and writes
   `lat, lon` to your system clipboard); "paste" applies it to the current photo. The next photo opens
   centred where you last placed one.
-- **leave unlocated (accept no GPS)** — the photo stays without a position. It only counts where no
-  folder fallback applies.
+
+**A photo the tracks or the fallback already place** can be given a position of its own: under each
+destination, a folded list — **N placed — by the tracks, by the fallback** — names those photos, each with
+**set position**. A coordinate set there is that photo's alone and outranks both; it stays while it is set,
+whatever tracks or fallback come to cover the photo later (**back to the tracks** / **back to the fallback**
+takes it away). Saved, it is written as the entry you would write by hand: a `chosen_by_user` review item.
 
 ![GPS view — placing a photo on the interactive map beside it](screenshots/carto-26-geotag-edit-gps-per-photo.png)
 
@@ -453,7 +463,7 @@ Two reset behaviors worth knowing (both take effect on the next run):
   `geotag plan` recomputes it. Your decisions are **kept** while what they decide about is unchanged:
   a day's offset is found again by its day, a photo's coordinate by the photo itself, even after geotag
   renamed it. A photo you move to another folder (or whose folder you rename) is asked again: its
-  coordinate, or its leave-unlocated, was given for the folder it was in. An answer whose question has changed is never silently applied to the new one — it is
+  coordinate was given for the folder it was in. An answer whose question has changed is never silently applied to the new one — it is
   marked **stale** and asked again: an acceptance of an offset no longer proposed, a confirmation of an
   offset no longer in effect or made on a track since taken out or changed, an inherited fallback that no longer exists, a zone kept for photos when
   one arrives recording yet another offset.

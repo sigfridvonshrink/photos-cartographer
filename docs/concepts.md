@@ -426,11 +426,10 @@ replaces its own position but your answer; the log keeps the position replaced. 
 never doubted so.
 A position of exactly latitude 0, longitude 0 is not one — it is what a device writes with no fix — so
 that photo is placed like one without, its camera's clock is never read from it, and the log records the
-(0, 0) a position written over it replaced. If you leave such a photo unlocated, geotag removes the (0, 0)
-— coordinates and hemisphere tags together — so digiKam does not show it off the coast of Africa, and the
-log records what it removed. One without is placed by the first of:
+(0, 0) a position written over it replaced. One without is placed by the first of:
 
-1. **a position you set** for that photo in the editor;
+1. **a position you set** for that photo in the editor — also for a photo the tracks or the fallback would
+   place, which then keeps yours for as long as you leave it set;
 2. **the tracks**, at its corrected time — on a track point within `gpx_direct_match_max_seconds`
    (*matched*), between the two points around it (*interpolated*), or just past the track's end
    (*extrapolated*, at most `gpx_extrapolation_max_seconds`), each within the limits the `gpx_*`
@@ -438,7 +437,9 @@ log records what it removed. One without is placed by the first of:
 3. **its destination's folder fallback**, the "if nothing else placed it, put it here" coordinate.
 
 A photo none of these places waits in the editor's GPS worklist, with why the tracks didn't place it,
-until you give it a position or leave it unlocated. Every position geotag writes says in the photo
+until you give its folder a fallback — one answer for every such photo there — or it a position. No photo
+leaves geotag without one: no plan is made while one waits, and finalize, then merge, refuse a photo that
+holds none, read from the photo as it is. Every position geotag writes says in the photo
 (`GPSProcessingMethod`) how it was found — `matched`, `interpolated`, `extrapolated`, or set by you
 (`manual_locked`, `manual_fallback`) — and `geotag finalize` prints the count of each. A photo whose
 time geotag writes and whose position it leaves as it is gets `+carto-time` appended to that field instead,

@@ -697,8 +697,8 @@ def test_a_photo_not_as_execution_left_it_stops_finalize(tmp_path, monkeypatch, 
                   "RUL-finalize_keeps_placement_count",
                   test="TST-geotag_finalize-finalize_reports_how_every_photo_was_placed")
 def test_finalize_reports_how_every_photo_was_placed(tmp_path, monkeypatch, capsys):
-    """The measure of a run: every photo counted by how it came by its position, those left without one among
-    them — in the plan, in finalize's output, and in the package's manifest."""
+    """The measure of a run: every photo counted by how it came by its position — in the plan, in finalize's output,
+    and in the package's manifest."""
     ws, ctl = _ready_ws(tmp_path, monkeypatch)
     _to_executed(monkeypatch, ws, ctl)
     plan = json.load(open(ctl / "photos-24-executable-plan.json"))
@@ -709,18 +709,16 @@ def test_finalize_reports_how_every_photo_was_placed(tmp_path, monkeypatch, caps
     assert json.load(open(ctl / "photos-26-archive-manifest.json"))["placement"] == {"native": 2}
 
 
-@pytest.mark.spec("RUL-unlocated_logged", "RUL-log_cites_decisions", "RUL-placement_recorded_with_its_track",
-                  test="TST-geotag_finalize-the_log_says_what_placed_a_photo_or_that_nothing_did")
-def test_the_log_says_what_placed_a_photo_or_that_nothing_did():
-    """A photo the user left unlocated has that in its log, with the decision; one the tracks placed has the
-    track that placed it and the time it was placed at. And a photo recorded under its new name by a prep run
-    since the plan keeps the time steps of the row planned under its old one."""
+@pytest.mark.spec("RUL-log_cites_decisions", "RUL-placement_recorded_with_its_track",
+                  test="TST-geotag_finalize-the_log_says_what_placed_a_photo")
+def test_the_log_says_what_placed_a_photo():
+    """A photo the tracks placed has in its log the track that placed it and the time it was placed at. And a photo
+    recorded under its new name by a prep run since the plan keeps the time steps of the row planned under its old
+    one."""
     d = f"{BYDEST}/T"
-    files = [_file(f"{d}/u.arw", "fpU"), _file(f"{d}/2024-07-03--14-00-00.arw", "fpT")]
+    files = [_file(f"{d}/2024-07-03--14-00-00.arw", "fpT")]
     rows = [{"relative_path": f"{d}/t.arw", "resolved_utc": "2024-07-03T12:00:00Z"}]
     plan = {"destinations": {d: {
-        "left_unlocated": [{"relative_path": f"{d}/u.arw", "content_fingerprint": "fpU",
-                            "because": f"photos-23 destinations.{d}.gps_decisions.review_items[u.arw]"}],
         "operations": [
             {"type": "metadata_gps_write", "relative_path": f"{d}/t.arw", "gps_origin": "recompute_automated",
              "preconditions": {"content_fingerprint": "fpT"}, "writes": {"GPSLatitude": 50.0, "GPSLongitude": 4.0},
@@ -728,11 +726,67 @@ def test_the_log_says_what_placed_a_photo_or_that_nothing_did():
             {"type": "rename_no_clobber", "relative_path": f"{d}/t.arw", "preconditions": {"content_fingerprint": "fpT"},
              "from": "t.arw", "to": "2024-07-03--14-00-00.arw"}]}}}
     log = cal.build_complete_log({}, files, rows, {}, plan)
-    assert {"phase": "geotag", "action": "left_unlocated",
-            "because": f"photos-23 destinations.{d}.gps_decisions.review_items[u.arw]"} in log["fpU"]["journey"]
     steps = {s["action"]: s for s in log["fpT"]["journey"]}
     assert steps["gps_written"]["gpx_file"] == "trip.gpx" and steps["gps_written"]["at_utc"] == "2024-07-03T12:00:00Z"
     assert steps["resolved_utc"]["value"] == "2024-07-03T12:00:00Z"            # found under the old name's row
+    assert not any(s["action"] == "left_unlocated" for e in log.values() for s in e["journey"])
+
+
+def _hold(ws, ctl, rel, lat, lon):
+    """The handoff, as a prep run since would record it, saying photo `rel` holds (`lat`, `lon`) — None for none."""
+    ho = json.load(open(ctl / "photos-11-handoff.json"))
+    for r in ho["files"]:
+        if r["relative_path"] == rel:
+            parsed = json.loads(r["metadata_status"]["parsed_json"])
+            parsed.pop("GPSLatitude"); parsed.pop("GPSLongitude")
+            if lat is not None:
+                parsed.update(GPSLatitude=lat, GPSLongitude=lon)
+            r["metadata_status"]["parsed_json"] = json.dumps(parsed)
+    (ctl / "photos-11-handoff.json").write_text(json.dumps(ho))
+    recorded(str(ws))
+
+
+@pytest.mark.parametrize("held", [(None, None), (0, 0), (0.0, -0.0)])
+@pytest.mark.spec("RUL-finalize_refuses_unplaced", "BLD-no_photo_unplaced", "RUL-null_island_is_no_position",
+                  test="TST-geotag_finalize-finalize_refuses_a_photo_holding_no_position")
+def test_finalize_refuses_a_photo_holding_no_position(tmp_path, monkeypatch, capsys, held):
+    """Finalize reads each photo's position from what it holds — prep's reading of it, and what the executed plan
+    wrote it — not from the plan's decisions alone: a photo that holds none, or latitude 0 and longitude 0, stops it,
+    named, and nothing is packaged."""
+    ws, ctl = _ready_ws(tmp_path, monkeypatch)
+    _to_executed(monkeypatch, ws, ctl)
+    _hold(ws, ctl, f"{BYDEST}/T/b.arw", *held)
+    capsys.readouterr()
+    assert _run(monkeypatch, ws, "finalize") == 2
+    said = capsys.readouterr()
+    out = said.out + said.err
+    assert "1 photo(s) in 6-photos-by-dest hold no position" in out and "b.arw" in out and "a.arw" not in out
+    assert not (ctl / "photos-26-complete-log.json").exists()
+
+
+@pytest.mark.spec("RUL-finalize_refuses_unplaced", "BLD-no_photo_unplaced",
+                  test="TST-geotag_finalize-a_position_the_plan_wrote_counts")
+def test_a_position_the_plan_wrote_counts():
+    """A photo prep read with no position, or at latitude 0 and longitude 0, holds the one the executed plan wrote
+    it; a photo whose position the plan cleared holds none; one the plan did not touch holds what prep read."""
+    def rec(name, gps):
+        parsed = {} if gps is None else {"GPSLatitude": gps[0], "GPSLongitude": gps[1]}
+        return {"relative_path": f"{BYDEST}/T/{name}", "folder_class": BYDEST, "media_class": "raw",
+                "content_hash": json.dumps({"status": "valid", "value": "fp-" + name}),
+                "metadata_status": {"parsed_json": json.dumps(parsed)}}
+    def op(name, kind, writes):
+        return {"type": kind, "relative_path": f"{BYDEST}/T/{name}", "writes": writes,
+                "preconditions": {"content_fingerprint": "fp-" + name}}
+    handoff = {"files": [rec("none.arw", None), rec("zero.arw", (0, 0)), rec("own.arw", (50.0, 4.0)),
+                         rec("cleared.arw", (50.0, 4.0)), rec("left.arw", None),
+                         dict(rec("elsewhere.arw", None), folder_class="5-photos-by-date")]}
+    plan = {"destinations": {f"{BYDEST}/T": {"operations": [
+        op("none.arw", "metadata_gps_write", {"GPSLatitude": 50.5, "GPSLongitude": 4.5}),
+        op("none.arw", "gps_marker_write", {"GPSProcessingMethod": "carto-gpx-interpolated"}),
+        op("zero.arw", "metadata_gps_write", {"GPSLatitude": 50.5, "GPSLongitude": 4.5}),
+        op("cleared.arw", "gps_marker_write", {"GPSLatitude": "", "GPSLatitudeRef": "", "GPSLongitude": "",
+                                               "GPSLongitudeRef": ""})]}}}
+    assert utils.photos_without_position(handoff, plan) == [f"{BYDEST}/T/cleared.arw", f"{BYDEST}/T/left.arw"]
 
 
 @pytest.mark.spec("RUL-finalize_needs_no_metadata_tool", "BLD-geotag_exiftool_needed",

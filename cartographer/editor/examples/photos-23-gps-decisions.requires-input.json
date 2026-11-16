@@ -47,7 +47,6 @@
           "files_total": 1,
           "manual_locked": 0,
           "manual_review_required": 0,
-          "no_gps_change_needed": 0,
           "preserve_native_gps": 1
         }
       }
@@ -89,7 +88,6 @@
               "seconds_from_track": 6600
             },
             "user_decision": {
-              "accept_unlocated": false,
               "manual_lat": "",
               "manual_lon": ""
             }
@@ -103,7 +101,6 @@
           "files_total": 2,
           "manual_locked": 0,
           "manual_review_required": 1,
-          "no_gps_change_needed": 0,
           "preserve_native_gps": 1
         }
       }
@@ -142,7 +139,6 @@
           "files_total": 1,
           "manual_locked": 0,
           "manual_review_required": 0,
-          "no_gps_change_needed": 0,
           "preserve_native_gps": 1
         }
       }
@@ -181,7 +177,6 @@
           "files_total": 3,
           "manual_locked": 0,
           "manual_review_required": 0,
-          "no_gps_change_needed": 0,
           "preserve_native_gps": 3
         }
       }
@@ -213,6 +208,23 @@
             "Automatic decisions are summarized here; exact file-level write operations are listed only in photos-24-executable-plan.json."
           ]
         },
+        "placed_photos": [
+          {
+            "content_fingerprint": "fp-6-photos-by-dest/Japan/extrap.arw",
+            "placed_by": "tracks",
+            "relative_path": "6-photos-by-dest/Japan/extrap.arw"
+          },
+          {
+            "content_fingerprint": "fp-6-photos-by-dest/Japan/interp-chosen.arw",
+            "placed_by": "tracks",
+            "relative_path": "6-photos-by-dest/Japan/interp-chosen.arw"
+          },
+          {
+            "content_fingerprint": "fp-6-photos-by-dest/Japan/interp.arw",
+            "placed_by": "tracks",
+            "relative_path": "6-photos-by-dest/Japan/interp.arw"
+          }
+        ],
         "review_items": [
           {
             "content_fingerprint": "fp-6-photos-by-dest/Japan/blocked-a.arw",
@@ -225,7 +237,6 @@
               "seconds_from_track": 28200
             },
             "user_decision": {
-              "accept_unlocated": false,
               "manual_lat": "",
               "manual_lon": ""
             }
@@ -241,7 +252,6 @@
               "seconds_from_track": 31800
             },
             "user_decision": {
-              "accept_unlocated": false,
               "manual_lat": "",
               "manual_lon": ""
             }
@@ -250,12 +260,11 @@
         "summary": {
           "automatic_folder_fallback": 0,
           "automatic_gpx_extrapolation": 1,
-          "automatic_gpx_interpolation": 1,
+          "automatic_gpx_interpolation": 2,
           "blocked": 2,
-          "files_total": 6,
+          "files_total": 7,
           "manual_locked": 0,
           "manual_review_required": 2,
-          "no_gps_change_needed": 0,
           "preserve_native_gps": 2
         }
       }
@@ -294,7 +303,6 @@
           "files_total": 1,
           "manual_locked": 0,
           "manual_review_required": 0,
-          "no_gps_change_needed": 0,
           "preserve_native_gps": 1
         }
       }

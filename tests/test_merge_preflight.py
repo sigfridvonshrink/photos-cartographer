@@ -31,6 +31,11 @@ MANAGED = ["0-sources", "1-strays", "2-missing-metadata", "3-redundant-jpgs",
            "4-videos-by-date", "5-photos-by-date", "6-photos-by-dest"]
 
 
+# What prep read of a photo geotag placed: a position, as every photo leaving geotag holds one
+# (RUL-merge_refuses_unplaced).
+PLACED = {"parsed_json": json.dumps({"GPSLatitude": 48.8566, "GPSLongitude": 2.3522})}
+
+
 def _ctl(ws):
     return ws / ".photos-ingest"
 
@@ -39,7 +44,7 @@ def _make(tmp_path, *, guard=True, config=True, library_in_config=True, bless_li
           handoff=True, handoff_current=True, cal_plan=True, cal_summary=True,
           summary_status="success", prep_log=True, complete_log=True, archive_manifest=True, finalized_media=True,
           bydest=("6-photos-by-dest/Trip/a.jpg",), sources_files=(),
-          fingerprint_method=utils.FINGERPRINT_ALGORITHM_VERSION):
+          fingerprint_method=utils.FINGERPRINT_ALGORITHM_VERSION, held=None):
     """Build a workspace that PASSES preflight by default, plus a sibling blessed library. Each
     keyword turns off / corrupts one precondition's input so a single check can be isolated."""
     ws = tmp_path / "ws"
@@ -62,7 +67,8 @@ def _make(tmp_path, *, guard=True, config=True, library_in_config=True, bless_li
         (ws / "0-sources" / name).write_bytes(b"x")
 
     ho = {"filename_timestamp_format": utils.CONFIG["filename_timestamp_format"], "files": [{"relative_path": rel, "folder_class": "6-photos-by-dest", "media_class": "image",
-                     "content_hash": json.dumps({"status": "valid", "value": f"fp-{i}"})}
+                     "content_hash": json.dumps({"status": "valid", "value": f"fp-{i}"}),
+                     "metadata_status": {"parsed_json": json.dumps(held[rel])} if rel in (held or {}) else PLACED}
                     for i, rel in enumerate(bydest)],
           "content_fingerprint": "whole-file-hash", "run_metadata": {"started_at": "t0"},
           "depends_on": {"cache": {"fingerprint_algorithm_version": fingerprint_method}}}
@@ -133,6 +139,18 @@ def test_filename_format_other_than_prep_s_blocks(tmp_path):
     ho_p.write_text(json.dumps(dict(json.loads(ho_p.read_text()), filename_timestamp_format="%Y%m%d_%H%M%S")))
     blockers, _, _ = _pf(ws)
     assert blockers == [utils.filename_format_changed("%Y%m%d_%H%M%S", utils.CONFIG["filename_timestamp_format"])]
+
+
+@pytest.mark.parametrize("held", [{}, {"GPSLatitude": 0, "GPSLongitude": 0}])
+@pytest.mark.spec("RUL-merge_refuses_unplaced", "BLD-no_photo_unplaced", "RUL-merge_rechecks_gates",
+                  test="TST-merge_preflight-a_photo_holding_no_position_blocks")
+def test_a_photo_holding_no_position_blocks(tmp_path, held):
+    """Finalize's refusal of a photo holding no position, checked again at merge's own start from what each photo
+    holds: a finalized workspace one of whose photos holds none — or latitude 0 and longitude 0 — merges nothing."""
+    ws, _ = _make(tmp_path, bydest=("6-photos-by-dest/Trip/a.jpg", "6-photos-by-dest/Trip/b.jpg"),
+                  held={"6-photos-by-dest/Trip/b.jpg": held})
+    blockers, _, _ = _pf(ws)
+    assert len(blockers) == 1 and "hold no position" in blockers[0] and "Trip/b.jpg" in blockers[0], blockers
 
 
 # --- happy path --------------------------------------------------------------

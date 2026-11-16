@@ -15,9 +15,9 @@
 """Phase 5b (geotag) — the BLD-placement_order GPS decision tree +
 photos-23-gps-decisions.json (BLD-gps_decisions_record).
 
-Per-file classifier (preserve/manual-locked/interpolation/extrapolation/folder-fallback/
-accept-unlocated/blocked), the per-destination summary artifact (paths only for review/blocker
-items), and folder_fallback downward inheritance. Decision logic at full coverage. From conftest.py.
+Per-file classifier (preserve/manual-locked/interpolation/extrapolation/folder-fallback/blocked), the
+per-destination summary artifact (paths only for review/blocker items and the photos the tracks or the fallback
+place), and folder_fallback downward inheritance. Decision logic at full coverage. From conftest.py.
 """
 import json
 from datetime import datetime, timezone
@@ -80,8 +80,7 @@ def test_classify_all_branches():
     assert cal.classify_gps(_file("a", "d"), ru, g, cfg, None, {})[0] == "gpx_interpolation"
     assert cal.classify_gps(_file("a", "d"), near_end, g, cfg, None, {})[0] == "gpx_extrapolation"
     assert cal.classify_gps(_file("a", "d"), far, g, cfg, {"lat": 1, "lon": 2}, {})[0] == "manual_fallback"
-    assert cal.classify_gps(_file("a", "d"), None, g, cfg, None, {"accept_unlocated": True})[0] == "no_change"
-    assert cal.classify_gps(_file("a", "d"), None, g, cfg, None, {})[0] == "blocked"
+    assert cal.classify_gps(_file("a", "d"), None, g, cfg, None, {})[0] == "blocked"   # waits: never left unplaced
 
 
 @pytest.mark.parametrize("lat, lon, ok", [(50, 4, True), (-90, 180, True), (91, 0, False),
@@ -152,15 +151,24 @@ def test_all_automatic_is_complete(tmp_path):
     assert art["decision_mode"] == "no_op_or_auto_resolved"
 
 
-def test_accept_unlocated_resolves_block(tmp_path):
+@pytest.mark.parametrize("value", [True, False])
+@pytest.mark.spec("RUL-unknown_decision_field_refused", "BLD-geotag_checks_decisions", "RUL-unplaced_photo_waits",
+                  test="TST-geotag_gps_decisions-leave_unlocated_is_refused_as_an_unknown_field")
+def test_leave_unlocated_is_refused_as_an_unknown_field(tmp_path, value):
+    """A photo is never left without a position: `accept_unlocated`, in a photos-23 still holding it, is a field a
+    position decision does not have — refused, named, the record left as it is — whatever its value."""
     wf = _wf(tmp_path)
     d = f"{BYDEST}/Trip"
-    files = [_file(f"{d}/b.jpg", d)]
     prior = {"destinations": {d: {"gps_decisions": {"review_items": [
-        {"relative_path": f"{d}/b.jpg", "user_decision": {"accept_unlocated": True}}]}}}}
-    art, _ = _build(wf, files, [], _gpx(), prior)
-    assert _dd(art, d)["gps_decisions"]["summary"]["no_gps_change_needed"] == 1
-    assert art["status"] == "complete"
+        {"relative_path": f"{d}/b.jpg", "user_decision": {"accept_unlocated": value}}]}}}}
+    art, blk = _build(wf, [_file(f"{d}/b.jpg", d)], [], _gpx(), prior)
+    assert art is None
+    assert blk == [f"{d}/b.jpg: user_decision.accept_unlocated is not a field of a photo's position decision "
+                   "(only manual_lat and manual_lon) — remove it."]
+    art, blk = _build(wf, [_file(f"{d}/b.jpg", d)], [], _gpx(), None)
+    (item,) = _dd(art, d)["gps_decisions"]["review_items"]
+    assert item["user_decision"] == {"manual_lat": "", "manual_lon": ""} and item["requires_user_input"]
+    assert "no_gps_change_needed" not in _dd(art, d)["gps_decisions"]["summary"]
 
 
 # --- coordinate validation ---------------------------------------------------
@@ -322,9 +330,8 @@ def _fp_file(rel, dest, fp):
                   "RUL-photo_decision_never_passes_by_name",
                   test="TST-geotag_gps_decisions-a_photo_s_decision_follows_it_through_its_rename")
 def test_a_photo_s_decision_follows_it_through_its_rename(tmp_path):
-    """A position the user set for one photo, or their answer to leave it unlocated, is that photo's — found
-    again by its fingerprint once geotag has renamed it, never lost with the old name (nor given to another
-    photo that takes the name)."""
+    """A position the user set for one photo is that photo's — found again by its fingerprint once geotag has renamed
+    it, never lost with the old name (nor given to another photo that takes the name)."""
     wf, d = _wf(tmp_path), f"{BYDEST}/T"
     before = [_fp_file(f"{d}/a.arw", d, "fp-a"), _fp_file(f"{d}/b.arw", d, "fp-b")]
     rows = [_row(f"{d}/a.arw", "2024-07-03T20:00:00Z"), _row(f"{d}/b.arw", "2024-07-03T21:00:00Z")]   # off the track
@@ -332,7 +339,7 @@ def test_a_photo_s_decision_follows_it_through_its_rename(tmp_path):
     items = {ri["relative_path"]: ri for ri in _dd(art, d)["gps_decisions"]["review_items"]}
     assert items[f"{d}/a.arw"]["content_fingerprint"] == "fp-a" and items[f"{d}/a.arw"]["requires_user_input"]
     items[f"{d}/a.arw"]["user_decision"].update(manual_lat=51.5, manual_lon=4.5)
-    items[f"{d}/b.arw"]["user_decision"]["accept_unlocated"] = True
+    items[f"{d}/b.arw"]["user_decision"].update(manual_lat=51.6, manual_lon=4.6)
     # execute renamed both; a new photo took a.arw's old name
     after = [_fp_file(f"{d}/2024-07-03--22-00-00.arw", d, "fp-a"), _fp_file(f"{d}/2024-07-03--23-00-00.arw", d, "fp-b"),
              _fp_file(f"{d}/a.arw", d, "fp-new")]
@@ -342,7 +349,7 @@ def test_a_photo_s_decision_follows_it_through_its_rename(tmp_path):
     assert not blk
     got = {ri["content_fingerprint"]: ri for ri in _dd(art2, d)["gps_decisions"]["review_items"]}
     assert got["fp-a"]["reason"] == "manual_locked" and got["fp-a"]["user_decision"]["manual_lat"] == 51.5
-    assert got["fp-b"]["reason"] == "accepted_unlocated"
+    assert got["fp-b"]["reason"] == "manual_locked" and got["fp-b"]["user_decision"]["manual_lat"] == 51.6
     assert got["fp-new"]["requires_user_input"] and got["fp-new"]["user_decision"]["manual_lat"] == ""
     # a fingerprint taken again with a new value: the decision follows through the pin's key
     retaken = [dict(_fp_file(after[0]["relative_path"], d, "fp-a2"), original_key="fp-a")]
@@ -353,18 +360,17 @@ def test_a_photo_s_decision_follows_it_through_its_rename(tmp_path):
 @pytest.mark.spec("RUL-moved_photo_position_decided_anew", "BLD-review_item_identity",
                   test="TST-geotag_gps_decisions-a_moved_photo_s_position_is_decided_anew")
 def test_a_moved_photo_s_position_is_decided_anew(tmp_path):
-    """A position typed for a photo, or its answer to stay unlocated, was given for the folder it lay in: moved to
-    another destination — or its folder renamed — the photo is asked again, though its fingerprint would find the
-    old answer."""
+    """A position typed for a photo was given for the folder it lay in: moved to another destination — or its folder
+    renamed — the photo is asked again, though its fingerprint would find the old answer."""
     wf, a, b, renamed = _wf(tmp_path), f"{BYDEST}/A", f"{BYDEST}/B", f"{BYDEST}/A2"
     off = "2024-07-03T20:00:00Z"                                               # off the track: asks
     files = [_fp_file(f"{a}/p.arw", a, "fp-p"), _fp_file(f"{a}/u.arw", a, "fp-u")]
     art, _ = _build(wf, files, [_row(f"{a}/p.arw", off), _row(f"{a}/u.arw", off)], _gpx())
     items = {ri["content_fingerprint"]: ri for ri in _dd(art, a)["gps_decisions"]["review_items"]}
     items["fp-p"]["user_decision"].update(manual_lat=51.5, manual_lon=4.5)
-    items["fp-u"]["user_decision"]["accept_unlocated"] = True
+    items["fp-u"]["user_decision"].update(manual_lat=51.6, manual_lon=4.6)
     art, _ = _build(wf, files, [_row(f"{a}/p.arw", off), _row(f"{a}/u.arw", off)], _gpx(), art)
-    assert {ri["reason"] for ri in _dd(art, a)["gps_decisions"]["review_items"]} == {"manual_locked", "accepted_unlocated"}
+    assert {ri["reason"] for ri in _dd(art, a)["gps_decisions"]["review_items"]} == {"manual_locked"}
     # one photo moved to B, the other's folder renamed: both asked again, nothing of A's answers with them
     moved = [_fp_file(f"{b}/p.arw", b, "fp-p"), _fp_file(f"{renamed}/u.arw", renamed, "fp-u")]
     art2, blk = _build(wf, moved, [_row(f"{b}/p.arw", off), _row(f"{renamed}/u.arw", off)], _gpx(), art)
@@ -372,7 +378,7 @@ def test_a_moved_photo_s_position_is_decided_anew(tmp_path):
     for dest in (b, renamed):
         (item,) = _dd(art2, dest)["gps_decisions"]["review_items"]
         assert item["reason"] == "no_reliable_gps_source" and item["requires_user_input"]
-        assert item["user_decision"] == {"manual_lat": "", "manual_lon": "", "accept_unlocated": False}
+        assert item["user_decision"] == {"manual_lat": "", "manual_lon": ""}
 
 
 @pytest.mark.spec("RUL-unplaced_photo_listed", "RUL-disagreeing_tracks_place_nothing", "BLD-gps_decisions_record",
@@ -395,3 +401,86 @@ def test_an_unplaced_photo_is_listed_with_why_the_tracks_did_not_place_it(tmp_pa
     art, _ = _build(wf, [_fp_file(f"{d}/x.arw", d, "fp-x")], [_row(f"{d}/x.arw", "2024-07-03T12:00:20Z")], two, prior)
     assert _dd(art, d)["gps_decisions"]["summary"]["automatic_folder_fallback"] == 1       # the fallback placed it
     assert art["track_disagreements"] == [{"gpx_files": ["mine.gpx", "theirs.gpx"], "photos": 1}]
+
+
+# --- a position chosen for a photo the tracks or the fallback place ---------------------------------------------
+
+@pytest.mark.spec("BLD-chosen_position", "BLD-gps_decisions_record",
+                  test="TST-geotag_gps_decisions-photos_23_lists_the_photos_tracks_and_fallback_place")
+def test_photos_23_lists_the_photos_tracks_and_fallback_place(tmp_path):
+    """photos-23 names, per destination, each photo the tracks or the folder fallback place and which of them does:
+    the photos a position can be chosen for. A photo holding its own position, or waiting, is not among them."""
+    wf, d = _wf(tmp_path), f"{BYDEST}/T"
+    files = [_fp_file(f"{d}/t.arw", d, "fp-t"), _fp_file(f"{d}/f.arw", d, "fp-f"),
+             dict(_file(f"{d}/n.arw", d, native=True), content_fingerprint="fp-n")]
+    rows = [_row(f"{d}/t.arw", "2024-07-03T12:00:30Z"), _row(f"{d}/f.arw", "2024-07-03T20:00:00Z")]
+    art, _ = _build(wf, files, rows, _gpx(), _with_fallback(d, 50.5, 4.5))
+    assert _dd(art, d)["gps_decisions"]["placed_photos"] == [
+        {"relative_path": f"{d}/f.arw", "content_fingerprint": "fp-f", "placed_by": "folder_fallback"},
+        {"relative_path": f"{d}/t.arw", "content_fingerprint": "fp-t", "placed_by": "tracks"}]
+    art, _ = _build(wf, files[2:], [], _gpx())
+    assert "placed_photos" not in _dd(art, d)["gps_decisions"]
+
+
+def _chosen(dest, rel, lat, lon):
+    return {"destinations": {dest: {"gps_decisions": {"review_items": [
+        {"relative_path": rel, "reason": "chosen_by_user", "user_decision": {"manual_lat": lat, "manual_lon": lon}}]}}}}
+
+
+@pytest.mark.parametrize("by", ["tracks", "folder_fallback"])
+@pytest.mark.spec("RUL-chosen_position_honoured", "BLD-chosen_position", "RUL-placement_order",
+                  test="TST-geotag_gps_decisions-a_position_chosen_for_a_placed_photo_places_it")
+def test_a_position_chosen_for_a_placed_photo_places_it(tmp_path, by):
+    """An entry the user adds by hand — the photo's path, `chosen_by_user`, a position — for a photo the tracks or the
+    fallback place is honoured: the photo is placed there as `manual_locked`, out of the placed list."""
+    wf, d = _wf(tmp_path), f"{BYDEST}/T"
+    utc = "2024-07-03T12:00:30Z" if by == "tracks" else "2024-07-03T20:00:00Z"
+    files, rows = [_fp_file(f"{d}/p.arw", d, "fp-p")], [_row(f"{d}/p.arw", utc)]
+    prior = _chosen(d, f"{d}/p.arw", 48.0, 2.0)
+    prior["destinations"][d]["folder_fallback"] = {"user_decision": {"fallback_lat": 50.5, "fallback_lon": 4.5}}
+    art, blk = _build(wf, files, rows, _gpx(), prior)
+    assert not blk and art["status"] == "complete"
+    gd = _dd(art, d)["gps_decisions"]
+    (item,) = gd["review_items"]
+    assert (item["reason"], item["user_decision"], item["requires_user_input"]) == (
+        "manual_locked", {"manual_lat": 48.0, "manual_lon": 2.0}, False)
+    assert gd["summary"]["manual_locked"] == 1 and "placed_photos" not in gd
+    ru = datetime(2024, 7, 3, 12, 0, 30, tzinfo=timezone.utc) if by == "tracks" else None
+    assert cal.classify_gps(files[0], ru, _gpx(), utils.CONFIG, {"lat": 50.5, "lon": 4.5},
+                            item["user_decision"]) == ("manual_locked", {"lat": 48.0, "lon": 2.0})
+
+
+@pytest.mark.spec("RUL-chosen_position_kept", "BLD-chosen_position",
+                  test="TST-geotag_gps_decisions-a_position_given_for_one_photo_is_kept_while_it_holds_one")
+def test_a_position_given_for_one_photo_is_kept_while_it_holds_one(tmp_path):
+    """A position given for one photo stays its own while it holds one — after tracks, then a fallback, come to place
+    the photo — and only once the user empties it do the tracks place it again, its item gone."""
+    wf, d = _wf(tmp_path), f"{BYDEST}/T"
+    files = [_fp_file(f"{d}/p.arw", d, "fp-p")]
+    off, on = [_row(f"{d}/p.arw", "2024-07-03T20:00:00Z")], [_row(f"{d}/p.arw", "2024-07-03T12:00:30Z")]
+    art, _ = _build(wf, files, off, _gpx())                             # nothing places it: it asks
+    _dd(art, d)["gps_decisions"]["review_items"][0]["user_decision"].update(manual_lat=48.0, manual_lon=2.0)
+    art, _ = _build(wf, files, on, _gpx(), art)                         # the tracks now cover its time
+    art["destinations"][d]["folder_fallback"]["user_decision"].update(fallback_lat=50.5, fallback_lon=4.5)
+    art, _ = _build(wf, files, on, _gpx(), art)                         # ... and a fallback is set
+    (item,) = _dd(art, d)["gps_decisions"]["review_items"]
+    assert item["reason"] == "manual_locked" and item["user_decision"] == {"manual_lat": 48.0, "manual_lon": 2.0}
+    item["user_decision"].update(manual_lat="", manual_lon="")
+    art, _ = _build(wf, files, on, _gpx(), art)
+    gd = _dd(art, d)["gps_decisions"]
+    assert gd["review_items"] == [] and gd["placed_photos"][0]["placed_by"] == "tracks"
+
+
+@pytest.mark.parametrize("rel, why", [("6-photos-by-dest/T/gone.arw", "names no photo of this destination"),
+                                      ("6-photos-by-dest/U/q.arw", "names no photo of this destination"),
+                                      ("6-photos-by-dest/T/n.arw", "holds a position of its own")])
+@pytest.mark.spec("RUL-chosen_position_names_a_photo", "BLD-chosen_position", "RUL-invalid_value_located",
+                  test="TST-geotag_gps_decisions-a_chosen_position_naming_no_photo_to_place_is_refused")
+def test_a_chosen_position_naming_no_photo_to_place_is_refused(tmp_path, rel, why):
+    """A position chosen for a photo names one of its destination's photos holding no position of its own — or the run
+    stops on it, naming it: a photo not there, one of another destination, one whose own position geotag keeps."""
+    wf, d = _wf(tmp_path), f"{BYDEST}/T"
+    files = [_fp_file(f"{d}/p.arw", d, "fp-p"), dict(_file(f"{d}/n.arw", d, native=True), content_fingerprint="fp-n"),
+             _fp_file(f"{BYDEST}/U/q.arw", f"{BYDEST}/U", "fp-q")]
+    _, blk = _build(wf, files, [_row(f"{d}/p.arw", "2024-07-03T12:00:30Z")], _gpx(), _chosen(d, rel, 48.0, 2.0))
+    assert len(blk) == 1 and f"review_items[{rel}]" in blk[0] and why in blk[0], blk

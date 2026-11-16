@@ -528,16 +528,31 @@ Same wrapper as §4.1 with `artifact_type: "gps_decisions"` / `artifact_name:
       "gpx_files_used": ["…"], "max_interpolation_gap_seconds": 120,
       "max_distance_to_track_m": 50, "confidence": "automatic", "notes": ["…"]   // confidence: "automatic", or "mixed" if the destination has blocked files
     },
-    "review_items": [ /* §5.4 — the per-file editable list */ ]
+    "review_items": [ /* §5.4 — the per-file editable list */ ],
+    "placed_photos": [ /* SYSTEM, optional — the photos the tracks or the fallback place, by path (below) */ ]
   },
   "file_less": true                        // SYSTEM, optional: a container destination (§4.2) — its fallback
 }                                          //   only seeds the destinations inside it
 ```
 
 **Editable surface in this file = `folder_fallback` (per destination) + `review_items` (per file).**
-Automatically-placed files (preserve-native, GPX interpolation/extrapolation, fallback) are **only
-counted** in `summary`, never listed per file — they are not editable here (they're automatic; the
-exact per-file writes live in `photos-24-executable-plan.json`, which the editor does not touch).
+Every photo leaves geotag with a position: there is no answer that leaves one without. A photo the tracks
+and the fallback both miss waits until you give **its folder a fallback** — one answer that places every
+such photo of the folder (and, once accepted there, of the folders inside it) — or **it a position of its
+own**.
+
+Photos with their own position are **only counted** in `summary`. Photos the tracks or the fallback place
+are counted too, and listed by path in `placed_photos` (read-only) so that you can give one of them a
+position of its own (§5.4, `chosen_by_user`); the exact per-file writes live in
+`photos-24-executable-plan.json`, which the editor does not touch.
+
+| `placed_photos[]` field | Type | Meaning |
+|-------|------|---------|
+| `relative_path` | string | The photo's workspace-relative path. |
+| `content_fingerprint` | string \| null | Its identity. |
+| `placed_by` | `"tracks"` \| `"folder_fallback"` | What places it now. |
+
+`placed_photos` is present only when some photo of the destination is placed so.
 
 ### 5.3 `folder_fallback` cell
 
@@ -556,42 +571,64 @@ blocks** (`requires_user_input` is always `false`).
 
 ### 5.4 `review_items[]` — the per-file decisions
 
-One entry per file that needs the human (or that the human already locked/accepted):
+One entry per file that needs the human (or that the human already gave a position):
 
 | Field | Type | Editable | Meaning |
 |-------|------|----------|---------|
 | `relative_path` | string | no | Workspace-relative path of the photo (e.g. `6-photos-by-dest/Japan/IMG_1.arw`). The editor's save names a review item by it. |
 | `content_fingerprint` | string \| null | no | The photo's identity. A decision is found again by it — through geotag's own rename of the photo — not by the path, within the photo's destination: moved to another folder (or its folder renamed), the photo is asked again. |
-| `tracks` | object | no | On a `no_reliable_gps_source` or `accepted_unlocated` photo that has a resolved time and that the tracks did not place: why. `reason` with its evidence: `no_tracks` (no track at all); `outside_track` + `seconds_from_track`; `track_gap` + `seconds_from_track` + `gap_seconds`, and `segment_break: true` when the gap is a break between two `<trkseg>` of the track (never bridged, however short); `track_jump` + `seconds_from_track` + `jump_meters`; `tracks_disagree` + `gpx_files` (the two tracks — each a file name, or `"<file> (track N)"` when both are tracks of one file) + `apart_meters`. Where several tracks miss, the one nearest in time speaks. |
-| `reason` | `"no_reliable_gps_source"` \| `"manual_locked"` \| `"accepted_unlocated"` \| `"own_position_contradicted"` | no | Why it's here (see below). |
+| `tracks` | object | no | On a `no_reliable_gps_source` photo that has a resolved time and that the tracks did not place: why. `reason` with its evidence: `no_tracks` (no track at all); `outside_track` + `seconds_from_track`; `track_gap` + `seconds_from_track` + `gap_seconds`, and `segment_break: true` when the gap is a break between two `<trkseg>` of the track (never bridged, however short); `track_jump` + `seconds_from_track` + `jump_meters`; `tracks_disagree` + `gpx_files` (the two tracks — each a file name, or `"<file> (track N)"` when both are tracks of one file) + `apart_meters`. Where several tracks miss, the one nearest in time speaks. |
+| `reason` | `"no_reliable_gps_source"` \| `"manual_locked"` \| `"own_position_contradicted"` — or `"chosen_by_user"` in an entry you add | no | Why it's here (see below). |
 | `own_position`, `proposed_position`, `apart_meters` | object, object \| null, int \| null | no | On an `own_position_contradicted` item: the photo's own position `{lat, lon}`; where the tracks place it at its corrected time `{lat, lon, method, gpx_file}` (`null` only on an item kept for an answer while no track places it); and how far apart, in metres. |
 | **`user_decision.manual_lat`** | number \| `""` | **yes** | Human-entered latitude (set both). |
 | **`user_decision.manual_lon`** | number \| `""` | **yes** | Human-entered longitude. |
-| **`user_decision.accept_unlocated`** | bool | **yes** | Accept leaving this file with no GPS (taken only when neither the tracks nor the folder fallback place it). A file holding exactly latitude 0, longitude 0 — a device's no-fix value — has it removed, and the log records it. |
 | `requires_user_input` | bool | no | `true` only for `no_reliable_gps_source` (until resolved). |
 | `stale_user_decision` | bool (always `false`) | no | — |
 
+A `user_decision` holds `manual_lat` and `manual_lon` and nothing else: any other field — `accept_unlocated`,
+from when a photo could be left without a position, among them — is a blocker naming it, and the editor shows
+the record as one it cannot read until the field is removed.
+
 `reason` values:
-- **`no_reliable_gps_source`** — *blocked*; `requires_user_input: true`. The human resolves it by setting
-  `manual_lat`+`manual_lon` **or** `accept_unlocated: true`. On the next run it reclassifies (below).
-- **`manual_locked`** — informational: a valid manual coordinate is already set. Editable (change/clear it).
-- **`accepted_unlocated`** — informational: `accept_unlocated` is set, so the file stays without GPS.
-  Editable.
+- **`no_reliable_gps_source`** — *blocked*; `requires_user_input: true`. Neither the tracks nor the folder
+  fallback place the photo. Resolve it, best first, by setting the **folder fallback** of its destination
+  (`folder_fallback.user_decision.fallback_lat`/`fallback_lon`, §5.3) — which places every such photo of the
+  folder at once — or by setting `manual_lat`+`manual_lon` on the item, for this photo alone. On the next run
+  it reclassifies (below).
+- **`manual_locked`** — informational: a valid manual coordinate is already set. Editable (change it; clear
+  it and the photo goes back to the tracks or the fallback, or waits if neither places it).
+- **`chosen_by_user`** — an entry **you add** to give a photo the tracks or the fallback already place a
+  position of its own (see below). Geotag takes it and writes it back as `manual_locked`.
 - **`own_position_contradicted`** — a photo **with its own GPS position** that the camera's offset, agreed from its
   other photos on the tracks, contradicts (listed in its photos-21 cell's `positions_contradicted`), and that lies more
   than `gpx_anchor_max_point_distance_meters` from where the tracks place it at its corrected time — most likely a
   wrong fix (jitter, a fix from minutes before). `requires_user_input: false`: the photo keeps its own position. To
   replace it, set `manual_lat`/`manual_lon` — the editor's **take the track's position** writes `proposed_position`
   — and it is written as `manual_locked`, the log keeping the position it replaced. Its `user_decision` holds only
-  those two (`accept_unlocated` there is a blocker: a photo with its own position is not left unlocated). An answered
-  item stays while its answer does. Never raised for a group named several bodies (§5d). A contradicted photo the
+  those two. An answered item stays while its answer does. Never raised for a group named several bodies (§5d). A contradicted photo the
   tracks place nowhere at its corrected time is not an item: it keeps its own position and is listed in its
   destination's `gps_decisions.contradicted_without_track` (`[{ "relative_path", "content_fingerprint" }]`).
 
-(So resolving a `no_reliable_gps_source` item → after re-run it becomes `manual_locked` or
-`accepted_unlocated` with `requires_user_input: false` — or, with `accept_unlocated` and a folder fallback
-or track that now places it, it is placed and only counted. A photo with its own GPS is preserved and never
-listed, but as `own_position_contradicted`. The editor's per-file to-do list is the `no_reliable_gps_source` items.)
+(So resolving a `no_reliable_gps_source` item → after re-run it becomes `manual_locked` with
+`requires_user_input: false` — or, placed by the folder fallback you set, it leaves the review items and is
+listed in `placed_photos`. A photo with its own GPS is preserved and never listed, but as
+`own_position_contradicted`. The editor's per-file to-do list is the `no_reliable_gps_source` items.)
+
+**A position for a photo the tracks or the fallback already place.** Add to its destination's
+`gps_decisions.review_items` an entry naming it, with the reason `chosen_by_user` and the position:
+
+```jsonc
+{ "relative_path": "6-photos-by-dest/Japan/IMG_7.arw",   // as placed_photos lists it
+  "reason": "chosen_by_user",
+  "user_decision": { "manual_lat": 35.0116, "manual_lon": 135.7681 } }
+```
+
+The next `geotag plan` places the photo there (`manual_locked`, which outranks the tracks and the fallback)
+and rewrites the entry as a `manual_locked` item. It stays the photo's while it holds a position, whatever
+tracks or fallback come to cover the photo later; empty both fields to give it back to them. An entry
+`chosen_by_user` whose `relative_path` names no photo of that destination, or a photo holding its own
+position, is a blocker naming it. The editor's **set position**, in a destination's folded list of placed
+photos, writes this entry for you.
 
 The record's top-level `track_disagreements` (read-only, present only when it happened) lists each pair of
 tracks that cover the same time in places farther apart than `gpx_tracks_agree_max_distance_meters`, and how
@@ -608,10 +645,11 @@ them; nothing here asks. It measures the worse device's error.
 ### 5.5 `summary` (read-only counts)
 
 `files_total`, `preserve_native_gps`, `automatic_gpx_interpolation`, `automatic_gpx_extrapolation`,
-`automatic_folder_fallback`, `manual_locked`, `manual_review_required`, `blocked`,
-`no_gps_change_needed`. Useful for a per-destination progress display; the editor never writes these. A photo
-whose position is exactly latitude 0, longitude 0 — what a device writes with no fix — counts as having none: it is
-never in `preserve_native_gps`, and is placed like any photo without a position.
+`automatic_folder_fallback`, `manual_locked`, `manual_review_required`, `blocked`. Useful for a
+per-destination progress display; the editor never writes these. A photo whose position is exactly latitude 0,
+longitude 0 — what a device writes with no fix — counts as having none: it is never in `preserve_native_gps`,
+and is placed like any photo without a position, the position written over the zeros and the log keeping them
+as what it replaced.
 
 ---
 
@@ -860,8 +898,9 @@ UI should make the *effective* choice obvious and ideally offer them as mutually
   `corrected_offset_seconds` if given, else the current offset; otherwise nothing.
 - **Folder fallback:** `fallback_lat`+`fallback_lon` (if both set & valid) → `accept_proposal`.
 - **Per-file GPS:** the photo's own GPS (preserved; no decision read) → `manual_lat`+`manual_lon` (if both set
-  & valid) → the tracks at its resolved time → the folder fallback → `accept_unlocated`. (If none applies the
-  file stays blocked = `no_reliable_gps_source`.)
+  & valid, on its item or on a `chosen_by_user` entry you added) → the tracks at its resolved time → the folder
+  fallback. (If none applies the file stays blocked = `no_reliable_gps_source`, and no plan is made until its
+  folder has a fallback or it a position; finalize and merge, too, refuse a photo that holds no position.)
 
 A bare `""`/`false` everywhere = "no decision yet".
 
@@ -888,7 +927,7 @@ Mirror these client-side; a value that fails makes geotag reject the whole artif
 | `confirmed_against_tracks` (photos-22) | Required whenever `confirmed` is `true`: a list (`[]` allowed, only meaning "no track was shown") of `{ "gpx_file": <path under gpx_root>, "sha256": <its SHA-256> }`, each a non-empty string — copied from `proposal.tracks`. `[]` with `confirmed: false`. |
 | `corrected_offset_seconds` (photos-22) | `""` (zero scrub) or a whole number of seconds — checked whether or not the cell is confirmed. |
 | `fallback_lat` / `fallback_lon`, `manual_lat` / `manual_lon` | Numbers (not booleans, not strings); latitude ∈ [-90, 90], longitude ∈ [-180, 180]. Set both or neither. `""` allowed (= unset). |
-| `accept_proposal` / `accept_unlocated` / `confirmed` | `true` or `false` (absent or `null` reads as `false`); anything else — `"false"`, `1`, `"yes"` — is a blocker, never coerced. Default `false`. |
+| `accept_proposal` / `confirmed` | `true` or `false` (absent or `null` reads as `false`); anything else — `"false"`, `1`, `"yes"` — is a blocker, never coerced. Default `false`. |
 
 ---
 

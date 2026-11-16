@@ -22,7 +22,7 @@ by-dest photo it plans to place, blocking one whose value is not the handoff's; 
 :::{bld} Merge's preflight
 :id: BLD-merge_preflight
 :status: ruled
-:realises: RUL-merge_rechecks_gates, RUL-merge_blocked_changes_nothing, RUL-merge_takes_finalized_current, RUL-merge_refuses_changed_since_finalize, RUL-unfingerprinted_photo_stops_merge, RUL-hidden_among_photos_stops_merge, RUL-imagemagick_absent_stops_merge
+:realises: RUL-merge_rechecks_gates, RUL-merge_blocked_changes_nothing, RUL-merge_takes_finalized_current, RUL-merge_refuses_changed_since_finalize, RUL-unfingerprinted_photo_stops_merge, RUL-hidden_among_photos_stops_merge, RUL-imagemagick_absent_stops_merge, RUL-merge_refuses_unplaced
 
 Merge's `preflight` SHALL run, under the workspace lock and before the library's, stopping at the first that fails:
 the seal; the initialization mark; a link at the top level; a missing managed folder; a misplaced top-level entry; the
@@ -33,7 +33,8 @@ log as the handoff vouches for it ({need}`BLD-prep_log_checked`); `photos-26-com
 manifest present, the complete log carrying prep's; photos by date holding no photo; photos by destination holding
 only `image` and `raw` files, no development subfolder and no link; every photo there one of the finalized set — the
 handoff's photos by destination joined by fingerprint to `photos-24`'s renames, each under its final name; and each
-photo of that set still there with the size and modification time `photos-26-finalized-media.json` recorded. Any
+photo of that set still there with the size and modification time `photos-26-finalized-media.json` recorded, and
+holding a position ({need}`BLD-no_photo_unplaced`). Any
 blocker ends the run with exit status 2 before the library lock, the plan or the summary. It stops, too, on a photo in `6-photos-by-dest` whose handoff record holds no fingerprint and on any hidden file or folder there, each named.
 :::
 

@@ -46,8 +46,8 @@ affordance.
 - **Per-date offset buckets**: grouped, collapsible, fan-out edit (#115).
 - **A contradicted own position is a review that waits on nothing**: the GPS worklist lists it beside the photos
   nothing placed, both positions and the distance said, with **take the track's position** (writing it as
-  `manual_lat`/`manual_lon`) and **keep its own position** — no "leave unlocated", a photo with its own position not
-  being left without one. Code site `contradictedNote` / `takeTrackPosition` in `web/app.js`, tested in
+  `manual_lat`/`manual_lon`) and **keep its own position** — no third choice, no photo being left without a
+  position. Code site `contradictedNote` / `takeTrackPosition` in `web/app.js`, tested in
   `app_clock_change.test.mjs` (BACKLOG 16).
 - **A clock changed during the day is one tick on the day's row**: the offset panel names both runs and offers
   "split the day where the clock changed"; for each photo without GPS whose part the runs leave unsettled, a choice
@@ -97,6 +97,25 @@ affordance.
   and how to repair it — in place of "No photos-2x". Why: a record a hand broke still holds the user's answers; "no
   file" sends them to re-plan, and geotag stops on the same record anyway, leaving it as it is. Saving into it stays
   refused. Code site `recordAbsent` / `recordAbsentText` in `web/app.js`, tested in `app_save.test.mjs` (BACKLOG 52).
+- **A photo nothing places is offered its folder's fallback first**: its review item leads with **set the folder's
+  fallback**, which opens that destination's fallback cell (saying what is set there, if anything), and only below it
+  **or a position for this photo alone**. Why: the owner ruled no photo leaves geotag unlocated, the folder fallback
+  being the answer for such photos (BACKLOG 21) — one coordinate there places every photo of the folder nothing else
+  places, where a position typed per photo places one. The order is presentation; what places a photo is the
+  placement order, in the spec. Code site `reviewOffers` / `controls` in `web/app.js`, tested in
+  `app_placement.test.mjs`.
+- **The photos the tracks or the fallback place are a folded list per destination, each with "set position"**: under
+  the worklist, `N placed — by the tracks, by the fallback` folds open to the photos photos-23 lists as placed
+  (`placed_photos`, which geotag writes for this — the editor's source, as it already loads photos-23; the server
+  computes nothing); **set position** opens a coordinate panel for that photo alone, and a save writes the entry a
+  hand would write — a `chosen_by_user` review item with the photo's path and position, added to the destination's
+  `review_items` (the one save that adds an entry rather than filling a `user_decision`, since a photo placed
+  automatically has no item to fill). Folded, because nothing about these photos waits. Code site
+  `withChosenCells` / `placedSummary` / `renderGps` in `web/app.js` and `_chosen_item` in `server.py`, tested in
+  `app_placement.test.mjs` and `test_serve.py` (BACKLOG 21).
+- **A photos-23 holding a field a position decision does not have is shown as unreadable**: the server reads it with
+  geotag's own check (`unknown_review_fields`) and shows it as a record that does not parse, naming the field —
+  `accept_unlocated` from an older record among them — rather than show answers geotag refuses (BACKLOG 21).
 - **Folder GPS fallback modelled as presence/absence** — no enum; an unset fallback reads `none`, not
   `resolved`, so it cannot falsely propagate; a **Clear** button resets to none (#241–#243).
 - Served as **package data via importlib.resources, no bundler**; folded into the package as the `edit`
@@ -163,5 +182,8 @@ event/sink seam.
   browser tab must not kill a running phase.
 - **Light / reactive theme** — NO. Dark-only; native controls themed via `color-scheme: dark` (#234).
 - **In-app editor "Re-run" button** — REMOVED; the hover preview follows the cursor instead (#133).
+- **"Leave unlocated (accept no GPS)"** — REMOVED, the checkbox and the decision field with it: the owner wants no
+  unlocated photos, the folder fallback being their answer (BACKLOG 21; behaviour in the spec,
+  `RAT-no_photo_unlocated`).
 - **Reordering the unknown-group snippet** — would reintroduce the dropped-comma / invalid-config bug;
   the regression test guards it (#278, #283).
