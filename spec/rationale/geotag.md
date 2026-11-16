@@ -244,7 +244,7 @@ one of places, and this is the one place the tool can hold it to that.
 :id: RAT-clock_is_the_cameras_for_the_day
 :status: ruled
 :forced: yes
-:follows_from: RAT-offset_per_day_and_place
+:follows_from: RAT-offset_per_camera_destination_day
 :justifies: RUL-offset_shared_within_day, RUL-same_day_offsets_agree
 
 A camera has one clock. Sorting a day's photos into a museum and a castle does not give it two: what its own positions
@@ -384,24 +384,11 @@ fallback's of a relation.
 
 ## 7. Per-destination structure
 
-:::{rat} A clock is wrong by its own amount, day by day
-:id: RAT-offset_per_day_and_place
-:status: ruled
-:forced: yes
-:follows_from: RAT-offset_per_camera_destination_day
-:justifies: RUL-offset_per_camera_destination_day
-
-A camera's clock drifts, and is set again — to local time, on a trip, often each morning. Its error is one amount for
-one day's shooting and another the next, and destinations are where the user went, not when; one offset per camera, or
-per destination over several days, would be wrong for every day but one. A day in one place is the unit within which
-the error stays put, so it is the unit decided.
-:::
-
 :::{rat} A clock changed during the day shows only on the GPS
 :id: RAT-clock_change_seen_by_gps
 :status: ruled
 :forced: no
-:follows_from: RAT-offset_per_day_and_place, RAT-anchor_agreement
+:follows_from: RAT-offset_per_camera_destination_day, RAT-anchor_agreement
 :justifies: RUL-day_split_into_parts, RUL-clock_change_split_proposed, RUL-clock_change_needs_gps, RUL-alternating_runs_no_clock_change, RUL-clock_change_needs_acceptance, RUL-clock_change_accepted_once, RUL-clock_change_parts_own_evidence, RUL-clock_change_unsettled_photo_asked, RUL-clock_change_settled_photo_not_asked
 
 A day is the unit because a clock is set again overnight; but it is also set at lunch, or reset, and then the day has
@@ -900,7 +887,7 @@ it can be seen later and mended.
 :id: RAT-camera_clock_ignores_dst
 :status: ruled
 :forced: no
-:follows_from: RAT-offset_per_day_and_place
+:follows_from: RAT-offset_per_camera_destination_day
 :justifies: RUL-camera_zone_offset_for_the_day
 
 A camera's clock is set by hand and keeps its setting through the night clocks change; a phone's follows the

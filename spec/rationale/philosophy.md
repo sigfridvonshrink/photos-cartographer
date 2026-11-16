@@ -161,11 +161,16 @@ it, so deleting a decision *restores* the prior state.
 :status: ruled
 :forced: yes
 :follows_from: FCT-clocks_drift
+:justifies: RUL-offset_per_camera_destination_day
 
 Start with the fact. Because each camera's clock is wrong by its own amount, and that amount changes from day to day
 (F2), there is no single offset to discover — the correct answer is **per (camera group, destination, day)**. *That*
 granularity is the entire source of the decisions' "complexity": it is a consequence of real, time-varying drift, not a
 premise.
+
+A camera's clock drifts, and is set again — to local time, on a trip, often each morning. Destinations are where the
+user went, not when: one offset per camera, or per destination over several days, would be wrong for every day but one.
+A day in one place is the unit within which the error stays put, so it is the unit decided.
 
 The offset is **inferred and applied per (camera group, destination, day)**; corrections fall *between* destinations
 and between days, never within one destination's day — which is why **one destination = one coherent shoot**.
