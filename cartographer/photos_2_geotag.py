@@ -1630,46 +1630,68 @@ class GeotagWorkflow:
         known, and the track points, a cell whose every photo lies farther than `gpx_anchor_max_clock_error_seconds`
         from all of them — there being such a photo — asks for an offset of the user's own; its proposal, still
         shown, says why. A clock reset to its factory date is the case. With no other device's photo there,
-        nothing can tell, and the guess stands as it is."""
-        bound = CONFIG["gpx_anchor_max_clock_error_seconds"]
-        known, track_times = {}, None
-        for (dest, bucket), (group, _g, _p, _a, _rep, _date, _day, sel, _tz) in sorted(recall.items()):
-            cell = destinations[dest]["camera_group_time_decisions"].get(bucket) or {}
-            proposal = cell.get("proposal") or {}
-            if proposal.get("proposal_source") not in self._FAR_CHECKED_PROPOSALS:
-                continue
-            if dest not in known:
-                rows = compute_resolved_utc(by_dest[dest], groups, {"destinations": {dest: destinations[dest]}})
-                # what another device says of when the destination was visited: a phone's photo, by its own
-                # offset or the zone; a camera's, by its cell's settled offset only — never one corrected before,
-                # whose offset no record here vouches for, nor a file naming no device, whose time may be any
-                known[dest] = [(r["camera_group"], r["relative_path"], t) for r in rows
-                               if r["resolved_utc_status"] == "valid" and (t := _parse_utc(r["resolved_utc"]))
-                               and ((cls := (groups.get(r["camera_group"]) or {}).get("camera_group_class"))
-                                    == "smartphone"
-                                    or (cls == "camera" and r["time_rule_used"] == "camera_group_offset"
-                                        and r["resolved_utc_provenance"] in self._SETTLED_SOURCES))]
-            others = [(p, t) for g2, p, t in known[dest] if g2 != group]
-            if not others:
-                continue
-            if track_times is None:
-                track_times = sorted(p.time_utc for p in gpx.points)
-            off = proposal["proposed_offset_seconds"]
-            times = []
-            for f in sel:
-                if (t := _parse_camera_naive(f.get("source_naive_time"))) is not None:
-                    try:
-                        times.append(t.replace(tzinfo=timezone.utc) + timedelta(seconds=off))
-                    except OverflowError:
-                        continue
-            why = far_from_evidence(times, others, track_times, bound)
-            if why is None:
-                continue
-            proposal["far_from_evidence"] = why
-            eff = cell.get("effective_time_anchor")
-            if isinstance(eff, dict) and eff.get("source") in self._FAR_CHECKED_SOURCES:
-                cell["effective_time_anchor"], cell["requires_user_input"] = "", True
-                cell.pop("decision_mode", None)
+        nothing can tell, and the guess stands as it is.
+
+        The fixes' own times are judged first, in rounds, each against what the rounds before left, until a round
+        withdraws none — a phone's fix offset withdrawn is no evidence for a later round; then the guesses, all
+        against what is left (BLD-offset_far_from_evidence)."""
+        checked = [(dest, bucket, entry) for (dest, bucket), entry in sorted(recall.items())
+                   if ((destinations[dest]["camera_group_time_decisions"].get(bucket) or {}).get("proposal") or {})
+                   .get("proposal_source") in self._FAR_CHECKED_PROPOSALS]
+        source = lambda c: destinations[c[0]]["camera_group_time_decisions"][c[1]]["proposal"]["proposal_source"]
+        fixes = [c for c in checked if source(c) == "gps_time"]
+        track_times = sorted(p.time_utc for p in gpx.points) if checked else []
+        while fixes:
+            known = {}
+            withdrawn = [c for c in fixes if self._withhold_if_far(c, destinations, known, by_dest, groups,
+                                                                    track_times)]
+            if not withdrawn:
+                break
+            fixes = [c for c in fixes if c not in withdrawn]
+        known = {}
+        for c in checked:
+            if source(c) != "gps_time":
+                self._withhold_if_far(c, destinations, known, by_dest, groups, track_times)
+
+    def _withhold_if_far(self, checked, destinations, known, by_dest, groups, track_times):
+        """Judge one far-checked cell against its destination's evidence as `known` holds it (worked out once per
+        destination); mark its proposal far, or unmark it, and withdraw an offset it took effect by. True when an
+        offset was withdrawn."""
+        dest, bucket, (group, _g, _p, _a, _rep, _date, _day, sel, _tz) = checked
+        cell = destinations[dest]["camera_group_time_decisions"][bucket]
+        proposal = cell["proposal"]
+        if dest not in known:
+            rows = compute_resolved_utc(by_dest[dest], groups, {"destinations": {dest: destinations[dest]}})
+            # what another device says of when the destination was visited: a phone's photo, by its own
+            # offset or the zone; a camera's, by its cell's settled offset only — never one corrected before,
+            # whose offset no record here vouches for, nor a file naming no device, whose time may be any
+            known[dest] = [(r["camera_group"], r["relative_path"], t) for r in rows
+                           if r["resolved_utc_status"] == "valid" and (t := _parse_utc(r["resolved_utc"]))
+                           and ((cls := (groups.get(r["camera_group"]) or {}).get("camera_group_class"))
+                                == "smartphone"
+                                or (cls == "camera" and r["time_rule_used"] == "camera_group_offset"
+                                    and r["resolved_utc_provenance"] in self._SETTLED_SOURCES))]
+        others = [(p, t) for g2, p, t in known[dest] if g2 != group]
+        off = proposal["proposed_offset_seconds"]
+        times = []
+        for f in sel:
+            if (t := _parse_camera_naive(f.get("source_naive_time"))) is not None:
+                try:
+                    times.append(t.replace(tzinfo=timezone.utc) + timedelta(seconds=off))
+                except OverflowError:
+                    continue
+        why = far_from_evidence(times, others, track_times, CONFIG["gpx_anchor_max_clock_error_seconds"]) \
+            if others else None
+        if why is None:
+            proposal.pop("far_from_evidence", None)
+            return False
+        proposal["far_from_evidence"] = why
+        eff = cell.get("effective_time_anchor")
+        if isinstance(eff, dict) and eff.get("source") in self._FAR_CHECKED_SOURCES:
+            cell["effective_time_anchor"], cell["requires_user_input"] = "", True
+            cell.pop("decision_mode", None)
+            return True
+        return False
 
     def _tracks_by(self, gpx, times, frames):
         """The track points the drift check sets a bucket's photos against: those within

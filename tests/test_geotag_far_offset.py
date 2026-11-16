@@ -176,3 +176,28 @@ def test_far_from_evidence_measures_the_nearest_of_each():
     assert why["nearest_other_photo"] == "q" and why["nearest_other_photo_seconds"] == 4 * 86400
     assert why["nearest_track_seconds"] == 2 * 86400 and why["other_photos"] == 2
     assert cal.far_from_evidence(times, others, [], 4 * 86400) is None
+
+
+@pytest.mark.spec("RUL-offset_far_from_evidence_asks", "RUL-gps_time_far_from_evidence_withheld",
+                  "BLD-offset_far_from_evidence", test="TST-geotag_far_offset-a_withheld_fix_offset_is_no_evidence")
+def test_a_phone_offset_withheld_as_far_is_no_evidence_for_a_guess(tmp_path):
+    """A phone's fixes put it on the reset camera's day, 2000-01-01; another camera, its offset the user's own, says
+    2026. The phone's fix offset is far from that and withdrawn first; the reset camera's guess, near only the
+    withdrawn phone, is then far from everything left and asks too."""
+    def fix(name, naive, utc):
+        return dict(_photo(name, naive, PHONE, "+01:00"), native_gps={"lat": 51.2, "lon": 3.2}, has_native_gps=True,
+                    gps_utc=utc)
+    phone = [fix("p1.heic", "2000:01:01 10:00:00", "2000-01-01T07:00:00Z"),
+             fix("p2.heic", "2000:01:01 11:00:00", "2000-01-01T08:00:00Z")]
+    other = [_photo("o.arw", "2026:05:01 15:00:00", OTHER)]
+    settled = {"accept_proposal": False, "accepted_offset_seconds": "", "manual_offset_seconds": -7200}
+    art, blockers = _wf(tmp_path).build_time_decisions(RESET + phone + other, GROUPS,
+                                                       _prior(**{CAM: _accept(-3600), OTHER: settled}), _gpx())
+    assert not blockers, blockers
+    cells = art["destinations"][DEST]["camera_group_time_decisions"]
+    (pcell,) = [c for k, c in cells.items() if k.startswith(PHONE)]
+    assert pcell["proposal"]["proposal_source"] == "gps_time" and pcell["proposal"]["far_from_evidence"]
+    assert pcell["effective_time_anchor"] == ""
+    cell = cells[CAM]
+    assert cell["proposal"]["proposal_source"] == "timezone_naive" and cell["effective_time_anchor"] == ""
+    assert cell["proposal"]["far_from_evidence"]["nearest_other_photo"] == f"{DEST}/o.arw"
