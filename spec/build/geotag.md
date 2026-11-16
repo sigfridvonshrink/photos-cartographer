@@ -105,8 +105,10 @@ the renames of the JPEGs set aside beside them ({need}`BLD-set_aside_renamed_wit
 A GPX self-anchor offset SHALL be set as `effective_time_anchor` with `decision_mode: "auto_resolved"` when its
 anchors do not conflict and `camera_time_and_timezone_policy.multi_anchor_auto_apply` holds for two or more anchors,
 or `single_anchor_auto_apply` for one — a phone's one anchor never ({need}`BLD-phone_offset_cell`); a destination's `inherited` timezone proposal is set as its
-`effective_iana_timezone` likewise, a `config_default` one never; a `recorded_offset`, `timezone_naive` or `neighbour_day` offset proposal
-becomes effective only with `accept_proposal: true`.
+`effective_iana_timezone` without the user's answer, whatever these settings say, a `config_default` one never; a
+`recorded_offset`, `timezone_naive` or `neighbour_day` offset proposal takes effect only as
+{need}`BLD-timezone_naive_offset` says — confirmed at the drift check where track points lie by its photos, else with
+`accept_proposal: true`.
 :::
 
 :::{bld} How an offset is accepted
@@ -251,7 +253,7 @@ executable runs on.
 :status: ruled
 :realises: RUL-missing_tracks_stop_geotag, RUL-no_tracks_no_stop, RUL-tracks_never_joined
 
-`geotag plan` SHALL stop before its first record, exit 2, when `gpx_root` is set and is not a directory — `geotag execute` then finds its plan stale; an empty `gpx_root`, or one holding no track, plans without tracks. The index keeps each file's points as a track of its own (`GPXIndex.tracks()`) and its SHA-256 (`file_sha`); placement and anchoring read the tracks one by one.
+`geotag plan` SHALL stop before its first record, exit 2, when `gpx_root` is set and is not a directory — `geotag execute` then finds its plan stale; an empty `gpx_root`, or one holding no track, plans without tracks. The index keeps each `<trk>` of each file as a track of its own (`GPXIndex.tracks()`), with the file's SHA-256 (`file_sha`); placement and anchoring read the tracks one by one.
 :::
 
 :::{bld} How tracks are ranked
@@ -417,6 +419,32 @@ plan read, `revalidate_plan` holding the plan stale where the table read now dif
 :realises: RUL-zone_from_photos_in_country, RUL-zone_from_photos_applies, RUL-no_timezone_to_inherit_waits, RUL-default_zone_proposed_only
 
 A destination holding photos, in a country whose `country_zones` are several, with no zone reaching it from above within the country nor one of a country of one timezone, SHALL be proposed `_zone_from_photos`: the one of `country_zones` at which, for each photo `_recorded_readings` gives — not a fixed-clock camera's, not yet corrected, not a kept true time, with an offset recorded beside its time — the zone's offset at the instant that offset gives, to the minute, is the offset recorded; none where no photo is read, or where none or several zones fit them all. It is `proposal_source: "photos_in_country"`, ahead of `config_default`, and takes effect like an inherited zone, `decision_mode: "auto_resolved"`, a `manual_iana_timezone` overriding it; the destinations within it inherit it.
+:::
+
+:::{bld} The question of the table of countries in the editor
+:id: BLD-editor_answers_zone_table
+:status: ruled
+:realises: RUL-zone_table_answered_in_editor
+:uses: BLD-zone_table_question
+
+The decision editor SHALL send, with the records it loads, `zone_table`: while `zone_table_question_pending`,
+`{"question": zone_table_question(…), "user_decision": {"download": ""}}`, shown at the head of its Time view, else
+null, and null in the demo. A save carrying `zone_table: [{"user_decision": {"download": "yes"|"no"}}]` is refused,
+nothing written, unless the answer is `yes` or `no` and, under the workspace lock, the question is still pending;
+otherwise, after the decision records and the configuration, it calls `settle_zone_table` with that answer, as `prep
+plan` does with `--download-zone-table`, lists `photos-02-zone-table.json` as written and returns what it said.
+:::
+
+:::{bld} The answer to the table of countries written by hand
+:id: BLD-zone_table_answered_by_hand
+:status: ruled
+:realises: RUL-zone_table_answered_by_hand
+:uses: BLD-zone_table_question
+
+`settle_zone_table` SHALL take a `photos-02-zone-table.json` holding `"download": "accepted"` with neither `copy` nor
+`failure` — written by hand — as the answer `yes` given to that `prep plan`, fetching and recording as
+{need}`BLD-zone_table_question` says, the record it replaces kept under `-NNN`; one holding `"download": "declined"` is
+a refusal, kept as given.
 :::
 
 
@@ -788,7 +816,7 @@ decimal places, and then no position is written ({need}`BLD-executable_plan`).
 :status: ruled
 :realises: RUL-photo_decision_follows_the_photo, RUL-unplaced_photo_listed, RUL-disagreeing_tracks_place_nothing, RUL-moved_photo_position_decided_anew, RUL-unplaced_photo_says_why
 
-Each of photos-23's `review_items` SHALL carry its photo's `content_fingerprint`, and a photo's earlier decision is the item, among its own destination's earlier `review_items` alone, with its fingerprint, or with the fingerprint its own values are pinned under, else — for an item carrying none — the item at its path. An item of a photo the tracks did not place carries `tracks`: the `reason` (`no_tracks`, `outside_track`, `track_gap`, `track_jump`, `tracks_disagree`) with `seconds_from_track`, `gap_seconds`, `jump_meters` or the `gpx_files` and `apart_meters` that go with it. The record's `track_disagreements` lists each pair of tracks that placed photos apart and how many, which `geotag plan` also warns of.
+Each of photos-23's `review_items` SHALL carry its photo's `content_fingerprint`, and a photo's earlier decision is the item, among its own destination's earlier `review_items` alone, with its fingerprint, or with the fingerprint its own values are pinned under, else — for an item carrying none — the item at its path. An item of a photo the tracks did not place carries `tracks`: the `reason` (`no_tracks`, `outside_track`, `track_gap`, `track_jump`, `tracks_disagree`, `time_from_date_fallback` ({need}`BLD-date_fallback_cell`)) with `seconds_from_track`, `gap_seconds`, `jump_meters` or the `gpx_files` and `apart_meters` that go with it — `time_from_date_fallback` with none. The record's `track_disagreements` lists each pair of tracks that placed photos apart and how many, which `geotag plan` also warns of.
 :::
 
 :::{bld} What a lower-ranked track said
@@ -1009,7 +1037,7 @@ is: the next `geotag plan` sets it aside under `-NNN` as it sets aside any plan 
 :status: ruled
 :realises: RUL-content_changed_write_held, RUL-failure_recorded, RUL-content_acceptance_is_of_that_content, RUL-content_acceptance_under_its_plan, RUL-failed_photo_named
 
-`photos-25-execution-summary.json` SHALL record the plan and execution ids, the SHA-256 of photos-24 and the dependencies it was validated against, counts per destination and in total, what was newly applied and what found satisfied, `failures` — each with its photo, operation id, operation `type` and the `error` that stopped it ({need}`BLD-write_failure_reason`) — `repeated_failures` ({need}`BLD-repeated_write_failure`) and blockers, `fingerprint_mismatches` — each with its expected and actual fingerprint and `user_decision.accept_fingerprint_change`, the one field a later execution reads — the snapshot, and run metadata apart; its `status` is `success`, `partial` (anything outstanding, a mismatch always), `failed` (nothing applied) or `rejected` (stopped before any change). An acceptance is read only from the summary of the same `plan_id` and holds for the `actual_fingerprint` it stands beside; a mismatch whose photo a later run of that plan finds still blocked is carried into the new summary as written. It is never a dependency.
+`photos-25-execution-summary.json` SHALL record the plan and execution ids, the SHA-256 of photos-24 and the dependencies it was validated against, counts per destination and in total, what was newly applied and what found satisfied, `failures` — each with its photo, operation id, operation `type` and the `error` that stopped it ({need}`BLD-write_failure_reason`) — `repeated_failures` ({need}`BLD-repeated_write_failure`) and blockers, `fingerprint_mismatches` — each with its expected and actual fingerprint and `user_decision.accept_fingerprint_change`, which the user writes and a later execution of the same plan reads, as it reads `failures` ({need}`BLD-repeated_write_failure`) — the snapshot, and run metadata apart; its `status` is `success`, `partial` (anything outstanding, a mismatch always), `failed` (nothing applied) or `rejected` (stopped before any change). An acceptance is read only from the summary of the same `plan_id` and holds for the `actual_fingerprint` it stands beside; a mismatch whose photo a later run of that plan finds still blocked is carried into the new summary as written. It is never a dependency.
 :::
 
 :::{bld} The reason a write failed
@@ -1038,6 +1066,20 @@ whose metadata write operations fail with the same set of operation types and er
 `repeated_failures` of the new summary — its path, `types`, `error` and `way_out` — and execute prints it with its way
 out: move the photo from photos by destination into photos by date, a `moved_back` {need}`BLD-workspace_check` passes
 with no acceptance, then run `prep plan`, `prep execute` and `geotag plan` again. The exit status is that of the run.
+:::
+
+:::{bld} A write's leftover cleared only by the journal
+:id: BLD-own_leftover_cleared
+:status: ruled
+:realises: RUL-geotag_clears_own_leftover, RUL-other_write_leftover_holds_photo, RUL-write_leftover_stops_geotag_plan
+
+`geotag execute` SHALL note a photo's metadata write operations `begun` in the plan's journal, and persist it under
+the lock the confirmations are written under, before it writes that photo's tags; it removes a `<file>_exiftool_tmp`
+beside the photo before the write ({need}`BLD-metadata_safe_write`) only where the journal held one of those operations
+`begun` as the run read it, and otherwise makes the photo a blocker naming the file, which it leaves where it is.
+`geotag plan` stops with each `<media name>_exiftool_tmp` under photos by destination named in a blocker of its own,
+apart from the folder's other files that are no photo; `execute` and `finalize` likewise with each but one beside a
+photo the plan writes, which is left to the writer ({need}`BLD-loop_gates`).
 :::
 
 

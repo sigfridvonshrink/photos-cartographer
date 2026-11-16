@@ -203,7 +203,7 @@ dependencies to vouch for what came before it.
 :verify: required
 :uses: DEF-geotag, DEF-managed_folders
 
-Geotag SHALL change only files in photos by destination — never a file in any other folder.
+Geotag SHALL change no media file outside photos by destination.
 :::
 
 :::{rul} A photo with no fingerprint stops geotag
@@ -295,8 +295,7 @@ it does not, extension aside, geotag SHALL rename that JPEG to the RAW's name, e
 :refines: RUL-set_aside_jpeg_renamed_with_raw
 :uses: DEF-geotag
 
-Geotag SHALL write nothing into a file outside photos by destination: a JPEG set aside beside its RAW is renamed, and
-no tag is written to it.
+Geotag SHALL write no tag into a JPEG set aside beside its RAW: it only renames it.
 :::
 
 ## 5. JSON artifact rule
@@ -575,6 +574,29 @@ A workspace's answer to whether to download the table of countries SHALL be kept
 again.
 :::
 
+:::{rul} The question of the table is answered in the editor too
+:id: RUL-zone_table_answered_in_editor
+:status: ruled
+:criticality: med
+:verify: required
+:refines: RUL-zone_table_asked_once
+
+The question whether to download the table of countries SHALL be answerable in the decision editor, the answer kept
+as one given to prep is.
+:::
+
+:::{rul} The question of the table is answered by hand too
+:id: RUL-zone_table_answered_by_hand
+:status: ruled
+:criticality: med
+:verify: required
+:refines: RUL-zone_table_asked_once
+:uses: DEF-control_records
+
+The question whether to download the table of countries SHALL be answerable by hand, in the record that keeps its
+answer — a permission written there downloading the table at prep's next plan.
+:::
+
 :::{rul} An unreadable record of the answer stops the run
 :id: RUL-unreadable_zone_table_record_stops
 :status: ruled
@@ -735,7 +757,9 @@ about once: at the check against the tracks where tracks lie by its photos, and 
 :verify: required
 :refines: RUL-proposals_need_acceptance
 
-An acceptance of a proposed clock offset SHALL hold only while the offset proposed is the one that was accepted.
+An acceptance of a proposed clock offset SHALL hold only while the offset proposed is the one accepted, or, proposed
+from the camera's own GPS, lies within the tolerance the configuration allows an accepted offset — the offset accepted
+being the one that takes effect.
 :::
 
 :::{rul} A proposal that has become another is asked about again
@@ -814,8 +838,9 @@ photos by destination itself among them, when it holds no photo directly.
 :verify: required
 :uses: DEF-geotag, DEF-destination, DEF-camera_group
 
-Geotag SHALL decide a camera's clock offset once for each destination and each day it took photos there, by the
-camera's own clock — a container destination, holding no photo, having none.
+Geotag SHALL decide a camera's clock offset once for each destination and each day it took photos there — a day split
+at a change of its clock once per part ({need}`RUL-day_split_into_parts`) — by the camera's own clock, a container
+destination, holding no photo, having none.
 :::
 
 :::{rul} An offset is proposed from its own evidence only
@@ -827,10 +852,11 @@ camera's own clock — a container destination, holding no photo, having none.
 :refines: RUL-offset_per_camera_destination_day
 
 Each offset SHALL be proposed only from that camera's own positions on that day — in that destination, else in
-another ({need}`RUL-offset_shared_within_day`) — or from the offset its photos there record with their times
+another ({need}`RUL-offset_shared_within_day`) — or from the times its own GPS fixes recorded
+({need}`RUL-gps_time_is_clock_evidence`), or from the offset its photos there record with their times
 ({need}`RUL-recorded_offset_proposed`), or from the destination's timezone; never from another day's offset — save the
 one its own GPS gave the day before or after, as {need}`RUL-neighbour_day_offset_proposed` proposes it — nor from one
-the user wrote or accepted on a guess in another destination.
+the user wrote apart from what the camera's positions support, or accepted on a guess, in another destination.
 :::
 
 :::{rul} A day's offset is the camera's wherever its photos were sorted
@@ -877,9 +903,10 @@ with their times where they record different ones.
 :refines: RUL-offset_per_camera_destination_day
 :uses: DEF-clock_offset
 
-A camera's day in a destination with no anchor of its own, and no offset from the same day elsewhere, SHALL be proposed
-the offset of the day before or after of the same camera in the same destination, where that day's offset was anchored
-by the camera's own GPS.
+A camera's day in a destination with no offset from its own GPS — its anchors or the times its fixes recorded — and no
+offset from the same day elsewhere SHALL be proposed the offset of the day before or after of the same camera in the
+same destination, where that day's offset was found from the camera's own GPS, in place of the one its photos record
+and the timezone's.
 :::
 
 :::{rul} A neighbouring day's offset waits for the user's acceptance
@@ -1091,7 +1118,8 @@ A proposed split of a camera's day SHALL NOT take effect until the user accepts 
 :verify: required
 :refines: RUL-clock_change_needs_acceptance
 
-An accepted split of a camera's day SHALL put the offset of each of its parts into effect with no further answer.
+An accepted split of a camera's day SHALL put the offset of each of its parts into effect with no further answer,
+save for each photo either part could have taken, or neither ({need}`RUL-clock_change_unsettled_photo_asked`).
 :::
 
 :::{rul} Each part is anchored by its own photos
@@ -2208,6 +2236,7 @@ user wrote it, for the user to replace.
 :anti: yes
 :verify: required
 :refines: RUL-geotag_rerun_keeps_settled
+:uses: DEF-own_values
 
 A photo whose fingerprint is taken again with a new value SHALL keep the own values geotag pinned for it under the old
 one, so long as the change maps one value to one.
@@ -2375,8 +2404,9 @@ place SHALL place that photo.
 :refines: RUL-chosen_position_honoured
 :uses: RUL-invalid_value_stops
 
-A position the user adds for one photo SHALL be refused unless it names a photo of that destination with no position
-of its own.
+A position the user adds for one photo, other than one answering the question about its contradicted own position
+({need}`RUL-contradicted_position_reviewed`), SHALL be refused unless it names a photo of that destination with no
+position of its own.
 :::
 
 :::{rul} An answer given for one photo is kept while it holds a position
@@ -2878,7 +2908,7 @@ A photo's rename SHALL be held back while a write to it is not counted as done.
 :criticality: high
 :anti: yes
 :verify: required
-:refines: RUL-every_change_journaled
+:refines: RUL-failed_operation_clean
 
 A photo whose planned changes cannot be made SHALL fail alone: every other photo's result is still recorded.
 :::
@@ -2916,6 +2946,42 @@ operation that failed.
 A photo whose metadata write fails in an execution as it failed in the previous execution of the same plan — the same
 operations, the same reason — SHALL be reported so, in the run's output and its record, with the way out: moving it
 back into photos by date, then running prep and planning geotag again.
+:::
+
+:::{rul} Geotag clears only the leftover of its own interrupted write
+:id: RUL-geotag_clears_own_leftover
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+:excepts: RUL-write_leftovers_by_dest_warned
+:uses: DEF-geotag
+
+Geotag SHALL remove the temporary file an interrupted metadata write left beside a photo only to write that photo
+again, and only where its own journal of the execution shows its write to that photo begun and never confirmed.
+:::
+
+:::{rul} Another leftover holds its photo back
+:id: RUL-other_write_leftover_holds_photo
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+:refines: RUL-geotag_clears_own_leftover
+
+Geotag's execution SHALL NOT write a photo beside which lies a temporary file of an interrupted metadata write that it
+may not remove ({need}`RUL-geotag_clears_own_leftover`): the photo fails, the file named and left where it is.
+:::
+
+:::{rul} A write's leftover stops geotag's plan
+:id: RUL-write_leftover_stops_geotag_plan
+:status: ruled
+:criticality: med
+:verify: required
+:refines: RUL-write_leftovers_by_dest_warned
+:uses: DEF-geotag
+
+Geotag's plan SHALL stop, naming it, on a temporary file an interrupted metadata write left in photos by destination.
 :::
 
 :::{rul} What an interrupted run changed is recorded by the next
@@ -2988,7 +3054,7 @@ Geotag SHALL NOT write to a photo while the image engine is not the one the phot
 :criticality: high
 :anti: yes
 :verify: required
-:refines: RUL-every_change_journaled
+:upholds: INV-no_stale_use
 :uses: DEF-geotag
 
 Geotag's execution and finalize SHALL NOT take a record of an earlier execution that they cannot read for none: they

@@ -193,6 +193,11 @@ event/sink seam.
   after it, and a run never waits on it. On a terminal the CLI asks y/N, the default no; where nobody can answer (a
   pipe) it says how to answer and goes on with the carried copy — that it never stops prep is behaviour, in the
   spec (`RUL-zone_table_never_stops_prep`).
+- **The decision editor shows the same question at the head of its Time view** while it is open — a row of its own,
+  answered *download it* / *keep the carried copy* and saved with the other answers, marked `unanswered`, never
+  `needs input`, since it holds nothing up. The Time view, because the table serves the choice of a destination's
+  country there; at its head, because the question stands before any destination's. That the editor answers it at all
+  is behaviour (`RUL-zone_table_answered_in_editor`).
 
 ---
 

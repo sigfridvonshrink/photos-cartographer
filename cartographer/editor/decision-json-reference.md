@@ -152,9 +152,14 @@ progress and to know when the file is "done". (Both are system-owned; don't set 
 `countries` is what `user_decision.country` (§4.3) is chosen from: its keys are the valid codes, each
 with its English `name` and its `zones` (sorted) — only zones the host's zone database knows. The table is the host's
 zone database's own (`zone.tab`, `iso3166.tab`) where it has one; else the copy downloaded for the workspace, kept in
-`photos-02-zone-table.json` (where the user said yes when `prep plan` asked); else the copy carried inside
+`photos-02-zone-table.json` (where the user said yes when `prep plan` asked, or in the editor); else the copy carried inside
 photos-cartographer. The executable plan's `depends_on.country_table` names which (`source`: `host`, `web` or
 `bundled`) and its `sha256`: another table makes the plan stale.
+
+The answer to whether to download the table is that record's `download`: `"declined"` keeps the carried copy;
+`"accepted"` is recorded with the `copy` downloaded. Written by hand, `{"download": "declined"}` is a refusal and
+`{"download": "accepted"}` alone has the next `prep plan` download the table. The editor answers it too, while it is
+open.
 
 ### 4.2 A destination
 

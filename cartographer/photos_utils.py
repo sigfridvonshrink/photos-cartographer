@@ -479,13 +479,20 @@ def settle_zone_table(ws, answer, reporter) -> None:
     `answer` is "yes", "no" or None — not answered. Where the host has its own table nothing is asked or recorded.
     "no" records the refusal; "yes" downloads the table once, now, and records it — or, where the download fails,
     records the answer and warns, the carried copy (or a copy downloaded earlier) staying in use. Unanswered with
-    nothing recorded says how to answer: prep is never stopped by the question (RUL-zone_table_never_stops_prep)."""
+    nothing recorded says how to answer: prep is never stopped by the question (RUL-zone_table_never_stops_prep). A
+    record holding `"download": "accepted"` alone — written by hand — is acted on as "yes". The decision editor calls
+    this with its answer as `prep plan` does (BLD-editor_answers_zone_table)."""
     version = bundled_zone_table()["tzdata_version"]
     if host_has_zone_table():
         if answer is not None:
             reporter.log("This host's zone database has its own table of countries: nothing to download.")
         return
     prior = read_zone_table_record(ws)
+    if answer is None and prior is not None and prior.get("download") == "accepted" \
+            and "copy" not in prior and "failure" not in prior:
+        # a permission written into the record by hand (BLD-zone_table_answered_by_hand): the table is downloaded now,
+        # as for one given to this run
+        answer = "yes"
     if answer is None:
         if prior is None:
             reporter.warn(f"Note: this host's zone database has no table of countries (zone.tab); geotag uses the "
@@ -581,8 +588,8 @@ def exiftool_mime_type(path: str):
 # The intermediate of a write to a media file: `<media>_exiftool_tmp`, the new file geotag has exiftool write
 # beside the photo and then renames over it (BLD-metadata_safe_write). A hard kill (SIGKILL/OOM/power loss) can
 # orphan one in a managed folder; prep recognizes and quarantines these (the live original is always intact —
-# the rename is atomic). Geotag's writer also unlinks a stale `_exiftool_tmp` for a file right before it
-# rewrites it. `<media>_original` is NOT one: no write of the pipeline leaves it, so that name is the backup
+# the rename is atomic). Geotag's writer clears one beside a photo only where its own journal shows its write to that
+# photo begun and never confirmed (BLD-own_leftover_cleared); any other stops geotag, left where it is. `<media>_original` is NOT one: no write of the pipeline leaves it, so that name is the backup
 # exiftool keeps of a USER's own edit — the camera's original — and is treated as any file of no media class
 # (RUL-user_backup_is_a_stray).
 _EXIFTOOL_ARTIFACT_SUFFIXES = ("_exiftool_tmp",)

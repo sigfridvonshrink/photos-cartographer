@@ -43,6 +43,7 @@ import sqlite3
 import stat
 import subprocess
 import sys
+import threading
 import xml.etree.ElementTree as ET
 import zoneinfo
 from datetime import datetime, timedelta, timezone
@@ -572,6 +573,11 @@ class GeotagWorkflow:
         self.fingerprints_here = {}
         # Live progress for the long phases (TTY: in-place bar; piped: a line every ~10 s; tests: quiet).
         self.coordinator = ProgressCoordinator()
+        # The execution's journal is written by the main thread as photos complete and by a worker as it begins a
+        # photo's write (BLD-own_leftover_cleared): one lock orders the two. `_journal_out` persists it, set by the
+        # execution for its run; without one the journal is kept in memory alone.
+        self._journal_lock = threading.Lock()
+        self._journal_out = None
 
     # --- preflight (RUL-geotag_gates, BLD-loop_gates) ------------------
 
@@ -726,9 +732,20 @@ class GeotagWorkflow:
                             f"into {by_dest}/ before geotagging: {_named(stray)}.")
 
         if nonphoto and for_execute:
-            # The leftover of a write this plan makes to a photo is the writer's to judge (BLD-metadata_safe_write),
-            # not a file put among the photos.
+            # The leftover of a write this plan makes to a photo is the writer's to judge (BLD-metadata_safe_write,
+            # BLD-own_leftover_cleared), not a file put among the photos.
             nonphoto = [(p, mc) for p, mc in nonphoto if not self._planned_write_leftover(p)]
+        # Any other leftover of an interrupted metadata write stops the command, named and left where it is — the plan
+        # stops on every one: only an execution whose own journal shows it began that write clears one
+        # (BLD-own_leftover_cleared).
+        leftovers = sorted(p for p, _mc in nonphoto if exiftool_artifact_base(os.path.basename(p)))
+        if leftovers:
+            blockers.append(f"{len(leftovers)} leftover(s) of an interrupted metadata write in {by_dest}/: "
+                            f"{_named(leftovers)}. Geotag clears only the one its own execution left, when that "
+                            "execution is resumed (`geotag execute` of the same plan); any other may be the only whole "
+                            "copy of something, so it is left where it is — move it out of the workspace, then re-run "
+                            "`geotag plan`.")
+            nonphoto = [(p, mc) for p, mc in nonphoto if p not in leftovers]
         if nonphoto:
             videos = sorted(p for p, mc in nonphoto if mc == "video")
             others = sorted(p for p, mc in nonphoto if mc != "video")
@@ -2839,17 +2856,14 @@ class GeotagWorkflow:
         photo as `<file>_exiftool_tmp`, never touching the photo; that file is synced to disk, then renamed over the
         photo, then the folder synced. Returns True on success; otherwise the reason it could not write — exiftool's
         own message, or the error that stopped it — kept beside the photo's failure (BLD-write_failure_reason). The
-        single seam the tests mock to avoid invoking exiftool."""
-        # An interrupted earlier write can have left `<file>_exiftool_tmp`. Geotag re-applies every un-confirmed
-        # file on resume, and the only file that can hold one is the one interrupted mid-write (never confirmed, so
-        # revisited here) — so removing the leftover for THIS target right before rewriting it cleans exactly the one
-        # that can exist. Safe: the photo is untouched (the rename never happened) and the leftover is a partial
-        # copy, never user media.
+        single seam the tests mock to avoid invoking exiftool.
+
+        A `<file>_exiftool_tmp` already beside the photo is never removed here: the caller clears geotag's own
+        (`_clear_own_leftover`), and any other is left where it is, the write failing as exiftool would
+        (BLD-own_leftover_cleared)."""
         tmp = abs_path + "_exiftool_tmp"
-        try:
-            os.remove(tmp)
-        except OSError:
-            pass  # absent (the normal case) or unremovable — exiftool refuses an output that exists
+        if os.path.lexists(tmp):
+            return f"{os.path.basename(tmp)} is beside it and was left where it is"
         cmd = (["exiftool", "-n"] + [f"-{k}={v}" for k, v in sorted(tags.items())] + ["-o", tmp, abs_path])
         try:
             out = subprocess.run(cmd, capture_output=True, text=True, stdin=subprocess.DEVNULL)
@@ -3049,6 +3063,19 @@ class GeotagWorkflow:
         if write_ops and already_written:
             res["applied"].extend(o["operation_id"] for o in write_ops)
         elif write_ops:
+            # A leftover of an interrupted write beside the photo is cleared only where this plan's journal shows its
+            # write begun and never confirmed — the one geotag's own write leaves. Any other may be the only whole copy
+            # of something: the photo is held back, the leftover named and left where it is (BLD-own_leftover_cleared).
+            own = any(journal.get(o["operation_id"]) == "begun" for o in write_ops)
+            leftover = abs_path + "_exiftool_tmp"
+            if not own and os.path.lexists(leftover):
+                res["blocker"] = (f"{rel}_exiftool_tmp: an interrupted metadata write's leftover beside {rel}, which "
+                                  "this plan's execution did not leave — it may be the only whole copy of something, "
+                                  "so it was left where it is. Move it out of the workspace, then run `geotag plan`")
+                return res
+            if own:
+                self._clear_own_leftover(leftover)
+            self._note_writes_begun(journal, [o["operation_id"] for o in write_ops])
             written = self._exiftool_write(abs_path, tags)
             if written is not True:
                 res["failed"] = [o["operation_id"] for o in write_ops]
@@ -3085,6 +3112,27 @@ class GeotagWorkflow:
                 res["blocker"] = f"{rel}: rename failed ({e})"
                 return res
         return done(final_abs)
+
+    @staticmethod
+    def _clear_own_leftover(leftover):
+        """Remove the leftover geotag's own interrupted write left beside a photo (BLD-own_leftover_cleared): the
+        photo is whole — the write puts the new file in its place only once it is complete — and the leftover a
+        partial copy of it."""
+        try:
+            os.remove(leftover)
+        except FileNotFoundError:
+            pass                                    # the write was begun, its output never opened
+
+    def _note_writes_begun(self, journal, oids):
+        """Note in the journal, before a photo's tags are written, that its write operations are begun, and persist it
+        (BLD-own_leftover_cleared): a leftover an interruption leaves beside the photo is then known as geotag's own.
+        An operation already confirmed is left so."""
+        with self._journal_lock:
+            for oid in oids:
+                if journal.get(oid) != "confirmed":
+                    journal[oid] = "begun"
+            if self._journal_out is not None:
+                self._journal_out(journal)
 
     def _apply_file_contained(self, rel, ops, journal, accepted_mismatches):
         """`_apply_file`, with anything it raises turned into that photo's failure: one photo's trouble
@@ -3209,6 +3257,9 @@ class GeotagWorkflow:
             # A JPEG set aside beside its RAW is renamed after its RAW, and only once the RAW's rename is confirmed: a run
             # never leaves the one renamed and the other not (BLD-set_aside_renamed_with_raw).
             followers = {rel for rel, ops in by_file.items() if any(o.get("follows") for o in ops)}
+            self._journal_out = lambda j: write_json_artifact(jpath, {
+                "journal_version": 1, "plan_id": plan["plan_id"], "operations": j, "media_after": media_after,
+                "updated_at": now_iso})
             self.coordinator.start_phase("applying calibration", len(by_file))
             with concurrent.futures.ThreadPoolExecutor(max_workers=max(1, jobs)) as ex:
                 for wave in (sorted(set(by_file) - followers), sorted(followers)):
@@ -3216,6 +3267,7 @@ class GeotagWorkflow:
             self.coordinator.finish_phase()
 
         finally:
+            self._journal_out = None
             cache.close()
             from .photos_utils import PersistentMagickWorker
             PersistentMagickWorker.cleanup_all()       # close the per-thread magick workers (verify pass)
@@ -3242,17 +3294,16 @@ class GeotagWorkflow:
                 results.append(r)
                 self.coordinator.increment_completed(1)
                 # Incremental confirmation journal (BLD-geotag_execution): persist each file's confirmed ops AS
-                # IT COMPLETES (in this main thread — workers never touch the journal), so a crash
-                # mid-run leaves a journal that lets the next run skip the already-applied files.
+                # IT COMPLETES, so a crash mid-run leaves a journal that lets the next run skip the already-applied
+                # files. A worker only notes a write begun, under the same lock (BLD-own_leftover_cleared).
                 if r["applied"] or r.get("found"):
-                    for oid in r["applied"] + (r.get("found") or []):
-                        journal[oid] = "confirmed"
-                    if r.get("after"):            # the photo as this run left it: finalize's baseline
-                        a = r["after"]
-                        media_after[a["relative_path"]] = {"size": a["size"], "mtime_ns": a["mtime_ns"]}
-                    write_json_artifact(jpath, {"journal_version": 1, "plan_id": plan["plan_id"],
-                                                "operations": journal, "media_after": media_after,
-                                                "updated_at": now_iso})
+                    with self._journal_lock:
+                        for oid in r["applied"] + (r.get("found") or []):
+                            journal[oid] = "confirmed"
+                        if r.get("after"):            # the photo as this run left it: finalize's baseline
+                            a = r["after"]
+                            media_after[a["relative_path"]] = {"size": a["size"], "mtime_ns": a["mtime_ns"]}
+                        self._journal_out(journal)
         except KeyboardInterrupt:
             # Ctrl-C: drop pending file writes and stop waiting instead of letting the `with`
             # exit drain them (shutdown(wait=True)). Files already applied are confirmed in the

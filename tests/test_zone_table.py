@@ -183,6 +183,30 @@ def test_the_answer_is_kept(tmp_path, monkeypatch, no_host_table, server):
     assert utils.zone_table(ws)["source"] == "bundled"
 
 
+@pytest.mark.spec("RUL-zone_table_answered_by_hand", "BLD-zone_table_answered_by_hand",
+                  test="TST-zone_table-an_answer_written_by_hand_is_taken")
+def test_an_answer_written_by_hand_is_taken(tmp_path, no_host_table, server):
+    """The answer written into its record by hand is taken as one given to `prep plan`: a refusal keeps the carried
+    copy, nothing asked or fetched; a permission alone is acted on by the next `prep plan`, which downloads the table
+    once and records it, the hand-written record kept beside it."""
+    ws = _ws(tmp_path)
+    path = utils.zone_table_path(ws)
+    with open(path, "w") as f:
+        json.dump({"download": "declined"}, f)
+    assert not utils.zone_table_question_pending(ws)
+    assert _warned(_settle(ws, None)) == "" and server.calls == []
+    assert utils.zone_table(ws)["source"] == "bundled"
+    with open(path, "w") as f:
+        json.dump({"download": "accepted"}, f)
+    assert not utils.zone_table_question_pending(ws)
+    _settle(ws, None)
+    assert len(server.calls) == 1 and _record(ws)["copy"]["tzdata_version"] == "2099z"
+    assert utils.zone_table(ws)["source"] == "web"
+    assert os.path.exists(path[:-len(".json")] + "-001.json")         # the hand-written record kept
+    _settle(ws, None)
+    assert len(server.calls) == 1                                  # downloaded once
+
+
 @pytest.mark.spec("RUL-zone_table_downloaded_once", "RUL-zone_table_copy_kept", "BLD-zone_table_download",
                   test="TST-zone_table-a_permission_downloads_once_into_the_records")
 def test_a_permission_downloads_once_into_the_records(tmp_path, no_host_table, server):

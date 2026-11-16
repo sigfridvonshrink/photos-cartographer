@@ -119,7 +119,8 @@ images), the first `prep plan` also asks — before anything is downloaded — w
 from IANA, once, into the workspace; geotag needs it only to offer a country's timezones. Refusing uses the copy
 carried inside photos-cartographer, which may be stale. Give the answer with `--download-zone-table yes` (or `no`)
 where nobody is at the terminal; with no answer, prep goes on with the carried copy and says how to answer. The
-answer is kept in the workspace and not asked again; the console's Plan button asks the same question.
+answer is kept in the workspace and not asked again; the console's Plan button asks the same question, and the
+decision editor's Time view offers it while it is open.
 
 Then plan again, inspect, and apply:
 

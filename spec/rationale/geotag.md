@@ -327,6 +327,22 @@ wrong by another, so the plan names the table it was made from: another one make
 does.
 :::
 
+:::{rat} The question of the table is answered where the others are
+:id: RAT-zone_table_answered_anywhere
+:status: ruled
+:forced: no
+:follows_from: RAT-zone_table_where_host_lacks, RAT-every_question_answerable
+:justifies: RUL-zone_table_answered_in_editor, RUL-zone_table_answered_by_hand
+
+The question of the table of countries is prep's, asked at a terminal when the workspace is made; a workspace made
+with no one at the terminal leaves it open, and the user who opens the editor to answer geotag's questions would
+otherwise have to leave it to answer this one. The owner ruled *"the user should be able to answer all questions in
+the editor"* — this one too, though prep asks it. Given there, it is the same answer: recorded as prep records it, a
+permission downloading the table then, on the user's word. And as every answer is a field of a record the user may
+write by hand, so is this one: written into the record that keeps it, a refusal stands as given, and a permission is
+acted on by prep's next plan — the one run that downloads.
+:::
+
 :::{rat} A camera that records its offset says which zone its clock was on
 :id: RAT-camera_records_its_clock_zone
 :status: ruled
@@ -452,8 +468,8 @@ show of its clock in the morning is the best evidence there is for the afternoon
 local hour. So a destination with no position of its own that day is offered the offset found elsewhere that day —
 applied by itself only where it was sure enough to apply itself there. And where the camera's positions give two
 offsets for one day that cannot both be right, one of them rests on a wrong match; neither is written until the user
-says which. An offset the user wrote, or accepted on a guess, is not passed on: it is their word about one place, not
-evidence. Another day's offset is never passed on by itself either — clocks are set again overnight; the day next to
+says which. An offset the user wrote apart from what the camera's positions support, or accepted on a guess, is not passed
+on: it is their word about one place, not evidence. Another day's offset is never passed on by itself either — clocks are set again overnight; the day next to
 one with no evidence is only offered ({need}`RAT-neighbour_day_offered`).
 :::
 
@@ -1407,6 +1423,24 @@ differs is something wrong — a tool, a format — that the user must see, not 
 photo's identity is at stake, so only the user can take the new content for it.
 :::
 
+:::{rat} Geotag knows its own leftover by its journal
+:id: RAT-own_leftover_known_by_journal
+:status: ruled
+:forced: no
+:follows_from: RAT-write_leftover_is_debris, RAT-no_automatic_deletion
+:justifies: RUL-geotag_clears_own_leftover, RUL-other_write_leftover_holds_photo, RUL-write_leftover_stops_geotag_plan
+
+Geotag writes a photo by having the new file written beside it and then put in its place, so a write it began and
+never finished leaves the photo whole and, beside it, only a partial copy: that leftover is never the only copy of
+anything, and the write done again must clear it, for the tool that writes the new file refuses one already there. But
+the name is the one every such tool gives its leftover, and one the user's own tool left may be the only whole copy of
+something; removed, it is gone, and nothing is removed but by an explicit act. The journal tells the two apart: a write
+is noted begun before it starts, so a leftover beside a photo whose write the journal shows begun and never confirmed
+is geotag's own. Any other is left where it is, and its photo is not written over its name. The plan stops on every
+one, geotag's own included: its own is cleared by running again the execution that left it, whose journal knows it —
+a new plan's journal would not.
+:::
+
 :::{rat} The record must cover what a broken run did
 :id: RAT-record_covers_broken_runs
 :status: ruled
@@ -1476,9 +1510,11 @@ have run it, the torn copy is still a record finalize cannot read, and it stops.
 :justifies: RUL-geotag_summary_only_for_execution
 
 Geotag's summary is what merge's is: the record of an execution, and the one place the user's acceptance of a
-changed picture is kept. A run turned away at the door executed nothing, and the terminal has said why; a summary
-written for it would put a record of nothing over the last execution's — and with it the acceptances finalize and the
-next run read. An interrupted run reached no end to record: its journal holds what it confirmed, and the run that
+changed picture is kept. A run turned away at the door executed nothing, and the terminal has said why; a run that took its plan as current
+and then could not take the snapshot it requires was refused for what the machine lacked, not turned away at the door:
+its summary records the refusal, carrying the acceptances of the summary it sets aside, so that none is lost. A summary
+written for a run turned away would put a record of nothing over the last execution's — and with it the acceptances
+finalize and the next run read. An interrupted run reached no end to record: its journal holds what it confirmed, and the run that
 finishes it writes the summary.
 :::
 
@@ -1505,21 +1541,6 @@ library.
 :justifies: RUL-finalize_checks_photos, RUL-finalize_reports_placement
 
 Merge refuses a photo changed since finalize, on the strength of what finalize recorded. If finalize records whatever it finds, an edit made between execute and finalize becomes the baseline, and the library receives a photo the log describes as something else. Finalize is given once the user judges the work done, so it is also where they are told how done: how every photo came by its position, and by what means.
-:::
-
-:::{rat} What a run reported stays on the record
-:id: RAT-run_records_outlive_the_next
-:status: ruled
-:forced: yes
-:follows_from: RAT-superseded_plans_recoverable
-:justifies: RUL-geotag_run_records_kept, RUL-prep_journal_kept
-
-An execution's summary is the one account of what that run did — what it applied, what failed, which pictures came
-out changed — and a package is what was handed on for keeping. The next execution, or a finalize run again after a
-further pass, would otherwise replace them, and with them a failure not yet looked at or the package already copied
-to storage, which the workspace could then no longer show as it was. A prep journal is the same account of an attempt: a plan
-executed again after a failed or interrupted attempt would otherwise replace the record of what that attempt did. Set
-aside, as a superseded plan is, they cost a file each and lose nothing.
 :::
 
 :::{rat} A command needs only the tools it runs

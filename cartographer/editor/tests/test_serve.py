@@ -500,6 +500,64 @@ def test_save_classes_a_new_camera_group_into_the_configuration(tmp_path):
     assert res3["ok"] is False and serve.CONFIG_NAME in res3["error"]
 
 
+def _no_host_table(monkeypatch, fetched):
+    """A host whose zone database has no table of countries; the download answered from memory, never the network."""
+    from cartographer import photos_utils as utils
+    real = utils._zone_database_file
+    monkeypatch.setattr(utils, "_zone_database_file",
+                        lambda name: None if name in ("zone.tab", "iso3166.tab") else real(name))
+
+    def fake(url, timeout):
+        import io
+        import tarfile
+        fetched.append(url)
+        buf = io.BytesIO()
+        with tarfile.open(fileobj=buf, mode="w:gz") as tf:
+            for name, text in (("zone.tab", "LT\t+5441+02519\tEurope/Vilnius\n"), ("iso3166.tab", "LT\tLithuania\n"),
+                               ("version", "2099z\n")):
+                info = tarfile.TarInfo(name)
+                info.size = len(text.encode())
+                tf.addfile(info, io.BytesIO(text.encode()))
+        return buf.getvalue()
+    monkeypatch.setattr(utils, "_download_zone_archive", fake)
+    return utils
+
+
+@pytest.mark.spec("RUL-zone_table_answered_in_editor", "RUL-zone_table_asked_once", "BLD-editor_answers_zone_table",
+                  test="TST-serve-the_table_of_countries_is_answered_in_the_editor")
+@pytest.mark.parametrize("answer", ["no", "yes"])
+def test_the_table_of_countries_is_answered_in_the_editor(tmp_path, monkeypatch, answer):
+    """While the workspace has the question of the table of countries open, the editor shows it as `prep plan` asks it,
+    and its save records the answer as `prep plan --download-zone-table` does — `yes` downloading the table then. The
+    question is then closed: the editor shows it no more, and answers it no more."""
+    ws = _workspace_with_fixtures(tmp_path)
+    assert serve._load_artifacts(ws)["zone_table"] is None             # the host has its own table: nothing to ask
+    fetched = []
+    utils = _no_host_table(monkeypatch, fetched)
+    loaded = serve._load_artifacts(ws)
+    cell = loaded["zone_table"]
+    assert cell["question"] == utils.zone_table_question(utils.bundled_zone_table()["tzdata_version"])
+    assert cell["user_decision"] == {"download": ""} and cell["requires_user_input"] is False
+    assert serve._load_artifacts(None)["zone_table"] is None           # the demo asks nothing
+    bad = serve._save(ws, {"zone_table": [{"kind": "zone_table", "user_decision": {"download": "maybe"}}],
+                           "hashes": loaded["hashes"]})
+    assert bad["ok"] is False and not os.path.exists(utils.zone_table_path(ws))
+    edit = {"kind": "zone_table", "user_decision": {"download": answer}}
+    res = serve._save(ws, {"zone_table": [edit], "hashes": loaded["hashes"]})
+    assert res["ok"] is True and res["written"] == [utils.ZONE_TABLE_ARTIFACT]
+    rec = utils.read_zone_table_record(ws)
+    if answer == "yes":
+        assert rec["download"] == "accepted" and rec["copy"]["tzdata_version"] == "2099z" and len(fetched) == 1
+        assert utils.zone_table(ws)["source"] == "web"
+    else:
+        assert rec == {"artifact_name": utils.ZONE_TABLE_ARTIFACT, "schema_version": 1, "download": "declined"}
+        assert fetched == [] and utils.zone_table(ws)["source"] == "bundled"
+    assert res["notes"]                                                # what the answer did, said with the save
+    assert serve._load_artifacts(ws)["zone_table"] is None             # answered: not asked again
+    again = serve._save(ws, {"zone_table": [edit], "hashes": res["hashes"]})
+    assert again["ok"] is False and utils.ZONE_TABLE_ARTIFACT in again["error"]
+
+
 @pytest.mark.spec("RUL-save_only_what_was_shown", "BLD-editor_writes_device_groups", "BLD-editor_marks_several_bodies",
                   test="TST-serve-a_class_is_not_saved_over_a_configuration_changed_since_load")
 def test_a_class_is_not_saved_over_a_configuration_changed_since_load(tmp_path):

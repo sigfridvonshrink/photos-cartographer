@@ -913,8 +913,9 @@ library as already present ({need}`RUL-collision_same_content`).
 The decisions SHALL live in the `user_decision` fields of geotag's `photos-21`, `photos-22` and `photos-23`, each field
 created by geotag and preserved across regeneration ({need}`RUL-decision_stage_writes_record`,
 {need}`RUL-decision_kept`), and in `fingerprint_mismatches` of `photos-25-execution-summary.json`, the decision editor
-writing only those fields and, in the configuration, a camera group's class and its several bodies
-({need}`BLD-editor_answers_every_question`).
+writing only those fields, in the configuration a camera group's class and its several bodies
+({need}`BLD-editor_answers_every_question`), and, in `photos-02-zone-table.json`, the answer to whether to download
+the table of countries ({need}`BLD-editor_answers_zone_table`).
 :::
 
 :::{bld} How a change is traced to its decision
@@ -1011,7 +1012,7 @@ the database's cache and identity rows while geotag and merge write only their o
 record of the state it leaves and a prune that deletes that record's rows of what it removed
 ({need}`BLD-workspace_database`); `photos-01-accepted-changes.json` is written by any checking command
 ({need}`BLD-accept_changes`) and `photos-02-zone-table.json` by `prep plan` ({need}`BLD-zone_table_question`) and by
-the decision editor, which records the same answer; and the editor writes, of geotag's records, the user's answers
+the decision editor, which records the same answer ({need}`BLD-editor_answers_zone_table`); and the editor writes, of geotag's records, the user's answers
 alone. Bundling copies of every phase's records into
 the archival package reads them, and is no write.
 :::
@@ -1433,7 +1434,8 @@ alone does; for prep and geotag the `EXDEV` of a move across filesystems is rais
 
 Geotag SHALL write metadata by having `exiftool -o` write the new file beside the photo as `<file>_exiftool_tmp` —
 the photo itself untouched — then giving it the photo's permissions, syncing it to disk, renaming it over the photo
-and syncing the folder, having first removed a `<file>_exiftool_tmp` an interrupted write left.
+and syncing the folder, having first removed a `<file>_exiftool_tmp` an interrupted write left where
+{need}`BLD-own_leftover_cleared` allows it.
 :::
 
 :::{bld} A rewritten record is on disk before it replaces the earlier one

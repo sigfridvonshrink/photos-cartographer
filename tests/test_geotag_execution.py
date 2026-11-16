@@ -338,25 +338,38 @@ def test_execute_j1_and_jN_produce_identical_summary_and_tree(tmp_path, monkeypa
 
 
 @pytest.mark.spec("BLD-merge_execute", "BLD-geotag_execution")
-def test_journal_writes_only_from_the_main_thread(tmp_path, monkeypatch):
-    """Single-writer journal (BLD-geotag_execution): the confirmation journal is persisted ONLY by the main thread —
-    worker threads apply per-file ops but never touch the journal. Probe every journal write under -j4
-    and assert each originated on MainThread."""
+def test_journal_written_by_one_writer_at_a_time(tmp_path, monkeypatch):
+    """One writer at a time (BLD-geotag_execution, BLD-own_leftover_cleared): the main thread persists each photo's
+    confirmations and a worker notes a write begun before it starts it, both under one lock — under -j4 no two journal
+    writes overlap, the confirmations come from the main thread and a worker's write only notes writes begun."""
     import threading
+    import time
     ws, ctl = _ready_ws(tmp_path, monkeypatch)
     _mock_tools(monkeypatch, ws)
     orig = cal.write_json_artifact
-    journal_threads = []
+    writes, active, most = [], [0], [0]
+    guard = threading.Lock()
 
     def spy(path, obj, *a, **k):
         if isinstance(obj, dict) and "journal_version" in obj:           # a journal write
-            journal_threads.append(threading.current_thread().name)
+            with guard:
+                active[0] += 1
+                most[0] = max(most[0], active[0])
+            writes.append((threading.current_thread().name, dict(obj["operations"])))
+            time.sleep(0.01)                                             # long enough for an overlap to show
+            with guard:
+                active[0] -= 1
         return orig(path, obj, *a, **k)
 
     monkeypatch.setattr(cal, "write_json_artifact", spy)
     assert _execute_jobs(monkeypatch, ws, 4) == 0
-    assert journal_threads, "expected at least one journal write"
-    assert all(t == "MainThread" for t in journal_threads), journal_threads
+    assert writes and most[0] == 1
+    before = {}
+    for thread, ops in writes:
+        changed = {k: v for k, v in ops.items() if before.get(k) != v}
+        assert thread == "MainThread" or set(changed.values()) <= {"begun"}, (thread, changed)
+        before = ops
+    assert any(t == "MainThread" for t, _ops in writes) and set(writes[-1][1].values()) == {"confirmed"}
 
 
 @pytest.mark.spec("RUL-control_records_never_media")
@@ -526,22 +539,19 @@ def test_exiftool_write_invocation(tmp_path, monkeypatch):
     assert photo.read_bytes() == b"orig" and os.listdir(tmp_path) == ["x.jpg"]
 
 
-def test_exiftool_write_unlinks_stale_tmp(tmp_path, monkeypatch):
-    """An interrupted earlier write can leave `<file>_exiftool_tmp`; the writer removes it for THIS target before
-    it runs exiftool, which refuses an output that exists — so the resumed write never trips over the leftover."""
+def test_exiftool_write_never_removes_a_leftover(tmp_path, monkeypatch):
+    """The writer itself never removes a `<file>_exiftool_tmp` it finds beside the photo: it fails, as exiftool would,
+    the leftover and the photo left as they were. Only its caller clears geotag's own (BLD-own_leftover_cleared)."""
     wf = cal.GeotagWorkflow(str(tmp_path))
     target = tmp_path / "x.jpg"
     target.write_bytes(b"orig")
     stale = tmp_path / "x.jpg_exiftool_tmp"
     stale.write_bytes(b"partial")
-    seen = []
-    def _run(cmd, **k):
-        seen.append(stale.exists())               # what exiftool finds at its output's name
-        return _fake_exiftool()(cmd, **k)
-    monkeypatch.setattr(cal.subprocess, "run", _run)
-    assert wf._exiftool_write(str(target), {"DateTimeOriginal": "2024:07:03 14:00:00"}) is True
-    assert seen == [False]                        # the leftover was gone before the write
-    assert target.read_bytes() == b"rewritten" and not stale.exists()
+    calls = []
+    monkeypatch.setattr(cal.subprocess, "run", _fake_exiftool(calls))
+    said = wf._exiftool_write(str(target), {"DateTimeOriginal": "2024:07:03 14:00:00"})
+    assert said is not True and "x.jpg_exiftool_tmp" in said and calls == []
+    assert target.read_bytes() == b"orig" and stale.read_bytes() == b"partial"
 
 
 @pytest.mark.spec("RUL-rewrite_in_place_atomic", "BLD-metadata_safe_write",
@@ -580,6 +590,7 @@ def test_a_write_interrupted_at_the_rename_leaves_the_photo_whole(tmp_path, monk
         with pytest.raises(KeyboardInterrupt):
             wf._exiftool_write(str(photo), {"DateTimeOriginal": "x"})
     assert photo.read_bytes() == b"orig" and (tmp_path / "x.jpg_exiftool_tmp").exists()
+    wf._clear_own_leftover(str(photo) + "_exiftool_tmp")              # the journal shows the write begun
     assert wf._exiftool_write(str(photo), {"DateTimeOriginal": "x"}) is True
     assert photo.read_bytes() == b"rewritten" and os.listdir(tmp_path) == ["x.jpg"]
 
@@ -622,6 +633,7 @@ def test_an_interrupted_metadata_write_leaves_the_photo_whole(tmp_path, monkeypa
         m.setenv("PERL5OPT", "-MCartoKillAtOutput")
         assert wf._exiftool_write(str(photo), tags) is not True         # killed mid-write
     assert photo.read_bytes() == original                                # the photo, intact
+    wf._clear_own_leftover(str(photo) + "_exiftool_tmp")                 # its own leftover, the write begun
     assert wf._exiftool_write(str(photo), tags) is True                  # the write done again
     assert not (tmp_path / "a.jpg_exiftool_tmp").exists()
     assert photo.read_bytes() != original and os.stat(photo).st_mode & 0o777 == 0o640
@@ -636,6 +648,102 @@ def test_exiftool_write_no_tmp_is_noop(tmp_path, monkeypatch):
     photo = tmp_path / "y.jpg"; photo.write_bytes(b"orig")
     monkeypatch.setattr(cal.subprocess, "run", _fake_exiftool())
     assert wf._exiftool_write(str(photo), {}) is True
+
+
+def _one_write(rel="x.jpg", oid="o"):
+    return [_op(oid, "metadata_time_write", rel, pre={"content_fingerprint": "FP"}, writes={"DateTimeOriginal": "x"})]
+
+
+@pytest.mark.spec("RUL-geotag_clears_own_leftover", "BLD-own_leftover_cleared",
+                  test="TST-geotag_execution-own_leftover_cleared_where_the_journal_shows_the_write_begun")
+def test_own_leftover_cleared_where_the_journal_shows_the_write_begun(tmp_path, monkeypatch):
+    """Run again, the execution finds beside a photo the leftover of its own write, which its journal shows begun and
+    never confirmed: it removes it and writes the photo."""
+    wf = cal.GeotagWorkflow(str(tmp_path))
+    photo = tmp_path / "x.jpg"; photo.write_bytes(b"orig")
+    (tmp_path / "x.jpg_exiftool_tmp").write_bytes(b"partial")
+    monkeypatch.setattr(cal.subprocess, "run", _fake_exiftool())
+    monkeypatch.setattr(cal.ContentHasher, "fingerprint_image", staticmethod(lambda p: {"value": "FP"}))
+    r = wf._apply_file("x.jpg", _one_write(), {"o": "begun"}, {})
+    assert r["blocker"] is None and r["applied"] == ["o"]
+    assert photo.read_bytes() == b"rewritten" and os.listdir(tmp_path) == ["x.jpg"]
+
+
+@pytest.mark.spec("RUL-other_write_leftover_holds_photo", "RUL-write_leftovers_by_dest_warned", "BLD-own_leftover_cleared",
+                  test="TST-geotag_execution-another_leftover_holds_its_photo_back")
+def test_another_leftover_holds_its_photo_back(tmp_path, monkeypatch):
+    """A leftover beside a photo whose write the journal does not show begun is not geotag's to remove — it may be the
+    only whole copy of something: the photo is held back, the leftover named and left as it was, nothing written."""
+    wf = cal.GeotagWorkflow(str(tmp_path))
+    photo = tmp_path / "x.jpg"; photo.write_bytes(b"orig")
+    leftover = tmp_path / "x.jpg_exiftool_tmp"; leftover.write_bytes(b"maybe the only copy")
+    calls, journal = [], {}
+    monkeypatch.setattr(cal.subprocess, "run", _fake_exiftool(calls))
+    monkeypatch.setattr(cal.ContentHasher, "fingerprint_image", staticmethod(lambda p: {"value": "FP"}))
+    r = wf._apply_file("x.jpg", _one_write(), journal, {})
+    assert "x.jpg_exiftool_tmp" in r["blocker"] and r["applied"] == [] and calls == []
+    assert leftover.read_bytes() == b"maybe the only copy" and photo.read_bytes() == b"orig"
+    assert journal == {}                                              # nothing begun
+
+
+@pytest.mark.spec("RUL-geotag_clears_own_leftover", "BLD-own_leftover_cleared",
+                  test="TST-geotag_execution-a_write_is_noted_begun_before_it_starts")
+def test_a_write_is_noted_begun_before_it_starts(tmp_path, monkeypatch):
+    """The journal says a photo's write is begun, on disk, before the tool writes anything beside the photo — so a
+    leftover an interruption leaves is known as geotag's own."""
+    wf = cal.GeotagWorkflow(str(tmp_path))
+    (tmp_path / "x.jpg").write_bytes(b"orig")
+    persisted, seen = [], []
+    wf._journal_out = lambda j: persisted.append(dict(j))
+
+    def _run(cmd, **k):
+        seen.append(persisted[-1] if persisted else None)
+        return _fake_exiftool()(cmd, **k)
+    monkeypatch.setattr(cal.subprocess, "run", _run)
+    monkeypatch.setattr(cal.ContentHasher, "fingerprint_image", staticmethod(lambda p: {"value": "FP"}))
+    r = wf._apply_file("x.jpg", _one_write(), {}, {})
+    assert r["applied"] == ["o"] and seen == [{"o": "begun"}]
+
+
+@pytest.mark.spec("RUL-geotag_clears_own_leftover", "RUL-geotag_execution_resumable", "BLD-own_leftover_cleared",
+                  test="TST-geotag_execution-a_run_cut_off_mid_write_clears_its_leftover_when_run_again")
+def test_a_run_cut_off_mid_write_clears_its_leftover_when_run_again(tmp_path, monkeypatch):
+    """An execution stopped while the tool writes a photo's new file leaves it beside the photo; the same plan's
+    execution run again finds its journal showing that write begun, clears the leftover and finishes."""
+    ws, ctl = _ready_ws(tmp_path, monkeypatch)
+    _mock_tools(monkeypatch, ws)
+    finishing = cal.GeotagWorkflow._exiftool_write
+
+    def cut_off(self, p, tags):
+        with open(p + "_exiftool_tmp", "wb") as f:
+            f.write(b"half")
+        raise KeyboardInterrupt
+    with monkeypatch.context() as m:
+        m.setattr(cal.GeotagWorkflow, "_exiftool_write", cut_off)
+        assert _execute(monkeypatch, ws) == 130
+    left = sorted(ws.glob("6-photos-by-dest/T/*_exiftool_tmp"))
+    assert left
+    plan_id = json.load(open(ctl / "photos-24-executable-plan.json"))["plan_id"]
+    ops = json.load(open(ctl / f"journal-{plan_id}.json"))["operations"]
+    assert "begun" in ops.values()
+    monkeypatch.setattr(cal.GeotagWorkflow, "_exiftool_write", finishing)
+    assert _execute(monkeypatch, ws) == 0
+    assert not list(ws.glob("6-photos-by-dest/T/*_exiftool_tmp")) and _summary(ctl)["status"] == "success"
+
+
+@pytest.mark.spec("RUL-write_leftover_stops_geotag_plan", "BLD-own_leftover_cleared",
+                  test="TST-geotag_execution-a_write_leftover_stops_the_plan_named")
+def test_a_write_leftover_stops_the_plan_named(tmp_path, monkeypatch):
+    """Geotag's plan stops on the leftover of an interrupted write under photos by destination, naming it in a blocker
+    of its own, and leaves it where it is."""
+    ws, _ctl = _ready_ws(tmp_path, monkeypatch)
+    leftover = ws / "6-photos-by-dest" / "T" / "a.arw_exiftool_tmp"
+    leftover.write_bytes(b"partial")
+    blockers, _w, _i = cal.GeotagWorkflow(str(ws)).preflight(needs_exiftool=False)
+    named = [b for b in blockers if "6-photos-by-dest/T/a.arw_exiftool_tmp" in b]
+    assert len(named) == 1 and "interrupted metadata write" in named[0]
+    assert not any("non-media" in b for b in blockers)
+    assert leftover.read_bytes() == b"partial"
 
 
 def test_target_occupied_bad_directory(tmp_path):
