@@ -248,6 +248,17 @@ with case — `IMG_1.JPG` pairs with `IMG_1.cr2`, never with `img_1.cr2` — the
 ({need}`BLD-jpeg_extensions`).
 :::
 
+:::{bld} The pair, recorded by prep
+:id: BLD-set_aside_pair_recorded
+:status: ruled
+:realises: RUL-set_aside_jpeg_renamed_with_raw, RUL-set_aside_jpeg_named_as_raw
+
+Prep's move of a JPEG into `3-redundant-jpgs` SHALL carry, where its inbox folder holds one raw file of its name, that
+raw file's fingerprint as `raw_fingerprint`: the JPEG's `redundant_jpeg_separated` step in the prep log keeps it, and
+each prep execution writes the latest one of each JPEG into its record of the handoff. Beside two raw files of its name,
+a JPEG names neither.
+:::
+
 :::{bld} The database is reconciled by planned operations
 :id: BLD-database_ops
 :status: ruled

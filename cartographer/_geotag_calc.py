@@ -43,7 +43,7 @@ from .photos_utils import (
     parse_naive_time, has_own_position, NO_IDENTITY_KEY, OTHER_TIME_FIELDS,
     missing_managed_folders, by_dest_reprep_pending,
     json_dependency, verify_json_dependency, handoff_content_fingerprint, write_json_artifact, write_versioned_json, db_path, ensure_control_dir,
-    journal_path, ContentHasher, _move_no_clobber, allocate_suffix, carries_stem,
+    journal_path, ContentHasher, _move_no_clobber, allocate_suffix, allocate_stem, carries_stem,
     prep_log_path, write_db_snapshot, take_zfs_snapshot,
     WorkspaceLock, ProgressCoordinator,
 )
@@ -131,6 +131,8 @@ __all__ = [
     '_dest_label',
     'destination_local_basename',
     'plan_renames',
+    'plan_set_aside_rename',
+    'recorded_sub_second',
     '_GPS_OP_ORIGIN',
     '_GPS_OP_MARKER',
     '_TRACK_MARKER',
@@ -1823,6 +1825,26 @@ def destination_local_basename(resolved_utc, tz, fmt, ext):
 CASE_RENAME_MARK = ".carto-case"
 
 
+# The field that holds the fraction of a second beside each recorded-time field, as prep reads them.
+_SUB_SECOND_FIELD = {"DateTimeOriginal": "SubSecTimeOriginal", "CreateDate": "SubSecCreateDate",
+                     "ModifyDate": "SubSecModifyDate"}
+
+
+def recorded_sub_second(parsed):
+    """The fraction of a second a photo records with its recorded time, as a number below 1, or None where it records
+    none (RUL-suffix_in_capture_order): the fraction written in the recorded time itself, else the one in the
+    sub-second field beside that time — its digits (`SubSecTimeOriginal`, `"045"` is .045), or the fraction of a
+    whole time it holds."""
+    value = parsed.get("selected_source_naive_timestamp")
+    tag = (parsed.get("selected_source_timestamp_tag") or "").rsplit(":", 1)[-1]
+    frac = re.match(r"\.(\d+)", str(value)[19:]) if parse_naive_time(value) else None
+    sub = parsed.get(_SUB_SECOND_FIELD.get(tag, ""))
+    if frac is None and sub is not None:
+        sub = str(sub).strip()
+        frac = re.match(r"\.(\d+)", sub[19:]) if parse_naive_time(sub) else re.fullmatch(r"(\d+)", sub)
+    return float("0." + frac.group(1)) if frac else None
+
+
 def plan_renames(files, fmt):
     """Plan no-clobber timestamp renames for the files of ONE destination (BLD-rename_planning). Returns
     {relative_path, current_name, planned_name, rename[, via]} per file, in relative_path order. EVERY
@@ -1832,13 +1854,22 @@ def plan_renames(files, fmt):
     (RUL-geotag_extension_lowercase): a name already carrying its timestamp keeps it, its extension alone
     lowercased. A rename that changes only the case of the name carries `via`, a free temporary name it
     passes through (BLD-case_rename_via). A file with no positionable timestamp keeps its
-    name (no rename); the unplaceable case is surfaced as a blocker by the executable-plan stage."""
+    name (no rename); the unplaceable case is surfaced as a blocker by the executable-plan stage.
+
+    The photos given a new name of one timestamp take its suffixes in the order they were taken
+    (RUL-suffix_in_capture_order): by true time, then by the fraction of a second they record (`sub_second`, where
+    they record one), then by the suffix their names already hold — none first. Photos sharing a name, extension aside
+    (a RAW and its JPEG), and given one timestamp are named as one: one name, one suffix, each its own extension
+    (RUL-pair_named_as_one)."""
     occupied = {os.path.basename(f["relative_path"]).lower() for f in files}
+    # every name held, its extension aside: a new name is free only where no photo holds it under any extension, so a
+    # photo never lands beside another photo's RAW or JPEG (RUL-pair_named_as_one)
+    stems = {os.path.splitext(n)[0] for n in occupied}
     held = {}                                         # each name, case folded: how many photos hold it
     for f in files:
         k = os.path.basename(f["relative_path"]).lower()
         held[k] = held.get(k, 0) + 1
-    out = []
+    rows, groups = {}, {}
     for f in sorted(files, key=lambda x: x["relative_path"]):
         rel = f["relative_path"]
         name = os.path.basename(rel)
@@ -1848,22 +1879,73 @@ def plan_renames(files, fmt):
         if base is None or (carries_stem(name, stem) and name.endswith(ext)):
             # A name already carrying the timestamp keeps its suffix: renaming it to another suffix of the
             # same time would change nothing, and on the next run back again.
-            out.append({"relative_path": rel, "current_name": name, "planned_name": name, "rename": False})
+            rows[rel] = {"relative_path": rel, "current_name": name, "planned_name": name, "rename": False}
             continue
         if carries_stem(name, stem) and held[name.lower()] == 1:
-            planned = os.path.splitext(name)[0] + ext          # its own name, the extension lowercased
-        else:
-            # The first free name, by the one rule prep also uses (RUL-suffix_choice_by_phase); a name carrying the
-            # timestamp whose lowercase form another photo here also holds takes it too.
-            planned = allocate_suffix(stem, ext.lstrip("."), occupied, bare_first=True)
-        row = {"relative_path": rel, "current_name": name, "planned_name": planned, "rename": True}
-        if planned.lower() == name.lower():
-            # Only the case changes: on a filesystem that ignores case the new name is the file's own, and a
-            # no-clobber move refuses it — so it goes by a temporary name free here and in the plan.
-            row["via"] = allocate_suffix(os.path.splitext(planned)[0] + CASE_RENAME_MARK, ext.lstrip("."),
-                                         occupied, bare_first=True)
-        out.append(row)
-    return out
+            rows[rel] = _rename_row(f, os.path.splitext(name)[0] + ext, occupied)   # its own name, extension lowercased
+            continue
+        # To be given the first free name of its timestamp, with the photos it shares a name with, extension aside.
+        groups.setdefault((stem, os.path.splitext(name)[0].lower()), []).append(f)
+    named = []
+    for (stem, _own), members in groups.items():
+        exts = [os.path.splitext(f["relative_path"])[1].lower() for f in members]
+        # one name for photos of different extensions only: two of one extension are two photos
+        named.extend([(stem, members)] if len(set(exts)) == len(exts) else [(stem, [f]) for f in members])
+    for stem, members in sorted(named, key=lambda g: (g[0],) + _capture_order(g[1], fmt)):
+        # The first free name, by the one rule prep also uses (RUL-suffix_choice_by_phase): free under every extension.
+        new = allocate_stem(stem, [""], stems, bare_first=True)
+        for f in members:
+            planned = new + os.path.splitext(f["relative_path"])[1].lower()
+            occupied.add(planned.lower())
+            rows[f["relative_path"]] = _rename_row(f, planned, occupied)
+    return [rows[rel] for rel in sorted(rows)]
+
+
+def _rename_row(f, planned, occupied):
+    """The rename of `f` to `planned`: through a temporary name where only the case changes (BLD-case_rename_via)."""
+    name = os.path.basename(f["relative_path"])
+    ext = os.path.splitext(name)[1].lower()
+    row = {"relative_path": f["relative_path"], "current_name": name, "planned_name": planned, "rename": True}
+    if planned.lower() == name.lower():
+        # Only the case changes: on a filesystem that ignores case the new name is the file's own, and a
+        # no-clobber move refuses it — so it goes by a temporary name free here and in the plan.
+        row["via"] = allocate_suffix(os.path.splitext(planned)[0] + CASE_RENAME_MARK, ext.lstrip("."),
+                                     occupied, bare_first=True)
+    return row
+
+
+def _capture_order(members, fmt):
+    """The key that orders photos given new names of one timestamp as they were taken (RUL-suffix_in_capture_order):
+    the true time, then the fraction of a second recorded — a photo recording none after those that do — then the
+    suffix its name holds after the timestamp prep named it by (`source_naive_time`), none first, then its path."""
+    def held_suffix(f):
+        name = os.path.splitext(os.path.basename(f["relative_path"]))[0]
+        t = parse_naive_time(f.get("source_naive_time"))
+        stem = t.strftime(fmt) if t is not None else None
+        rest = name[len(stem) + 1:] if stem and carries_stem(name, stem) and name.lower() != stem.lower() else ""
+        return int(rest) if rest.isdigit() else 0
+    utcs = [_parse_utc(f.get("resolved_utc")) for f in members]
+    subs = [f.get("sub_second") for f in members if f.get("sub_second") is not None]
+    return (min(u for u in utcs if u is not None), not subs, min(subs) if subs else 0,
+            min(held_suffix(f) for f in members), min(f["relative_path"] for f in members))
+
+
+def plan_set_aside_rename(raw_rename, jpeg, taken):
+    """The rename of a JPEG prep set aside beside a RAW, made with that RAW's rename operation `raw_rename`
+    (BLD-set_aside_renamed_with_raw): to the RAW's new name, extension aside, the JPEG's own extension in lowercase — a
+    rename only, which `follows` the RAW's and is applied after it. None where the JPEG holds that name already, or
+    where a file in redundant JPEGs holds it or is given it (`taken`, case folded, the name added once given): the JPEG
+    is then left as it is."""
+    rel = jpeg["relative_path"]
+    name = os.path.basename(rel)
+    to = os.path.splitext(raw_rename["to"])[0] + os.path.splitext(name)[1].lower()
+    if to.lower() == name.lower() or to.lower() in taken:
+        return None
+    taken.add(to.lower())
+    pre = {"content_fingerprint": jpeg.get("content_fingerprint"),
+           "size": jpeg.get("size"), "mtime_ns": jpeg.get("mtime_ns")}
+    return _make_op("rename_no_clobber", rel, "renamed with its RAW",
+                    {"from": name, "to": to, "follows": raw_rename["operation_id"]}, pre)
 
 
 # ============================================================================
@@ -2407,6 +2489,29 @@ def build_complete_log(prep_photos, files, resolved_rows, time_artifact, plan, e
         renamed = [s["to"] for s in steps if s.get("phase") == "geotag" and s.get("action") == "final_rename"
                    and s.get("to")]
         entry["geotag_path"] = os.path.join(os.path.dirname(rel), renamed[-1]) if renamed else rel
+
+    # A JPEG set aside beside its RAW and renamed with it: its renames, this pass's and the earlier ones', in its own
+    # record (BLD-set_aside_renamed_with_raw).
+    in_model = {f.get("content_fingerprint") for f in files}
+    aside = {}
+    for p in [p for p, _confirmed in earlier_passes] + [plan]:
+        for dd in (p.get("destinations") or {}).values():
+            for op in dd.get("operations") or []:
+                fp = (op.get("preconditions") or {}).get("content_fingerprint")
+                if op.get("follows") and fp and fp not in in_model:
+                    aside[fp] = op["relative_path"]
+    for fp, rel in sorted(aside.items()):
+        entry = photos.setdefault(fp, {"content_fingerprint": fp, "journey": []})
+        steps = entry.setdefault("journey", [])
+        for past in earlier:
+            steps.extend(past.get(fp) or [])
+        start = len(steps)
+        steps.extend(_gps_and_rename_steps(ops_by_fp.get(fp) or [], native=False))
+        if run:
+            steps[start:] = [dict(s, run=run) for s in steps[start:]]
+        renamed = [s["to"] for s in steps if s.get("phase") == "geotag" and s.get("action") == "final_rename"]
+        if renamed:
+            entry["geotag_path"] = os.path.join(os.path.dirname(rel), renamed[-1])
     return photos
 
 

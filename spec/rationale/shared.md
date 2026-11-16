@@ -1526,6 +1526,19 @@ coerced, half applied or let through, it spoils a later operation, and the chang
 explained. Checking keeps every change explainable and the user its author.
 :::
 
+:::{rat} One moment, one name, in both phases
+:id: RAT-format_reads_no_zone
+:status: ruled
+:forced: yes
+:follows_from: RAT-hand_written_fallible, RAT-misnamed_not_ignored
+:justifies: RUL-filename_format_zone_free
+
+Prep names a file from the time its camera recorded, which carries no zone; geotag names it from its corrected time,
+a moment in its destination's zone. A field that reads the zone — `%z`, `%Z` — is empty in the one and filled in the
+other, so one moment gets two names: a file geotag left as it was would be named afresh, and prep's check of a name
+would hold a geotag name for a wrong one. Such a format is refused before it names anything.
+:::
+
 :::{rat} The library and the workspace lie apart
 :id: RAT-library_and_workspace_apart
 :status: ruled

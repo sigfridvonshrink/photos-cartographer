@@ -21,7 +21,7 @@ import math
 import re
 import shutil
 import tempfile
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 import sqlite3
 import ctypes
 import errno
@@ -968,19 +968,24 @@ def allocate_suffix(base: str, ext: str, index: set, start_idx: int = 1, bare_fi
     paths, which are only ever reached once the bare name is already taken), the bare name is skipped and
     allocation goes straight to `<base>-NNN`. `-{idx:03d}` is the shared form; `start_idx` lets merge
     begin past the highest existing suffix (append-only library) rather than gap-fill from 1."""
-    if bare_first:
-        bare = f"{base}.{ext}" if ext else base
-        if bare.lower() not in index:
-            index.add(bare.lower())
-            return bare
-    idx = start_idx
+    stem = allocate_stem(base, [ext], index, start_idx, bare_first)
+    return f"{stem}.{ext}" if ext else stem
+
+
+def allocate_stem(base: str, exts, index: set, start_idx: int = 1, bare_first: bool = False) -> str:
+    """`allocate_suffix`'s rule over the names of several extensions at once: the first stem, `<base>` or
+    `<base>-NNN`, under which the name of every one of `exts` (no leading dot; `""` for the stem alone) is free in
+    `index` (case folded), those names added to it. Geotag gives it the stems a destination's photos hold, so that
+    photos sharing a name, extension aside, take one stem free under every extension (RUL-pair_named_as_one)."""
+    def names(stem):
+        return [(f"{stem}.{e}" if e else stem).lower() for e in exts]
+    idx = None if bare_first else start_idx
     while True:
-        suffix = f"-{idx:03d}"
-        name = f"{base}{suffix}.{ext}" if ext else f"{base}{suffix}"
-        if name.lower() not in index:
-            index.add(name.lower())
-            return name
-        idx += 1
+        stem = base if idx is None else f"{base}-{idx:03d}"
+        if not any(n in index for n in names(stem)):
+            index.update(names(stem))
+            return stem
+        idx = start_idx if idx is None else idx + 1
 
 def suffix_root(stem: str) -> str:
     """The root name of an extension-less stem: strip a trailing dedup suffix `-NNN` (3+ digits — the
@@ -1963,6 +1968,14 @@ def validate_config(cfg: dict, workspace_root: str = None):
             raise ValueError(f"config: filename_timestamp_format {fmt!r} does not vary with the timestamp.")
         if "/" in out1 or "\x00" in out1:
             raise ValueError(f"config: filename_timestamp_format {fmt!r} produces an illegal path character.")
+        # Prep names a file from the time its camera recorded, which carries no zone; geotag from the corrected time,
+        # which does. A field that reads the two differently — `%z`, `%Z` — names one moment two ways
+        # (RUL-filename_format_zone_free).
+        zoned = datetime(2001, 2, 3, 4, 5, 6, tzinfo=timezone(timedelta(hours=5, minutes=30)))
+        if zoned.strftime(fmt) != out1:
+            raise ValueError(f"config: filename_timestamp_format {fmt!r} holds a field that reads a timezone, such as "
+                             "%z or %Z: prep names files from a time without one and geotag from a time with one, "
+                             "so the two would name one moment differently. Use only fields of the date and time.")
 
     if "gpx_root" in cfg:
         _check_path("gpx_root", cfg["gpx_root"])

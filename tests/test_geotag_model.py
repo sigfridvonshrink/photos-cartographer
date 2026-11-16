@@ -75,6 +75,17 @@ def test_file_model_builds_by_dest_photos(tmp_path):
     assert f["planned_filename"] is None
 
 
+@pytest.mark.spec("RUL-suffix_in_capture_order", "BLD-sub_second_read",
+                  test="TST-geotag_model-file_model_carries_the_sub_second")
+def test_file_model_carries_the_sub_second(tmp_path):
+    """The fraction of a second prep read beside a photo's recorded time reaches geotag through the handoff."""
+    rec = _hfile("6-photos-by-dest/T/a.jpg")
+    parsed = json.loads(rec["metadata_status"]["parsed_json"])
+    rec["metadata_status"]["parsed_json"] = json.dumps(dict(parsed, SubSecTimeOriginal="25"))
+    files = _wf(tmp_path, [rec, _hfile("6-photos-by-dest/T/b.jpg")]).build_file_model()
+    assert [f["sub_second"] for f in files] == [0.25, None]
+
+
 @pytest.mark.spec("BLD-geotag_file_model", "RUL-geotag_changes_only_by_dest", "RUL-video_never_changed",
                   test="TST-geotag_model-file_model_excludes_non_bydest_and_videos")
 def test_file_model_excludes_non_bydest_and_videos(tmp_path):

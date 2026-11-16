@@ -767,6 +767,8 @@ class GeotagWorkflow:
                 "camera_group_key": md.get("camera_group_key") or parsed.get("camera_group_key") or NO_IDENTITY_KEY,
                 "source_naive_time": parsed.get("selected_source_naive_timestamp"),
                 "source_time_tag": parsed.get("selected_source_timestamp_tag"),
+                # the fraction of a second it records: the order of a burst's names (RUL-suffix_in_capture_order)
+                "sub_second": recorded_sub_second(parsed),
                 "raw_times": {k: parsed.get(k) for k in
                               ("DateTimeOriginal", "CreateDate", "ModifyDate",
                                "OffsetTimeOriginal", "OffsetTimeDigitized", "OffsetTime", "TimeZone")
@@ -2340,6 +2342,7 @@ class GeotagWorkflow:
         by_dest = {}
         for f in files:
             by_dest.setdefault(f["destination"], []).append(f)
+        aside_by_raw, aside_taken = self._set_aside_jpegs()
 
         destinations, all_ops, media_pre = {}, [], []
         placement = {}                                # how each photo comes by its position: the measure of the run
@@ -2352,7 +2355,8 @@ class GeotagWorkflow:
             tz = ((t_dests.get(dest, {}).get("destination_timezone")) or {}).get("effective_iana_timezone") or ""
             rename_inputs = [{"relative_path": f["relative_path"],
                               "resolved_utc": (utc_by_path.get(f["relative_path"]) or {}).get("resolved_utc"),
-                              "destination_timezone": tz} for f in by_dest[dest]]
+                              "destination_timezone": tz, "sub_second": f.get("sub_second"),
+                              "source_naive_time": f.get("source_naive_time")} for f in by_dest[dest]]
             renames = {r["relative_path"]: r for r in plan_renames(rename_inputs, fmt)}
 
             ops, no_ops = [], []
@@ -2412,6 +2416,15 @@ class GeotagWorkflow:
                     ops.extend(fops)
                 else:
                     no_ops.append(rel)
+                # The JPEG prep set aside beside this RAW is renamed with it, and nothing else is done to it: the one
+                # change geotag makes outside photos by destination (RUL-set_aside_jpeg_renamed_with_raw).
+                raw_rename = next((o for o in fops if o["type"] == "rename_no_clobber"), None)
+                for j in (aside_by_raw.get(f.get("content_fingerprint")) or []) if raw_rename else []:
+                    jop = plan_set_aside_rename(raw_rename, j, aside_taken)
+                    if jop is not None:
+                        ops.append(jop)
+                        media_pre.append({k: j.get(k) for k in ("relative_path", "content_fingerprint", "size",
+                                                                "mtime_ns")})
                 media_pre.append({"relative_path": rel, "content_fingerprint": f.get("content_fingerprint"),
                                   "size": f.get("size"), "mtime_ns": f.get("mtime_ns")})
             destinations[dest] = {"destination_path": dest, "operations": ops, "no_ops": no_ops}
@@ -2451,6 +2464,30 @@ class GeotagWorkflow:
             "depends_on": depends_on,
         }
         return plan, blockers
+
+    def _set_aside_jpegs(self):
+        """`(by RAW, taken)`: the JPEGs prep set aside beside a RAW, from the handoff, by their RAW's fingerprint
+        (BLD-set_aside_pair_recorded) — each one still on disk as the handoff recorded it; one gone or changed since is
+        left as it is — and every name in redundant JPEGs, case folded (BLD-set_aside_renamed_with_raw)."""
+        aside = folder_name('redundant_jpgs')
+        by_raw, taken = {}, set()
+        for rec in (self.handoff or {}).get("files") or []:
+            if rec.get("folder_class") != aside:
+                continue
+            rel = rec.get("relative_path") or ""
+            taken.add(os.path.basename(rel).lower())
+            if not rec.get("raw_fingerprint"):
+                continue
+            try:
+                st = os.stat(os.path.join(self.workspace_root, rel))
+            except OSError:
+                continue
+            if (st.st_size, st.st_mtime_ns) != (rec.get("size"), rec.get("mtime_ns")):
+                continue
+            by_raw.setdefault(rec["raw_fingerprint"], []).append({
+                "relative_path": rel, "content_fingerprint": _recorded_fingerprint(rec),
+                "size": rec.get("size"), "mtime_ns": rec.get("mtime_ns")})
+        return by_raw, taken
 
     def _exec_depends_on(self, resolved_fp, media_pre, planned_op_fp):
         ws = self.workspace_root
@@ -2849,34 +2886,13 @@ class GeotagWorkflow:
                     if fp and o["type"] == "metadata_time_write" and journal.get(o["operation_id"]) != "confirmed":
                         cache.time_written_record(fp, {k: o["writes"].get(k) for k in TIME_PAIR})
 
+            # A JPEG set aside beside its RAW is renamed after its RAW, and only once the RAW's rename is confirmed: a run
+            # never leaves the one renamed and the other not (BLD-set_aside_renamed_with_raw).
+            followers = {rel for rel, ops in by_file.items() if any(o.get("follows") for o in ops)}
             self.coordinator.start_phase("applying calibration", len(by_file))
             with concurrent.futures.ThreadPoolExecutor(max_workers=max(1, jobs)) as ex:
-                futs = [ex.submit(self._apply_file_contained, rel, ops, journal, accepted)
-                        for rel, ops in sorted(by_file.items())]
-                try:
-                    for fut in concurrent.futures.as_completed(futs):
-                        r = fut.result()
-                        results.append(r)
-                        self.coordinator.increment_completed(1)
-                        # Incremental confirmation journal (BLD-geotag_execution): persist each file's confirmed ops AS
-                        # IT COMPLETES (in this main thread — workers never touch the journal), so a crash
-                        # mid-run leaves a journal that lets the next run skip the already-applied files.
-                        if r["applied"] or r.get("found"):
-                            for oid in r["applied"] + (r.get("found") or []):
-                                journal[oid] = "confirmed"
-                            if r.get("after"):            # the photo as this run left it: finalize's baseline
-                                a = r["after"]
-                                media_after[a["relative_path"]] = {"size": a["size"], "mtime_ns": a["mtime_ns"]}
-                            write_json_artifact(jpath, {"journal_version": 1, "plan_id": plan["plan_id"],
-                                                        "operations": journal, "media_after": media_after,
-                                                        "updated_at": now_iso})
-                except KeyboardInterrupt:
-                    # Ctrl-C: drop pending file writes and stop waiting instead of letting the `with`
-                    # exit drain them (shutdown(wait=True)). Files already applied are confirmed in the
-                    # journal above, so the next run resumes from the diff (RUL-geotag_execution_resumable). Re-raise
-                    # to main().
-                    ex.shutdown(wait=False, cancel_futures=True)
-                    raise
+                for wave in (sorted(set(by_file) - followers), sorted(followers)):
+                    self._apply_wave(ex, wave, by_file, journal, media_after, accepted, jpath, plan, now_iso, results)
             self.coordinator.finish_phase()
 
         finally:
@@ -2893,6 +2909,37 @@ class GeotagWorkflow:
         write_versioned_json(execution_summary_path(ws), summary)        # the earlier one kept as -NNN
         # (BLD-geotag_records_versioned)
         return summary
+
+    def _apply_wave(self, ex, wave, by_file, journal, media_after, accepted, jpath, plan, now_iso, results):
+        """Apply the photos of `wave` on the pool `ex`, journalling each as it completes. A file whose operations follow
+        another's (`follows`) is applied only where every one followed is confirmed by now."""
+        wave = [rel for rel in wave if all(journal.get(o["follows"]) == "confirmed"
+                                           for o in by_file[rel] if o.get("follows"))]
+        futs = [ex.submit(self._apply_file_contained, rel, by_file[rel], journal, accepted) for rel in wave]
+        try:
+            for fut in concurrent.futures.as_completed(futs):
+                r = fut.result()
+                results.append(r)
+                self.coordinator.increment_completed(1)
+                # Incremental confirmation journal (BLD-geotag_execution): persist each file's confirmed ops AS
+                # IT COMPLETES (in this main thread — workers never touch the journal), so a crash
+                # mid-run leaves a journal that lets the next run skip the already-applied files.
+                if r["applied"] or r.get("found"):
+                    for oid in r["applied"] + (r.get("found") or []):
+                        journal[oid] = "confirmed"
+                    if r.get("after"):            # the photo as this run left it: finalize's baseline
+                        a = r["after"]
+                        media_after[a["relative_path"]] = {"size": a["size"], "mtime_ns": a["mtime_ns"]}
+                    write_json_artifact(jpath, {"journal_version": 1, "plan_id": plan["plan_id"],
+                                                "operations": journal, "media_after": media_after,
+                                                "updated_at": now_iso})
+        except KeyboardInterrupt:
+            # Ctrl-C: drop pending file writes and stop waiting instead of letting the `with`
+            # exit drain them (shutdown(wait=True)). Files already applied are confirmed in the
+            # journal above, so the next run resumes from the diff (RUL-geotag_execution_resumable). Re-raise
+            # to main().
+            ex.shutdown(wait=False, cancel_futures=True)
+            raise
 
     @staticmethod
     def _prior_mismatches(ws, plan_id):

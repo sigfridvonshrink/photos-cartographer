@@ -67,6 +67,35 @@ the pipeline does not place them, and a tag written into one would be a guess. S
 the user's statement that it is ready.
 :::
 
+:::{rat} A pair keeps one name
+:id: RAT-pair_keeps_one_name
+:status: ruled
+:forced: no
+:follows_from: RAT-redundant_named_like_its_raw, RAT-only_sorted_is_ready
+:justifies: RUL-set_aside_jpeg_renamed_with_raw, RUL-set_aside_jpeg_only_renamed, RUL-set_aside_jpeg_named_as_raw
+
+A JPEG set aside beside its RAW is the same shot, named like it so that the two names show it. Once geotag corrects the
+RAW's name, a JPEG left under the camera's time names another moment — eight hours away, for a camera left on home
+time — and the pair no longer shows. Prep knows the pair when it sets the JPEG aside, so it records it, and the rename
+rests on that record, never on a likeness of names, which a suffix given to one and not the other already breaks. A
+rename is all: the JPEG is a copy nobody uses, no time or position is decided for it, and a tag written into it would be
+a guess. Renamed so, its name is its RAW's and no longer its own recorded time, and prep takes it as given.
+:::
+
+:::{rat} A video has no zone to correct its name by
+:id: RAT-video_name_uncorrected
+:status: ruled
+:forced: no
+:follows_from: RAT-only_sorted_is_ready
+:justifies: RUL-video_name_stays_uncorrected
+
+A name is corrected to its destination's local time, and a video has no destination: videos are not sorted into
+destinations, so there is no zone to read a corrected time in. A zone guessed from the photos of the camera's day goes
+wrong on a day spread over two destinations of different zones — the video would be named in the wrong one, under a
+name that looks corrected. Its camera's time, uncorrected, is at least what it says it is. Placing videos in
+destinations, and then correcting their names, is another piece of work.
+:::
+
 :::{rat} No identity, no change
 :id: RAT-no_identity_no_change
 :status: ruled
@@ -1152,6 +1181,34 @@ Prep gives every file it files one spelling of its extension, but photos by dest
 prep leaves as it finds it — so a photo put there by hand keeps the `.JPG` its camera wrote. Geotag renames the
 photos there anyway, and is the last phase to touch them before the library: left to it, the one spelling holds in
 the library too, and a name is the same name on every filesystem and in every tool.
+:::
+
+:::{rat} A burst is read in the order of its names
+:id: RAT-names_in_capture_order
+:status: ruled
+:forced: no
+:follows_from: RAT-geotag_finishes_extension_spelling
+:justifies: RUL-suffix_in_capture_order, RUL-pair_named_as_one
+
+Within one second, the suffix is all a folder listing has to order a burst by. Given in path order, where `-` sorts
+before `.`, `T`, `T-001` and `T-002` become `T'-002`, `T'` and `T'-001`: the burst rotates. The fraction of a second a
+camera records is its own order of the frames, and the suffix prep gave is the order prep had them in; either keeps the
+burst as it was shot. A RAW and its JPEG, a HEIC and the other file of its shot, are one shot: named apart, one half
+lands beside another frame's other half, and the pair shows a shot that never was — as would a new name another photo
+holds under another extension.
+:::
+
+:::{rat} A name is the time the place showed
+:id: RAT-names_local_in_repeated_hour
+:status: ruled
+:forced: no
+:follows_from: RAT-time_written_as_lived
+:justifies: RUL-names_local_in_repeated_hour
+
+A photo's name is the time its destination's clocks showed — the time of a ticket, a timetable, a diary. In the hour a
+zone repeats as its clocks go back, those clocks run back, and names taken from them sort against the true order for
+that hour. A name of true time — UTC, or an offset in every name — would mislabel every other hour to fix that one.
+The true order is kept where it can be read: in the metadata, each time with its offset beside it.
 :::
 
 

@@ -114,6 +114,43 @@ Geotag SHALL run prep's execution itself only where prep's plan moves, renames o
 Geotag SHALL never change a video.
 :::
 
+:::{rul} A video keeps the name prep gave it
+:id: RUL-video_name_stays_uncorrected
+:status: ruled
+:criticality: med
+:anti: yes
+:verify: required
+:refines: RUL-video_never_changed
+:uses: RUL-prep_name_provisional, RUL-geotag_name_final
+
+Geotag SHALL NOT correct a video's name: the name prep gives a video from its camera's clock, uncorrected, is final.
+:::
+
+:::{rul} A JPEG set aside beside its RAW is renamed with it
+:id: RUL-set_aside_jpeg_renamed_with_raw
+:status: ruled
+:criticality: med
+:verify: required
+:refines: RUL-geotag_changes_only_by_dest
+:uses: DEF-geotag, DEF-managed_folders, RUL-redundant_jpeg_set_aside
+
+Where geotag renames a RAW in photos by destination, it SHALL rename the JPEG prep set aside beside that RAW to the
+RAW's new name, extension aside — the one change geotag makes outside photos by destination.
+:::
+
+:::{rul} A set-aside JPEG is renamed, never written
+:id: RUL-set_aside_jpeg_only_renamed
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+:refines: RUL-set_aside_jpeg_renamed_with_raw
+:uses: DEF-geotag
+
+Geotag SHALL write nothing into a file outside photos by destination: a JPEG set aside beside its RAW is renamed, and
+no tag is written to it.
+:::
+
 ## 5. JSON artifact rule
 
 :::{rul} A decision stage reached writes its record
@@ -2146,6 +2183,42 @@ photo already records when it was made, adding none it does not hold.
 
 Each photo in photos by destination SHALL end with its extension in lowercase once geotag has executed — one whose name
 already carries its timestamp renamed for its extension alone.
+:::
+
+:::{rul} The photos of one second keep the order they were taken in
+:id: RUL-suffix_in_capture_order
+:status: ruled
+:criticality: med
+:verify: required
+:refines: RUL-suffix_deterministic
+:uses: DEF-timestamp_name
+
+Geotag SHALL give the photos of a destination that take new names of one timestamp their suffixes in the order they
+were taken: by the fraction of a second each records, where it records one, then by the suffix its name already holds,
+none first.
+:::
+
+:::{rul} A pair takes one name
+:id: RUL-pair_named_as_one
+:status: ruled
+:criticality: med
+:verify: required
+:refines: RUL-suffix_choice_by_phase
+:uses: DEF-timestamp_name
+
+Photos of a destination that share a name, extension aside, and take new names of one timestamp SHALL be given one new
+name, each keeping its extension, that no other photo there holds under any extension.
+:::
+
+:::{rul} In the hour a zone repeats, names are its local time
+:id: RUL-names_local_in_repeated_hour
+:status: ruled
+:criticality: low
+:verify: required
+:refines: RUL-geotag_name_final
+
+In the hour a destination's zone repeats as its clocks go back, geotag SHALL name each photo by its local time there,
+so that the names of that hour sort by local time and not by true time.
 :::
 
 
