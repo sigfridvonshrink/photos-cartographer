@@ -85,6 +85,9 @@ __all__ = [
     '_valid_offset',
     '_parse_camera_naive',
     '_naive_date',
+    'date_fallback_day',
+    'untimed',
+    'date_fallback_time',
     '_parse_utc',
     '_equirect_xy',
     '_point_to_segment',
@@ -678,6 +681,39 @@ def _naive_date(s):
     return dt.strftime("%Y-%m-%d") if dt else None
 
 
+# A destination's date fallback as photos-21 holds it (BLD-date_fallback_cell): a year, a year and month, or a day.
+_DATE_FALLBACK = re.compile(r"([0-9]{4})(?:-([0-9]{2})(?:-([0-9]{2}))?)?")
+
+
+def date_fallback_day(value):
+    """The day a date fallback stands for — `YYYY`, `YYYY-MM` or `YYYY-MM-DD`, the month and day it leaves out taken as
+    the first (RUL-date_fallback_fills_to_a_day) — as a naive datetime at midnight; None where `value` is no such
+    date: another form, or a day the calendar has not (RUL-date_fallback_checked)."""
+    m = _DATE_FALLBACK.fullmatch(value) if isinstance(value, str) else None
+    if m is None:
+        return None
+    try:
+        return datetime(int(m[1]), int(m[2] or 1), int(m[3] or 1))
+    except ValueError:
+        return None
+
+
+def untimed(f):
+    """Whether photo `f` carries no recorded time (DEF-recorded_time): the one kind of photo a date fallback times
+    (RUL-date_fallback_only_untimed)."""
+    return not f.get("has_timestamp", True)
+
+
+def date_fallback_time(f, d):
+    """The time the date fallback in effect at destination record `d` gives photo `f` — its day at midnight, local to
+    the destination (RUL-date_fallback_times_untimed) — or None: a photo with a recorded time of its own is never timed
+    by one (RUL-date_fallback_only_untimed), and one no fallback covers has none."""
+    if not untimed(f):
+        return None
+    eff = (d.get("date_fallback") or {}).get("effective_date")
+    return date_fallback_day(eff.get("date")) if isinstance(eff, dict) else None
+
+
 def _parse_utc(s):
     """An ISO-8601 UTC datetime (trailing Z accepted) as an aware datetime, or None."""
     try:
@@ -1253,8 +1289,10 @@ OFFSET_TAG_FOR = {"DateTimeOriginal": "OffsetTimeOriginal", "CreateDate": "Offse
 def clock_group_key(f):
     """The camera group `f`'s time is solved under (BLD-modified_time_files): prep's, unless its time was read from
     `ModifyDate` — the editing computer's clock, not the camera's — then `NO_IDENTITY_KEY`, solved on its own as a
-    file naming no camera is (RUL-modified_time_solved_alone). `CreateDate` is the camera's clock still."""
-    if (f.get("source_time_tag") or "").rsplit(":", 1)[-1] == "ModifyDate":
+    file naming no camera is (RUL-modified_time_solved_alone). `CreateDate` is the camera's clock still. A photo with
+    no recorded time reads no clock at all: `NO_IDENTITY_KEY` too, in no camera's offset or class question
+    (RUL-date_fallback_no_clock_evidence)."""
+    if untimed(f) or (f.get("source_time_tag") or "").rsplit(":", 1)[-1] == "ModifyDate":
         return NO_IDENTITY_KEY
     return f["camera_group_key"]
 
@@ -1451,7 +1489,16 @@ def _resolve_one(f, d, cls, naive, tz, key, dest, overrides):
     compute_resolved_utc."""
     resolved, status, rule, offset_used, prov = None, "unresolved", "missing_timestamp", None, None
     scope = key
-    if naive is not None and f.get("true_time"):
+    fill = date_fallback_time(f, d) if naive is None else None
+    if fill is not None:
+        # no recorded time: its destination's date fallback, its day at midnight, read by the zone like any local
+        # time — a midnight it skips or repeats as the user answered (BLD-date_fallback_cell) — never by a clock offset
+        if tz:
+            resolved, status, amb_rule, offset_used = _resolve_by_zone(fill, tz, _reading_answer(f, d))
+            rule, prov = amb_rule or "date_fallback", tz
+        else:
+            status, rule = "unresolved", "timezone_missing"
+    elif naive is not None and f.get("true_time"):
         # the user kept this time as the photo's true one, local to its destination (BLD-changed_time_kept): read by the
         # zone — a time it skips or repeats as the user answered — never by a clock offset
         if tz:
@@ -1707,7 +1754,12 @@ def classify_gps(file, resolved_utc, gpx, cfg, effective_fallback, file_decision
         return "preserve_native", None
     if manual:
         return "manual_locked", {"lat": mlat, "lon": mlon}
-    if resolved_utc is not None:
+    if untimed(file):
+        # timed by its folder's date fallback: that time is not when it was taken, so no track places it by it
+        # (RUL-date_fallback_never_placed_by_tracks)
+        if why is not None:
+            why["reason"] = "time_from_date_fallback"
+    elif resolved_utc is not None:
         p = place_gps(resolved_utc, gpx, cfg, why)
         if p is not None:
             return _GPS_PLACE_CATEGORY[p["method"]], p
@@ -2335,6 +2387,17 @@ def _true_time_steps(plan):
     return out
 
 
+def _date_fallback_steps(time_op):
+    """The log's step for a time a date fallback gave a photo with none of its own (BLD-geotag_log_steps): the fallback
+    as the user gave it (`value`, such as "1985-06"), the day it was filled to, and the photos-21 cell it was given in —
+    from the provenance of the plan's time write. [] for any other time."""
+    df = ((time_op or {}).get("provenance") or {}).get("date_fallback")
+    if not isinstance(df, dict):
+        return []
+    return [{"phase": "geotag", "action": "date_fallback_applied", "value": df.get("date"), "filled": df.get("filled"),
+             "because": time_op["provenance"].get("because")}]
+
+
 def _earlier_pass_steps(plan, confirmed):
     """{fingerprint: [steps]} for one earlier executed pass: what its confirmed operations did to each
     photo, matched by the fingerprint the operation was planned against, and the true times it kept, each step
@@ -2358,6 +2421,7 @@ def _earlier_pass_steps(plan, confirmed):
                 steps.append({"phase": "geotag", "action": "clock_offset_applied", "offset_seconds": prov["utc_offset_used"],
                               "offset_description": describe_offset(prov["utc_offset_used"]),
                               "because": prov.get("because")})
+            steps += _date_fallback_steps(time_op)
             if prov.get("resolved_utc"):
                 steps.append({"phase": "geotag", "action": "resolved_utc", "value": prov["resolved_utc"]})
             if prov.get("destination_timezone"):
@@ -2449,6 +2513,8 @@ def build_complete_log(prep_photos, files, resolved_rows, time_artifact, plan, e
                           "offset_description": describe_offset(row["utc_offset_used"]),
                           "because": offset_decision_pointer(dict(row, camera_group=row.get("camera_group") or group),
                                                              dest, cells)})
+        time_op = next((o for o in ops if o["type"] == "metadata_time_write"), None)
+        steps += _date_fallback_steps(time_op)
         if row.get("resolved_utc"):
             steps.append({"phase": "geotag", "action": "resolved_utc", "value": row["resolved_utc"]})
         tz = ((t_dests.get(dest, {}).get("destination_timezone")) or {}).get("effective_iana_timezone")
@@ -2456,7 +2522,6 @@ def build_complete_log(prep_photos, files, resolved_rows, time_artifact, plan, e
             steps.append({"phase": "geotag", "action": "timezone_resolved", "value": tz,
                           "because": f"photos-21 destinations.{dest}.destination_timezone"})
 
-        time_op = next((o for o in ops if o["type"] == "metadata_time_write"), None)
         if time_op is not None:
             steps.append(_time_written_step(time_op))
         steps.extend(_gps_and_rename_steps(ops, native=f.get("has_native_gps")))

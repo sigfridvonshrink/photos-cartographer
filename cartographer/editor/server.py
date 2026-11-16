@@ -349,6 +349,8 @@ def _edit_cell(art, e):
         return None
     if kind == "timezone":
         cell = d.get("destination_timezone")
+    elif kind == "date":                        # the destination's date fallback, for its photos with no time
+        cell = d.get("date_fallback")
     elif kind == "offset":
         cell = (d.get("camera_group_time_decisions") or {}).get(e.get("key"))
     elif kind == "reading":                     # a photo's time at a daylight-saving change, keyed by its path

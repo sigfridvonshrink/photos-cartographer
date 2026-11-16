@@ -293,6 +293,23 @@ and holds for such files arriving later, until the destination's zone changes. O
 them their offset, and run prep again. By hand: `unidentified_files.user_decision` in photos-21 (see the
 [decision-JSON reference](../cartographer/editor/decision-json-reference.md)).
 
+### Date fallback
+
+A destination holding photos that record **no time** — scanned prints, above all — gets a row **Date fallback**
+("2 photos with no time"), and so does every folder above it, so you can answer once for a whole tree of scans. Type
+the date, as much as you know: a year (`1985`), a month (`1985-06`) or a day (`1985-06-14`); a month or day left
+out is the first. The date given on the nearest folder up covers a photo, its own folder included — it applies itself,
+nothing to accept (an **inherited ⟵** badge says from where); one written lower down overrides it. **clear** takes it
+back.
+
+It times only the photos with no recorded time; a photo with a time keeps it. Each takes the day's midnight, local to
+its destination, written into it and named by it — several of one date in the order of their current file names, the
+order they came from the scanner. The tracks never place them by it (that time is not when they were taken): give
+their folder a GPS fallback, or each a position, in the GPS view. Until a date covers every such photo, `geotag plan`
+stops after the time decisions, naming them. Or move them back to `2-missing-metadata/`. By hand: `date` in the
+destination's `date_fallback.user_decision` in photos-21 (see the
+[decision-JSON reference](../cartographer/editor/decision-json-reference.md)).
+
 ### A time at a clock change
 
 A photo read by its destination's zone whose time falls at a **daylight-saving change** — 02:30 on the
@@ -458,7 +475,7 @@ holds for the content you saw: if the photo changes again, it asks again. By han
 
 Two reset behaviors worth knowing (both take effect on the next run):
 
-- **Re-rooting** — setting a manual **timezone** or **folder fallback** on a folder makes it the new
+- **Re-rooting** — setting a manual **timezone**, **date fallback** or **folder fallback** on a folder makes it the new
   basis its descendants inherit, replacing whatever flowed from higher up. A descendant that set its own
   value keeps it (it overrides). A **country** works the same way, but only once per tree: a country
   chosen inside another country's folder is removed by the next run, which says so in the terminal and
@@ -485,6 +502,7 @@ Two reset behaviors worth knowing (both take effect on the next run):
 | Save refused: records changed | reload the page, make the edits again |
 | Say which country a folder is in | Time view → timezone → **In country** (once, at the top of its tree) |
 | Answer a clock offset | **accept proposal**, a group's **use this**, or a manual offset |
+| Date photos with no time (scans) | Time view → **Date fallback** on their folder, or one above: `1985`, `1985-06` or `1985-06-14` |
 | Step a photo along the track (Drift) | scroll wheel, or `[` `]` (Shift `{` `}` for ×10) |
 | Confirm an offset as it is (Drift) | tick **confirm this bucket** |
 | Set a coordinate (GPS) | paste `lat, lon`, place-name search, or pan + "use map center" |

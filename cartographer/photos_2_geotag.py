@@ -261,6 +261,8 @@ def _decision_shape_blockers(prior, kind):
             cells(d, "changed_times", dest)
             obj(obj(d, "unidentified_files", f"{dest}: unidentified_files"), "user_decision",
                 f"{dest}: unidentified_files.user_decision")
+            obj(obj(d, "date_fallback", f"{dest}: date_fallback"), "user_decision",
+                f"{dest}: date_fallback.user_decision")
         elif kind == "drift":
             cells(d, "drift_decisions", dest)
         else:
@@ -686,18 +688,8 @@ class GeotagWorkflow:
             if problem:
                 blockers.append(f"{problem.capitalize()}, which prep never writes: re-run prep — `photos-cartographer prep plan` then `photos-cartographer prep execute`.")
 
-        # 6. Every photo must carry a recorded time: one with none can never be resolved to its true
-        # time, and no decision of geotag's could supply one (prep sends such a photo to missing
-        # metadata; one sorted into a destination by hand stops geotag here, before any planning).
-        untimed = sorted(rec.get("relative_path") or "" for rec in (handoff.get("files") or [])
-                         if rec.get("folder_class") == by_dest and rec.get("media_class") in ("image", "raw")
-                         and not _has_recorded_time(rec))
-        if untimed:
-            blockers.append(f"{len(untimed)} photo(s) in {by_dest}/ have no recorded time, so their true "
-                            f"time cannot be resolved: {_named(untimed)}. They belong in "
-                            f"{folder_name('missing_metadata')}/ — move them there, then re-run geotag. "
-                            f"Give one a time there and prep files it into {folder_name('photos_by_date')}/, "
-                            "to sort again.")
+        # A photo with no recorded time passes here: its folder's date fallback times it, or photos-21 asks for one
+        # and geotag stops there (BLD-geotag_untimed_gate).
 
         info["by_dest_photos"] = sum(1 for _, mc in self._scan_media(by_dest) if mc in ("image", "raw"))
         return blockers, warnings, info
@@ -934,6 +926,8 @@ class GeotagWorkflow:
         # a photo's own position is set against the tracks only where its offset contradicts it
         # (BLD-contradicted_position)
         native = {f["relative_path"] for f in files if f.get("has_native_gps")} - set(contradicted)
+        # a time a date fallback gave is no time the tracks place by (RUL-date_fallback_never_placed_by_tracks)
+        native |= {f["relative_path"] for f in files if untimed(f)}
         return [around(t, reach) for r in rows if r["resolved_utc_status"] == "valid"
                 and r["relative_path"] not in native and (t := _parse_utc(r["resolved_utc"]))]
 
@@ -982,6 +976,9 @@ class GeotagWorkflow:
         # bucket proposes its own, or takes the one the camera's own positions gave that day in another destination
         # (RUL-offset_shared_within_day).
         eff_tz = {}
+        # The date fallback in effect at each destination, given there or at the nearest one above it
+        # (RUL-date_fallback_from_nearest): (destination, "date") -> {"date", "filled", "set_at"}.
+        eff_date = {}
         recall = {}                                  # (destination, bucket) -> what its cell was built from
         # A country is chosen once, at the top of its tree (RUL-country_chosen_once): `eff_country` maps a destination
         # to (code, the destination it was chosen at) for itself and everything inside it.
@@ -1047,6 +1044,10 @@ class GeotagWorkflow:
                 # photos are in, and lets none through from above: each destination below answers for itself.
                 eff_tz[(dest, "tz")] = _ZONE_WAITS
             tz = tz_block["effective_iana_timezone"] or None
+            date_cell = self._date_fallback_cell(dest, prior_d.get("date_fallback") or {},
+                                                 _nearest_ancestor(dest, eff_date, "date"),
+                                                 [] if is_container else by_dest[dest], blockers)
+            eff_date[(dest, "date")] = date_cell["effective_date"]
             prior_cells = prior_d.get("camera_group_time_decisions") or {}
             cells = {}
             # Containers hold no media → no offset cells. A real destination gets one offset cell per
@@ -1110,6 +1111,7 @@ class GeotagWorkflow:
             destinations[dest] = {
                 "destination_path": dest,
                 "destination_timezone": tz_block,
+                "date_fallback": date_cell,
                 "camera_group_time_decisions": cells,
             }
             if is_container:
@@ -1146,7 +1148,8 @@ class GeotagWorkflow:
                            for c in (d.get("local_time_readings") or {}).values())
                     or any(c["requires_user_input"] for d in destinations.values()
                            for c in (d.get("changed_times") or {}).values())
-                    or any((d.get("unidentified_files") or {}).get("requires_user_input") for d in destinations.values()))
+                    or any((d.get("unidentified_files") or {}).get("requires_user_input") for d in destinations.values())
+                    or any(d["date_fallback"]["requires_user_input"] for d in destinations.values()))
         artifact = {
             "artifact_type": "time_decisions",
             "artifact_name": TIME_DECISIONS_ARTIFACT,
@@ -1162,6 +1165,35 @@ class GeotagWorkflow:
         if not requires:
             artifact["decision_mode"] = "no_op_or_auto_resolved"
         return artifact, blockers
+
+    def _date_fallback_cell(self, dest, prior_df, inherited, files, blockers):
+        """A destination's `date_fallback` cell in photos-21 (BLD-date_fallback_cell): the date the user gave it —
+        `user_decision.date`, a year, a year and month or a day, checked (RUL-date_fallback_checked) — else the one in
+        effect at the nearest destination above it (`inherited`, (path, effective)), taking effect unasked
+        (RUL-date_fallback_from_nearest); its photos with no recorded time (`untimed_photos`); and, where one of
+        them is there and no date is in effect, a question (RUL-untimed_photo_stops_geotag)."""
+        ud = prior_df.get("user_decision") or {}
+        given = ud.get("date", "")
+        given = "" if given is None else given
+        effective = None
+        if given != "":
+            day = date_fallback_day(given)
+            if day is None:
+                blockers.append(f"{dest}: date_fallback.user_decision.date {given!r} is not a date — write a year "
+                                "(\"1985\"), a year and month (\"1985-06\") or a day (\"1985-06-14\").")
+            else:
+                effective = {"date": given, "filled": day.strftime("%Y-%m-%d"), "set_at": dest}
+        elif inherited is not None:
+            effective = dict(inherited[1])
+        cell = {"user_decision": {"date": given}, "effective_date": effective}
+        if inherited is not None:
+            cell["inherited_from"] = inherited[0]
+        here = sorted(f["relative_path"] for f in files if untimed(f))
+        if here:
+            cell["untimed_photos"] = here
+        cell["requires_user_input"] = bool(here) and effective is None
+        cell["stale_user_decision"] = False
+        return cell
 
     def _clock_change(self, dest, group, g, bucket, cell, prior_cell, frames, sel, gpx, blockers, tz, date, day):
         """A change of the camera's clock during its day here (BLD-clock_change_split), on the day's cell `cell`: the
@@ -1393,7 +1425,9 @@ class GeotagWorkflow:
             for r in asked:
                 f = files[r["relative_path"]]
                 tz = r["destination_timezone"]
-                amb = _zone_ambiguity(_parse_camera_naive(f.get("source_naive_time")), tz)
+                # a photo's own time, or the midnight its folder's date fallback gives it (BLD-date_fallback_cell)
+                local = _parse_camera_naive(f.get("source_naive_time")) or date_fallback_time(f, d)
+                amb = _zone_ambiguity(local, tz)
                 prior = earlier.get(f.get("content_fingerprint")) or earlier.get(f.get("original_key")) or {}
                 ud = prior.get("user_decision") if isinstance(prior.get("user_decision"), dict) else {}
                 given = ud.get("utc_offset_seconds", "")
@@ -1409,9 +1443,9 @@ class GeotagWorkflow:
                         effective = int(given)
                 out[f["relative_path"]] = {
                     "content_fingerprint": f.get("content_fingerprint"),
-                    "camera_time": f.get("source_naive_time"), "timezone": tz,
+                    "camera_time": f.get("source_naive_time") or local.strftime("%Y:%m:%d %H:%M:%S"), "timezone": tz,
                     "case": amb["case"], "offsets_seconds": amb["offsets_seconds"],
-                    "readings_utc": [(_parse_camera_naive(f.get("source_naive_time")) - timedelta(seconds=o))
+                    "readings_utc": [(local - timedelta(seconds=o))
                                      .strftime("%Y-%m-%dT%H:%M:%SZ") for o in amb["offsets_seconds"]],
                     "user_decision": {"utc_offset_seconds": given},
                     "effective_utc_offset_seconds": effective,
@@ -2463,6 +2497,12 @@ class GeotagWorkflow:
                             o["provenance"].pop("because")
                             if f.get("time_kept"):
                                 o["provenance"]["because"] = f"photos-21 destinations.{dest}.changed_times[{rel}]"
+                        elif untimed(f):
+                            # no time of its own: its folder's date fallback, as given and where it was given
+                            # (RUL-date_fallback_recorded)
+                            eff = ((t_dests.get(dest) or {}).get("date_fallback") or {}).get("effective_date") or {}
+                            o["provenance"]["because"] = f"photos-21 destinations.{eff.get('set_at')}.date_fallback"
+                            o["provenance"]["date_fallback"] = {k: eff.get(k) for k in ("date", "filled", "set_at")}
                         o["pre_state"] = held_time_pre_state(f, o["writes"])   # every value it replaces, for the log
                     elif o["type"] == "metadata_gps_write" and o.get("gps_origin") == "recompute_automated":
                         # the track that placed it, and the instant it was placed at: what the position rests on
@@ -3507,7 +3547,8 @@ def camera_groups_of_class(handoff, cfg, cls):
             continue
         md, parsed = rec.get("metadata_status") or {}, _parsed_record(rec)
         key = clock_group_key({"camera_group_key": md.get("camera_group_key") or parsed.get("camera_group_key")
-                               or NO_IDENTITY_KEY, "source_time_tag": parsed.get("selected_source_timestamp_tag")})
+                               or NO_IDENTITY_KEY, "source_time_tag": parsed.get("selected_source_timestamp_tag"),
+                               "has_timestamp": _has_recorded_time(rec)})
         if camera_group_class(key, dg) == cls:
             out.setdefault(key, []).append(rec.get("relative_path"))
     return {k: sorted(p for p in v if p) for k, v in sorted(out.items())}
@@ -3857,6 +3898,23 @@ def run(args):
                       + (f"; {need_changed} photo(s) hold a time changed since geotag wrote it — keep it as the "
                          "true local time, or take back geotag's" if need_changed else "")
                       + "). Edit the user_decision fields and re-run.", stream="stdout")
+                # A photo with no recorded time that no date fallback covers stops geotag here, before any time is
+                # resolved, named with its two ways out (RUL-untimed_photo_stops_geotag, RUL-untimed_photo_named).
+                untimed_left = sorted(p for d in artifact["destinations"].values()
+                                      if d["date_fallback"]["requires_user_input"]
+                                      for p in d["date_fallback"].get("untimed_photos") or [])
+                if untimed_left:
+                    by_dest = folder_name('photos_by_dest')
+                    reporter.error(f"\nGeotag cannot proceed: {len(untimed_left)} photo(s) in {by_dest}/ have no "
+                                   f"recorded time, and no date fallback covers them: {_named(untimed_left)}. Give "
+                                   "their folder (or a folder above it) a date fallback — a year, a year and month, "
+                                   "or a day — in `photos-cartographer edit`, or as date_fallback.user_decision.date in "
+                                   f"{TIME_DECISIONS_ARTIFACT}. Otherwise they belong in "
+                                   f"{folder_name('missing_metadata')}/: give one a time there and prep files it into "
+                                   f"{folder_name('photos_by_date')}/, to sort again.")
+                    emit_next_step(reporter, "give their folder a date fallback (or move them out), then re-run "
+                                             "`geotag plan`.")
+                    sys.exit(2)
             else:
                 reporter.log(f"Wrote {TIME_DECISIONS_ARTIFACT}: status=complete — all time decisions resolved.", stream="stdout")
 

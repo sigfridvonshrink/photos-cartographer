@@ -100,7 +100,8 @@ none.
 
 Each question geotag asks SHALL be a `user_decision` of a cell of its record, its fields documented in
 `cartographer/editor/decision-json-reference.md`, which geotag reads whether the editor or a hand wrote it. The
-editor loads and saves each by its kind: in photos-21, `timezone` (`destination_timezone`), `offset` (a cell of
+editor loads and saves each by its kind: in photos-21, `timezone` (`destination_timezone`), `date` (`date_fallback`,
+{need}`BLD-date_fallback_cell`), `offset` (a cell of
 `camera_group_time_decisions`, a phone's among them, by its key — a day's split where its clock changed answered on the
 day's cell, its parts never), `reading` (an entry of `local_time_readings`, by
 its photo's path), `changed` (an entry of `changed_times`, by its photo's path) and `unidentified`
@@ -1104,7 +1105,8 @@ by every prep run; `geotag_path`, by finalize, its by-dest folder under the name
 `because` naming the decision exactly: a clock offset its `photos-21` cell, with its day where the camera's photos there
 span days (`camera_group_time_decisions.<group>@<date>`), or the `photos-22` drift confirmation whose validated offset
 replaced it; a time kept as the true time its entry of the destination's `changed_times`
-(`changed_times[<path>]`); a timezone its destination's cell; a manual position the photo's pin among `photos-23`'s review items or
+(`changed_times[<path>]`); a time a date fallback gave the `date_fallback` cell of the destination it was written at;
+a timezone its destination's cell; a manual position the photo's pin among `photos-23`'s review items or
 the destination's folder fallback, with the destination it was accepted from.
 :::
 
@@ -1116,7 +1118,10 @@ the destination's folder fallback, with the destination it was accepted from.
 Geotag's steps SHALL be `clock_offset_applied` (its `offset_seconds` with an `offset_description` in words, such as
 "camera clock 1 h 55 min ahead of UTC"), `resolved_utc`, `timezone_resolved`, `time_written` (with its `writes`, the
 `pre_state` it replaced — the value each field it writes held — the field `read_from` and the `rule`, from the plan),
-`true_time_kept` (the time the user kept as the photo's true time, its `value`, from the plan's `true_times_kept`), `gps_written` (with its
+`true_time_kept` (the time the user kept as the photo's true time, its `value`, from the plan's `true_times_kept`),
+`date_fallback_applied` (the date fallback that gave a photo with no recorded time its time: its `value` as the user
+wrote it, the day it was `filled` to and the cell it was written in as `because`, from the time write's provenance),
+`gps_written` (with its
 origin, method and, for a manual position or one written over a position the device wrote that is none of the photo's
 own, the `pre_state` it replaced, from the plan), `gps_cleared` (a position geotag
 wrote and no longer places, with that position, from the plan, and the method left), `gps_preserved` and `final_rename`,
