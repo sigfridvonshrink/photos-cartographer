@@ -104,7 +104,7 @@ def test_the_file_model_reads_a_fix_time_only_with_the_photos_own_position(tmp_p
     assert got == {f"{DEST}/a.arw": "2024-07-03T00:59:30Z", f"{DEST}/b.arw": None}
 
 
-@pytest.mark.spec("RUL-gps_time_is_clock_evidence", "RUL-gps_times_agreeing_apply", "BLD-gps_time_proposal",
+@pytest.mark.spec("RUL-gps_time_is_clock_evidence", "RUL-gps_time_rank", "RUL-gps_times_agreeing_apply", "BLD-gps_time_proposal",
                   "BLD-offset_buckets", test="TST-geotag_gps_time-two_fixes_apply_themselves")
 def test_two_fixes_agreeing_apply_themselves_ahead_of_the_recorded_offset(tmp_path):
     """No track: the two fixes' times agree on −32430 — the earliest's — and apply themselves, where the photos'
@@ -167,7 +167,7 @@ def test_fixes_whose_offsets_disagree_count_for_nothing(tmp_path):
     assert cell["gps_time_set_aside"]["offsets_seconds"] == [-32430, -31830]
 
 
-@pytest.mark.spec("RUL-gps_time_is_clock_evidence", "BLD-offset_buckets",
+@pytest.mark.spec("RUL-gps_time_is_clock_evidence", "RUL-gps_time_rank", "BLD-offset_buckets",
                   test="TST-geotag_gps_time-a_track_anchor_comes_first")
 def test_a_track_anchor_comes_before_the_fix_time(tmp_path):
     """A track passes where both photos were taken, at 00:30 and 01:30 UTC: the track's −34200 is proposed, the

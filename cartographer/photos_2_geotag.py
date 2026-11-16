@@ -526,6 +526,9 @@ class GeotagWorkflow:
         self.handoff = None
         self._gpx_fingerprint = None
         self.planned_tracks = None        # the tracks `geotag plan` indexed (load_gpx)
+        # (destination, camera group) -> the content fingerprints of the group's photos there, corrected ones
+        # included: what an offset kept from its photos' fixes is checked against (BLD-day_offset_kept)
+        self.fingerprints_here = {}
         # Live progress for the long phases (TTY: in-place bar; piped: a line every ~10 s; tests: quiet).
         self.coordinator = ProgressCoordinator()
 
@@ -1019,6 +1022,7 @@ class GeotagWorkflow:
         # to (code, the destination it was chosen at) for itself and everything inside it.
         eff_country, table = {}, country_table(self.workspace_root)
         self.country_removals = []
+        self.fingerprints_here = {}
         # where a zone written above stops reaching down: a folder with a zone written, or a country chosen
         # (RUL-zone_asked_at_every_level)
         zone_stops = set()
@@ -1107,6 +1111,7 @@ class GeotagWorkflow:
                 # Days are counted over every photo of the group here, corrected ones too, so a bucket keeps
                 # its key as photos arrive; only the photos not yet corrected are asked about or offset.
                 gframes = [f for f in by_dest[dest] if f["camera_group_key"] == group]
+                self.fingerprints_here[(dest, group)] = {fp for f in gframes if (fp := f.get("content_fingerprint"))}
                 dates = sorted({d for f in gframes if (d := _naive_date(f.get("source_naive_time")))})
                 for date in (dates if len(dates) > 1 else [None]):
                     # a time the user kept as the true one is no reading of the camera's clock
@@ -1687,7 +1692,9 @@ class GeotagWorkflow:
             return False
         proposal["far_from_evidence"] = why
         eff = cell.get("effective_time_anchor")
-        if isinstance(eff, dict) and eff.get("source") in self._FAR_CHECKED_SOURCES:
+        # an offset kept from an earlier run is not this proposal's, and is not withdrawn for it
+        if isinstance(eff, dict) and eff.get("source") in self._FAR_CHECKED_SOURCES \
+                and cell.get("decision_mode") != "kept_from_earlier":
             cell["effective_time_anchor"], cell["requires_user_input"] = "", True
             cell.pop("decision_mode", None)
             return True
@@ -1925,27 +1932,39 @@ class GeotagWorkflow:
                (n == 1 and policy["single_anchor_auto_apply"] and not phone):   # one phone photo: a proposal
                 effective = {"offset_seconds": proposal["proposed_offset_seconds"], "source": "gpx_anchor_auto"}
                 decision_mode = "auto_resolved"
-        anchored_by = None
+        anchored_by = fixed_by = None
         if isinstance(effective, dict) and effective["source"] == "gpx_anchor_auto":
             # the tracks the offset rests on, as they are now: what keeping it later is checked against
             anchored_by = [{"gpx_file": f, "sha256": gpx.file_sha.get(f)} for f in
                            sorted({a["gpx_match"]["gpx_file"] for a in proposal["anchors"]
                                    if abs(a["proposed_offset_seconds"] - effective["offset_seconds"]) <= spread})]
+        elif isinstance(effective, dict) and effective["source"] == "gps_time_auto":
+            # the photos whose fixes' times gave it, by their content: what keeping it later is checked against
+            fixed_by = sorted({fp for f in frames if (fp := f.get("content_fingerprint"))
+                               for r in gps_readings([f])
+                               if abs(r["offset_seconds"] - effective["offset_seconds"]) <= spread})
         if effective == "" and not stale and manual_off in ("", None) and not accept and not keep and not several:
-            # An offset found from the camera's own GPS stays this camera's offset for the day when the
-            # photos that gave it are corrected and later ones bring no anchor — while what it rested on
-            # still stands: every track that anchored it is under gpx_root unchanged, and no photo that has
-            # arrived since says otherwise. A user's answer needs no such keeping: it is preserved as their
-            # decision, and withdrawing it takes effect.
+            # An offset found from the camera's own GPS — its tracks, or its photos' fixes — stays this camera's
+            # offset for the day when the photos that gave it are corrected and later ones bring no GPS of their
+            # own (RUL-day_offset_kept_for_later_photos) — while what it rested on still stands: every track that
+            # anchored it is under gpx_root unchanged (RUL-kept_offset_rests_on_its_tracks), or every photo whose
+            # fix gave it is still among the camera's photos here (RUL-kept_offset_rests_on_its_fixes); and no
+            # proposal its own GPS now gives says otherwise (RUL-kept_offset_yields_to_new_photo). A user's answer
+            # needs no such keeping: it is preserved as their decision, and withdrawing it takes effect.
             earlier = prior_cell.get("effective_time_anchor")
-            rests_on = prior_cell.get("anchored_by")
-            if isinstance(earlier, dict) and earlier.get("source") == "gpx_anchor_auto" \
-                    and isinstance(rests_on, list) and rests_on \
-                    and all(isinstance(t, dict) and t.get("gpx_file") in gpx.file_sha
-                            and gpx.file_sha[t["gpx_file"]] == t.get("sha256") for t in rests_on) \
-                    and not (is_gpx and (conflicting or imprecise
-                                         or abs(proposal["proposed_offset_seconds"] - earlier.get("offset_seconds", 0)) > tolerance)):
-                effective, decision_mode, anchored_by = earlier, "kept_from_earlier", rests_on
+            was = earlier.get("source") if isinstance(earlier, dict) else None
+            rests_on, fixed = prior_cell.get("anchored_by"), prior_cell.get("fixed_by")
+            here = self.fingerprints_here.get((dest, key), set())
+            stands = (was == "gpx_anchor_auto" and isinstance(rests_on, list) and rests_on
+                      and all(isinstance(t, dict) and t.get("gpx_file") in gpx.file_sha
+                              and gpx.file_sha[t["gpx_file"]] == t.get("sha256") for t in rests_on)) \
+                or (was == "gps_time_auto" and isinstance(fixed, list) and fixed
+                    and all(isinstance(fp, str) and fp in here for fp in fixed))
+            if stands and not ((is_gpx and (conflicting or imprecise)) or (
+                    (is_gpx or is_gps_time)
+                    and abs(proposal["proposed_offset_seconds"] - earlier.get("offset_seconds", 0)) > tolerance)):
+                effective, decision_mode = earlier, "kept_from_earlier"
+                anchored_by, fixed_by = (rests_on, None) if was == "gpx_anchor_auto" else (None, fixed)
         if effective != "" or stale or manual_off not in ("", None) or accept or keep:
             pass                                   # decided above, or the user's to decide
         elif is_shared and shared["applied_itself"]:
@@ -1979,6 +1998,8 @@ class GeotagWorkflow:
         }
         if anchored_by:
             cell["anchored_by"] = anchored_by
+        if fixed_by:
+            cell["fixed_by"] = fixed_by
         if differ:
             cell["recorded_offsets_differ"] = differ   # the photos record more than one: none is proposed from them
         if set_aside and not is_gpx:

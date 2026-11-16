@@ -46,7 +46,7 @@ Everything the editor must guarantee, in five rules:
 1. **Only `user_decision` blocks are yours to write.** Every other field — `proposal*`, `effective_*`,
    `requires_user_input`, `stale_user_decision`, `status`, `summary`, `automatic_decision_summary`,
    `depends_on`, `countries`, `artifact_type`/`artifact_name`, `decision_mode`, `contradicted_by`,
-   `country`/`country_from`/`country_zones`/`country_removed`, `conflicts_with`, `anchored_by`,
+   `country`/`country_from`/`country_zones`/`country_removed`, `conflicts_with`, `anchored_by`, `fixed_by`,
    `date`/`day`, the per-file `reason` and `tracks`, `track_disagreements`, etc. — is
    **system-owned**. Geotag **regenerates the whole artifact from scratch** on its next run and
    reads back **only the `user_decision` values** from the file you saved, each found again by what
@@ -259,9 +259,10 @@ destinations or buckets.
 | `clock_change_part` | object | no | On a part of a day split where its clock changed, keyed `<key>#1` or `<key>#2`: `{ "of": <the day's key>, "part": 1 \| 2, "photos": <how many> }`. Built by geotag from the day's acceptance — its offset `gpx_anchor_accepted` or `gps_time_accepted`; nothing of it is yours to write. |
 | `positions_contradicted` | list | no | On a camera's cell whose offset from its GPS self-anchor is in effect (`gpx_anchor_auto`, `gpx_anchor_accepted`, `gpx_anchor_chosen`) where the anchors conflict or tie or the offset is not the one proposed: the photos holding their own position that matched the tracks and that no pass agrees with the offset in effect. Each is set against the tracks in photos-23 (`own_position_contradicted`, §5.4). Never on a phone's cell or a group named several bodies. |
 | `anchored_by` | list | no | On a cell whose offset applied itself from GPS: the track files it was found from, each `{ "gpx_file", "sha256" }`. The offset is kept for later photos of the day (`decision_mode: "kept_from_earlier"`) only while each is under `gpx_root` unchanged and no newer GPS proposal says otherwise. |
+| `fixed_by` | list | no | On a cell whose offset applied itself from its photos' GPS fix times (`gps_time_auto`): the content fingerprints of the photos whose fixes gave it. The offset is kept for later photos of the day (`decision_mode: "kept_from_earlier"`) only while each of those photos is still one of the camera's in the destination and no newer GPS proposal says otherwise. |
 | `requires_user_input` | bool | no | `true` ⇔ `effective_time_anchor == ""`. (Containers carry no offset cells, so this is never softened here.) |
 | `stale_user_decision` | bool | no | `accept_proposal` is set but `accepted_offset_seconds` is no longer the offset proposed (another offset beyond the tolerance, or none proposed): kept as written, it takes no effect, nothing applies itself in its place, and the cell asks. |
-| `decision_mode` | `"auto_resolved"` \| `"kept_from_earlier"` \| `"to_be_confirmed_against_tracks"` | no | Present only when the offset took effect without the user. `auto_resolved`: a GPX self-anchor applied itself under the policy flags (`gpx_anchor_auto`), as did GPS fix times (`gps_time_auto`), or a same-day shared offset did (`same_day_auto`). `kept_from_earlier`: the cell's earlier `gpx_anchor_auto` offset is kept (see `anchored_by`). `to_be_confirmed_against_tracks`: an offset from the photos' recorded offset, from the timezone or from the day next to it is passed, unasked here, to photos-22 (`recorded_offset_unconfirmed`, `timezone_unconfirmed`, `neighbour_day_unconfirmed`). A manual or accepted offset carries none. Withdrawn when a same-day conflict (`conflicts_with`) withholds the offset. |
+| `decision_mode` | `"auto_resolved"` \| `"kept_from_earlier"` \| `"to_be_confirmed_against_tracks"` | no | Present only when the offset took effect without the user. `auto_resolved`: a GPX self-anchor applied itself under the policy flags (`gpx_anchor_auto`), as did GPS fix times (`gps_time_auto`), or a same-day shared offset did (`same_day_auto`). `kept_from_earlier`: the cell's earlier `gpx_anchor_auto` or `gps_time_auto` offset is kept (see `anchored_by`, `fixed_by`). `to_be_confirmed_against_tracks`: an offset from the photos' recorded offset, from the timezone or from the day next to it is passed, unasked here, to photos-22 (`recorded_offset_unconfirmed`, `timezone_unconfirmed`, `neighbour_day_unconfirmed`). A manual or accepted offset carries none. Withdrawn when a same-day conflict (`conflicts_with`) withholds the offset. |
 
 **`proposal` shapes** (all read-only; this is the evidence the UI shows). Tried in order: the GPX
 self-anchor of the bucket's native-GPS frames; else the times their own GPS fixes recorded; else, when the
@@ -933,8 +934,8 @@ UI should make the *effective* choice obvious and ideally offer them as mutually
   proposed; a stale acceptance stops here, the cell asking) → with no human input, in order: the GPX
   self-anchor applying itself under the policy flags (`gpx_anchor_auto`) → two GPS fix times or more applying
   themselves under `multi_anchor_auto_apply` (`gps_time_auto`) → the cell's earlier `gpx_anchor_auto`
-  offset kept (`kept_from_earlier`, while every `anchored_by` track is unchanged under `gpx_root` and no new
-  GPS proposal disagrees, conflicts or is imprecise) → a same-day shared offset that applied itself in its
+  or `gps_time_auto` offset kept (`kept_from_earlier`, while every `anchored_by` track is unchanged under `gpx_root`,
+  or every `fixed_by` photo is still there, and no new GPS proposal disagrees, conflicts or is imprecise) → a same-day shared offset that applied itself in its
   own destination (`same_day_auto`) → an offset from the day next to it, the photos' recorded offset or the
   timezone, with tracks by the photos, sent to photos-22 (`neighbour_day_unconfirmed`, `recorded_offset_unconfirmed`,
   `timezone_unconfirmed`). Setting a manual offset overrides `accept_proposal`. Two GPS-derived offsets of

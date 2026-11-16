@@ -481,7 +481,7 @@ class GPXIndex:
             gpx_files.extend((os.path.relpath(os.path.join(r, f), self.gpx_root), os.path.join(r, f))
                              for f in files if is_gpx_file(f))
             # the walk never follows a linked folder: the tracks in it are not read, and that is said
-            # (RUL-unreadable_tracks_stop_geotag)
+            # (RUL-track_link_never_followed, RUL-track_link_named)
             linked.extend(os.path.relpath(os.path.join(r, d), self.gpx_root) for d in dirs
                           if os.path.islink(os.path.join(r, d)))
         if self.unlisted:

@@ -310,7 +310,7 @@ def test_the_kept_points_are_read_without_the_tracks(tracks, tmp_path):
     assert [(p.source_file, p.point_index) for p in kept.points] == [(p.source_file, p.point_index) for p in planned.points]
 
 
-@pytest.mark.spec("BLD-track_window", "BLD-anchor_matching", "BLD-track_placement",
+@pytest.mark.spec("RUL-track_window_reaches_every_reader", "BLD-track_window", "BLD-anchor_matching", "BLD-track_placement",
                   test="TST-kept_tracks-the_window_holds_every_point_a_decision_reaches")
 def test_the_window_holds_every_point_a_decision_reaches(tmp_path, monkeypatch):
     """Anchoring and placement decide the same over the window as over every point there is: a week of tracks from two

@@ -747,6 +747,32 @@ def test_a_kept_offset_rests_on_what_it_was_found_from():
     assert wf._offset_cell("D", "K", g, kept, same, gpx, [])["decision_mode"] == "kept_from_earlier"
 
 
+@pytest.mark.spec("BLD-day_offset_kept", "BLD-offset_far_from_evidence",
+                  test="TST-geotag_offset_inference-a_kept_offset_is_not_withdrawn_for_the_guess")
+def test_a_kept_offset_is_not_withdrawn_for_the_guess_beside_it():
+    """A day's offset kept from its fixes, its later photo's own proposal the zone's guess: the guess, far from the
+    phone's photos there, is marked so, and the kept offset stands — it is not the guess's. The same offset taking
+    effect from the fixes now, as this run's own, is withdrawn with it."""
+    utils.CONFIG.update(CFG)
+    wf = cal.GeotagWorkflow("/tmp")
+    known = {"D": [("Apple|iPhone|", "D/p.jpg", datetime(2024, 7, 8, 8, 0, tzinfo=timezone.utc))]}
+    sel = [{"relative_path": "D/c.arw", "source_naive_time": "2024:07:03 14:50:00"}]
+
+    def judged(**cell):
+        cell = {"proposal": {"proposal_source": "timezone_naive", "proposed_offset_seconds": -7200},
+                "effective_time_anchor": {"offset_seconds": -6600, "source": "gps_time_auto"},
+                "requires_user_input": False, **cell}
+        withdrawn = wf._withhold_if_far(("D", CAM, (CAM, {}, {}, [], None, None, None, sel, None)),
+                                        {"D": {"camera_group_time_decisions": {CAM: cell}}}, dict(known), {}, {}, [])
+        return withdrawn, cell
+
+    withdrawn, cell = judged(decision_mode="kept_from_earlier")
+    assert not withdrawn and cell["proposal"]["far_from_evidence"]
+    assert cell["effective_time_anchor"]["offset_seconds"] == -6600 and not cell["requires_user_input"]
+    withdrawn, cell = judged(decision_mode="auto_resolved")
+    assert withdrawn and cell["effective_time_anchor"] == "" and cell["requires_user_input"]
+
+
 # --- each setting bounds one thing --------------------------------------------------------------------------
 
 @pytest.mark.spec("RUL-setting_bounds_one_thing", "BLD-anchor_matching",

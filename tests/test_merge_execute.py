@@ -148,7 +148,7 @@ def _tree(root):
     return out
 
 
-@pytest.mark.spec("RUL-sealing_needs_no_tracks", test="TST-merge_execute-merge_needs_no_tracks_folder")
+@pytest.mark.spec("RUL-merge_needs_no_tracks", "BLD-track_window", test="TST-merge_execute-merge_needs_no_tracks_folder")
 def test_merge_needs_no_tracks_folder(tmp_path, monkeypatch):
     """Merge seals what the workspace keeps: with the configured tracks folder not there, it plans and executes, and
     never builds the tracks."""
