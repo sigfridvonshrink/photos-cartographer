@@ -67,3 +67,16 @@ test("a placed photo is listed, given an empty answer, and saved as a chosen pos
   app.state.work.gps.destinations[D].gps_decisions.placed_photos[0].user_decision = { manual_lat: 95, manual_lon: 135.75 };
   assert.equal(app.refInvalid(ref), true);                                      // checked as any position
 });
+
+test("a position the user set, emptied, previews the photo placed as before, never as waiting", () => {
+  const rel = `${D}/set.arw`, ref = { file: "gps", dest: D, kind: "review", path: rel };
+  const item = { relative_path: rel, reason: "manual_locked", requires_user_input: false,
+    user_decision: { manual_lat: 35.0, manual_lon: 135.7 } };
+  const work = { gps: { destinations: { [D]: { folder_fallback: fallback({}), gps_decisions: { review_items: [item] } } } } };
+  app.state.base = JSON.parse(JSON.stringify(work)); app.state.work = work;
+  item.user_decision = { manual_lat: "", manual_lon: "" };
+  assert.match(app.previewEffective(ref), /placed as before/);
+  assert.doesNotMatch(app.previewEffective(ref), /needs/);
+  work.gps.destinations[D].folder_fallback.user_decision = { fallback_lat: 35.6, fallback_lon: 139.6 };
+  assert.match(app.previewEffective(ref), /placed as before/);                     // the tracks may place it before the fallback
+});

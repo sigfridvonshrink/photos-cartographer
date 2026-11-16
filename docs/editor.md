@@ -194,7 +194,8 @@ day there, since a camera reset each morning has a per-day offset. A phone gets 
 them. See [why grouping is per-day](concepts.md#why-grouping-is-per-day-within-a-destination).
 
 Days of one group with the same proposal are collapsed into one row (e.g. "3 Jul 2024 … 9 Jul 2024
-(7 days)"); an answer there applies to every day in it. Click **▸** to show each day and answer one
+(7 days)"); an answer there applies to every day in it. A day that takes an answer otherwise — one clock read two
+ways that day, a guess far from all evidence, a phone kept as it records itself — is a row of its own. Click **▸** to show each day and answer one
 separately. A camera gets a heading of its own only where its days need different answers and the
 destination has other cameras; a destination with one camera lists its days directly.
 
@@ -243,7 +244,8 @@ What the proposal panel shows depends on where the offset came from:
   the day, each part corrected by its own photos. Runs are told apart by when the GPS says the photos were taken, so
   a clock set back an hour, whose camera times repeat, is found too. For each photo without GPS that either part
   could have taken (or neither), pick **before** or **after** the change; the others go to their part unasked. If
-  the clock did not change, answer the day's offset as usual instead. By hand: `accept_clock_change`,
+  the clock did not change, answer the day's offset as usual instead. A split accepted for a change the next run no
+  longer finds is kept, stale, and offered **clear the split**. By hand: `accept_clock_change`,
   `accepted_change_offsets_seconds` and `photo_parts` in the day's cell.
 - **From the GPS fixes' own times** — no track passes the photos' places, but their GPS fixes recorded
   the UTC they were taken at: each, less the camera time, is a reading of the offset. The panel lists a few
@@ -478,7 +480,8 @@ name in the worklist for a larger preview):
 **Fallback** and **Placed** buckets each such photo has **set position**. A coordinate set there is that
 photo's alone and outranks both; it stays while it is set,
 whatever tracks or fallback come to cover the photo later (**back to the tracks** / **back to the fallback**
-takes it away). Saved, it is written as the entry you would write by hand: a `chosen_by_user` review item.
+takes it away). Saved, it is written as the entry you would write by hand: a `chosen_by_user` review item. Emptied
+after a run, the photo is placed as before it was set — by the tracks or its fallback — which the panel previews.
 
 ![GPS view — placing a photo on the interactive map beside it](screenshots/carto-26-geotag-edit-gps-per-photo.png)
 

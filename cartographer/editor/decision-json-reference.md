@@ -419,7 +419,7 @@ takes no part in the offsets shared within a day.
 
 **By hand:** in the day's cell, write the fields as above, then re-run `geotag plan`. **In the editor:** the
 offset panel shows the two runs and **split the day where the clock changed**, then, for each unsettled photo, a choice
-of **before** or **after** the change.
+of **before** or **after** the change; a split held stale with no change proposed is offered **clear the split**.
 
 ### 4.5 A phone's day — a `smartphone` offset cell
 

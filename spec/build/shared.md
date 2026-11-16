@@ -103,7 +103,7 @@ Each question geotag asks SHALL be a `user_decision` of a cell of its record, it
 editor loads and saves each by its kind: in photos-21, `timezone` (`destination_timezone`), `date` (`date_fallback`,
 {need}`BLD-date_fallback_cell`), `offset` (a cell of
 `camera_group_time_decisions`, a phone's among them, by its key — a day's split where its clock changed answered on the
-day's cell, its parts never), `reading` (an entry of `local_time_readings`, by
+day's cell, its parts never, and withdrawn there where geotag holds it stale, no change being proposed now), `reading` (an entry of `local_time_readings`, by
 its photo's path), `changed` (an entry of `changed_times`, by its photo's path) and `unidentified`
 (`unidentified_files`); in photos-22, `drift`; in photos-23, `fallback`, `review` and `chosen` (a photo of a
 destination's `placed_photos`, by its path: written as its `chosen_by_user` review item, added where it has none —
@@ -111,9 +111,11 @@ destination's `placed_photos`, by its path: written as its `chosen_by_user` revi
 in `photos-25-execution-summary.json`, which `geotag execute` reads, `fingerprint` (an entry of `fingerprint_mismatches`,
 by its photo's path); and in the configuration a camera group's class, `camera` ({need}`BLD-editor_lists_new_camera_groups`),
 and whether a camera group is several bodies, `bodies` ({need}`BLD-editor_marks_several_bodies`).
-The editor writes each answer as geotag takes it: where an offset cell lists `conflicts_with`, a proposal the user takes
-there is written as `manual_offset_seconds`, the user's own offset, which keeps its effect
-({need}`RUL-chosen_offset_not_withheld`) — never as an acceptance, which geotag withholds there again.
+The editor writes each answer as geotag takes it, in each cell it is given for: where an offset cell lists
+`conflicts_with`, a proposal the user takes there is written as `manual_offset_seconds`, the user's own offset, which
+keeps its effect ({need}`RUL-chosen_offset_not_withheld`) — never as an acceptance, which geotag withholds there again;
+and on a phone's day kept as it records itself, any other answer ends the keeping, which would outrank it
+({need}`BLD-phone_offset_cell`).
 :::
 
 :::{bld} The editor's timezone questions, as the working decisions settle them

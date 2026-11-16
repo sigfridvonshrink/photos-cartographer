@@ -156,3 +156,14 @@ test("hasUnsavedEdits: an edit not yet saved, never in demo mode or before anyth
   app.state.base = arts("", true); app.state.work = arts("Asia/Tokyo", true);
   assert.equal(app.hasUnsavedEdits(), false);              // demo edits cannot be saved
 });
+
+test("a changed time: keep is no answer where the photo holds no time geotag reads", () => {
+  const garbled = { DateTimeOriginal: "garbage", OffsetTimeOriginal: "+02:00" };
+  const cell = (h) => ({ held_time: h, user_decision: { keep: "new", answered_for: { ...h } } });
+  assert.equal(app.heldTimeKeepable(cell(garbled)), false);
+  assert.equal(app.changedHolds(cell(garbled)), false);                             // geotag: a blocker, no time to keep
+  const read = { DateTimeOriginal: "2024:07:03 14:45:00", OffsetTimeOriginal: "+02:00" };
+  assert.equal(app.heldTimeKeepable(cell(read)), true);
+  assert.equal(app.changedHolds(cell(read)), true);
+  assert.equal(app.changedHolds({ ...cell(garbled), user_decision: { keep: "geotag", answered_for: { ...garbled } } }), true);
+});
