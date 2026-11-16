@@ -652,7 +652,7 @@ class PlanExecutor:
         # from a different file at the path by it (RUL-retake_only_unchanged_file), and this run rewrites it with the
         # state it leaves, whether or not its operations all succeed (RUL-execution_records_state).
         prior_record = read_workspace_record(self.workspace_root)[1]
-        self._changing, self._recorded = False, False
+        self._changing, self._recorded, self._changes_logged = False, False, False
         try:
             # 1. Preflight validation
             self.coordinator.start_phase("executing - preflight validation")
@@ -1074,21 +1074,14 @@ class PlanExecutor:
                                "photos": log_photos,
                                "workspace_changes": read_prior_workspace_changes(self.workspace_root)
                                + [dict(c, run=plan.plan_id) for c in self.workspace_changes]}
-                    lfd, ltmp = tempfile.mkstemp(dir=os.path.dirname(plp), prefix=".tmp-prep-log-", suffix=".json", text=True)
                     try:
-                        with os.fdopen(lfd, 'w') as lf:
-                            json.dump(log_obj, lf, indent=2, sort_keys=True)
-                        replace_durably(ltmp, plp)
+                        _write_prep_log(plp, log_obj)
+                        self._changes_logged = True
                         if plan.summary and "performance_and_cache" in plan.summary:
                             plan.summary["performance_and_cache"]["prep_log_written"] = True
                         for _w in log_warnings:
                             get_reporter().warn(f"  Warning: {_w}")
                     except Exception as e:
-                        if os.path.exists(ltmp):
-                            try:
-                                os.remove(ltmp)
-                            except Exception:
-                                pass
                         raise ExecuteFailed(f"Failed to write prep log: {e}")
 
                     # 2. Re-hash journal
@@ -1225,10 +1218,53 @@ class PlanExecutor:
             if self._changing and not self._recorded:
                 # A run that changed something and ended short of its end still leaves a state: recorded, so the
                 # next run's check does not take this run's own work for a change by hand (RUL-execution_records_state).
+                # The changes by hand its check passed are logged first, as a run that finishes logs them: the record
+                # no longer shows them, and a cull among them is still to take its set-aside JPEG
+                # (BLD-workspace_changes_logged).
+                if not self._changes_logged:
+                    self._log_changes_of_unfinished_run(plan.plan_id)
                 write_workspace_record(self.workspace_root,
                                        cache_rows=cache.get_all_files() if cache is not None else None)
             if cache is not None:
                 cache.close()
+
+    def _log_changes_of_unfinished_run(self, run_id):
+        """Add this run's changes by hand to `workspace_changes` of prep's log, the rest of the log as it was, for a run
+        that ends short of writing the log itself (BLD-workspace_changes_logged). A log that cannot be read is left
+        alone: the next plan stops on it (RUL-unreadable_prep_log_stops)."""
+        from .photos_utils import prep_log_path
+        if not self.workspace_changes:
+            return
+        plp = prep_log_path(self.workspace_root)
+        try:
+            read_prior_prep_log(self.workspace_root)
+            if os.path.exists(plp):
+                with open(plp) as pf:
+                    log_obj = json.load(pf)
+            else:
+                log_obj = {"schema_version": PREP_LOG_SCHEMA_VERSION, "tool": "photos-1-prep", "photos": {}}
+            log_obj["workspace_changes"] = (read_prior_workspace_changes(self.workspace_root)
+                                            + [dict(c, run=run_id) for c in self.workspace_changes])
+            _write_prep_log(plp, log_obj)
+        except (OSError, ValueError) as e:
+            get_reporter().warn(f"Warning: the changes by hand this run passed could not be added to prep's log ({e}).")
+
+
+def _write_prep_log(plp, log_obj):
+    """Write prep's log over the earlier one durably: a temporary file beside it, then renamed into place."""
+    lfd, ltmp = tempfile.mkstemp(dir=os.path.dirname(plp), prefix=".tmp-prep-log-", suffix=".json", text=True)
+    try:
+        with os.fdopen(lfd, 'w') as lf:
+            json.dump(log_obj, lf, indent=2, sort_keys=True)
+        replace_durably(ltmp, plp)
+    except BaseException:
+        if os.path.exists(ltmp):
+            try:
+                os.remove(ltmp)
+            except OSError:
+                pass
+        raise
+
 
 class JournalWriter:
     def __init__(self, journal_path: str):

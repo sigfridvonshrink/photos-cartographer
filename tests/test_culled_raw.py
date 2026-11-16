@@ -240,3 +240,34 @@ def test_a_cull_seen_by_an_earlier_run_still_takes_the_jpeg(tmp_path, monkeypatc
     assert _check(ws) == []
     [op] = _culled_ops(_plan(ws, changes=()))
     assert op.verification["raw_path"] == raw
+
+
+@pytest.mark.spec("RUL-culled_raw_takes_its_jpeg", "RUL-allowed_changes_named", "BLD-workspace_changes_logged",
+                  "BLD-culled_raw_found", test="TST-culled_raw-a_cull_passed_by_a_failed_execute_still_takes_the_jpeg")
+def test_a_cull_passed_by_a_failed_execute_still_takes_the_jpeg(tmp_path, monkeypatch):
+    """An execute whose check passed a cull, and whose quarantine move then fails, still logs the cull in prep's log
+    before recording the state it leaves: the next check sees nothing, and the next plan quarantines the JPEG."""
+    ws = _dumped(tmp_path, monkeypatch)
+    raw = _find(ws, "5-photos-by-date", b"RAW1")
+    jpeg = _find(ws, "3-redundant-jpgs", b"JPG1")
+    os.remove(ws / raw)                                            # culled by hand
+    changes = _check(ws)
+    plan = _plan(ws, changes)
+    assert len(_culled_ops(plan)) == 1
+
+    def fail(src, dst):
+        raise OSError("the disk said no")
+    monkeypatch.setattr(prep, "_move_no_clobber", fail)
+    with pytest.raises(prep.ExecuteFailed):
+        prep.PlanExecutor(str(ws), workspace_changes=changes).execute(plan)
+    monkeypatch.undo()
+    _install(monkeypatch)
+
+    assert (ws / jpeg).exists()                                    # the move failed: the JPEG is where it was
+    assert _check(ws) == []                                        # the failed run recorded the state it left ...
+    with open(utils.prep_log_path(str(ws))) as f:
+        logged = json.load(f)["workspace_changes"]
+    assert [(c["kind"], c["path"], c["run"]) for c in logged if c["kind"] == "deleted"] == \
+        [("deleted", raw, plan.plan_id)]                           # ... and logged the cull its check passed
+    [op] = _culled_ops(_plan(ws, changes=()))
+    assert op.source == jpeg and op.verification["raw_path"] == raw

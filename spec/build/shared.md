@@ -1662,6 +1662,7 @@ The check SHALL print the changes it passes, `sorted` aside, and those accepted,
 `from`, the `accepted` code, an interrupted run's `phase` and `plan_id` and, where the record holds one, the
 `content_fingerprint` — for the execution's record:
 prep's execute adds them, each with its `run`, to `workspace_changes` of `photos-15-prep-log.json`, after the earlier
-runs'; geotag's execute writes them as `workspace_changes` of `photos-25-execution-summary.json`, merge's as
+runs' — an execute that ends short of writing its log adds them there, the rest of the log as it was, before it records
+the state it leaves; geotag's execute writes them as `workspace_changes` of `photos-25-execution-summary.json`, merge's as
 `workspace_changes` of `photos-31-merge-summary.json`. A plan, a dry run and finalize print them.
 :::
