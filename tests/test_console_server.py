@@ -230,6 +230,28 @@ def test_unreadable_geotag_plan_summarised_as_a_blocker(tmp_path, torn):
     assert server._execute_guard(str(tmp_path), "geotag", {"confirmed": True}) is not None
 
 
+@pytest.mark.spec("RUL-merge_unreadable_record_stops", "BLD-console_unreadable_merge_plan",
+                  test="TST-console_server-unreadable_merge_plan_summarised_with_its_repair")
+@pytest.mark.parametrize("torn", ['{"plan_id": "m1", "destinations": {', "[]", '{"destinations": {}}',
+                                  '{"plan_id": "m1", "destinations": [], "totals": {}}'],
+                         ids=["torn", "not_an_object", "no_plan_id", "another_shape"])
+def test_unreadable_merge_plan_summarised_with_its_repair(tmp_path, torn):
+    """A photos-30 merge cannot read — torn, not an object, without its plan id, or in another shape than merge reads
+    — is summarised as a plan with one blocker naming the file and the way on that merge itself gives: repair it or
+    restore a `-NNN` copy, never `merge plan` again, which stops on it; never an error of the server, and the gate
+    refuses to execute it."""
+    from cartographer.photos_3_merge import merge_plan_path
+    m = merge_plan_path(str(tmp_path)); os.makedirs(os.path.dirname(m), exist_ok=True)
+    with open(m, "w") as f:
+        f.write(torn)
+    ms = server._plan_summary(str(tmp_path), "merge")
+    assert ms["exists"] and len(ms["blockers"]) == 1, ms
+    [why] = ms["blockers"]
+    assert "photos-30-merge-plan.json" in why and "-NNN" in why and "repair" in why, why
+    assert "`merge plan` again" not in why, why
+    assert server._execute_guard(str(tmp_path), "merge", {"confirm": True}) is not None
+
+
 # --- execute gate (generic, per phase) ------------------------------------
 
 def test_execute_guard_requires_confirmation(tmp_path):

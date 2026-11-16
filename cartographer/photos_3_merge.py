@@ -135,7 +135,7 @@ def _read_record(path, required=("plan_id",)):
     return obj
 
 
-def _read_plan(path):
+def read_merge_plan(path):
     """The merge plan at `path` in the shape merge reads it in (BLD-merge_record_shape): `destinations` an object whose
     every value holds a `files` list of objects, each naming its `by_dest_source` and any `library_target` as text;
     `depends_on` and `totals` objects, `blockers` a list, where present. UnreadableRecord otherwise — a plan that
@@ -767,7 +767,7 @@ class MergeWorkflow:
                 continue
             # One that cannot be read stops the plan, naming it (RUL-merge_unreadable_record_stops): passed over, a
             # photo it placed would block for a reason that is not true — that no earlier plan placed it.
-            plan = _read_plan(p)
+            plan = read_merge_plan(p)
             pid = plan["plan_id"]
             # The bytes its executes recorded placing, by path in the workspace (RUL-placed_bytes_confirm_place): its
             # journal's, the newest, before those the plan carried forward with a record.
@@ -998,7 +998,7 @@ class MergeWorkflow:
             emit_next_step(reporter, "`merge plan` first to build the plan.")
             return 2
         try:
-            plan = _read_plan(p)
+            plan = read_merge_plan(p)
         except UnreadableRecord as e:
             return _unreadable_refusal(reporter, e, "dry-run")
         stale = self.revalidate_plan_deps(ws, plan)
@@ -1208,7 +1208,7 @@ class MergeWorkflow:
         if not os.path.exists(p):
             return {"status": "no_plan"}
         try:
-            plan = _read_plan(p)
+            plan = read_merge_plan(p)
         except UnreadableRecord as e:
             return {"status": "unreadable", "error": e}
         stale = self.revalidate_plan_deps(ws, plan)
