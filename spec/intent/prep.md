@@ -29,16 +29,6 @@ Prep SHALL leave photos by destination as it finds it: never moving a file into 
 renaming, quarantining, deleting or writing one there.
 :::
 
-:::{rul} Prep puts videos by date
-:id: RUL-videos_by_date
-:status: ruled
-:criticality: med
-:verify: required
-:uses: DEF-prep, DEF-managed_folders, DEF-timestamp_name
-
-Prep SHALL put each video it takes in that has a recorded time into videos by date, under its timestamp name.
-:::
-
 ## 2. The workspace's first run, and the strays
 
 :::{rul} Initializing, prep moves the dump into the inbox
@@ -107,10 +97,10 @@ already did: the folders it made, and the dump already in the inbox.
 :verify: required
 :uses: DEF-strays_folder, DEF-archival_package
 
-A file prep moves to the strays folder SHALL be recorded nowhere but in the plan that moves it, the journal of that
-move and the record of the workspace's state ({need}`RUL-execution_records_state`) — no fingerprint, no row of the
-files the workspace database describes, no entry in the handoff or any log — the archival package holding it only as it
-holds that plan and that record.
+A file prep moves to the strays folder SHALL be recorded nowhere but in the plan that moves it, the journal of that move
+and the record of the workspace's state ({need}`RUL-execution_records_state`) — no fingerprint, no row of the files the
+workspace database describes, no entry in the handoff or any log — the archival package holding it only as it holds that
+plan and that record.
 :::
 
 ## 5. What prep refuses to work on
@@ -121,6 +111,7 @@ holds that plan and that record.
 :criticality: high
 :anti: yes
 :verify: required
+:uses: DEF-managed_folders
 
 A video in photos by date or photos by destination, or a photo in videos by date, SHALL block prep's plan.
 :::
@@ -131,6 +122,7 @@ A video in photos by date or photos by destination, or a photo in videos by date
 :criticality: high
 :anti: yes
 :verify: required
+:uses: DEF-development
 
 An editing sidecar — a file holding a photo's development beside it — found anywhere prep inventories SHALL block
 prep's plan.
@@ -142,6 +134,7 @@ prep's plan.
 :criticality: med
 :anti: yes
 :verify: required
+:uses: DEF-managed_folders
 
 A file of no media class found in a managed folder other than the inbox SHALL block prep's plan.
 :::
@@ -242,6 +235,16 @@ Prep SHALL move a file in photos by date or videos by date that has no recorded 
 :uses: DEF-prep, DEF-managed_folders, DEF-timestamp_name, DEF-recorded_time
 
 Prep SHALL put each photo it takes in that has a recorded time into photos by date, under its timestamp name.
+:::
+
+:::{rul} Prep puts videos by date
+:id: RUL-videos_by_date
+:status: ruled
+:criticality: med
+:verify: required
+:uses: DEF-prep, DEF-managed_folders, DEF-timestamp_name
+
+Prep SHALL put each video it takes in that has a recorded time into videos by date, under its timestamp name.
 :::
 
 :::{rul} Media with no recorded time goes to missing metadata
@@ -392,7 +395,7 @@ Prep's execution SHALL record the move of a JPEG taken with its culled RAW as it
 comparison with the recorded state finds no change in it.
 :::
 
-:::{rul} Of identical media, one copy is kept
+:::{rul} Of identical media, prep quarantines every copy outside photos by destination but one
 :id: RUL-duplicates_quarantined
 :status: ruled
 :criticality: high
@@ -499,6 +502,7 @@ with it.
 :id: RUL-cache_schema_not_migrated
 :status: ruled
 :criticality: high
+:anti: yes
 :verify: required
 :uses: DEF-workspace_database
 
@@ -513,7 +517,7 @@ Prep SHALL stop on a workspace database whose recorded schema is not the one it 
 :status: ruled
 :criticality: med
 :verify: required
-:uses: DEF-workspace_database
+:uses: DEF-workspace_database, DEF-managed_folders
 
 Prep SHALL recognize as moved a file new to photos by destination whose size, modification time and name are those of
 a file the workspace database holds and that is gone from its path — one only, matched by no other such file and by no
@@ -560,7 +564,7 @@ A file prep has quarantined SHALL NOT be in the workspace database.
 :status: ruled
 :criticality: med
 :verify: required
-:refines: RUL-quarantined_leaves_database
+:refines: RUL-handoff_describes_workspace
 :uses: DEF-workspace_database
 
 A file prep has quarantined SHALL NOT be in the handoff.
@@ -658,7 +662,7 @@ A media file whose fingerprint failed SHALL be found the duplicate of no file, a
 :status: ruled
 :criticality: high
 :verify: required
-:uses: DEF-fingerprint
+:uses: DEF-fingerprint, DEF-managed_folders
 
 A media file outside photos by destination whose fingerprint failed SHALL block prep's plan.
 :::
@@ -703,7 +707,8 @@ Prep SHALL record each duplicate it quarantines with the copy it kept, in the ha
 :refines: RUL-duplicate_recorded_with_kept
 
 A file prep quarantines for another reason than being a copy — a leftover of an interrupted write, a hidden file of a
-dump — SHALL be recorded as no duplicate: neither in its summary, nor its handoff, nor its log.
+dump, the JPEG of a culled RAW — SHALL be recorded as no duplicate: neither in its summary, nor its handoff, nor its
+log.
 :::
 
 :::{rul} The quarantine manifest records a duplicate with the copy kept
@@ -711,7 +716,7 @@ dump — SHALL be recorded as no duplicate: neither in its summary, nor its hand
 :status: ruled
 :criticality: med
 :verify: required
-:refines: RUL-duplicate_recorded_with_kept
+:refines: RUL-evidence_before_quarantine
 
 Prep SHALL record each duplicate it quarantines with the copy it kept, in the quarantine manifest.
 :::
@@ -820,15 +825,24 @@ and not carry out the saved plan.
 An interruption SHALL leave prep's journal as its last save left it, never part-written.
 :::
 
-:::{rul} A folder left empty is removed as planned
+:::{rul} A folder left empty is removed
 :id: RUL-emptied_folders_removed
 :status: ruled
 :criticality: med
 :verify: required
-:refines: RUL-execution_only_the_plan
 
 Prep SHALL remove a folder its plan leaves empty — in the inbox or a by-date folder, or a dump's folder on the first
-run — only as a planned operation.
+run.
+:::
+
+:::{rul} A folder is removed only as planned
+:id: RUL-folder_removed_only_as_planned
+:status: ruled
+:criticality: med
+:verify: required
+:refines: RUL-emptied_folders_removed, RUL-execution_only_the_plan
+
+Prep SHALL remove a folder only as a planned operation.
 :::
 
 :::{rul} A folder is removed only while it is empty
@@ -851,18 +865,30 @@ After an interrupted execution, prep SHALL plan again from the workspace as it s
 interrupted plan.
 :::
 
+:::{rul} A plan executed again keeps the earlier attempt's journal
+:id: RUL-prep_journal_kept
+:status: ruled
+:criticality: med
+:anti: yes
+:verify: required
+:uses: DEF-prep
+
+A prep execution of a plan already executed SHALL never overwrite the earlier attempt's journal: it is first set aside,
+recoverably.
+:::
+
 
 ## 13. The quarantine
 
-:::{rul} A duplicate's evidence is recorded before it is moved
+:::{rul} A quarantined file's reason is recorded before it is moved
 :id: RUL-evidence_before_quarantine
 :status: ruled
 :criticality: high
 :verify: required
 :refines: RUL-duplicates_quarantined
 
-Prep SHALL record why it quarantines a file — its path, the copy kept and the shared fingerprint — before it moves the
-file into the quarantine.
+Prep SHALL record why it quarantines a file — its path and its reason, and for a duplicate the copy kept and the
+shared fingerprint — before it moves the file into the quarantine.
 :::
 
 :::{rul} An unreadable quarantine record is never written over
@@ -884,10 +910,11 @@ quarantine left where it was.
 :anti: yes
 :verify: required
 
-No prep run SHALL remove anything from the quarantine, however often it runs and however old the quarantine is.
+No prep plan, dry run or execution SHALL remove anything from the quarantine, however often it runs and however
+old the quarantine is.
 :::
 
-:::{rul} Only the user's prune deletes, and only when told to
+:::{rul} Only the user's prune deletes
 :id: RUL-prune_explicit
 :status: ruled
 :criticality: high
@@ -1071,12 +1098,12 @@ under a fingerprint taken again ({need}`RUL-log_follows_retaken_fingerprint`), S
 it was — its steps, and the place prep last left it — neither dropped nor given a step of its going.
 :::
 
-:::{rul} Prep's log names what it set aside
+:::{rul} Prep's log records each duplicate with the copy kept
 :id: RUL-prep_log_records_set_aside
 :status: ruled
 :criticality: med
 :verify: required
-:refines: RUL-duplicate_recorded_with_kept
+:refines: RUL-duplicates_quarantined
 
 Prep's log SHALL record each duplicate prep quarantined — where it was, where it went, and the copy kept — with the kept
 copy's entry.
@@ -1145,6 +1172,7 @@ The number of jobs SHALL be recorded in no plan, configuration or handoff.
 :status: ruled
 :criticality: med
 :verify: required
+:refines: RUL-tool_failure_never_valid
 
 A tool that fails or crashes on a file SHALL be restarted and tried again a bounded number of times before the file's
 fingerprint or metadata is recorded as failed.
@@ -1155,7 +1183,6 @@ fingerprint or metadata is recorded as failed.
 :status: ruled
 :criticality: med
 :verify: required
-:refines: RUL-tool_failure_retried
 
 A file's fingerprint or metadata SHALL never be recorded as valid when the tool failed or crashed on it.
 :::
@@ -1194,18 +1221,6 @@ duplicates of files it may change apart from those of photos by destination, the
 and failed, the blockers and warnings, and which records it wrote.
 :::
 
-:::{rul} A plan executed again keeps the earlier attempt's journal
-:id: RUL-prep_journal_kept
-:status: ruled
-:criticality: med
-:anti: yes
-:verify: required
-:uses: DEF-prep
-
-A prep execution of a plan already executed SHALL never overwrite the earlier attempt's journal: it is first set aside,
-recoverably.
-:::
-
 :::{rul} What prep quarantines is counted by why
 :id: RUL-set_aside_counted_by_reason
 :status: ruled
@@ -1214,5 +1229,5 @@ recoverably.
 :refines: RUL-prep_run_summarised
 
 Prep's summary SHALL count the files it quarantines by the reason for each — duplicates, leftovers of an interrupted
-write, hidden files of a dump — apart.
+write, hidden files of a dump, the JPEG of a culled RAW — apart.
 :::

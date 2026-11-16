@@ -114,7 +114,7 @@ a downstream expression of the "local, owned" ethos (P1, P2), not a structural d
 :forced: yes
 :follows_from: CHC-photos_matter
 
-plan / validate / execute; atomic no-clobber; quarantine, not delete; original-values ledger.
+plan / validate / execute; atomic no-clobber; quarantine, not delete; a ledger of each photo's **own values**.
 :::
 
 :::{rat} No mutation outside a validated plan
@@ -123,7 +123,8 @@ plan / validate / execute; atomic no-clobber; quarantine, not delete; original-v
 :forced: yes
 :follows_from: RAT-non_destructive_core
 
-**plan → validate → execute**; the dry-run *is* the serialized plan; stale plans are rejected against current state.
+**plan → validate → execute**; the dry run validates the very serialized plan execution runs; stale plans are rejected
+against current state.
 :::
 
 :::{rat} Safety cannot rest on the plan being correct
@@ -150,8 +151,8 @@ Duplicates are **quarantined**, never removed; pruning is an explicit, separate 
 :forced: yes
 :follows_from: RAT-non_destructive_core
 
-An **original-values ledger** keeps what each photo held before the tool first changed it, and every plan decides from
-it, so deleting a decision *restores* the prior state.
+A ledger of each photo's **own values** keeps what each photo held before the tool first changed it, and every plan
+decides from it, so deleting a decision *restores* the prior state.
 :::
 
 ### From F2 + P3 — drift makes the decisions intricate; P3 keeps them cheap
@@ -182,7 +183,7 @@ and between days, never within one destination's day — which is why **one dest
 :forced: yes
 :follows_from: FCT-clocks_drift
 
-**Format + editor split**: JSON is the record; the Time/Drift/GPS app is what writes it.
+**Format + editor split**: JSON is the record; the decision editor is what writes it.
 :::
 
 :::{rat} The record must stay an honest statement of *intent*, not a mutable scratchpad
@@ -200,8 +201,8 @@ The editor writes **only the `user_decision` field** — never derived or eviden
 :forced: yes
 :follows_from: FCT-clocks_drift, CHC-ask_only_what_data_cannot_settle, CHC-local_folder_library
 
-Such intricacy would be brutal to enter by hand, so P3 (ask only what the data can't settle) governs how it is
-collected — and introduces the document's central trade.
+Clock drift makes the decisions intricate, and entered by hand they would be brutal; so P3 (ask only what the data
+can't settle) governs how they are collected — trading many short-reaching asks for a few far-reaching ones.
 :::
 
 :::{rat} Asking per-photo would be thousands of short-reaching chores
@@ -357,7 +358,7 @@ library."
 :id: RAT-multi_session_job
 :status: ruled
 :forced: yes
-:follows_from: FCT-large_batches, CHC-total_placement
+:follows_from: FCT-large_batches, CHC-total_placement, CHC-local_folder_library
 
 This is a **two-level chain**: a fact and a choice together force an intermediate consequence, and that consequence
 forces the record machinery. It is the part most easily mistaken for an arbitrary choice.

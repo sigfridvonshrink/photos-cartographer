@@ -36,10 +36,23 @@ computed against a workspace another process is reading or changing is untrustwo
 :status: ruled
 :forced: yes
 :follows_from: RAT-planning_inside_lock, RAT-no_mutation_outside_plan
-:justifies: INV-one_run_at_a_time
+:justifies: INV-one_run_at_a_time, RUL-lock_through_the_run
 
 This whole-run lock is independent of, and stricter than, the dependency-revalidation discipline: revalidation guards
-against *stale* inputs across separate runs, while the lock guarantees runs never overlap in the first place.
+against *stale* inputs across separate runs, while the lock guarantees runs never overlap in the first place. A run's
+records are part of its work, so the lock lasts until the last of them is written.
+:::
+
+:::{rat} A locked run is refused, never queued
+:id: RAT-locked_run_refused
+:status: ruled
+:forced: no
+:follows_from: RAT-lock_and_revalidation
+:justifies: RUL-lock_fail_fast
+
+A run that waited for the lock would start on a workspace another run has just changed, with what it read before, and
+from a script or the console it would hang with no word of why. Refused at once, it says so, and is run again when the
+other is done.
 :::
 
 :::{rat} A crash never locks a workspace for good
@@ -47,7 +60,7 @@ against *stale* inputs across separate runs, while the lock guarantees runs neve
 :status: ruled
 :forced: yes
 :follows_from: RAT-recoverable_core
-:justifies: RUL-stale_lock_recovered
+:justifies: RUL-stale_lock_recovered, RUL-library_lock_stale_recovered
 
 Runs can die — a power cut, a killed terminal, the system running out of memory — and a dead run cannot release its
 lock. Held for good, it would leave the user to find and delete a control file by hand, the one edit the tool otherwise
@@ -86,45 +99,13 @@ filesystem supports it; they are not the basis of the safety model.
 :id: RAT-one_filesystem_specific_part
 :status: ruled
 :forced: no
-:follows_from: RAT-snapshot_is_extra, RAT-linux_and_open_source_not_roots
+:follows_from: RAT-snapshot_is_extra
 :justifies: RUL-filesystem_agnostic, BLD-snapshot_is_zfs
 
 The mechanism is named for ZFS because that is the reference implementation, but it is deliberately the *only* part
 of the pipeline that touches a feature of one particular filesystem, and it is optional; everything else asks only
 what POSIX filesystems share, which is not nothing — locks, atomic renames, refusing moves and syncing are what the
 safety of every change rests on.
-:::
-
-:::{rat} A workspace is local, by a list of the kinds known to be
-:id: RAT-workspace_is_local
-:status: ruled
-:forced: no
-:follows_from: RAT-live_lock_never_taken, RAT-one_filesystem_specific_part
-:justifies: RUL-workspace_local_filesystem, RUL-local_filesystem_checked_first, RUL-not_local_stops, RUL-not_local_named
-
-The workspace is where the originals move, again and again, under one lock; on some network filesystems that lock
-guards the runs of one machine only, and which ones cannot be told from inside a run. The workspace's database is no
-safer there: its own locking is known to fail across a network. A workspace has no reason to be shared — it is one
-place made for one ingest — so a local one costs nothing, and the question is settled for it rather than left to each
-filesystem. The kinds known to be local are listed, not the network ones: a kind the list does not know is refused,
-so no new network filesystem slips through, and a local one left off costs a refusal that names it. No setting turns
-the check off: it would be the one switch that rests the safety of the originals on a filesystem's goodwill. Asked
-before anything else, the lock included, it is never mistaken for a run in progress.
-:::
-
-:::{rat} A missing requirement is named before it fails a change
-:id: RAT-filesystem_tried_first
-:status: ruled
-:forced: no
-:follows_from: RAT-one_filesystem_specific_part, RAT-safe_at_each_change
-:justifies: RUL-filesystem_requirements_tried, RUL-filesystem_lacking_stops, RUL-filesystem_lacking_named, RUL-filesystem_trial_leaves_nothing, RUL-library_requirements_tried, RUL-library_lacking_stops, RUL-library_lacking_named
-
-A filesystem without one of what every change rests on — a FAT or exFAT card, some network shares — fails at the run's
-first lock or move, with that call's error and no word of why: a lock it cannot take reads as a run in progress, a move
-it cannot refuse is found only once a photo was to be moved. Tried first on files of its own, each costs a few
-milliseconds, and the run stops before it has changed anything, naming what is missing. Tried at every run, since a
-workspace or a library can be moved, or a different filesystem mounted at its place, between two runs; and removed
-after, so that a refused run, a sealed workspace's included, leaves no trace of having asked.
 :::
 
 :::{rat} A rollback point is the state just before the change
@@ -260,7 +241,7 @@ still, not a second one.
 :status: ruled
 :forced: yes
 :follows_from: RAT-idempotent_reruns
-:justifies: RUL-staleness_by_area
+:justifies: RUL-staleness_by_area, RUL-costly_results_survive_unrelated_edits, RUL-times_survive_unrelated_config_edits
 
 Collapsing all staleness to a single whole-file hash would needlessly restale unrelated artifacts on any edit, and is
 explicitly not done.
@@ -273,9 +254,9 @@ explicitly not done.
 :follows_from: RAT-surgical_staleness, RAT-no_mutation_outside_plan
 :justifies: RUL-any_config_change_replans, RUL-costly_results_survive_unrelated_edits, RUL-times_survive_unrelated_config_edits
 
-The whole-file fingerprint restaling the plan is a catch-all guaranteeing no config-driven change is ever silently
-missed, even one in an area without its own field-scoped fingerprint. It is intentional belt-and-braces *alongside* the
-field-scoped fingerprints, not a contradiction of surgical staleness: they keep the **expensive** derived caches from
+The whole-file hash restaling the plan is a catch-all guaranteeing no config-driven change is ever silently
+missed, even one in an area without its own field-scoped hash. It is intentional belt-and-braces *alongside* the
+field-scoped hashes, not a contradiction of surgical staleness: they keep the **expensive** derived caches from
 restaling on unrelated edits, while the **cheap-to-rebuild** plan simply re-plans on any config change. What surgical
 staleness rules out is collapsing the *surgical* caches onto the whole-file hash; using that hash as an additional
 coarse trigger for a cheap artifact is consistent with — indeed protective of — surgical staleness.
@@ -290,7 +271,7 @@ coarse trigger for a cheap artifact is consistent with — indeed protective of 
 
 Geotag's and merge's plans locate the destination tree by name and classify the tree, and renaming a managed folder or
 moving an extension between media and `other` changes which files exist where. Prep re-plans from the filesystem each
-run and guards execution with the whole-file hash, so it needs no separate folder or extension fingerprint of its own.
+run and guards execution with the whole-file hash, so it needs no separate folder or extension hash of its own.
 :::
 
 :::{rat} A file's class decides how it is handled
@@ -357,7 +338,7 @@ detectable; it versions the code that computes the key, so only the code can set
 :id: RAT-one_skipped_place
 :status: ruled
 :forced: yes
-:follows_from: RAT-consolidated_log
+:follows_from: RAT-consolidated_log, RAT-non_destructive_core
 :justifies: RUL-control_records_together, RUL-control_records_never_media
 
 Skipping the control directory wholesale means a control or artifact file can never be mistaken for a photo. There is
@@ -369,7 +350,7 @@ no per-file "ignore list" to maintain: whatever the control directory holds, now
 :status: ruled
 :forced: no
 :follows_from: RAT-no_automatic_deletion, RAT-consolidated_log
-:justifies: RUL-control_records_together
+:justifies: DEF-control_records
 
 A quarantine manifest says why each file beside it was set aside. Kept in the quarantine folder it describes, it cannot
 be parted from those files: whoever looks at a duplicate finds its reason next to it, and pruning a folder removes the
@@ -449,7 +430,7 @@ The decision records are read back at the start of every run, and a record that 
 :status: ruled
 :forced: yes
 :follows_from: RAT-one_skipped_place, RAT-bytes_are_the_safe_check
-:justifies: RUL-handoff_verified_by_content, RUL-run_only_refresh_restales_nothing
+:justifies: RUL-handoff_verified_by_content, RUL-run_only_refresh_restales_nothing, RUL-hash_is_the_dependency_check
 
 Living in the skipped directory is independent of the handoff's role as a dependency: it is invisible to prep's media
 scan yet fully verified as a dependency by geotag — verified by content, not by exact bytes, so a run-only refresh of
@@ -490,7 +471,8 @@ fingerprint and de-duplication rest on.
 
 The destination tree is read-only for prep yet still scanned by it, so prep is also the gatekeeper for links that
 appear there; and the mandatory re-prep after any change to it means geotag and merge only ever consume a handoff prep
-built with no forbidden link present.
+built with no forbidden link present. A link put there since prep ran is one the handoff cannot know of, so geotag
+and merge also check, themselves, the places they work.
 :::
 
 :::{rat} A rebuilt structure could mask a loss
@@ -498,7 +480,7 @@ built with no forbidden link present.
 :status: ruled
 :forced: yes
 :follows_from: RAT-phases_rely_on_the_shape, RAT-non_destructive_core
-:justifies: RUL-missing_folder_blocks, RUL-structure_built_once, RUL-only_prep_builds_structure, RUL-missing_folder_named, RUL-empty_inbox_normal
+:justifies: RUL-missing_folder_blocks, RUL-structure_built_once, RUL-only_prep_builds_structure, RUL-missing_folder_named
 
 Since prep creates the structure once and never removes a folder, a missing one is evidence the structure was deleted
 or moved out-of-band — not a state any phase produces. Silently rebuilding it could mask a real loss: a deleted folder
@@ -536,7 +518,7 @@ A file named for a photo with `_original` after it is what the user's own tool l
 :follows_from: RAT-recoverable_core
 :justifies: RUL-hidden_folder_among_photos_blocks, RUL-hidden_among_photos_stops_merge
 
-Prep reads no hidden folder, so photos in one are never fingerprinted, never handed on, never merged — and the workspace is sealed around them as if it were empty. A hidden entry among the photos is something outside cartographer put there; saying so costs the user a moment, silence can cost the photos.
+Prep reads no hidden folder, so photos in one are never fingerprinted, never handed on, never merged — and the workspace is sealed around them as if it were empty. A hidden entry among the photos is something outside cartographer put there; saying so costs the user a moment, silence can cost the photos. Merge is where it is caught: merge seals the workspace around what it leaves, and up to then removing it costs nothing.
 :::
 
 
@@ -760,7 +742,7 @@ re-run can recover. Refusing to run leaves it where the user put it until they m
 
 The tracks are evidence for the clock offsets and positions geotag proposes, and a track added, corrected or removed can
 change them. A decision made against the old tracks, or a plan built from them, could then be wrong while still looking
-settled; the tracks' fingerprint in each record turns the change into staleness instead of letting it pass unseen.
+settled; the tracks' hash in each record turns the change into staleness instead of letting it pass unseen.
 :::
 
 ## 8. Nothing used once what it came from has changed
@@ -775,6 +757,17 @@ settled; the tracks' fingerprint in each record turns the change into staleness 
 The facts the dependencies are built from — the configuration, the control records, the camera-group derivation's
 version, the filename format, the tracks, the snapshot mechanism — are each defined once, for every phase, so that a
 single change has one authoritative source and a predictable staleness footprint everywhere.
+:::
+
+:::{rat} A record of what has changed describes nothing
+:id: RAT-stale_record_describes_nothing
+:status: ruled
+:forced: yes
+:follows_from: RAT-no_mutation_outside_plan
+:justifies: INV-no_stale_use
+
+A record derived from what has since changed describes a workspace that no longer exists; acted on, it changes
+originals by a judgement on facts no longer true, and nothing in the record would show it.
 :::
 
 :::{rat} Opposite jobs, so different names
@@ -832,9 +825,7 @@ A hash is chosen precisely so it changes on any byte change: detecting change is
 :justifies: RUL-hash_is_the_dependency_check
 
 A record is small and every byte of it can matter — a decision, an offset, a timezone — so the safe check is its exact
-bytes: comparing chosen fields would let through a change to a field nobody chose. The handoff is the exception because
-prep rewrites its run identifiers on every run; checked by its bytes, a run that changed nothing would make everything
-after it stale.
+bytes: comparing chosen fields would let through a change to a field nobody chose.
 :::
 
 :::{rat} Failing to look is no proof that nothing changed
@@ -853,7 +844,7 @@ nothing would all pass. Refusing costs a re-plan; trusting could cost a photo it
 :id: RAT-same_content_same_bytes
 :status: ruled
 :forced: no
-:follows_from: RAT-safe_at_each_change
+:follows_from: RAT-bytes_are_the_safe_check, RAT-idempotent_reruns
 :justifies: RUL-records_written_alike
 
 A record is recognised as unchanged by the hash of its bytes. Were the same content written in another order of keys
@@ -865,7 +856,7 @@ they had already answered.
 :id: RAT-fingerprint_is_the_whole_file
 :status: ruled
 :forced: no
-:follows_from: RAT-safe_at_each_change
+:follows_from: RAT-decoded_pixel_identity, RAT-non_destructive_core
 :justifies: RUL-fingerprint_covers_every_frame, RUL-fingerprint_covers_every_stream, RUL-fingerprint_method_is_the_builds
 
 Two files with one fingerprint are one photo to everything that follows: one is set aside as the other's duplicate, and merge removes a workspace's copy because the library holds "it". A fingerprint of the first frame, or of the streams a tool picks by default, makes different files one. And a fingerprint means something only beside others taken the same way: compared across methods, the same file differs and — worse — different files can agree.
@@ -952,7 +943,7 @@ the mark of a time set in another zone, which the user, told, can still answer o
 :status: ruled
 :forced: no
 :follows_from: RAT-discrete_stages
-:justifies: RUL-prep_empties_inbox
+:justifies: RUL-prep_empties_inbox, RUL-empty_inbox_normal
 
 An empty inbox is the one sign that nothing is waiting to be organized: geotag and merge refuse to run while it holds
 something, and the next dump arrives into a clean place, where nothing left from the last one can be taken for part of
@@ -1138,74 +1129,6 @@ the configuration with nothing left to judge. The questions only the user can an
 geotag's; a prep that asked would hold up the inbox on questions it does not need answered.
 :::
 
-:::{rat} A save answers what the user saw
-:id: RAT-save_what_was_seen
-:status: ruled
-:forced: no
-:follows_from: RAT-recoverable_core
-:justifies: RUL-save_only_what_was_shown
-
-A decision is the user's answer to a proposal they were shown. A plan run since the editor loaded may have changed the proposal; a save laid over it would record an acceptance of something the user never saw, or drop an answer whose question is gone and report success.
-:::
-
-:::{rat} A save cut short leaves its earlier records, not its later ones
-:id: RAT-save_in_dependency_order
-:status: ruled
-:forced: no
-:follows_from: RAT-save_what_was_seen, RAT-recoverable_core
-:justifies: RUL-save_writes_in_order
-
-A save of several records is several writes, and a power cut or a killed editor can fall between two of them. The
-drift validation is proposed from the times the time decisions settle, and the GPS decisions from both; written in
-that order, a save cut short leaves the earlier records with their new answers and the later ones as they were — no
-answer stands on an earlier one left unsaved, and saving again finishes the rest. The summary's acceptances and a
-camera group's class stand on none of the three, and come after them.
-:::
-
-:::{rat} The editor's save, too, keeps what it replaces
-:id: RAT-save_keeps_the_replaced
-:status: ruled
-:forced: no
-:follows_from: RAT-superseded_plans_recoverable, RAT-recoverable_core
-:justifies: RUL-save_keeps_the_replaced
-
-The decision records hold the user's typed answers. A re-plan already keeps the earlier record; the save is their other
-writer, and without a copy an answer lost to a mistaken save or a fault of the editor is gone, recoverable from
-nowhere. Kept among the re-plan's copies, every earlier version of a record is in one series, in the order it was
-replaced. The configuration is left out: nothing else that rewrites it keeps a copy, and the save's change to it is one
-camera group's class, plain to see and to change back.
-:::
-
-:::{rat} One editing session answers the decisions
-:id: RAT-one_editing_session
-:status: ruled
-:forced: no
-:follows_from: RAT-save_what_was_seen
-:justifies: RUL-one_editor_at_a_time, RUL-editor_kept_until_stopped
-
-Two editors open on one workspace would each show the decisions as they loaded them, and the first to save would make
-the other's next save one over records it never showed — refused, with whatever the user had answered there since. One
-editor at a time keeps the answers in one place. An editor cannot tell when its user is done: a page left open is still
-the session, and a browser closed tells it nothing. Giving the workspace up between requests would let a second editor
-in between two saves of the first, so it is kept until the editor itself is stopped.
-:::
-
-:::{rat} Every question can be answered in the editor, and by hand
-:id: RAT-every_question_answerable
-:status: ruled
-:forced: no
-:follows_from: RAT-save_what_was_seen, RAT-editor_writes_only_decisions
-:justifies: RUL-every_question_in_editor, RUL-every_question_answerable_by_hand
-
-A question the tool asks and the editor cannot answer sends the user to a text editor, a terminal and the reference to
-find the field — the work the editor exists to spare — and a question answered only outside the tool is not one the
-tool keeps track of. The owner ruled *"the user should be able to answer all questions in the editor"*, so each
-question gets its view as it is built. The editor is the easier way, never the only one: *"the editor is not the only
-possibility to answer, I need to keep the option to manually give answers, so the snippet added for a new camera needs
-to stay"* — every answer is a field of a record, written there by hand as well, and documented; a new camera's class is
-the one answer kept in the configuration, where geotag's printed lists are pasted and where the editor writes it.
-:::
-
 
 ## 12. The record of what was done, kept beyond the workspace
 
@@ -1246,7 +1169,8 @@ account of each phase: a second, rebuilt account could disagree with the first.
 
 A photo is renamed up to twice in the workspace — a provisional name, then its final one — and may be renamed again on
 its way into the library, so no name identifies it across its journey. Its fingerprint does: it survives every rename,
-move and metadata write the pipeline makes.
+move and metadata write the pipeline makes. A file of no media class is never fingerprinted, so it has nothing to
+key an entry by.
 :::
 
 :::{rat} Retention serves the log, nothing more
@@ -1291,7 +1215,7 @@ boundary, to be opened later and compared.
 :status: ruled
 :forced: no
 :follows_from: RAT-database_shows_only_now
-:justifies: RUL-database_image_each_phase, RUL-database_image_whole, RUL-image_never_working_data, RUL-images_archived, RUL-image_capture_atomic
+:justifies: RUL-database_image_each_phase, RUL-database_image_whole, RUL-image_capture_atomic, RUL-image_untouched_by_failed_run
 
 Never overwriting guards photos, which cannot be made again. An image can: it is a copy of the live database, and only
 the latest end of each phase is worth keeping, so a phase's next successful run replaces its image — whole, so that a
@@ -1401,7 +1325,7 @@ without the tool, that nothing in it has decayed or been altered.
 :id: RAT-step_traced_to_run
 :status: ruled
 :forced: no
-:follows_from: RAT-recoverable_core
+:follows_from: RAT-consolidated_log
 :justifies: RUL-log_step_names_run
 
 A photo's log outlives the workspace by decades. A step that names its run can be matched to that run's plan and
@@ -1453,7 +1377,7 @@ it cannot be undone: that one decision reads the library file again rather than 
 :status: ruled
 :forced: yes
 :follows_from: RAT-lock_and_revalidation, CHC-local_folder_library
-:justifies: RUL-library_lock, RUL-library_lock_fail_fast, RUL-library_lock_holds_only_holder, RUL-library_lock_stale_recovered
+:justifies: RUL-library_lock, RUL-library_lock_fail_fast, RUL-library_takes_many_workspaces
 
 Many workspaces merge into one library, each under its own lock. Only a lock on the library itself keeps two of their
 merges from writing it at once.
@@ -1464,11 +1388,12 @@ merges from writing it at once.
 :status: ruled
 :forced: no
 :follows_from: RAT-library_is_ground_truth, RAT-non_destructive_core
-:justifies: RUL-library_known_by_mark, RUL-library_confirmed_before_lock, RUL-library_place_checked, RUL-library_mark_made_by_setup, RUL-library_mark_required, RUL-library_creates_only_placements
+:justifies: RUL-library_known_by_mark, RUL-library_confirmed_before_lock, RUL-library_mark_made_by_setup, RUL-library_mark_required, RUL-library_creates_only_placements, RUL-library_lock_holds_only_holder
 
-The library is the user's: it has no structure of the tool's to inspect, so one mark, made once and on purpose, is
-all that tells it from any other folder. Checking the mark before anything is written there — the lock included —
-keeps the tool from writing into a folder that was never made a library.
+The library is the user's: it has no structure of the tool's to inspect, so one mark, made once and on purpose, is all
+that tells it from any other folder. Checking the mark before anything is written there — the lock included — keeps the
+tool from writing into a folder that was never made a library. Its lock, too, holds nothing of the library's but who
+holds it.
 :::
 
 :::{rat} The workspace keeps only what still needs attention
@@ -1487,7 +1412,7 @@ so merge moves rather than copies, and removes a copy whose content the library 
 :status: ruled
 :forced: yes
 :follows_from: RAT-recoverable_core, RAT-remainder_worklist, RAT-move_not_copy
-:justifies: RUL-merge_resumable, RUL-unplaced_photo_stays
+:justifies: RUL-merge_resumable, RUL-unplaced_photo_stays, RUL-merge_moves
 
 The workspace's copy is removed last, once the library's is verified, so an interruption never loses a photo: running
 merge again finishes the work. A photo merge cannot place stays where it is, so what stays behind is exactly what
@@ -1502,8 +1427,7 @@ still needs attention.
 :justifies: RUL-merge_reseals, RUL-reseal_rederives_nothing
 
 Merge adds to the record finalize packaged, so the existing package no longer describes the whole journey. Since merge
-is the workspace's last act, remaking the package once at its end is what the user always wants. Finalize stays its own
-command because geotag is freely re-run, and re-packaging after every pass would be wasted.
+is the workspace's last act, remaking the package once at its end is what the user always wants.
 :::
 
 :::{rat} An empty folder means two things; a mark means one
@@ -1561,16 +1485,15 @@ than any automated move inside a finished workspace.
 :follows_from: RAT-no_automatic_deletion, RAT-sealed_is_final
 :justifies: RUL-sealed_prune_allowed
 
-The quarantine holds what prep set aside: the spare copies of duplicates, the hidden files a dump brought, the
-leftovers of interrupted writes and the JPEG of a RAW the user culled. Not all of it is spare — a leftover may still be
-the only whole copy of something — so what makes a prune safe is not what the quarantine holds but that the user chose
-it: a prune deletes only the runs the user names, by their plan or their age, or all of them only when told so outright,
-and lists every file it would delete
-before it deletes anything, deleting only when told to. Deleting them, with the manifests that list them, touches no
-photo, library file, earlier control record or row of the database but its own entries in the record of the
-workspace's state, adding only its own record of what it removed; what each manifest said is kept in that record, and
-a duplicate's in the transformation log and the package. It neither reprocesses the workspace nor adds a batch to it,
-so the seal's reasons do not reach it, and the space can be reclaimed.
+The quarantine holds what prep set aside: the spare copies of duplicates, the hidden files a dump brought, the leftovers
+of interrupted writes and the JPEG of a RAW the user culled. Not all of it is spare — a leftover may still be the only
+whole copy of something — so what makes a prune safe is not what the quarantine holds but that the user chose it: a
+prune deletes only the runs the user names, by their plan or their age, or all of them only when told so outright, and
+lists every file it would delete before it deletes anything, deleting only when told to. Deleting them, with the
+manifests that list them, touches no photo, library file, earlier control record or row of the database but its own
+entries in the record of the workspace's state, adding only its own record of what it removed; what each manifest said
+is kept in that record, and a duplicate's in the transformation log and the package. It neither reprocesses the
+workspace nor adds a batch to it, so the seal's reasons do not reach it, and the space can be reclaimed.
 :::
 
 :::{rat} The same picture is not the same file
@@ -1603,7 +1526,7 @@ A workspace's folders are scanned, moved from and sealed by the phases that run 
 :follows_from: RAT-hand_written_fallible, RAT-hash_is_for_change
 :justifies: INV-authored_values_checked, RUL-checked_every_run
 
-A fingerprint tells whether a value changed, not whether it makes sense. A value can match its fingerprint and still be
+A hash tells whether a value changed, not whether it makes sense. A value can match its hash and still be
 meaningless or dangerous, or be freshly typed and wrong; and a value valid in one run can be edited before the next. So
 both checks are needed, every time.
 :::
@@ -1641,7 +1564,7 @@ would hold a geotag name for a wrong one. Such a format is refused before it nam
 :status: ruled
 :forced: yes
 :follows_from: RAT-hand_written_fallible, RAT-library_is_ground_truth, CHC-local_folder_library
-:justifies: RUL-library_place_checked, RUL-checked_paths
+:justifies: RUL-library_place_checked, RUL-checked_paths, RUL-library_outside_every_workspace
 
 A library inside the workspace would be merged into itself, the tool walking its own output as input. A workspace
 inside the library is no safer: the library's own tools, digiKam among them, watch the library's folders and would take
@@ -1732,19 +1655,6 @@ plan can see it.
 A rename can reach the disk before the bytes it names; after a power cut the file is then there and empty. A photo
 lost that way is lost as surely as one overwritten, so the new file is made safe on disk before it takes the old
 one's place, whatever that costs in speed: the archive outlives every run by decades.
-:::
-
-:::{rat} Within a workspace, every move is one rename
-:id: RAT-workspace_one_filesystem
-:status: ruled
-:forced: no
-:follows_from: RAT-safe_at_each_change
-:justifies: RUL-workspace_one_filesystem, RUL-one_filesystem_checked_every_run, RUL-workspace_moves_one_filesystem
-
-On one filesystem every move a workspace sees is a single rename: nothing to copy, nothing to verify, no temporary copy
-to leave behind. A workspace is one place made for one ingest, so nothing needs it spread over volumes; one that is
-would turn prep's ordinary moves into copies, slower and less safe. Only the library is a place apart, and only merge
-crosses into it. Checking every run, not once, catches a volume mounted into the workspace since the last.
 :::
 
 :::{rat} A temporary copy left behind is debris
@@ -1871,12 +1781,12 @@ decisions — so they compare nothing.
 :follows_from: RAT-workspace_as_last_left, RAT-decoded_pixel_identity
 :justifies: RUL-change_told_by_entries, RUL-copy_passes
 
-A check every run makes has to be quick, so it reads no file: a file's path, size, modification time and identity on
-its filesystem are enough. The owner: *"a replaced file would also typically have a different inode."* An untouched
-file keeps all three, a replacement keeps none of them reliably, and a move keeps them under a new path. A file of the
-same size and modification time under a new inode is a copy, or a restore from a snapshot: a replacement almost never
-keeps the modification time to the nanosecond, and the fingerprint read again would prove nothing, since it covers the
-pixels and a time changed by hand passes it.
+A check every run makes has to be quick, so it reads no file: a file's path, size, modification time and identity on its
+filesystem are enough. The owner: *"a replaced file would also typically have a different inode."* An untouched file
+keeps its size, time and identity, a replacement keeps none of them reliably, and a move keeps them under a new path. A
+file of the same size and modification time under a new inode is a copy, or a restore from a snapshot: a replacement
+almost never keeps the modification time to the nanosecond, and the fingerprint read again would prove nothing — the
+contrast {need}`RAT-decoded_pixel_identity` draws — since it covers the pixels and a time changed by hand passes it.
 :::
 
 :::{rat} What a person changed is part of the account
@@ -1903,7 +1813,7 @@ over it — a new inode, size and time, its fingerprint the same — and renames
 execution records the state it leaves, a failed one included, every run after it would stop on the tool's own work. A
 plan changes no file, so it leaves the record as it was. Prep can begin from the files alone, so a first run compares
 nothing; geotag and merge build on what prep recorded, and without a record a change since could not be told. A prune
-is the one way the quarantine changes, so what it removes is taken out of the record with it.
+is the one way a user may take from the quarantine, so what it removes is taken out of the record with it.
 :::
 
 :::{rat} A run killed outright left its work in writing
@@ -1936,4 +1846,123 @@ command to run again with a code made from the list as printed. The code accepts
 since the list was printed — one more file — is not what the user saw, so the command stops again and lists them anew.
 An acceptance is recorded, kept and archived like the other records, so it can be read later why a run went on; and an
 accepted change is part of the state from then on, so it stops nothing again.
+:::
+
+
+## 18. The workspace's filesystem
+
+:::{rat} A workspace is local, by a list of the kinds known to be
+:id: RAT-workspace_is_local
+:status: ruled
+:forced: no
+:follows_from: RAT-live_lock_never_taken, RAT-one_filesystem_specific_part
+:justifies: RUL-workspace_local_filesystem, RUL-local_filesystem_checked_first, RUL-not_local_stops, RUL-not_local_named
+
+The workspace is where the originals move, again and again, under one lock; on some network filesystems that lock
+guards the runs of one machine only, and which ones cannot be told from inside a run. The workspace's database is no
+safer there: its own locking is known to fail across a network. A workspace has no reason to be shared — it is one
+place made for one ingest — so a local one costs nothing, and the question is settled for it rather than left to each
+filesystem. The kinds known to be local are listed, not the network ones: a kind the list does not know is refused,
+so no new network filesystem slips through, and a local one left off costs a refusal that names it. No setting turns
+the check off: it would be the one switch that rests the safety of the originals on a filesystem's goodwill. Asked
+before anything else, the lock included, it is never mistaken for a run in progress.
+:::
+
+:::{rat} A missing requirement is named before it fails a change
+:id: RAT-filesystem_tried_first
+:status: ruled
+:forced: no
+:follows_from: RAT-one_filesystem_specific_part, RAT-safe_at_each_change
+:justifies: RUL-filesystem_requirements_tried, RUL-filesystem_lacking_stops, RUL-filesystem_lacking_named, RUL-filesystem_trial_leaves_nothing, RUL-library_requirements_tried, RUL-library_lacking_stops, RUL-library_lacking_named
+
+A filesystem without one of what every change rests on — a FAT or exFAT card, some network shares — fails at the run's
+first lock or move, with that call's error and no word of why: a lock it cannot take reads as a run in progress, a move
+it cannot refuse is found only once a photo was to be moved. Tried first on files of its own, each costs a few
+milliseconds, and the run stops before it has changed anything, naming what is missing. Tried at every run, since a
+workspace or a library can be moved, or a different filesystem mounted at its place, between two runs; and removed
+after, so that a refused run, a sealed workspace's included, leaves no trace of having asked.
+:::
+
+:::{rat} Within a workspace, every move is one rename
+:id: RAT-workspace_one_filesystem
+:status: ruled
+:forced: no
+:follows_from: RAT-safe_at_each_change
+:justifies: RUL-workspace_one_filesystem, RUL-one_filesystem_checked_every_run, RUL-workspace_moves_one_filesystem
+
+On one filesystem every move a workspace sees is a single rename: nothing to copy, nothing to verify, no temporary copy
+to leave behind. A workspace is one place made for one ingest, so nothing needs it spread over volumes; one that is
+would turn prep's ordinary moves into copies, slower and less safe. Only the library is a place apart, and only merge
+crosses into it. Checking every run, not once, catches a volume mounted into the workspace since the last.
+:::
+
+
+## 19. The decision editor
+
+:::{rat} A save answers what the user saw
+:id: RAT-save_what_was_seen
+:status: ruled
+:forced: no
+:follows_from: RAT-decisions_are_the_users, RAT-acceptance_is_of_what_was_shown
+:justifies: RUL-save_only_what_was_shown
+
+A decision is the user's answer to a proposal they were shown. A plan run since the editor loaded may have changed the proposal; a save laid over it would record an acceptance of something the user never saw, or drop an answer whose question is gone and report success.
+:::
+
+:::{rat} One editing session answers the decisions
+:id: RAT-one_editing_session
+:status: ruled
+:forced: no
+:follows_from: RAT-save_what_was_seen
+:justifies: RUL-one_editor_at_a_time, RUL-editor_kept_until_stopped
+
+Two editors open on one workspace would each show the decisions as they loaded them, and the first to save would make
+the other's next save one over records it never showed — refused, with whatever the user had answered there since. One
+editor at a time keeps the answers in one place. An editor cannot tell when its user is done: a page left open is still
+the session, and a browser closed tells it nothing. Giving the workspace up between requests would let a second editor
+in between two saves of the first, so it is kept until the editor itself is stopped.
+:::
+
+:::{rat} A save cut short leaves its earlier records, not its later ones
+:id: RAT-save_in_dependency_order
+:status: ruled
+:forced: no
+:follows_from: RAT-save_what_was_seen, RAT-recoverable_core
+:justifies: RUL-save_writes_in_order
+
+A save of several records is several writes, and a power cut or a killed editor can fall between two of them. The
+drift validation is proposed from the times the time decisions settle, and the GPS decisions from both; written in
+that order, a save cut short leaves the earlier records with their new answers and the later ones as they were — no
+answer stands on an earlier one left unsaved, and saving again finishes the rest. The summary's acceptances and a
+camera group's class stand on none of the three, and come after them.
+:::
+
+:::{rat} The editor's save, too, keeps what it replaces
+:id: RAT-save_keeps_the_replaced
+:status: ruled
+:forced: no
+:follows_from: RAT-superseded_plans_recoverable, RAT-recoverable_core
+:justifies: RUL-save_keeps_the_replaced
+
+The decision records hold the user's typed answers. A re-plan already keeps the earlier record; the save is their other
+writer, and without a copy an answer lost to a mistaken save or a fault of the editor is gone, recoverable from
+nowhere. Kept among the re-plan's copies, every earlier version of a record is in one series, in the order it was
+replaced. The configuration is left out: nothing else that rewrites it keeps a copy, and the save's change to it is one
+camera group's class, plain to see and to change back.
+:::
+
+:::{rat} Every question can be answered in the editor, and by hand
+:id: RAT-every_question_answerable
+:status: ruled
+:forced: no
+:follows_from: RAT-save_what_was_seen, RAT-editor_writes_only_decisions
+:justifies: RUL-every_question_in_editor, RUL-every_question_answerable_by_hand
+
+A question the tool asks and the editor cannot answer sends the user to a text editor, a terminal and the reference to
+find the field — the work the editor exists to spare — and a question answered only outside the tool is not one the
+tool keeps track of. The owner ruled *"the user should be able to answer all questions in the editor"*, so each
+question gets its view as it is built. The editor is the easier way, never the only one: *"the editor is not the only
+possibility to answer, I need to keep the option to manually give answers, so the snippet added for a new camera needs
+to stay"* — every answer is a field of a record, written there by hand as well, and documented; a new camera's class is
+the one answer kept in the configuration, where geotag's printed lists are pasted and where the editor writes it.
 :::

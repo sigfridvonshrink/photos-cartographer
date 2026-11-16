@@ -1338,12 +1338,12 @@ found to hold its content. Its bytes are compared with the workspace copy's firs
 Merge SHALL write `photos-31-merge-summary.json` when its execute ends — `success`, `partial` or `failed` — or refuses
 for a required snapshot or the library's room ({need}`BLD-library_space`), and on no other outcome: not for a failed
 precondition of its preflight, a plan missing, unreadable or stale, a journal unreadable, or an interrupt, the file then
-left as it was. It holds, per photo,
-grouped by destination, where it landed, whether it was renamed for the library or already present, whether it left
-photos by destination, and, blocked, why — with no library path; in total, the photos placed new, renamed, already
-present and blocked, the removed the sum of the first three; the status `success`, `partial`, `failed` (every photo
-blocked) or `rejected` (a required snapshot not taken or the library short of room, nothing changed); the merge run and plan ids, `library_root`, the
-geotag plan and execution ids, the photos it newly moved and those an earlier run had, and the SHA-256 of `photos-24-executable-plan.json`,
+left as it was. It holds, per photo, grouped by destination, where it landed, whether it was renamed for the library or
+already present, whether it left photos by destination, and, blocked, why — with no library path; in total, the photos
+placed new, renamed, already present and blocked, the removed the sum of the first three; the status `success`,
+`partial`, `failed` (every photo blocked) or `rejected` (a required snapshot not taken or the library short of room,
+nothing changed); the merge run and plan ids, `library_root`, the geotag plan and execution ids, the photos it newly
+moved and those an earlier run had, and the SHA-256 of `photos-24-executable-plan.json`,
 `photos-25-execution-summary.json` and `photos-11-handoff.json`; and, apart, the run's times and job count.
 :::
 

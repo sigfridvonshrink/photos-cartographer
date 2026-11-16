@@ -100,9 +100,9 @@ and the next simply initializes again.
 
 A stray is a file cartographer does not understand — a document, a sidecar it has no use for. Recorded beside the media,
 it would make cartographer answer for what it cannot reason about; parked whole, it waits for the user to keep or clear
-it, and clearing it is a change the user accepts once, by its code. Moving it is a change like any other, planned and journaled, so the plan
-names it, where it was and where it goes, and that plan is kept with the workspace's records; it is named nowhere it
-would be taken for a photo.
+it, and clearing it is a change the user accepts once, by its code. Moving it is a change like any other, planned and
+journaled, so the plan names it, where it was and where it goes, and that plan is kept with the workspace's records; it
+is named nowhere it would be taken for a photo.
 :::
 
 ## 5. What prep refuses to work on
@@ -364,16 +364,16 @@ each execution keeps reuse safe.
 :follows_from: RAT-idempotent_reruns, RAT-decoded_pixel_identity
 :justifies: RUL-fingerprint_taken_afresh
 
-Decoding a photo to fingerprint it is the costliest step prep takes, so it is done once per file and kept. Any write to
-a file changes its size or its modification time, and both are read without opening it: an unchanged pair says the
-fingerprint kept still describes the file, a changed one that it may not.
+Decoding a photo to fingerprint it is the costliest step prep takes, so it is done once per file and kept. A write to a
+file almost always changes its size or its modification time, and both are read without opening it: an unchanged pair
+says the fingerprint kept still describes the file, a changed one that it may not.
 :::
 
 :::{rat} A fingerprint compares only with one taken the same way
 :id: RAT-fingerprint_same_method
 :status: ruled
 :forced: yes
-:follows_from: RAT-decoded_pixel_identity, RAT-new_version_may_change_nothing
+:follows_from: RAT-decoded_pixel_identity
 :justifies: RUL-fingerprint_method_matches
 
 Duplicates are found and a photo is followed through every phase by comparing fingerprints, and two fingerprints of one
@@ -535,10 +535,10 @@ user can check the pair, and a photo already sorted into a destination is seen t
 :follows_from: RAT-duplicate_points_at_twin, RAT-reviewer_sees_what_was_touched
 :justifies: RUL-only_duplicates_recorded_as_duplicates, RUL-set_aside_counted_by_reason
 
-The quarantine takes more than copies: what an interrupted write left beside a photo, and the hidden files a dump
-brings. These have no twin. Recorded as duplicates, they would read as copies whose kept file is missing, and a count of
-duplicates would report copies never found — the reviewer checking the dedup against what they dumped would find it
-wrong. Counted apart by why each went, each figure means what it says.
+The quarantine takes more than copies: what an interrupted write left beside a photo, the hidden files a dump brings,
+and the JPEG set aside beside a RAW the user culled. These have no twin. Recorded as duplicates, they would read as
+copies whose kept file is missing, and a count of duplicates would report copies never found — the reviewer checking the
+dedup against what they dumped would find it wrong. Counted apart by why each went, each figure means what it says.
 :::
 
 
@@ -649,7 +649,7 @@ leave it truncated — the evidence lost at the one moment it is needed, and the
 :status: ruled
 :forced: yes
 :follows_from: RAT-no_mutation_outside_plan, RAT-safety_not_on_the_plan
-:justifies: RUL-emptied_folders_removed
+:justifies: RUL-emptied_folders_removed, RUL-folder_removed_only_as_planned
 
 Moving files out leaves their folders empty, and the inbox must end empty for the next dump; a day emptied by the sort
 should not linger. Removing a folder is a change to the workspace like any other, so it is planned and journaled; and
@@ -752,7 +752,8 @@ later one never writes over an earlier's.
 :follows_from: RAT-recoverable_core
 :justifies: RUL-prune_age_at_least_one_day
 
-Pruning is the only place cartographer deletes for good. An age of zero or less selects every run's quarantine, which is what `--all` exists to say out loud.
+Pruning is the only place cartographer deletes for good. An age of zero or less selects every run's quarantine, which is
+what `--all` exists to say out loud. An age is counted in whole days, so one under a day is zero.
 :::
 
 
@@ -880,7 +881,7 @@ nowhere.
 :status: ruled
 :forced: no
 :follows_from: RAT-failure_may_be_the_machines, RAT-unknown_is_not_unchanged
-:justifies: RUL-tool_failure_retried
+:justifies: RUL-tool_failure_retried, RUL-tool_failure_never_valid
 
 A long-lived tool process can die for reasons that have nothing to do with the file it was reading. Restarted and tried
 again, the file is judged on its own; still failing, it is recorded as failed and blocks or waits, never passed off as
