@@ -562,6 +562,28 @@ def test_maintenance_commands_do_not_check(tmp_path, monkeypatch):
     assert rc == 0 and stop is None, said
 
 
+@pytest.mark.spec("RUL-quarantine_changed_only_by_prune", "BLD-workspace_record",
+                  test="TST-workspace_check-a_prune_cut_short_is_no_change")
+def test_a_prune_cut_short_is_no_change(tmp_path, monkeypatch):
+    """A prune whose removal of a run folder stops midway — the duplicate gone, its manifest left — takes what it
+    removed out of the record all the same: the next plan goes on."""
+    ws, q = _with_quarantine(monkeypatch, tmp_path)
+
+    def cut_short(path, *a, **kw):
+        os.remove(q)
+        raise OSError("the disk said no")
+    monkeypatch.setattr(shutil, "rmtree", cut_short)
+    monkeypatch.chdir(ws)
+    with use_reporter(Reporter([CaptureSink()])):
+        with pytest.raises(OSError):
+            prep.prune_quarantine(str(ws), do_delete=True, prune_all=True)
+    monkeypatch.undo()
+    _install(monkeypatch)
+    assert not os.path.exists(q) and glob.glob(str(ws / ".photos-ingest-quarantine" / "*" / "manifest.json"))
+    rc, said, stop = _prep(monkeypatch, ws, "plan")
+    assert rc == 0 and stop is None, said
+
+
 @pytest.mark.no_hand_built_record
 @pytest.mark.spec("BLD-hand_change_is_work", "RUL-prepped_nothing_to_do",
                   test="TST-workspace_check-a_workspace_with_no_record_is_work_for_prep")

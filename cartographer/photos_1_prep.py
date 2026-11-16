@@ -3161,12 +3161,15 @@ def prune_quarantine(workspace_root, plan_ids=None, older_than_days=None, do_del
                      stream="stdout")
         if do_delete:
             safe = RootGuard.resolve_and_check_path(base, d)  # containment within quarantine
-            shutil.rmtree(safe)
-            # What prune removes is no change to the next check (RUL-quarantine_changed_only_by_prune): out of the
-            # record too. A sealed workspace is checked no more, and its database is left as merge sealed it.
-            from .photos_utils import QUARANTINE_DIR, is_sealed
-            if not is_sealed(workspace_root):
-                forget_in_workspace_record(workspace_root, [f"{QUARANTINE_DIR}/{d}"])
+            try:
+                shutil.rmtree(safe)
+            finally:
+                # What prune removes is no change to the next check (RUL-quarantine_changed_only_by_prune): out of the
+                # record too, each file gone, a removal cut short midway too. A sealed workspace is checked no more,
+                # and its database is left as merge sealed it.
+                from .photos_utils import QUARANTINE_DIR, is_sealed
+                if not is_sealed(workspace_root):
+                    forget_in_workspace_record(workspace_root, [f"{QUARANTINE_DIR}/{d}"])
     reporter.log(f"{'Removed' if do_delete else 'Would remove'} total: "
                  f"{len(selected)} plan(s), {total_files} files, {total_bytes} bytes", stream="stdout")
     if not do_delete:

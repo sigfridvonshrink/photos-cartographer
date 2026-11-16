@@ -1585,8 +1585,9 @@ in `.photos-ingest-quarantine/` whole but the `.tmp-` files of a manifest's rewr
 before its database image, or in its `finally` once its operations have begun; geotag's `execute_plan` in a `finally`
 once it begins applying photos, each written or renamed photo's fingerprint carried from the path it was planned under;
 merge's `execute_plan` in a `finally` once its moves have begun, before its summary, database image and seal. A prune
-that deletes takes the run folders it removed out of the record (`forget_in_workspace_record`), the workspace not
-sealed. No plan, dry run or finalize writes it.
+that deletes takes out of the record every file under the run folders it removes that is no longer on disk
+(`forget_in_workspace_record`), in a `finally`, so a removal cut short midway is taken out as far as it went, the
+workspace not sealed. No plan, dry run or finalize writes it.
 :::
 
 :::{bld} Recognising the work of an execution killed before its record
