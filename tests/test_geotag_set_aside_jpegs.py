@@ -22,7 +22,7 @@ import sys
 
 import pytest
 
-from _handoff import vouched
+from _handoff import recorded, vouched
 from _zone import answer_root_zone
 import photos_1_prep as prep
 import photos_2_geotag as cal
@@ -202,6 +202,24 @@ def test_a_held_raw_holds_its_jpeg(tmp_path, monkeypatch):
     monkeypatch.setattr(cal.GeotagWorkflow, "_apply_file", real)
     assert _geotag(monkeypatch, ws, "execute") == 0                  # run again: the pair renamed together
     assert (ws / "3-redundant-jpgs" / f"{HOME}.jpg").exists() and (ws / "6-photos-by-dest" / "T" / f"{HOME}.arw").exists()
+
+
+@pytest.mark.spec("BLD-finalize_preconditions", "RUL-finalize_checks_photos",
+                  test="TST-geotag_set_aside_jpegs-a_renamed_jpeg_changed_stops_finalize")
+def test_a_renamed_jpeg_changed_since_execution_stops_finalize(tmp_path, monkeypatch, capsys):
+    """Finalize checks the JPEG the plan renamed with its RAW as it checks the photos: one changed since execution
+    stops it, named under the folder it is in — not as a photo of photos by destination."""
+    ws, ctl = _workspace(tmp_path, monkeypatch)
+    _tools(monkeypatch, ws)
+    assert _geotag(monkeypatch, ws, "execute") == 0
+    (ws / "3-redundant-jpgs" / f"{HOME}.jpg").write_bytes(b"retouched by hand, another size")
+    recorded(ws)                                   # past the workspace check: finalize's own check meets it
+    capsys.readouterr()
+    assert _geotag(monkeypatch, ws, "finalize") == 2
+    said = capsys.readouterr()
+    said = said.out + said.err
+    assert f"1 file(s) in 3-redundant-jpgs are not as the execution left them (3-redundant-jpgs/{HOME}.jpg)" in said
+    assert not (ctl / "photos-26-finalized-media.json").exists()
 
 
 @pytest.mark.spec("RUL-set_aside_jpeg_catches_up", "BLD-set_aside_jpeg_catches_up", "RUL-set_aside_jpeg_only_renamed",

@@ -3293,7 +3293,10 @@ class GeotagWorkflow:
 
         changed = self._changed_since_execution(plan)
         if changed:
-            return [f"{len(changed)} photo(s) in {folder_name('photos_by_dest')} are not as the execution left "
+            # a photo of photos by destination, or a JPEG set aside that the plan renamed with its RAW
+            # (BLD-finalize_preconditions): each named under the folder it is in
+            where = " and ".join(sorted({c.split(os.sep, 1)[0] for c in changed}))
+            return [f"{len(changed)} file(s) in {where} are not as the execution left "
                     f"them ({_named(changed)}) — re-run `geotag plan` and `geotag execute` first (after "
                     "`prep plan` and `prep execute`, if geotag asks)."]
         # No photo leaves geotag without a position (RUL-finalize_refuses_unplaced): checked from what each photo

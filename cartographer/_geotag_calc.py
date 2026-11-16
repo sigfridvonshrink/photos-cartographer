@@ -1156,9 +1156,9 @@ def clock_change_proposal(frames, photos, gpx, cfg):
     on the tracks (`infer_anchor_proposal`), else by their fixes' times (`gps_readings`) — taken in the order of the
     true time their GPS gives each — the track time its anchor matched, else its fix's time — form two consecutive
     runs, each agreeing within itself on an offset of its own — a run on the tracks proposing with no photo against it,
-    no tie and no stay; a run of fix times within `gpx_anchor_offset_spread_max_seconds` of its first — the two offsets
-    farther apart than that spread. A clock set back, its two runs interleaved in camera time, shows so as one set
-    forward does. Nothing changes where the day's photos already agree, where no split, or more than one, makes two
+    no tie and no stay; a run of fix times within `gpx_anchor_offset_spread_max_seconds` of each other, the first's
+    offset the run's — the two offsets farther apart than that spread. A clock set back, its two runs interleaved in
+    camera time, shows so as one set forward does. Nothing changes where the day's photos already agree, where no split, or more than one, makes two
     such runs, as three or more alternating runs never do, or where the runs, each photo at the true time its own run's
     offset gives it, do not follow one another a second or more apart.
 
