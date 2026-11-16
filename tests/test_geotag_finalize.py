@@ -791,6 +791,22 @@ def test_a_position_the_plan_wrote_counts():
     assert utils.photos_without_position(handoff, plan) == [f"{BYDEST}/T/cleared.arw", f"{BYDEST}/T/left.arw"]
 
 
+@pytest.mark.spec("RUL-finalize_refuses_unplaced", "RUL-merge_refuses_unplaced", "BLD-no_photo_unplaced",
+                  test="TST-geotag_finalize-a_copy_in_another_destination_is_placed_on_its_own")
+def test_a_copy_in_another_destination_is_placed_on_its_own():
+    """One photo copied into two destinations — two records of one fingerprint — the plan placing only one copy: the
+    other holds no position, and is named. Each copy is joined to the plan by the path the plan was built on."""
+    def rec(dest):
+        return {"relative_path": f"{BYDEST}/{dest}/a.arw", "folder_class": BYDEST, "media_class": "raw",
+                "content_hash": json.dumps({"status": "valid", "value": "fp-a"}),
+                "metadata_status": {"parsed_json": "{}"}}
+    handoff = {"files": [rec("Rome"), rec("Paris")]}
+    plan = {"destinations": {f"{BYDEST}/Rome": {"operations": [
+        {"type": "metadata_gps_write", "relative_path": f"{BYDEST}/Rome/a.arw",
+         "writes": {"GPSLatitude": 41.9, "GPSLongitude": 12.5}, "preconditions": {"content_fingerprint": "fp-a"}}]}}}
+    assert utils.photos_without_position(handoff, plan) == [f"{BYDEST}/Paris/a.arw"]
+
+
 @pytest.mark.spec("RUL-finalize_needs_no_metadata_tool", "BLD-geotag_exiftool_needed",
                   test="TST-geotag_finalize-finalize_runs_without_exiftool_plan_and_execute_do_not")
 def test_finalize_runs_without_exiftool_plan_and_execute_do_not(tmp_path, monkeypatch, capsys):

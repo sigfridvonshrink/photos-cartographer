@@ -3101,10 +3101,23 @@ def photos_without_position(handoff, plan):
     plan clears it (a `gps_marker_write` emptying `GPSLatitude`), else the one its handoff record holds — prep's reading
     of the photo — judged by the one own-position test (BLD-own_position_test), so latitude 0 and longitude 0 is none.
     A record is joined to the plan's operations by its content fingerprint, which a metadata write and geotag's rename
-    leave as it was — by its path only where it holds none. Read from the records, never by a tool run on a photo: finalize runs none
-    (RUL-finalize_needs_no_metadata_tool). Their paths as the handoff records them, sorted."""
+    leave as it was — by the path the plan was built on where it holds none, or where another record holds the same one
+    (a photo copied into two destinations, which prep keeps both of). Read from the records, never by a tool run on a
+    photo: finalize runs none (RUL-finalize_needs_no_metadata_tool). Their paths as the handoff records them, sorted."""
     by_dest = folder_name('photos_by_dest')
-    written = {}                                # fingerprint or path -> (lat, lon) the plan leaves, or None
+    records = []
+    for rec in (handoff or {}).get("files") or []:
+        if rec.get("folder_class") != by_dest or rec.get("media_class") not in ("image", "raw"):
+            continue
+        try:
+            fp = json.loads(rec.get("content_hash")).get("value")
+        except Exception:
+            fp = None
+        records.append((rec, fp))
+    held = {}
+    for _rec, fp in records:
+        held[fp] = held.get(fp, 0) + 1
+    written = {}                                # ("fp", fingerprint) or ("path", path) -> (lat, lon) left, or None
     for dd in ((plan or {}).get("destinations") or {}).values():
         for op in dd.get("operations") or []:
             w = op.get("writes") or {}
@@ -3114,19 +3127,14 @@ def photos_without_position(handoff, plan):
                 pos = None
             else:
                 continue
-            key = (op.get("preconditions") or {}).get("content_fingerprint") or op.get("relative_path")
-            if pos is not None or key not in written:     # a position written outranks a clear
-                written[key] = pos
+            fp = (op.get("preconditions") or {}).get("content_fingerprint")
+            for key in ((("fp", fp),) if fp else ()) + (("path", op.get("relative_path")),):
+                if pos is not None or key not in written:     # a position written outranks a clear
+                    written[key] = pos
     out = []
-    for rec in (handoff or {}).get("files") or []:
-        if rec.get("folder_class") != by_dest or rec.get("media_class") not in ("image", "raw"):
-            continue
+    for rec, fp in records:
         rel = rec.get("relative_path")
-        try:
-            fp = json.loads(rec.get("content_hash")).get("value")
-        except Exception:
-            fp = None
-        key = fp if fp else rel
+        key = ("fp", fp) if fp and held[fp] == 1 else ("path", rel)
         if key in written:
             pos = written[key]
         else:
