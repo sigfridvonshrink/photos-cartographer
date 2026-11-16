@@ -71,3 +71,19 @@ test("an answer settles nothing it does not reach: past a country of several tim
   assert.equal(status(`${R}/Belgium/Ghent`), "ok");
   assert.equal(status(R), "ok");
 });
+
+test("the zone a country's photos fit applies itself and passes down, while that country stands", () => {
+  const work = { time: { countries: { US: { name: "United States", zones: ["America/Los_Angeles", "America/New_York"] } },
+    destinations: {
+      [`${R}/US`]: box([], { user_decision: { manual_iana_timezone: "", country: "US" } }),
+      [`${R}/US/LA`]: tz({ requires_user_input: false, proposal_source: "photos_in_country",
+        proposed_iana_timezone: "America/Los_Angeles", effective_iana_timezone: "America/Los_Angeles", decision_mode: "auto_resolved" }),
+      [`${R}/US/LA/Pier`]: tz({ requires_user_input: false, proposal_source: "inherited", proposed_iana_timezone: "America/Los_Angeles" }),
+    } } };
+  setWork(work);
+  assert.deepEqual(app.previewTz(`${R}/US/LA`), { tz: "America/Los_Angeles", source: "photos" });
+  assert.deepEqual(app.previewTz(`${R}/US/LA/Pier`), { tz: "America/Los_Angeles", source: "inherited", from: `${R}/US/LA` });
+  assert.equal(app.wouldResolve({ file: "time", dest: `${R}/US/LA`, kind: "timezone" }), true);
+  write(work, `${R}/US`, "country", "");                                       // the country taken back: no longer
+  assert.equal(app.previewTz(`${R}/US/LA`), null);
+});

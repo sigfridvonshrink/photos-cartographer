@@ -240,7 +240,8 @@ A timezone the user writes for a destination SHALL take effect over the one it i
 :refines: RUL-timezone_auto_resolves
 :uses: DEF-geotag, DEF-decision
 
-A destination with no timezone to inherit SHALL wait for the user.
+A destination with no timezone to inherit SHALL wait for the user, save one its photos give within its country
+({need}`RUL-zone_from_photos_in_country`).
 :::
 
 :::{rul} An inherited timezone yields to the destination's own photos
@@ -312,6 +313,31 @@ answering for themselves.
 A timezone answered for a destination in a country of several timezones SHALL be one of that country's timezones.
 :::
 
+:::{rul} In a country of several timezones, the photos' offsets propose the one that fits
+:id: RUL-zone_from_photos_in_country
+:status: ruled
+:criticality: high
+:verify: required
+:refines: RUL-country_of_several_gives_none
+:uses: DEF-geotag, DEF-decision
+
+A destination in a country of several timezones, with no timezone written or inherited, SHALL be proposed the one
+timezone of that country whose offset at the time of each of its photos read by the offset recorded with its time is
+that offset — where exactly one is, and at least one photo records an offset.
+:::
+
+:::{rul} A timezone the photos give within their country applies itself
+:id: RUL-zone_from_photos_applies
+:status: ruled
+:criticality: high
+:verify: required
+:refines: RUL-zone_from_photos_in_country
+:uses: DEF-geotag, DEF-decision
+
+A timezone proposed from the offsets a destination's photos record within its country SHALL take effect without the
+user's answer.
+:::
+
 :::{rul} A country is said once, at the top of its tree
 :id: RUL-country_chosen_once
 :status: ruled
@@ -353,8 +379,8 @@ timezone for the offsets those photos record.
 :verify: required
 :refines: RUL-timezone_auto_resolves
 
-The configured default timezone SHALL be offered to a destination with no zone to inherit, never applied without the
-user's answer.
+The configured default timezone SHALL be offered to a destination with no zone to inherit nor one its photos give,
+never applied without the user's answer.
 :::
 
 :::{rul} A proposal waits for the user's acceptance

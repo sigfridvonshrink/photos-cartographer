@@ -1029,6 +1029,10 @@ class GeotagWorkflow:
                 inherited_tz = (country[1], zones[0])       # a country of one timezone: that is the zone
             elif zones and inherited_tz is not None and (own_country or inherited_tz[1] not in zones):
                 inherited_tz = None                         # a zone from above the country is none of its own
+            # in a country of several timezones, with none reaching it, the one zone of the country its photos'
+            # recorded offsets fit (BLD-zone_from_photos_in_country)
+            fitted = (_zone_from_photos(by_dest[dest], groups, zones)
+                      if len(zones) > 1 and inherited_tz is None and not is_container else None)
             # A destination holding photos has one timezone for all of them (RUL-inherited_timezone_yields_to_photos):
             # the zone it would take — the one written for it, else the one it inherits — is set against what its own
             # photos record.
@@ -1040,7 +1044,7 @@ class GeotagWorkflow:
             tz_block = self._timezone_decision(dest, prior_d.get("destination_timezone") or {},
                                                blockers, inherited_tz, file_less=is_container, against=against,
                                                country=country, zones=zones, own_country=own_country,
-                                               removed=removed)
+                                               removed=removed, fitted=fitted)
             # what children inherit: the zone in effect; or, where this destination's own photos speak
             # against the zone it would inherit and the user has not answered, that it waits — a
             # destination inside it does not reach past it to the zone its photos contradict
@@ -1613,10 +1617,11 @@ class GeotagWorkflow:
         return seg
 
     def _timezone_decision(self, dest, prior_tz, blockers, inherited=None, file_less=False, against=None,
-                           country=None, zones=(), own_country="", removed=None):
+                           country=None, zones=(), own_country="", removed=None, fitted=None):
         # Proposal precedence (BLD-timezone_cell): the nearest RESOLVED ancestor destination's timezone (a more
         # specific signal than the generic global default — e.g. a Japan/Kyoto leaf inheriting Japan's
-        # Asia/Tokyo over a Europe/Brussels home default) wins; else the config default; else none.
+        # Asia/Tokyo over a Europe/Brussels home default) wins; else, in a country of several timezones, the one its
+        # photos' recorded offsets fit (BLD-zone_from_photos_in_country); else the config default; else none.
         # Destinations are geographically NESTED — a child sits inside its parent, so it can scarcely
         # cross a timezone boundary the parent didn't — so a timezone proposal (inherited or config
         # default) auto-resolves without per-destination confirmation, staying overridable by a manual
@@ -1629,6 +1634,9 @@ class GeotagWorkflow:
         elif inherited is not None:
             anc_path, anc_tz = inherited
             proposed, source, inherited_from = anc_tz, "inherited", anc_path
+        elif fitted:
+            # the photos' own offsets, within the country the user said (BLD-zone_from_photos_in_country)
+            proposed, source, inherited_from = fitted, "photos_in_country", None
         elif default:
             proposed, source, inherited_from = default, "config_default", None
         else:
@@ -1663,13 +1671,13 @@ class GeotagWorkflow:
         # An inherited zone is adopted (and re-propagated downward) without the user's answer — container or
         # real — because the nested geography makes the parent's timezone the right one for the child. The
         # configured default is only proposed: it is the user's usual zone, true of no trip in particular, and
-        # applied to a trip abroad it would name and time its photos in the wrong zone; each top-level trip
-        # answers once, everything beneath inheriting. A manual entry overrides either, and is the one decision
+        # applied to a place abroad it would name and time its photos in the wrong zone; it is answered once, on
+        # the folder of the country or region it holds for, everything beneath inheriting. A manual entry overrides either, and is the one decision
         # the user makes here (BLD-timezone_cell).
         # ...unless this destination's own photos say otherwise: a phone's photo here that records an offset
         # the inherited zone does not have at that time was taken in another zone, and the one zone change
         # of a trip is not adopted unasked. The user writes the zone — the inherited one, if it is right.
-        auto = not manual and bool(proposed) and source in ("inherited", "country") and not unanswered
+        auto = not manual and bool(proposed) and source in ("inherited", "country", "photos_in_country") and not unanswered
         if auto:
             effective = proposed
         block = {

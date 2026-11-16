@@ -81,6 +81,7 @@ __all__ = [
     'open_track_record',
     '_valid_iana',
     '_offsets_against_zone',
+    '_zone_from_photos',
     '_ZONE_WAITS',
     '_valid_offset',
     '_parse_camera_naive',
@@ -1159,34 +1160,65 @@ def _parse_iso_offset(s):
 _ZONE_WAITS = "\x00waits"
 
 
-def _offsets_against_zone(files, groups, tz):
-    """What a destination's own photos say against the timezone `tz` it would inherit: the photos read by
-    the offset recorded with their time (a phone's, a file's naming no camera — never a camera's, whose
-    offset tag says what its clock was set to, not where it was) whose offset is not `tz`'s at that time.
-    None when none speaks against it; else how many, and one of them."""
-    if not _valid_iana(tz):
-        return None
-    zone, out = zoneinfo.ZoneInfo(tz), []
+def _recorded_readings(files, groups):
+    """The photos of `files` read by the offset recorded with their time — a phone's, a file's naming no camera; never
+    a camera's, whose offset tag says what its clock was set to, not where it was; nor one geotag corrected, nor a
+    kept true time, read by the zone, its tag told apart (BLD-changed_time_kept_not_anchor) — as (path, camera time,
+    offset), by path."""
     for f in sorted(files, key=lambda x: x["relative_path"]):
-        # a kept true time is read by the zone, its tag told apart (BLD-changed_time_kept_not_anchor)
         if (groups.get(f["camera_group_key"]) or {}).get("camera_group_class") == "camera" or f.get("geotag_marker") \
                 or f.get("true_time"):
             continue
         naive, own = _parse_camera_naive(f.get("source_naive_time")), _own_offset(f)
-        if naive is None or own is None:
-            continue
-        try:
-            there = (naive - timedelta(seconds=own)).replace(tzinfo=timezone.utc).astimezone(zone).utcoffset()
-        except OverflowError:
-            continue
-        if round(there.total_seconds() / 60) * 60 != own:
-            out.append((f["relative_path"], own, int(there.total_seconds())))
+        if naive is not None and own is not None:
+            yield f["relative_path"], naive, own
+
+
+def _zone_offset_there(zone, naive, own):
+    """`zone`'s UTC offset, in whole seconds, at the instant a photo whose camera time is `naive` recorded with offset
+    `own` was taken; None where that instant is out of range."""
+    try:
+        return int((naive - timedelta(seconds=own)).replace(tzinfo=timezone.utc).astimezone(zone).utcoffset()
+                   .total_seconds())
+    except OverflowError:
+        return None
+
+
+def _offsets_against_zone(files, groups, tz):
+    """What a destination's own photos say against the timezone `tz` it would inherit: the photos read by
+    the offset recorded with their time (`_recorded_readings`) whose offset is not `tz`'s at that time.
+    None when none speaks against it; else how many, and one of them."""
+    if not _valid_iana(tz):
+        return None
+    zone, out = zoneinfo.ZoneInfo(tz), []
+    for rel, naive, own in _recorded_readings(files, groups):
+        there = _zone_offset_there(zone, naive, own)
+        if there is not None and round(there / 60) * 60 != own:
+            out.append((rel, own, there))
     if not out:
         return None
     rel, own, there = out[0]
     return {"photos": len(out), "example": rel, "recorded_offset_seconds": own,
             "recorded_offsets": sorted({o for _r, o, _t in out}),
             "timezone": tz, "timezone_offset_seconds": there}
+
+
+def _zone_from_photos(files, groups, zones):
+    """The one zone of `zones` — a country's — whose offset at each photo's time is the offset the photo records with
+    it (`_recorded_readings`), or None: where no photo records one, or none or several of the zones fit them all
+    (RUL-zone_from_photos_in_country, BLD-zone_from_photos_in_country)."""
+    readings = list(_recorded_readings(files, groups))
+    if not readings:
+        return None
+    fit = []
+    for tz in zones:
+        if not _valid_iana(tz):
+            continue
+        zone = zoneinfo.ZoneInfo(tz)
+        if all((there := _zone_offset_there(zone, naive, own)) is not None and round(there / 60) * 60 == own
+               for _rel, naive, own in readings):
+            fit.append(tz)
+    return fit[0] if len(fit) == 1 else None
 
 
 def _local_to_utc(naive, tz):

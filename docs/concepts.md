@@ -371,7 +371,9 @@ offset is whole seconds, so they still hold. A destination gets its zone from:
 - **its country**: you say which country a folder is in — once, at the top of its tree, whatever the
   folder is called. A country of one timezone gives it to everything inside. A country of several gives
   none, and lets none through from above: each destination inside answers for itself, among that
-  country's zones only. A country said again inside another is taken out by the next run, which tells
+  country's zones only — save where its phone photos settle it: the one zone of the country whose offset,
+  at each photo's time, is the one the photo records, applies itself. Zones sharing their offsets then
+  (New York and Detroit; Phoenix and Los Angeles in summer) leave it asking. A country said again inside another is taken out by the next run, which tells
   you.
 
 Your configured `default_folder_timezone` is only **offered** to a destination with nothing to inherit —

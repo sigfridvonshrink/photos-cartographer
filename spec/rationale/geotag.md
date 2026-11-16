@@ -204,6 +204,22 @@ offset tag is not such evidence — it says what the clock was set to, and a cam
 destination abroad.
 :::
 
+:::{rat} The photos say which of the country's zones
+:id: RAT-zone_from_photos_in_country
+:status: ruled
+:forced: no
+:follows_from: RAT-country_said_not_guessed, RAT-photos_outrank_inheritance, CHC-ask_only_what_data_cannot_settle
+:justifies: RUL-zone_from_photos_in_country, RUL-zone_from_photos_applies
+
+A country of several zones narrows the answer to a handful, and a phone's photo records the offset it was taken at.
+Where exactly one of the country's zones had that offset at every such photo's time, the photos and the user's own
+word on the country together settle it: asking would be asking what the data already says. It is the same evidence
+that stops an inherited zone, read the other way — so it applies itself, as an inherited zone does, and passes down
+as any zone in effect does. Where several zones fit (zones that share their offsets), or none, or no photo records an
+offset, nothing tells them apart, and the destination asks. Positions would say more, but only through a database of
+zone boundaries, a dependency the tool does not carry; the offsets need only the zone database it already reads.
+:::
+
 :::{rat} One timezone, because that is what can be checked
 :id: RAT-one_zone_can_be_checked
 :status: ruled
@@ -678,8 +694,8 @@ change.
 
 The destination a place lies in is the most specific word on its timezone: Kyoto inside Japan is in Japan's zone. The
 configured default is the user's usual zone, true of no trip in particular, so it is offered only where the tree says
-nothing. And a zone the user sets on a trip's folder should hold for everything beneath it — one answer for the trip,
-not one per folder.
+nothing. And a zone the user sets on a place's folder — a country, a region — should hold for everything beneath it:
+one answer for the place, not one per folder.
 :::
 
 :::{rat} The home zone is right for no trip in particular
@@ -692,7 +708,8 @@ not one per folder.
 The configured default is the zone the user usually lives in, and a trip is where they went. Applied by itself to a
 trip abroad, it would name every photo in home time and turn the times of photos that record no offset by the hours
 between the two zones — written into the originals, with no sign anything is off. Offered instead, it costs one answer
-per trip, at the trip's folder, everything beneath inheriting it; a trip at home takes it in one click.
+per place, at the folder of the country or region it holds for, everything beneath inheriting it; a place at home
+takes it in one click.
 :::
 
 :::{rat} A timezone is asked wherever an answer would reach, and asked no more once given
@@ -703,7 +720,7 @@ per trip, at the trip's folder, everything beneath inheriting it; a trip at home
 :justifies: RUL-zone_asked_at_every_level, RUL-zone_not_asked_where_one_reaches, RUL-editor_answer_ends_zone_asking
 
 Asked only where photos lie, a country of three cities asks three times, unless the user knows to answer on the folder
-that asks nothing. The tool cannot tell which folder is the place a zone holds for — a country, a region, a trip — so it
+that asks nothing. The tool cannot tell which folder is the place a zone holds for — a country, a region, a town — so it
 asks at each folder above a destination that waits, and the user answers where it is true; the owner: *"the user should
 be asked at every level and any choice should propagate to children, with the caveat of multiple timezone countries"*.
 An answer passes down to everything below, so the questions it settles go with it: *"This should not multiply choices -

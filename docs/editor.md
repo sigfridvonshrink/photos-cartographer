@@ -164,12 +164,14 @@ asked (a zone there would reach nothing), and the folders inside it are.
 - **In country** — say which country a folder is in (whatever the folder is called; it needn't be the
   country's own folder). A country with **one** timezone gives it to everything inside. A country with
   **several** gives none and lets none through from above: each destination inside answers for itself,
-  and the **Manual timezone** list only offers that country's zones. A country is said **once, at the
+  and the **Manual timezone** list only offers that country's zones — unless its phone photos settle it:
+  where exactly one of the country's zones had, at each photo's time, the offset the photo records, that
+  zone applies itself, badged `from its photos`. A country is said **once, at the
   top of its tree**: below a folder that has one, the choice is locked and says where it was made, and
   choosing a country on a folder removes any country chosen inside it (the editor says which). The
   choice appears only when the host's timezone database lists countries.
 - **The configured default** (`default_folder_timezone`) is only **offered**: a destination with nothing
-  to inherit shows it with a **use** button, but it never applies by itself — so a trip abroad is never
+  to inherit shows it with a **use** button, but it never applies by itself — so a place abroad is never
   timed in your home zone. Inside a country, it is offered only if it is one of that country's zones.
 - **Manual timezone** — pick an IANA zone from the dropdown: the zones of the machine geotag runs on, so one
   your browser knows and that machine does not is never offered. It overrides an inherited one and

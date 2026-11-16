@@ -360,6 +360,14 @@ A container destination's timezone cell with no `effective_iana_timezone`, where
 A destination's `destination_timezone.user_decision.country` — the country it is in — SHALL hold an ISO 3166 code of `country_table` — every country of the zone database's `zone.tab`, named from `iso3166.tab`, with its timezones — or be empty; another value, or any where the host's database has no such table, is a blocker. The topmost country chosen above or at a destination is in effect there, recorded as `country`, with `country_from` where it was chosen above and `country_zones`. One chosen within it is written back empty, the cell holding `country_removed` (`country`, `because`, `country_there`) for that run, and `geotag plan` warns of each. A country of one timezone proposes it as `proposal_source: "country"`, taking effect like an inherited zone, over any zone from above. A country of several gives its own destination's zone to nothing within it and lets none through from above; within it a `manual_iana_timezone` that is none of `country_zones` is a blocker, and the configured default is proposed only where it is one. `photos-21-time-decisions.json` holds the table read as `countries`.
 :::
 
+:::{bld} The zone a country's photos fit
+:id: BLD-zone_from_photos_in_country
+:status: ruled
+:realises: RUL-zone_from_photos_in_country, RUL-zone_from_photos_applies, RUL-no_timezone_to_inherit_waits, RUL-default_zone_proposed_only
+
+A destination holding photos, in a country whose `country_zones` are several, with no zone reaching it from above within the country nor one of a country of one timezone, SHALL be proposed `_zone_from_photos`: the one of `country_zones` at which, for each photo `_recorded_readings` gives — not a fixed-clock camera's, not yet corrected, not a kept true time, with an offset recorded beside its time — the zone's offset at the instant that offset gives, to the minute, is the offset recorded; none where no photo is read, or where none or several zones fit them all. It is `proposal_source: "photos_in_country"`, ahead of `config_default`, and takes effect like an inherited zone, `decision_mode: "auto_resolved"`, a `manual_iana_timezone` overriding it; the destinations within it inherit it.
+:::
+
 :::{bld} The offset derived from the timezone
 :id: BLD-timezone_naive_offset
 :status: ruled

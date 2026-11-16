@@ -187,8 +187,9 @@ so tuning the config and running `prep plan` again reuses them instead of re-rea
 
 This is the one step only you can do: move photos from `5-photos-by-date/` into a destination tree
 under `6-photos-by-dest/`. Move them, don't rename them — a file outside the inbox whose name isn't the
-one prep gave it stops prep, which names the file and the name it should carry. Build a tree of places —
-for example `year/country/city/place`:
+one prep gave it stops prep, which names the file and the name it should carry. Build a tree of places,
+each folder lying in the one above it — a country, a city in it, a sight in the city — under a folder that
+groups them, such as a year:
 
 ```
 6-photos-by-dest/2026/Belgium/Brussels/Atomium/

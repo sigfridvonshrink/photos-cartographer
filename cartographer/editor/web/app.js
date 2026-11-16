@@ -426,6 +426,7 @@ function previewEffective(ref) {
     if (u.manual_iana_timezone) return validTz(u.manual_iana_timezone) ? u.manual_iana_timezone : "✗ invalid zone";
     const pv = previewTz(ref.dest);
     if (pv && pv.source === "inherited") return `${pv.tz} (inherited ⟵ ${leaf(pv.from)}, preview)`;
+    if (pv && pv.source === "photos") return `${pv.tz} (the one zone of the country its photos' offsets fit)`;
     if (c.proposal_source === "config_default" && c.proposed_iana_timezone)
       return `— (proposed: ${c.proposed_iana_timezone}, the configured default — use it or pick another)`;
     return "— (needs input)";
@@ -558,6 +559,12 @@ function tzWalk(dest) {
         if (a && a.tz) { got = { tz: a.tz, source: "inherited", from: anc }; break; }
       }
     }
+    // nothing reaching it, in a country of several timezones: the one zone of the country its photos' recorded offsets
+    // fit, as the last run found it, applies itself (BLD-zone_from_photos_in_country) — while that country stands
+    const c = tzCell(dest);
+    if (!got && c && c.proposal_source === "photos_in_country" && k && k.zones.length > 1
+        && k.zones.includes(c.proposed_iana_timezone))
+      got = { tz: c.proposed_iana_timezone, source: "photos" };
   }
   return got && zoneWaits(dest, got.tz) ? TZ_WAITS : got;   // the configured default is proposed, never in effect
 }
@@ -614,6 +621,7 @@ function tags(ref) {
   if (ref.kind === "timezone") {
     const pv = previewTz(ref.dest);                       // live preview, updates as ancestors change
     if (pv && pv.source === "inherited") out.push(chip("inherited", `inherited ⟵ ${leaf(pv.from)}`));
+    if (pv && pv.source === "photos") out.push(chip("inherited", "from its photos"));
   } else if (ref.kind === "fallback") {
     const pv = previewFallback(ref.dest);                 // live preview, updates as ancestors change
     if (pv && pv.source === "inherited") out.push(chip("inherited", `inherited ⟵ ${leaf(pv.from)}`));
