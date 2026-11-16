@@ -338,8 +338,8 @@ detectable; it versions the code that computes the key, so only the code can set
 :id: RAT-one_skipped_place
 :status: ruled
 :forced: yes
+:justifies: RUL-control_records_together, RUL-control_records_never_media, RUL-not_inventoried
 :follows_from: RAT-consolidated_log, RAT-non_destructive_core
-:justifies: RUL-control_records_together, RUL-control_records_never_media
 
 Skipping the control directory wholesale means a control or artifact file can never be mistaken for a photo. There is
 no per-file "ignore list" to maintain: whatever the control directory holds, now or later, is skipped with it.
@@ -798,8 +798,8 @@ transformation log and de-duplication rely on.
 :id: RAT-new_version_may_change_nothing
 :status: ruled
 :forced: yes
+:justifies: RUL-engine_change_is_checked, RUL-retaken_fingerprint_same_photo
 :follows_from: RAT-fingerprint_same_method, RAT-decoded_pixel_identity
-:justifies: RUL-engine_change_is_checked
 
 A new ImageMagick usually decodes the same pixels to the same fingerprint, but nothing promises it. Trusted blindly, a
 fingerprint from the old version compared with one from the new can call one photo two; discarded blindly, a photo

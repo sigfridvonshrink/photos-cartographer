@@ -331,6 +331,22 @@ def test_a_photos_23_holding_leave_unlocated_shows_as_unreadable(tmp_path):
     assert res["ok"] is False and "cannot read" in res["error"]
 
 
+@pytest.mark.spec("RUL-unknown_decision_field_refused", "BLD-geotag_checks_decisions",
+                  test="TST-serve-a_photos_21_holding_an_unknown_field_shows_as_unreadable")
+def test_a_photos_21_holding_an_unknown_field_shows_as_unreadable(tmp_path):
+    """A photos-21 whose camera's offset decision holds a field it does not have — a misspelling — is shown as a record
+    that cannot be read, naming the field, as geotag refuses it."""
+    ws = _workspace_with_fixtures(tmp_path)
+    time_p = os.path.join(ws, serve.CONTROL, serve.TIME_NAME)
+    art = json.load(open(time_p))
+    cells = next(d["camera_group_time_decisions"] for d in art["destinations"].values()
+                 if d.get("camera_group_time_decisions"))
+    next(iter(cells.values()))["user_decision"]["acept_proposal"] = True
+    open(time_p, "w").write(json.dumps(art))
+    shown = serve._load_artifacts(ws)["time"]
+    assert set(shown) == {"_error"} and "user_decision.acept_proposal is not a field" in shown["_error"]
+
+
 @pytest.mark.spec("RUL-every_question_in_editor", "BLD-editor_answers_every_question",
                   test="TST-serve-saves_a_phone_s_and_a_clock_change_s_answers")
 def test_apply_edits_saves_the_questions_of_a_phone_and_of_a_time_at_a_clock_change():

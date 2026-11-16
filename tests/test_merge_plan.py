@@ -408,6 +408,26 @@ def test_dry_run_summarizes_validated_plan(tmp_path, monkeypatch, capsys):
         json.loads(out)
 
 
+@pytest.mark.spec("RUL-dry_run_changes_nothing", test="TST-merge_plan-dry_run_changes_nothing")
+def test_dry_run_changes_nothing(tmp_path, monkeypatch):
+    """Merge's dry run changes nothing in the workspace or the library — no file written, moved or removed, the locks'
+    owner records aside — whether its plan places a photo, finds one already there or gives one a name of its own."""
+    ws, lib, fp = _build_ws(tmp_path, [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"},
+                                       {"fp": "B", "dest": "Trip", "final_name": "b.jpg"},
+                                       {"fp": "C", "dest": "Trip", "final_name": "c.jpg"}],
+                            library_files=[{"fp": "B", "dest": "Trip", "name": "b.jpg", "bytes": b"img-1"},
+                                           {"fp": "OTHER", "dest": "Trip", "name": "c.jpg"}])
+    _patch_fp(monkeypatch, fp)
+    assert merge._run_locked_workflow("plan", str(ws)) == 0
+
+    def tree(root):
+        return {os.path.relpath(os.path.join(r, f), root): open(os.path.join(r, f), "rb").read()
+                for r, _d, fs in os.walk(root) for f in fs if not f.endswith(".lock")}
+    before = (tree(str(ws)), tree(str(lib)))
+    assert merge._run_locked_workflow("dry-run", str(ws)) == 0
+    assert (tree(str(ws)), tree(str(lib))) == before
+
+
 @pytest.mark.spec("RUL-no_plan_no_run", test="TST-merge_plan-dry_run_without_plan_errors")
 def test_dry_run_without_plan_errors(tmp_path, monkeypatch):
     ws, lib, fp = _build_ws(tmp_path, [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"}])
@@ -670,16 +690,28 @@ def test_the_suffix_is_above_the_highest_of_the_library_and_the_batch(tmp_path, 
     assert names == {"NEW": "ts-008.jpg", "SEVEN": "ts-007.jpg"}
 
 
-@pytest.mark.spec("BLD-one_library_file_compared", "RUL-collision_by_content",
-                  test="TST-merge_plan-one_library_file_is_compared_per_photo")
-def test_one_library_file_is_compared_per_photo(tmp_path, monkeypatch):
-    """With no file at the photo's own name but two whose names differ from it only in case, merge compares the
-    first of them in sorted order alone: the photo, held by the second, is not found there and takes a suffix."""
+@pytest.mark.parametrize("second", ["the photo", "the same picture", "another picture"])
+@pytest.mark.spec("BLD-one_library_file_compared", "RUL-collision_by_content", "RUL-collision_same_content",
+                  "RUL-same_pixels_other_file_blocks", "RUL-collision_different_content",
+                  test="TST-merge_plan-every_library_file_at_the_place_is_compared")
+def test_every_library_file_at_the_place_is_compared(tmp_path, monkeypatch, second):
+    """Merge compares a photo with every library file at its place — the one under its own name and each whose name
+    differs from it only in case —, not with the first alone: held byte for byte by the second, the photo is already
+    in the library and nothing is written; held there as the same picture in other bytes, it is blocked; only where
+    neither file is it does it take a name of its own, beside the one under its own name."""
+    lib_second = {"the photo": {"fp": "A", "bytes": b"img-0"}, "the same picture": {"fp": "A", "bytes": b"other"},
+                  "another picture": {"fp": "OTHER2"}}[second]
     ws, lib, fp = _build_ws(tmp_path, [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"}],
-                            library_files=[{"fp": "OTHER", "dest": "Trip", "name": "A.jpg"},
-                                           {"fp": "A", "dest": "Trip", "name": "a.JPG", "bytes": b"img-0"}])
+                            library_files=[{"fp": "OTHER", "dest": "Trip", "name": "a.jpg"},
+                                           dict(lib_second, dest="Trip", name="A.JPG")])
     _patch_fp(monkeypatch, fp)
-    assert merge._run_locked_workflow("plan", str(ws)) == 0
+    assert merge._run_locked_workflow("plan", str(ws)) == (2 if second == "the same picture" else 0)
     [f] = _files(_plan_of(ws))
-    assert f["disposition"] == "renamed_incoming" and f["resolved_name"] == "a-001.jpg"
-    assert f["library_collision"]["path"] == os.path.join(str(lib), "Trip", "A.jpg")
+    if second == "the photo":
+        assert f["disposition"] == "already_present" and f["library_match"] == "bytes"
+        assert f["library_target"] == os.path.join(str(lib), "Trip", "A.JPG")
+    elif second == "the same picture":
+        assert f["disposition"] == "blocked" and f["library_match"] == "pixels"
+    else:
+        assert f["disposition"] == "renamed_incoming" and f["resolved_name"] == "a-001.jpg"
+        assert f["library_collision"]["path"] == os.path.join(str(lib), "Trip", "a.jpg")

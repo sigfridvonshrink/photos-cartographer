@@ -166,15 +166,6 @@ Prep's execute SHALL write `photos-15-prep-log.json` before the handoff, and rec
 `depends_on.prep_log`, outside its content fingerprint.
 :::
 
-:::{bld} Finalize copies only the log the handoff vouches for
-:id: BLD-finalize_checks_prep_log
-:status: ruled
-:realises: INV-no_stale_use, RUL-unchecked_counts_as_changed
-
-Geotag's finalize SHALL copy prep's log only when its bytes hash to the value {need}`BLD-prep_log_vouched` records, and
-stop otherwise — the log missing or unreadable, or the handoff recording no hash, among the cases.
-:::
-
 :::{bld} A change by hand is not "nothing to do"
 :id: BLD-hand_change_is_work
 :status: ruled

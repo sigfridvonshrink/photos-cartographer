@@ -1362,6 +1362,31 @@ _CHANGE_TITLES = {"changed": "changed in place", "appeared": "appeared", "remove
                   "interrupted_run": "left by the interrupted execution"}
 
 
+# An error the build did not foresee ends a command with an exit status of its own (BLD-exit_statuses): never 1,
+# which says the workspace or the library is locked, so a crash is never read as a run to try again.
+UNFORESEEN_ERROR_EXIT = 4
+
+
+def ends_unforeseen_error_apart(run):
+    """Wrap a command's `run(args)` so that an error it did not foresee ends it with `UNFORESEEN_ERROR_EXIT`, named
+    with where it arose (RUL-exit_status_says_how_it_ended). An exit the command chose, and an interrupt, pass as
+    they are; its own `finally` clauses have released its locks by the time this reports."""
+    import functools
+    import traceback
+
+    @functools.wraps(run)
+    def wrapped(args):
+        try:
+            return run(args)
+        except Exception as err:
+            from .reporting import get_reporter
+            reporter = get_reporter()
+            reporter.error(f"Error: {err}")
+            reporter.log(traceback.format_exc().rstrip())
+            sys.exit(UNFORESEEN_ERROR_EXIT)
+    return wrapped
+
+
 def add_accept_changes_argument(parser) -> None:
     """`--accept-changes <code>` on every checking command (BLD-accept_changes): accept once the unexpected changes
     the check listed, the code printed with them."""
@@ -2486,7 +2511,8 @@ def _zfs_snapshot_exists(snap: str) -> bool:
 FIELD_SET_VERSION = 4
 # 2: a file's recorded time is the first field holding a valid time, not the first present.
 METADATA_SCHEMA_VERSION = 2
-CAMERA_GROUP_KEY_VERSION = 1
+# 2: a key of empty parts alone (every identity field held blank) is NO_IDENTITY_KEY, a file naming no camera.
+CAMERA_GROUP_KEY_VERSION = 2
 
 # -G0 names each value's group, so prep — not exiftool's own priority — chooses which group a field is
 # taken from; -a keeps a tag present in several groups once per group.
@@ -3240,7 +3266,9 @@ class MetadataReader:
             v = parsed.get(k)
             if v is not None:
                 ident_parts.append(str(v).strip())
-        parsed["camera_group_key"] = "|".join(ident_parts) if ident_parts else NO_IDENTITY_KEY
+        # A key of empty parts alone — every identity field the file holds blank — names no camera, as a file
+        # holding none of them does (BLD-camera_identity_values).
+        parsed["camera_group_key"] = "|".join(ident_parts) if any(ident_parts) else NO_IDENTITY_KEY
 
         # Passive boolean helper checks
 

@@ -609,3 +609,36 @@ def test_an_offset_that_carries_the_photos_away_from_their_tracks_is_still_check
         cell = drift["destinations"][DEST]["drift_decisions"][CAM]
         assert not blk and cell["requires_user_input"] and len(cell["proposal"]["track_segment"]) == 2
         assert cell["proposal"]["current_offset_seconds"] == typed
+
+
+@pytest.mark.spec("RUL-unknown_decision_field_refused", "RUL-checked_decision_structure", "BLD-geotag_checks_decisions",
+                  test="TST-drift_validation-an_unknown_field_in_a_time_or_drift_decision_is_refused")
+def test_an_unknown_field_in_a_time_or_drift_decision_is_refused(tmp_path):
+    """A field a time or drift decision does not have — a misspelt `acept_proposal` — is refused as a photo's position
+    decision's is: a blocker naming it, located, the record not built; never passed over, which would read the
+    decision as unanswered, or answered without it."""
+    wf = _wf(tmp_path)
+    files = [_file(f"{DEST}/a.arw", "2024:07:03 14:00:00")]
+    gpx = _gpx([(50.0, 4.0, _utc(12))])
+    utils.CONFIG["camera_time_and_timezone_policy"]["default_folder_timezone"] = "Europe/Brussels"
+    art, blk = wf.build_time_decisions(files, GROUPS, _prior_time(
+        {CAM: {"user_decision": {"manual_offset_seconds": 0, "acept_proposal": True}}}), gpx)
+    assert art is None
+    assert blk == [f"{DEST}: camera_group_time_decisions[{CAM}]: user_decision.acept_proposal is not a field of a "
+                   "camera's clock-offset decision (only accept_proposal, accepted_offset_seconds, "
+                   "manual_offset_seconds, keep_as_recorded, accept_clock_change, accepted_change_offsets_seconds "
+                   "and photo_parts) — remove it."]
+    *_, drift, blk = _triggered(tmp_path, {"confirmed": True, "confirmd_offset_seconds": 0})
+    assert drift is None
+    assert blk == [f"{DEST}: drift_decisions[{CAM}]: user_decision.confirmd_offset_seconds is not a field of a drift "
+                   "validation (only confirmed, corrected_offset_seconds, confirmed_offset_seconds and "
+                   "confirmed_against_tracks) — remove it."]
+    for kind, block in (("time", "destination_timezone"), ("time", "unidentified_files"), ("time", "date_fallback"),
+                        ("gps", "folder_fallback")):
+        record = {"destinations": {DEST: {block: {"user_decision": {"note": "mine"}}}}}
+        assert [b.split(" is not")[0] for b in cal._decision_shape_blockers(record, kind)] == [
+            f"{DEST}: {block}: user_decision.note"]
+    for block in ("local_time_readings", "changed_times"):
+        record = {"destinations": {DEST: {block: {f"{DEST}/a.arw": {"user_decision": {"note": "mine"}}}}}}
+        assert [b.split(" is not")[0] for b in cal._decision_shape_blockers(record, "time")] == [
+            f"{DEST}: {block}[{DEST}/a.arw]: user_decision.note"]

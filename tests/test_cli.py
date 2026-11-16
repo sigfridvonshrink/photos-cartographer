@@ -394,7 +394,7 @@ def test_locked_workspace_fails_fast(tmp_path, monkeypatch, capsys):
         fcntl.flock(fd, fcntl.LOCK_UN); os.close(fd)
 
 
-@pytest.mark.spec("RUL-prep_dry_run_changes_nothing", test="TST-cli-dry_run_mutates_nothing_on_disk")
+@pytest.mark.spec("RUL-prep_dry_run_changes_nothing", "RUL-dry_run_changes_nothing", test="TST-cli-dry_run_mutates_nothing_on_disk")
 def test_dry_run_mutates_nothing_on_disk(tmp_path, monkeypatch, capsys):
     """Dry-run is validation, not simulation, and is strictly read-only: it loads the saved plan,
     validates it against an in-memory DB, and prints a summary. Snapshot the whole control dir + a
