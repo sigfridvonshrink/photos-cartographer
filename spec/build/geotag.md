@@ -1042,6 +1042,20 @@ out: move the photo from photos by destination into photos by date, a `moved_bac
 with no acceptance, then run `prep plan`, `prep execute` and `geotag plan` again. The exit status is that of the run.
 :::
 
+:::{bld} A write's leftover cleared only by the journal
+:id: BLD-own_leftover_cleared
+:status: ruled
+:realises: RUL-geotag_clears_own_leftover, RUL-other_write_leftover_holds_photo, RUL-write_leftover_stops_geotag_plan
+
+`geotag execute` SHALL note a photo's metadata write operations `begun` in the plan's journal, and persist it under
+the lock the confirmations are written under, before it writes that photo's tags; it removes a `<file>_exiftool_tmp`
+beside the photo before the write ({need}`BLD-metadata_safe_write`) only where the journal held one of those operations
+`begun` as the run read it, and otherwise makes the photo a blocker naming the file, which it leaves where it is.
+`geotag plan` stops with each `<media name>_exiftool_tmp` under photos by destination named in a blocker of its own,
+apart from the folder's other files that are no photo; `execute` and `finalize` likewise with each but one beside a
+photo the plan writes, which is left to the writer ({need}`BLD-loop_gates`).
+:::
+
 
 ## 21. Finalize
 

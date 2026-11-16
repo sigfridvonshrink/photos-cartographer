@@ -1407,6 +1407,24 @@ differs is something wrong — a tool, a format — that the user must see, not 
 photo's identity is at stake, so only the user can take the new content for it.
 :::
 
+:::{rat} Geotag knows its own leftover by its journal
+:id: RAT-own_leftover_known_by_journal
+:status: ruled
+:forced: no
+:follows_from: RAT-write_leftover_is_debris, RAT-no_automatic_deletion
+:justifies: RUL-geotag_clears_own_leftover, RUL-other_write_leftover_holds_photo, RUL-write_leftover_stops_geotag_plan
+
+Geotag writes a photo by having the new file written beside it and then put in its place, so a write it began and
+never finished leaves the photo whole and, beside it, only a partial copy: that leftover is never the only copy of
+anything, and the write done again must clear it, for the tool that writes the new file refuses one already there. But
+the name is the one every such tool gives its leftover, and one the user's own tool left may be the only whole copy of
+something; removed, it is gone, and nothing is removed but by an explicit act. The journal tells the two apart: a write
+is noted begun before it starts, so a leftover beside a photo whose write the journal shows begun and never confirmed
+is geotag's own. Any other is left where it is, and its photo is not written over its name. The plan stops on every
+one, geotag's own included: its own is cleared by running again the execution that left it, whose journal knows it —
+a new plan's journal would not.
+:::
+
 :::{rat} The record must cover what a broken run did
 :id: RAT-record_covers_broken_runs
 :status: ruled

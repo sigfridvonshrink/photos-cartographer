@@ -1433,7 +1433,8 @@ alone does; for prep and geotag the `EXDEV` of a move across filesystems is rais
 
 Geotag SHALL write metadata by having `exiftool -o` write the new file beside the photo as `<file>_exiftool_tmp` —
 the photo itself untouched — then giving it the photo's permissions, syncing it to disk, renaming it over the photo
-and syncing the folder, having first removed a `<file>_exiftool_tmp` an interrupted write left.
+and syncing the folder, having first removed a `<file>_exiftool_tmp` an interrupted write left where
+{need}`BLD-own_leftover_cleared` allows it.
 :::
 
 :::{bld} A rewritten record is on disk before it replaces the earlier one

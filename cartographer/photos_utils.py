@@ -581,8 +581,8 @@ def exiftool_mime_type(path: str):
 # The intermediate of a write to a media file: `<media>_exiftool_tmp`, the new file geotag has exiftool write
 # beside the photo and then renames over it (BLD-metadata_safe_write). A hard kill (SIGKILL/OOM/power loss) can
 # orphan one in a managed folder; prep recognizes and quarantines these (the live original is always intact —
-# the rename is atomic). Geotag's writer also unlinks a stale `_exiftool_tmp` for a file right before it
-# rewrites it. `<media>_original` is NOT one: no write of the pipeline leaves it, so that name is the backup
+# the rename is atomic). Geotag's writer clears one beside a photo only where its own journal shows its write to that
+# photo begun and never confirmed (BLD-own_leftover_cleared); any other stops geotag, left where it is. `<media>_original` is NOT one: no write of the pipeline leaves it, so that name is the backup
 # exiftool keeps of a USER's own edit — the camera's original — and is treated as any file of no media class
 # (RUL-user_backup_is_a_stray).
 _EXIFTOOL_ARTIFACT_SUFFIXES = ("_exiftool_tmp",)

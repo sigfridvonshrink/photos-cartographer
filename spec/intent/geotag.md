@@ -2925,6 +2925,42 @@ operations, the same reason — SHALL be reported so, in the run's output and it
 back into photos by date, then running prep and planning geotag again.
 :::
 
+:::{rul} Geotag clears only the leftover of its own interrupted write
+:id: RUL-geotag_clears_own_leftover
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+:excepts: RUL-write_leftovers_by_dest_warned
+:uses: DEF-geotag
+
+Geotag SHALL remove the temporary file an interrupted metadata write left beside a photo only to write that photo
+again, and only where its own journal of the execution shows its write to that photo begun and never confirmed.
+:::
+
+:::{rul} Another leftover holds its photo back
+:id: RUL-other_write_leftover_holds_photo
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+:refines: RUL-geotag_clears_own_leftover
+
+Geotag's execution SHALL NOT write a photo beside which lies a temporary file of an interrupted metadata write that it
+may not remove ({need}`RUL-geotag_clears_own_leftover`): the photo fails, the file named and left where it is.
+:::
+
+:::{rul} A write's leftover stops geotag's plan
+:id: RUL-write_leftover_stops_geotag_plan
+:status: ruled
+:criticality: med
+:verify: required
+:refines: RUL-write_leftovers_by_dest_warned
+:uses: DEF-geotag
+
+Geotag's plan SHALL stop, naming it, on a temporary file an interrupted metadata write left in photos by destination.
+:::
+
 :::{rul} What an interrupted run changed is recorded by the next
 :id: RUL-applied_unrecorded_is_recorded
 :status: ruled

@@ -323,10 +323,11 @@ def test_names_the_plan_gives_are_recorded_at_execute(tmp_path):
     (bd / "a.jpg.tmp-case.jpg").rename(bd / "a.jpg")
     (bd / "a.jpg_exiftool_tmp").write_bytes(b"partial")
     assert cal.GeotagWorkflow(str(ws)).preflight(for_execute=True)[0] == []
-    # the same leftover beside a photo no operation writes is a file among the photos, as at planning
+    # the same leftover beside a photo no operation writes stops the command, named, as at planning
+    # (BLD-own_leftover_cleared)
     (bd / "a.jpg_exiftool_tmp").rename(bd / "b.jpg_exiftool_tmp")
     blockers, _, _ = cal.GeotagWorkflow(str(ws)).preflight(for_execute=True)
-    assert any("must contain only photos" in b and "b.jpg_exiftool_tmp" in b for b in blockers), blockers
+    assert any("interrupted metadata write" in b and "b.jpg_exiftool_tmp" in b for b in blockers), blockers
 
 
 @pytest.mark.spec("RUL-sort_photos_only", test="TST-geotag_preflight-video_in_by_dest_blocks")
