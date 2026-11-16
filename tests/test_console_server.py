@@ -230,6 +230,57 @@ def test_unreadable_geotag_plan_summarised_as_a_blocker(tmp_path, torn):
     assert server._execute_guard(str(tmp_path), "geotag", {"confirmed": True}) is not None
 
 
+@pytest.mark.spec("BLD-accept_changes", "RUL-code_accepts_only_its_list",
+                  test="TST-console_server-accept_with_no_remembered_execute_opens_the_gate")
+def test_accept_with_no_remembered_execute_opens_the_gate():
+    """"Accept these" on a stopped execute this page never ran (reloaded, or another tab) sends nothing: it opens the
+    execute gate on the saved plan, and only the confirmation given there sends the execute, with the reviewed plan id
+    and the stop's code. A remembered execute, or a command that needs no confirmation, is sent again with the code at
+    once (docs/design/decisions.md, BACKLOG 50). The page's code runs under Node, its DOM and requests stood in for."""
+    import shutil
+    import subprocess
+    node = shutil.which("node")
+    if node is None:
+        pytest.skip("no node on this host")
+    here = os.path.dirname(os.path.abspath(__file__))
+    app = os.path.join(here, os.pardir, "cartographer", "console", "web", "app.js")
+    run = subprocess.run([node, os.path.join(here, "console_accept_harness.js"), app],
+                         capture_output=True, text=True, timeout=60)
+    assert run.returncode == 0, run.stdout + run.stderr
+    got = json.loads(run.stdout)
+    code = "0123456789ab"
+    fresh = got["execute_not_remembered"]
+    assert fresh["sent_on_accept"] == [] and fresh["gate_open"], fresh          # no confirmation made up
+    assert fresh["sent_on_confirm"] == [{"phase": "merge", "command": "execute", "confirm": True, "plan_id": "p7",
+                                         "jobs": 2, "accept_changes": code}]
+    assert got["execute_remembered"]["sent_on_accept"] == [
+        {"phase": "geotag", "command": "execute", "confirm": True, "plan_id": "p3", "jobs": 4, "accept_changes": code}]
+    assert got["plan_not_remembered"]["sent_on_accept"] == [
+        {"phase": "prep", "command": "plan", "jobs": 2, "accept_changes": code}]
+
+
+@pytest.mark.spec("RUL-merge_unreadable_record_stops", "BLD-console_unreadable_merge_plan",
+                  test="TST-console_server-unreadable_merge_plan_summarised_with_its_repair")
+@pytest.mark.parametrize("torn", ['{"plan_id": "m1", "destinations": {', "[]", '{"destinations": {}}',
+                                  '{"plan_id": "m1", "destinations": [], "totals": {}}'],
+                         ids=["torn", "not_an_object", "no_plan_id", "another_shape"])
+def test_unreadable_merge_plan_summarised_with_its_repair(tmp_path, torn):
+    """A photos-30 merge cannot read — torn, not an object, without its plan id, or in another shape than merge reads
+    — is summarised as a plan with one blocker naming the file and the way on that merge itself gives: repair it or
+    restore a `-NNN` copy, never `merge plan` again, which stops on it; never an error of the server, and the gate
+    refuses to execute it."""
+    from cartographer.photos_3_merge import merge_plan_path
+    m = merge_plan_path(str(tmp_path)); os.makedirs(os.path.dirname(m), exist_ok=True)
+    with open(m, "w") as f:
+        f.write(torn)
+    ms = server._plan_summary(str(tmp_path), "merge")
+    assert ms["exists"] and len(ms["blockers"]) == 1, ms
+    [why] = ms["blockers"]
+    assert "photos-30-merge-plan.json" in why and "-NNN" in why and "repair" in why, why
+    assert "`merge plan` again" not in why, why
+    assert server._execute_guard(str(tmp_path), "merge", {"confirm": True}) is not None
+
+
 # --- execute gate (generic, per phase) ------------------------------------
 
 def test_execute_guard_requires_confirmation(tmp_path):

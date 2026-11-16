@@ -279,8 +279,20 @@ Merge SHALL allow a fresh plan at any time on a workspace not sealed, whatever a
 :uses: DEF-merge, DEF-library, DEF-fingerprint, DEF-managed_folders
 
 A fresh plan SHALL carry forward every finalized photo no longer in photos by destination with the library place the
-latest earlier plan of the workspace gave it whose place, fingerprinted again, holds it — whether or not the journal
+latest earlier plan of the workspace gave it whose place, checked again, holds it — whether or not the journal
 recorded the move.
+:::
+
+:::{rul} An earlier place is confirmed by the bytes placed there
+:id: RUL-placed_bytes_confirm_place
+:status: ruled
+:criticality: high
+:verify: required
+:refines: RUL-replan_carries_placed
+:uses: DEF-merge, DEF-library, DEF-fingerprint
+
+A library place an earlier execute recorded filling SHALL count as holding its photo while it holds the very bytes
+placed there, whatever ImageMagick version now takes the fingerprints.
 :::
 
 :::{rul} An earlier place counts only inside this library
@@ -326,7 +338,7 @@ The blocker for a photo a fresh plan cannot carry forward SHALL name why.
 :refines: RUL-merge_resumable
 :uses: DEF-merge, DEF-library, DEF-fingerprint
 
-A photo gone from photos by destination SHALL count as merged only while its library place, fingerprinted again, holds
+A photo gone from photos by destination SHALL count as merged only while its library place, checked again, holds
 it — whatever the journal or the plan says.
 :::
 

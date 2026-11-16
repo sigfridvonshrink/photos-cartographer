@@ -647,7 +647,9 @@ fingerprints each photo again. A photo whose fingerprint changed is still merged
 recorded — and merge's package keeps its old value beside its new, each with its version, in
 `photos-35-fingerprint-map.json`; geotag's records stay as finalize sealed them, under the old one. Where two photos'
 fingerprints now coincide, or one's new value is another's old, prep would have told them apart differently: those
-photos are held back, named — merge them with the ImageMagick version that prepped the workspace. A library whose filesystem fails at a lock, a move that refuses a
+photos are held back, named — merge them with the ImageMagick version that prepped the workspace. A photo an earlier
+merge already placed is recognised in the library by the bytes it placed there, so upgrading ImageMagick between a
+partial merge and the next plan does not hold it back. A library whose filesystem fails at a lock, a move that refuses a
 taken name or a sync stops it, named — tried in the library at each start. The library may be on a network share;
 its lock may then hold back only the merges of one machine, so never run merges from two machines into one library
 at once (at worst a photo fails, or lands twice under two names — never one overwritten).

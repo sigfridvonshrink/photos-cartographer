@@ -484,6 +484,33 @@ def test_save_classes_a_new_camera_group_into_the_configuration(tmp_path):
     assert res3["ok"] is False and serve.CONFIG_NAME in res3["error"]
 
 
+@pytest.mark.spec("RUL-save_only_what_was_shown", "BLD-editor_writes_device_groups", "BLD-editor_marks_several_bodies",
+                  test="TST-serve-a_class_is_not_saved_over_a_configuration_changed_since_load")
+def test_a_class_is_not_saved_over_a_configuration_changed_since_load(tmp_path):
+    """The configuration changed by hand since the editor loaded it — another setting, the camera group still
+    unclassed, so the class asked for is still a question — refuses the save of a class, naming the configuration, and
+    leaves the file as the hand left it; reloaded, the same class is saved over the configuration as it now stands."""
+    ws, cfg = _camera_workspace(tmp_path)
+    cfg_path = os.path.join(ws, serve.CONTROL, serve.CONFIG_NAME)
+    loaded = serve._load_artifacts(ws)
+    assert list(loaded["cameras"]["groups"]) == ["Apple|iPhone 15"]
+    by_hand = copy.deepcopy(cfg)
+    by_hand["merge"]["library_space_margin_percent"] = 7               # an unrelated setting, the group untouched
+    from cartographer import photos_utils as utils
+    utils.write_json_artifact(cfg_path, by_hand)
+    before = open(cfg_path, "rb").read()
+    edit = {"kind": "camera", "key": "Apple|iPhone 15", "user_decision": {"device_class": "phones"}}
+    res = serve._save(ws, {"cameras": [edit], "hashes": loaded["hashes"]})
+    assert res["ok"] is False and serve.CONFIG_NAME in res["error"] and "changed since" in res["error"], res
+    assert open(cfg_path, "rb").read() == before                       # left as the hand left it
+    again = serve._load_artifacts(ws)
+    res = serve._save(ws, {"cameras": [edit], "hashes": again["hashes"]})
+    assert res["ok"] is True, res
+    after = json.load(open(cfg_path))
+    assert after["merge"]["library_space_margin_percent"] == 7
+    assert after["camera_time_and_timezone_policy"]["device_groups"]["phones"] == ["Apple|iPhone 15"]
+
+
 @pytest.mark.spec("RUL-editor_marks_several_bodies", "BLD-editor_marks_several_bodies", "RUL-every_question_in_editor",
                   "RUL-every_question_answerable_by_hand",
                   test="TST-serve-names_a_camera_group_several_bodies_in_the_configuration")

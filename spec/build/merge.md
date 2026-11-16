@@ -30,7 +30,8 @@ only where its path, size and modification time are those `photos-26-finalized-m
 photo holds its new value now, no file of the handoff held it, and no other by-dest photo's new value is its old; and
 otherwise block it, naming why, together with a photo whose unchanged value its new value equals. A photo so mapped is
 compared with the library's files — fingerprinted under the same version — by its new value: in the plan, at execute,
-and when a later plan carries it forward ({need}`BLD-merge_carry_forward`).
+and when a later plan carries it forward and its place holds other bytes than those recorded as placed there
+({need}`BLD-placed_bytes_journalled`).
 :::
 
 :::{bld} Merge's package maps each changed fingerprint, old value to new
@@ -129,11 +130,50 @@ its own name where geotag renamed nothing; the entries sorted by their path in t
 
 Merge's `build_merge_plan` SHALL give a finalized photo no longer under `6-photos-by-dest` the record of the latest
 plan — `photos-30-merge-plan.json`, then its `-NNN` backups newest first — holding a record for its content fingerprint
-not blocked whose `library_target` fingerprints, through `_fingerprint_library_file`, to it, adding `carried_from_plan`
+not blocked whose `library_target` holds it ({need}`BLD-placed_bytes_journalled`), adding `carried_from_plan`
 (the plan that first placed it); no such record makes it a blocked record whose reason names the places tried, or that
-no earlier plan placed it. A record's place counts only inside the configured `library_root`; a photo found at an earlier place outside it blocks, unless it is found, by its fingerprint, at the same place under the configured library, where the user moved it.
-One of those plans that cannot be read, does not parse as a JSON object or holds no `plan_id` stops the plan with exit
-status 2, naming it, no plan written.
+no earlier plan placed it. A record's place counts only inside the configured `library_root`; a photo found at an earlier place outside it blocks, unless it is found at the same place under the configured library, where the user moved it.
+One of those plans, or of their journals, that cannot be read, does not parse as a JSON object, holds no `plan_id` or is
+not in the shape of {need}`BLD-merge_record_shape` stops the plan with exit status 2, naming it, no plan written.
+:::
+
+:::{bld} The bytes of each placed file are journalled, and confirm its place
+:id: BLD-placed_bytes_journalled
+:status: ruled
+:realises: RUL-placed_bytes_confirm_place, RUL-replan_carries_placed, RUL-resume_rechecks_library
+:uses: BLD-merge_journal_resume, BLD-merge_carry_forward
+
+Merge's execute SHALL record in the journal, under `placed_sha256` keyed by the photo's path in the workspace, the
+SHA-256 of the library file of each photo it confirms; a later plan carrying a photo forward gives its record, as
+`placed_sha256`, the one the journal of the plan it is carried from holds, else that plan's record's own; and a place
+whose file has the record's `placed_sha256` holds the photo, no fingerprint taken — one without it, or whose bytes
+differ, holding it only where it fingerprints, through `_fingerprint_library_file`, to the value the photo was placed
+under ({need}`BLD-changed_fingerprint_mapped`). Both the plan carrying it forward and the execute finding the photo's
+workspace copy gone check the place so.
+:::
+
+:::{bld} The shape of merge's plan and journal
+:id: BLD-merge_record_shape
+:status: ruled
+:realises: RUL-merge_unreadable_record_stops
+
+Merge SHALL read as unreadable a plan whose `destinations` is not an object of objects each holding a `files` list of
+objects that name their `by_dest_source`, and any `library_target`, as text, or whose `depends_on` or `totals`, where
+present, is not an object or `blockers` not a list; and a journal whose `operations`, or `placed_sha256` where present,
+is not an object.
+:::
+
+:::{bld} The console's summary of a merge plan merge cannot read
+:id: BLD-console_unreadable_merge_plan
+:status: ruled
+:realises: RUL-merge_unreadable_record_stops
+:uses: BLD-merge_record_shape
+
+Where `photos-30-merge-plan.json` is there and merge would read it as unreadable — it cannot be opened, does not parse as
+a JSON object, holds no `plan_id` or is not in the shape of {need}`BLD-merge_record_shape` — the console's summary of the
+merge plan SHALL show it as a plan with one blocker naming the file and, as the way on, repairing it or restoring it
+from a `-NNN` copy, never `merge plan`, which stops on it; no execution is offered for it. The summaries of prep's and
+geotag's plans name planning again ({need}`BLD-unreadable_plan`), for their planning sets such a plan aside.
 :::
 
 ## 7. Plan / dry-run / execute lifecycle
@@ -159,8 +199,9 @@ fingerprint, the ImageMagick version, and the fingerprints of the folder names a
 :uses: BLD-merge_plan, BLD-merge_move, BLD-merge_journal_resume
 
 Merge's execute SHALL, on its main thread, read the plan, revalidate its `depends_on` and read the journal an earlier
-execute of the plan left — a plan or journal that cannot be read, does not parse as a JSON object or lacks its
-`plan_id` or `operations` stopping it with exit status 2, nothing changed, as such a plan stops the dry run — then
+execute of the plan left — a plan or journal that cannot be read, does not parse as a JSON object, lacks its
+`plan_id` or `operations` or is not in the shape of {need}`BLD-merge_record_shape` stopping it with exit status 2,
+nothing changed, as such a plan stops the dry run — then
 take the snapshots and sweep the temporaries a crash left; then move the photos on a pool of `jobs` workers, each touching only its own photo and
 returning a result; the main thread alone writing the journal, as each result arrives, and sorting the results by path
 before the summary is built.

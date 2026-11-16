@@ -135,6 +135,47 @@ def _read_record(path, required=("plan_id",)):
     return obj
 
 
+def read_merge_plan(path):
+    """The merge plan at `path` in the shape merge reads it in (BLD-merge_record_shape): `destinations` an object whose
+    every value holds a `files` list of objects, each naming its `by_dest_source` and any `library_target` as text;
+    `depends_on` and `totals` objects, `blockers` a list, where present. UnreadableRecord otherwise — a plan that
+    parses in another shape is as unreadable as one that does not parse (RUL-merge_unreadable_record_stops)."""
+    plan = _read_record(path)
+    dests = plan.get("destinations")
+    if not isinstance(dests, dict):
+        raise UnreadableRecord(path, "its destinations are not a JSON object")
+    for name, d in dests.items():
+        files = d.get("files") if isinstance(d, dict) else None
+        if not isinstance(files, list):
+            raise UnreadableRecord(path, f"its destination {name!r} holds no list of files")
+        for f in files:
+            if not (isinstance(f, dict) and isinstance(f.get("by_dest_source"), str)
+                    and isinstance(f.get("library_target"), (str, type(None)))):
+                raise UnreadableRecord(path, f"its destination {name!r} holds a file record of another shape")
+    for key, kind in (("depends_on", dict), ("totals", dict), ("blockers", list)):
+        if key in plan and not isinstance(plan[key], kind):
+            raise UnreadableRecord(path, f"its {key} is not a JSON {'object' if kind is dict else 'list'}")
+    return plan
+
+
+def _read_journal(path):
+    """(operations, placed bytes) of the merge journal at `path`, each a JSON object; UnreadableRecord otherwise."""
+    j = _read_record(path, required=("operations",))
+    ops, placed = j["operations"], j.get("placed_sha256", {})
+    if not isinstance(ops, dict):
+        raise UnreadableRecord(path, "its operations are not a JSON object")
+    if not isinstance(placed, dict):
+        raise UnreadableRecord(path, "its placed_sha256 is not a JSON object")
+    return ops, placed
+
+
+def _journal_placed(ws, plan_id):
+    """{by-dest path: SHA-256} of the files the executes of plan `plan_id` recorded placing
+    (BLD-placed_bytes_journalled); empty where none left a journal."""
+    p = journal_path(ws, plan_id)
+    return _read_journal(p)[1] if os.path.exists(p) else {}
+
+
 def _unreadable_refusal(reporter, err, command):
     """Stop on a record of merge's own it cannot read, naming it (RUL-merge_unreadable_record_stops): exit 2."""
     reporter.error(f"\nMerge cannot {command}: {err.path} cannot be read ({err.error}). Nothing was changed, and "
@@ -182,6 +223,15 @@ class MergeWorkflow:
         workspace lock, BEFORE main() acquires the library lock (RUL-library_confirmed_before_lock) — so no
         `.photos-merge.lock` is ever dropped into a directory that is not a blessed library."""
         blockers, warnings, info = [], [], {}
+        if not self.shape_passes(blockers, warnings):
+            return blockers, warnings, info
+        return self._preflight_rest(blockers, warnings, info)
+
+    def shape_passes(self, blockers, warnings):
+        """The preflight's first steps, each stopping it: the seal, the initialization mark, a link at the top level,
+        the configuration read and checked (loaded into CONFIG), a missing managed folder, a misplaced top-level entry.
+        True when all pass — the workspace one whose folders are known, which the workspace's check compares before
+        the rest of the preflight validates anything (RUL-workspace_checked_first); else False, the blocker added."""
         ws = self.workspace_root
 
         # 0. Terminal-seal check — sealed means sealed (RUL-sealed_refuses).
@@ -192,47 +242,51 @@ class MergeWorkflow:
                 warnings.append("A likely new dump is present (at the workspace root or in "
                                 f"{folder_name('sources')}/). A sealed workspace is final; move it into "
                                 "a fresh workspace by hand — merge left it exactly where it is.")
-            return blockers, warnings, info
+            return False
 
         # 0a. Initialized, and no misplaced entry at the workspace root (RUL-only_prep_builds_structure;
         # RUL-top_level_only_managed).
         if not os.path.exists(guard_path(ws)):
             blockers.append("Not an initialized workspace (no photos-00-workspace-guard) — "
                             "run prep first: `photos-cartographer prep plan` then `photos-cartographer prep execute`.")
-            return blockers, warnings, info
+            return False
         root_syms = top_level_links(ws)
         if root_syms:
             blockers.append(f"Forbidden symlink at the workspace root: {', '.join(root_syms)}. Symlinks are "
                             "never followed; remove it before merging.")
-            return blockers, warnings, info
+            return False
         # The configuration is read first: it names the managed folders the checks below look for
         # (RUL-control_directory_fixed — it is found without knowing any of them).
         cfg_p = config_path(ws)
         if not os.path.exists(cfg_p):
             blockers.append("Workspace config photos-00-config.json is missing — run prep first: `photos-cartographer prep plan` then `photos-cartographer prep execute`.")
-            return blockers, warnings, info
+            return False
         try:
             load_config(ws)                 # the workspace's file, whole and checked, replaces CONFIG
         except ValueError as e:
             blockers.append(f"Invalid workspace config: {e}")
-            return blockers, warnings, info
+            return False
         except Exception as e:
             blockers.append(f"Workspace config could not be read: {e}")
-            return blockers, warnings, info
+            return False
         # 0c. The managed 0-6 structure must be intact (RUL-missing_folder_blocks) — merge never creates/repairs it.
         struct_missing = missing_managed_folders(ws)
         if struct_missing:
             blockers.append("Workspace is non-conforming: missing managed folder(s): "
                             f"{', '.join(struct_missing)}. Restore the 0-6 structure (merge never "
                             "creates or repairs it) before merging.")
-            return blockers, warnings, info
+            return False
         misplaced = misplaced_top_level_entries(ws)
         if misplaced:
             blockers.append(f"Misplaced entry at workspace root (dumps belong in "
                             f"{folder_name('sources')}/): {', '.join(misplaced)}. The top level holds only "
                             "the managed folders and hidden entries.")
-            return blockers, warnings, info
+            return False
+        return True
 
+    def _preflight_rest(self, blockers, warnings, info):
+        """The preflight past its shape steps (`shape_passes`): the library, the handoff and the photos."""
+        ws = self.workspace_root
         cfg = CONFIG
 
         # 5. Config valid + library_root is a blessed library (RUL-library_place_checked; RUL-library_mark_required).
@@ -713,13 +767,17 @@ class MergeWorkflow:
                 continue
             # One that cannot be read stops the plan, naming it (RUL-merge_unreadable_record_stops): passed over, a
             # photo it placed would block for a reason that is not true — that no earlier plan placed it.
-            plan = _read_record(p)
+            plan = read_merge_plan(p)
             pid = plan["plan_id"]
-            for d in (plan.get("destinations") or {}).values():
-                for rec in d.get("files") or []:
+            # The bytes its executes recorded placing, by path in the workspace (RUL-placed_bytes_confirm_place): its
+            # journal's, the newest, before those the plan carried forward with a record.
+            placed = _journal_placed(ws, pid)
+            for d in plan["destinations"].values():
+                for rec in d["files"]:
                     if rec.get("disposition") != "blocked" and rec.get("library_target"):
+                        h = placed.get(rec.get("by_dest_source")) or rec.get("placed_sha256")
                         found.setdefault(rec.get("content_fingerprint"), []).append(
-                            (rec.get("carried_from_plan") or pid, rec))
+                            (rec.get("carried_from_plan") or pid, dict(rec, placed_sha256=h) if h else rec))
         return found
 
     def _carried_forward(self, e, earlier, blockers, library_root):
@@ -728,8 +786,9 @@ class MergeWorkflow:
         library this plan names; otherwise a blocker naming why. A place in a library the setting has since
         been pointed away from does not count (RUL-earlier_place_in_this_library): the workspace would seal
         naming the new library while the photo sits in the old. Moved by hand to its place in the new
-        library — the same path under it — it is carried forward from there. The library's file is checked by the
-        value the earlier plan placed the photo under: its value under that plan's ImageMagick
+        library — the same path under it — it is carried forward from there. The library's file is checked by
+        `_holds`: by the bytes the earlier execute recorded placing, whatever ImageMagick is in use
+        (RUL-placed_bytes_confirm_place), else by the value the earlier plan placed the photo under
         (BLD-changed_fingerprint_mapped)."""
         if not earlier:
             reason = (f"{e['by_dest_relpath']} is no longer in the workspace and no earlier merge plan "
@@ -738,7 +797,7 @@ class MergeWorkflow:
             outside = []          # (plan id, earlier record outside this library, its place in this library)
             for pid, rec in earlier:
                 if _lies_inside(rec["library_target"], library_root):
-                    if self._verify_fp(rec["library_target"], _library_value(rec)):
+                    if self._holds(rec["library_target"], rec):
                         return dict(rec, carried_from_plan=pid)
                 else:
                     name = rec.get("resolved_name") or e["final_name"]
@@ -746,10 +805,10 @@ class MergeWorkflow:
                             else os.path.join(library_root, name))
                     outside.append((pid, rec, here))
             for pid, rec, here in outside:                # moved by hand into this library's place
-                if self._verify_fp(here, _library_value(rec)):
+                if self._holds(here, rec):
                     return dict(rec, library_target=here, carried_from_plan=pid)
             held = next(((rec, here) for _pid, rec, here in outside
-                         if self._verify_fp(rec["library_target"], _library_value(rec))), None)
+                         if self._holds(rec["library_target"], rec)), None)
             if held:
                 rec, here = held
                 reason = (f"{e['by_dest_relpath']} was moved by an earlier merge plan to {rec['library_target']}, "
@@ -939,7 +998,7 @@ class MergeWorkflow:
             emit_next_step(reporter, "`merge plan` first to build the plan.")
             return 2
         try:
-            plan = _read_record(p)
+            plan = read_merge_plan(p)
         except UnreadableRecord as e:
             return _unreadable_refusal(reporter, e, "dry-run")
         stale = self.revalidate_plan_deps(ws, plan)
@@ -980,6 +1039,21 @@ class MergeWorkflow:
         r = self._fingerprint_library_file(path)
         return r.get("status") == "valid" and r.get("value") == expected_fp
 
+    def _holds(self, path, rec):
+        """True iff the library file at `path` holds the photo of plan record `rec`, which an earlier execute placed:
+        byte for byte the file that execute recorded placing — whatever ImageMagick is in use now, for another
+        version may take another fingerprint of it (RUL-placed_bytes_confirm_place) — or, its bytes unrecorded (a
+        move that finished without its journal entry) or since changed, fingerprinting to the value the photo was
+        placed under (BLD-changed_fingerprint_mapped)."""
+        h = rec.get("placed_sha256")
+        if h:
+            try:
+                if sha256_file(path) == h:
+                    return True
+            except OSError:
+                return False
+        return self._verify_fp(path, _library_value(rec))
+
     def _library_match(self, src_abs, lib_path, fp):
         """How the library file at `lib_path` stands to the workspace's photo at `src_abs`, checked just before the
         photo's workspace copy would be removed because the library holds it: "bytes" — it fingerprints to the
@@ -1004,14 +1078,21 @@ class MergeWorkflow:
     def _move_file(self, ws, library_root, rec):
         """Apply one planned move (`_place_file`), an error in it blocking this photo alone: recorded like any
         other failed placement, its photo left in by-dest, the run going on to its summary
-        (BLD-merge_failed_placement, RUL-merge_outcome_recorded)."""
+        (BLD-merge_failed_placement, RUL-merge_outcome_recorded). A photo the library holds comes back with the
+        SHA-256 of its library file, for the journal (BLD-placed_bytes_journalled)."""
         try:
-            return self._place_file(ws, rec)
+            out = self._place_file(ws, rec)
         except Exception as e:
             src_rel = rec.get("by_dest_source")
             return {"by_dest_source": src_rel, "library_path": rec.get("library_target"),
                     "content_fingerprint": rec.get("content_fingerprint"), "final_kind": "blocked",
                     "removed": False, "newly": False, "blocker": f"{src_rel}: move failed ({e})"}
+        if out["removed"]:
+            try:
+                out["placed_sha256"] = sha256_file(out["library_path"])
+            except OSError:
+                pass        # unrecorded: a later plan confirms the place by its fingerprint, as a move never journalled
+        return out
 
     def _place_file(self, ws, rec):
         """Apply one planned move as the place-then-remove (BLD-merge_move), with state-derivation resume
@@ -1041,8 +1122,9 @@ class MergeWorkflow:
             return out
         if not os.path.exists(src_abs):
             # Done by an earlier run, or by hand: counted done only while the library still holds it,
-            # whatever the journal or the plan says (RUL-resume_rechecks_library).
-            if self._verify_fp(target, fp):
+            # whatever the journal or the plan says (RUL-resume_rechecks_library) — by the bytes an earlier execute
+            # recorded placing, where this plan carried them forward (RUL-placed_bytes_confirm_place).
+            if self._holds(target, rec):
                 out["final_kind"] = self._plan_kind(disp)
                 out["removed"] = True
                 return out
@@ -1126,7 +1208,7 @@ class MergeWorkflow:
         if not os.path.exists(p):
             return {"status": "no_plan"}
         try:
-            plan = _read_record(p)
+            plan = read_merge_plan(p)
         except UnreadableRecord as e:
             return {"status": "unreadable", "error": e}
         stale = self.revalidate_plan_deps(ws, plan)
@@ -1139,12 +1221,10 @@ class MergeWorkflow:
         # (RUL-merge_unreadable_record_stops). No outcome is read from it: a photo gone from by-dest is checked in
         # the library whatever the journal says (RUL-resume_rechecks_library).
         jpath = journal_path(ws, plan["plan_id"])
-        journal = {}
+        journal, placed = {}, {}
         if os.path.exists(jpath):
             try:
-                journal = _read_record(jpath, required=("operations",))["operations"]
-                if not isinstance(journal, dict):
-                    raise UnreadableRecord(jpath, "its operations are not a JSON object")
+                journal, placed = _read_journal(jpath)
             except UnreadableRecord as e:
                 return {"status": "unreadable", "error": e}
 
@@ -1193,8 +1273,11 @@ class MergeWorkflow:
                         # the record of every move confirmed before it.
                         if r["removed"]:
                             journal[r["by_dest_source"]] = "confirmed"
+                            if r.get("placed_sha256"):              # BLD-placed_bytes_journalled
+                                placed[r["by_dest_source"]] = r["placed_sha256"]
                             write_json_artifact(jpath, {"journal_version": 1, "plan_id": plan["plan_id"],
-                                                        "operations": journal, "updated_at": now_iso})
+                                                        "operations": journal, "placed_sha256": placed,
+                                                        "updated_at": now_iso})
                 except KeyboardInterrupt:
                     # Ctrl-C: drop pending moves and stop waiting instead of letting the `with` exit
                     # drain them (shutdown(wait=True)). Files already moved are confirmed in the journal
@@ -1877,6 +1960,16 @@ def _run_locked_workflow(command, ws, jobs=None, accept_changes=None):
             reporter.error(vol_err)
             return 2
         wf = MergeWorkflow(ws)
+        # The workspace as the last execution left it (RUL-workspace_checked_first), before the preflight validates
+        # the library, the handoff or the photos — as geotag checks it before its preflight. Made where the
+        # preflight's first steps find it initialized, unsealed, its configuration read and its top level as it should
+        # be, so its folders are known; otherwise the preflight refuses below, naming why. A workspace with no record
+        # is refused (RUL-record_needed).
+        workspace_changes = []
+        if wf.shape_passes([], []):
+            workspace_changes, stop = check_workspace(ws, "merge", command, accept_changes)
+            if stop:
+                return stop
         blockers, warnings, info = wf.preflight()
         for w in warnings:
             reporter.warn(f"  Warning: {w}")
@@ -1888,12 +1981,6 @@ def _run_locked_workflow(command, ws, jobs=None, accept_changes=None):
             emit_next_step(reporter, "resolve the blocker(s) above — usually `geotag finalize`, then "
                                      f"`merge init-library` to bless the library — and re-run `merge {command}`.")
             return 2
-        # The workspace as the last execution left it (RUL-workspace_checked_first): the preflight has found it
-        # initialized, unsealed and its configuration read, so its folders are known; a workspace with no record is
-        # refused (RUL-record_needed).
-        workspace_changes, stop = check_workspace(ws, "merge", command, accept_changes)
-        if stop:
-            return stop
 
         # Preflight confirmed the .photos-library marker — safe to take the library-side lock now
         # (RUL-library_confirmed_before_lock: workspace lock, then config+marker, then library lock).

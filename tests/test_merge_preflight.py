@@ -178,6 +178,7 @@ def test_imagemagick_absent_stops_merge(tmp_path, monkeypatch, capsys, command, 
         assert not any("ImageMagick" in b for b in blockers), blockers
         return
     assert len(blockers) == 1 and "ImageMagick" in blockers[0], blockers
+    utils.write_workspace_record(str(ws))       # the state prep's execution left, which the check compares first
     before = sorted(str(p) for p in tmp_path.rglob("*"))
     assert merge._run_locked_workflow(command, str(ws)) == 2
     out = capsys.readouterr()

@@ -164,6 +164,22 @@ photo — a record the user would rely on to find it. Fingerprinting the place a
 a resume.
 :::
 
+:::{rat} A placed file is known by its bytes, which no ImageMagick reads differently
+:id: RAT-placed_bytes_outlive_engine
+:status: ruled
+:forced: no
+:follows_from: RAT-library_is_evidence_of_move, RAT-one_version_per_comparison
+:justifies: RUL-placed_bytes_confirm_place
+
+A merge left partial may be finished months later, and ImageMagick may be upgraded in between — the very case merge
+takes prep's fingerprints again for. A photo already placed is then fingerprinted under the new version and compared
+with the value the earlier plan recorded under the old; where the upgrade changed it, the photo would block as gone from
+its place, a reason that is not true, and the workspace could never seal while that version is in use. Merge placed the
+file itself, so it can know it by what no version reads differently: the digest of its bytes, taken as it lands. A
+place still holding those bytes holds the photo. Where no digest was recorded — a move that finished without its
+journal entry — or the library's copy has since been rewritten, the fingerprint is the evidence left, as before.
+:::
+
 :::{rat} A record that cannot be read is not an empty one
 :id: RAT-merge_unreadable_record_not_empty
 :status: ruled

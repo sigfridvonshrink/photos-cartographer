@@ -1353,19 +1353,24 @@ def test_a_new_fingerprint_is_merged_and_mapped_in_merges_package(tmp_path, monk
         assert ".photos-ingest/photos-35-fingerprint-map.json" in tar.getnames()
 
 
-@pytest.mark.spec("BLD-fingerprint_map", "BLD-changed_fingerprint_mapped", "RUL-replan_carries_placed",
+@pytest.mark.parametrize("journalled", [True, False], ids=["journalled", "never_journalled"])
+@pytest.mark.spec("BLD-fingerprint_map", "BLD-changed_fingerprint_mapped", "RUL-replan_carries_placed", "RUL-merge_merges_changed_fingerprint",
                   "RUL-changed_fingerprint_mapping_recorded",
                   test="TST-merge_execute-a_photo_merged_under_a_new_fingerprint_is_carried_forward_by_it")
-def test_a_photo_merged_under_a_new_fingerprint_is_carried_forward_by_it(tmp_path, monkeypatch):
-    """A partial merge moved a photo under its new value; the re-plan finds it in the library by that value, carries
-    it forward, and the merge that finishes maps it."""
+def test_a_photo_merged_under_a_new_fingerprint_is_carried_forward_by_it(tmp_path, monkeypatch, journalled):
+    """A partial merge moved a photo under its new value; the re-plan finds it in the library — by the bytes the
+    journal recorded placing, or, the move never journalled, by that new value — carries it forward, and the merge
+    that finishes maps it."""
     ws, lib = _ws(tmp_path, [_changed_under_new_engine({"fp": "A", "dest": "Trip", "final_name": "a.jpg"}, "A2"),
                              {"fp": "B", "dest": "Trip", "final_name": "b.jpg"}],
                   library_files=[{"fp": "FAIL", "dest": "Trip", "name": "b.jpg"}])
     monkeypatch.setattr(merge, "get_imagemagick_version", lambda: "newer")
     assert merge._run_locked_workflow("plan", str(ws)) == 2
+    pid = json.load(open(merge.merge_plan_path(str(ws))))["plan_id"]
     assert merge._run_locked_workflow("execute", str(ws)) == 3          # a moved, b blocked
     assert not os.path.exists(_src(ws, "Trip", "a.jpg"))
+    if not journalled:
+        os.remove(utils.journal_path(str(ws), pid))                     # the confirmation never written
     open(os.path.join(str(lib), "Trip", "b.jpg"), "wb").write(_fp_bytes("OTHER"))
     assert merge._run_locked_workflow("plan", str(ws)) == 0
     [a] = [f for d in json.loads(open(_ctl(ws, "photos-30-merge-plan.json")).read())["destinations"].values()
@@ -1374,6 +1379,62 @@ def test_a_photo_merged_under_a_new_fingerprint_is_carried_forward_by_it(tmp_pat
     assert merge._run_locked_workflow("execute", str(ws)) == 0
     fmap = json.loads(open(_ctl(ws, "photos-35-fingerprint-map.json")).read())
     assert list(fmap["photos"]) == ["A2"]
+
+
+@pytest.mark.spec("RUL-placed_bytes_confirm_place", "BLD-placed_bytes_journalled", "RUL-retaken_fingerprint_same_photo",
+                  "RUL-replan_carries_placed", "RUL-resume_rechecks_library",
+                  test="TST-merge_execute-a_photo_placed_before_imagemagick_changed_is_confirmed_by_its_bytes")
+def test_a_photo_placed_before_imagemagick_changed_is_confirmed_by_its_bytes(tmp_path, monkeypatch):
+    """A partial merge placed a.jpg; ImageMagick is then upgraded, and the new version reads every photo to another
+    value. The re-plan confirms a.jpg's place by the bytes the execute recorded placing there — not by a fingerprint
+    the new version takes differently — carries it forward, and the merge that finishes seals."""
+    ws, lib = _ws(tmp_path, [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"},
+                             {"fp": "B", "dest": "Trip", "final_name": "b.jpg"}],
+                  library_files=[{"fp": "FAIL", "dest": "Trip", "name": "b.jpg"}])
+    version = {"now": "older"}
+    monkeypatch.setattr(merge, "get_imagemagick_version", lambda: version["now"])
+    assert merge._run_locked_workflow("plan", str(ws)) == 2
+    first = json.load(open(merge.merge_plan_path(str(ws))))["plan_id"]
+    assert merge._run_locked_workflow("execute", str(ws)) == 3          # a.jpg placed, b.jpg blocked
+    a_lib = os.path.join(str(lib), "Trip", "a.jpg")
+    journal = json.load(open(utils.journal_path(str(ws), first)))
+    assert journal["placed_sha256"] == {"6-photos-by-dest/Trip/a.jpg": utils.sha256_file(a_lib)}
+
+    by_content = merge.MergeWorkflow._fingerprint_library_file
+
+    def upgraded(self, abs_path):                                       # the new version: every value another
+        r = by_content(self, abs_path)
+        return dict(r, value=r["value"] + "'") if r.get("value") else r
+    version["now"] = "newer"
+    monkeypatch.setattr(merge.MergeWorkflow, "_fingerprint_library_file", upgraded)
+    with open(os.path.join(str(lib), "Trip", "b.jpg"), "wb") as f:
+        f.write(_fp_bytes("OTHER"))                                      # b.jpg's own blocker cleared
+    assert merge._run_locked_workflow("plan", str(ws)) == 0
+    plan = json.load(open(merge.merge_plan_path(str(ws))))
+    assert not plan["blockers"], plan["blockers"]
+    a = next(r for d in plan["destinations"].values() for r in d["files"] if r["by_dest_source"].endswith("a.jpg"))
+    assert a["carried_from_plan"] == first and a["placed_sha256"] == utils.sha256_file(a_lib)
+    assert merge._run_locked_workflow("execute", str(ws)) == 0
+    assert utils.is_sealed(str(ws))
+    log = json.loads(open(_ctl(ws, "photos-35-merge-log.json")).read())
+    assert log["photos"]["A"]["library_path"] == a_lib
+
+
+@pytest.mark.spec("RUL-merge_merges_changed_fingerprint", "BLD-changed_fingerprint_mapped", "BLD-merge_move",
+                  test="TST-merge_execute-a_mapped_photo_whose_place_holds_it_at_execute_is_already_present")
+def test_a_mapped_photo_whose_place_holds_it_at_execute_is_already_present(tmp_path, monkeypatch):
+    """A photo merged under its new value whose place is found taken at execute by the very same file is compared with
+    it by that new value: already present, its workspace copy removed, the merge whole — never blocked as other
+    content for a value the library's file was not fingerprinted under."""
+    ws, lib = _ws(tmp_path, [_changed_under_new_engine({"fp": "A", "dest": "Trip", "final_name": "a.jpg"}, "A2")])
+    monkeypatch.setattr(merge, "get_imagemagick_version", lambda: "newer")
+    assert merge._run_locked_workflow("plan", str(ws)) == 0
+    a_lib = os.path.join(str(lib), "Trip", "a.jpg")
+    os.makedirs(os.path.dirname(a_lib), exist_ok=True)
+    shutil.copyfile(_src(ws, "Trip", "a.jpg"), a_lib)                    # the place taken by the same bytes since
+    assert merge._run_locked_workflow("execute", str(ws)) == 0
+    assert _summary(ws)["totals"]["already_present"] == 1
+    assert not os.path.exists(_src(ws, "Trip", "a.jpg")) and utils.is_sealed(str(ws))
 
 
 def _rows(db, skip=()):
@@ -1964,13 +2025,14 @@ def test_either_way_out_of_a_library_pointed_away_from_finishes_the_merge(tmp_pa
 
 @pytest.mark.parametrize("record, command", [("earlier plan", "plan"), ("set-aside plan", "plan"),
                                              ("plan", "dry-run"), ("plan", "execute"), ("journal", "execute")])
-@pytest.mark.parametrize("damage", ["garbled", "not an object"])
+@pytest.mark.parametrize("damage", ["garbled", "not an object", "another shape"])
 @pytest.mark.spec("RUL-merge_unreadable_record_stops", "BLD-merge_carry_forward", "BLD-merge_journal_resume",
+                  "BLD-merge_record_shape", "BLD-merge_execute",
                   test="TST-merge_execute-a_record_of_merges_own_it_cannot_read_stops_it")
 def test_a_record_of_merges_own_it_cannot_read_stops_it(tmp_path, capsys, record, command, damage):
-    """A plan of merge's own — the saved one, or one a re-plan set aside — or its journal that cannot be read stops
-    the command reading it (exit 2), naming the file, which is left as it was: never taken for an empty one, nothing
-    moved, no plan or summary written."""
+    """A plan of merge's own — the saved one, or one a re-plan set aside — or its journal that cannot be read, or
+    that parses in another shape than merge reads it in, stops the command reading it (exit 2), naming the file, which
+    is left as it was: never taken for an empty one, nothing moved, no plan or summary written, no traceback."""
     ws, lib = _ws(tmp_path, [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"},
                              {"fp": "B", "dest": "Trip", "final_name": "b.jpg"}],
                   library_files=[{"fp": "FAIL", "dest": "Trip", "name": "b.jpg"}])
@@ -1984,8 +2046,14 @@ def test_a_record_of_merges_own_it_cannot_read_stops_it(tmp_path, capsys, record
         target = merge.journal_path(str(ws), plan_id)
     else:
         target = merge.merge_plan_path(str(ws))
+    if damage == "another shape":           # parses, its plan id or operations there, in a shape merge cannot read
+        obj = json.load(open(target))
+        obj.update({"placed_sha256": []} if record == "journal" else {"destinations": []})
+        text = json.dumps(obj)
+    else:
+        text = "{torn" if damage == "garbled" else "[]"
     with open(target, "w") as f:
-        f.write("{torn" if damage == "garbled" else "[]")
+        f.write(text)
     capsys.readouterr()
 
     def state():
