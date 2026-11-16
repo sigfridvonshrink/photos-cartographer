@@ -4,7 +4,7 @@
 
 - **What this is:** [`README.md`](README.md). **The record:** [`HISTORY.md`](HISTORY.md).
 
-*Open items: **17** — 7, 11, 14, 18, 21, 22, 27, 28, 30 to 32, 40, 43, 45, 47 to 49.* 🛑 Numbers are never reused; the next is **53**.
+*Open items: **18** — 7, 11, 14, 18, 21, 22, 27, 28, 30 to 32, 40, 43, 45, 47 to 49, 53.* 🛑 Numbers are never reused; the next is **54**.
 
 ---
 
@@ -242,6 +242,19 @@ format holding `%z` reads differently in prep and geotag, and names in the hour 
 
 **Open:** order by sub-second then the suffix already held, one suffix across the extensions of a stem; refuse a
 format whose fields read differently with and without a zone.
+
+### 53. Videos sorted into destinations, and geotagged
+
+**Why:** videos stay in videos by date, never sorted, so geotag gives them no place and no corrected time: their
+names keep the camera's clock (stated as final by BACKLOG 43), they carry no position, and merge leaves them out of
+the library. A trip's videos are as much the trip as its photos. The owner wants them sorted into destinations and
+geotagged as photos are (2026-11-16).
+
+**Open:** whether videos are sorted into photos by destination beside the photos or into a destination tree of
+their own; which time and position tags a video holds that exiftool writes safely, per container (MP4, MOV, MTS,
+AVI), and whether a video it cannot write is held as a photo is (BACKLOG 25's way out); whether a video's own clock
+is the photo camera's (the same body) or its own camera group; how a video's span (start to end) is placed — at its
+start, as one point; and what merge does with them.
 
 ### 47. What the country choice leaves open
 
