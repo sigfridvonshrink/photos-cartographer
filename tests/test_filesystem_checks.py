@@ -288,8 +288,11 @@ _NEED = -(-_SIZE * 105 // 100)                                       # and the d
 
 
 @pytest.mark.spec("RUL-library_space_checked", "RUL-library_space_short_stops", "RUL-library_space_short_named",
+                  "RUL-merge_outcome_recorded", "BLD-library_space", "BLD-merge_records",
                   test="TST-filesystem_checks-execute_stops_short_of_room")
 def test_execute_stops_with_nothing_moved_when_the_library_is_short_of_room(tmp_path, monkeypatch, capsys):
+    """A library short of room stops the execution with nothing moved, and the summary records it as refused, the
+    shortfall its reason."""
     ws, lib = _merge_ws(tmp_path, _TWO)
     assert merge._run_locked_workflow("plan", str(ws)) == 0
     asked = _library_elsewhere(monkeypatch, lib, _NEED - 1)
@@ -301,7 +304,12 @@ def test_execute_stops_with_nothing_moved_when_the_library_is_short_of_room(tmp_
     assert asked == [str(lib)]
     assert _state(lib, but=(".photos-merge.lock",)) == lib_before   # nothing moved
     assert os.path.exists(_src(ws, "Trip", "a.jpg")) and os.path.exists(_src(ws, "Trip", "b.jpg"))
-    assert not os.path.exists(merge.merge_summary_path(str(ws)))
+    s = _summary(ws)
+    assert s["status"] == "rejected" and s["snapshot"] is None
+    assert s["totals"] == {"placed_new": 0, "already_present": 0, "renamed_for_library": 0,
+                           "removed_from_by_dest": 0, "blocked": 0}
+    assert len(s["failures"]) == 1 and f"{_NEED - 1} bytes free" in s["failures"][0]
+    assert not utils.is_sealed(str(ws))
 
 
 @pytest.mark.spec("RUL-library_space_checked", test="TST-filesystem_checks-execute_counts_only_what_is_left")

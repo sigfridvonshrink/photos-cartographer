@@ -225,9 +225,12 @@ tell a refusal from a run that found nothing to do; a recorded outcome says whic
 :follows_from: RAT-merge_outcome_decides_next, RAT-refused_merge_clean
 :justifies: RUL-merge_summary_only_for_execution
 
-The summary is the record of an execution: what it placed, what it left and how it ended. A run stopped at the door
-executed nothing, and the terminal has said why; a summary written for it would put a record of nothing over that of
-the last merge that ran. An interrupted run reached no end to record: its journal holds what it confirmed, and the
+The summary is the record of an execution: what it placed, what it left and how it ended. An execution that took its
+plan as current and then could not make its first move — no required snapshot, no room in the library — was refused
+for what the machine lacked, not for what the plan or the workspace held; its summary records the refusal and its
+reason, so a fix with nothing to undo is told from a run that found nothing to do. A run stopped at the door — its plan
+stale or unreadable, its preflight refused — executed nothing, and the terminal has said why; a summary written for it
+would put a record of nothing over that of the last merge that ran. An interrupted run reached no end to record: its journal holds what it confirmed, and the
 run that finishes it writes the summary.
 :::
 

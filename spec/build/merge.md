@@ -88,8 +88,8 @@ photos by destination and whose place is free, by the filesystem of the nearest 
 out the workspace's own; and compare each total, raised by `merge.library_space_margin_percent` percent of it and
 rounded up to a whole byte, with that filesystem's free space as `shutil.disk_usage` gives it,
 naming the library where it lies there. Execute calls it after revalidating the plan and reading the journal, before
-the snapshots, and a shortfall stops it with exit status 2, no summary written; the plan calls it once written,
-warning of each.
+the snapshots, and a shortfall stops it with exit status 2, the summary written `rejected` with each shortfall among its
+failures ({need}`BLD-merge_records`); the plan calls it once written, warning of each.
 :::
 
 ## 3. Configuration and validation

@@ -386,10 +386,11 @@ taking it for an empty one.
 :refines: RUL-merge_records_landing
 :uses: DEF-merge
 
-Merge SHALL record whether its run succeeded whole, in part or not at all, or was refused before changing anything.
+Merge SHALL record whether its execution succeeded whole, in part or not at all, or stopped before its first move for
+want of a required snapshot or of room in the library.
 :::
 
-:::{rul} Merge's summary is written only for an execution
+:::{rul} No other stop writes merge's summary
 :id: RUL-merge_summary_only_for_execution
 :status: ruled
 :criticality: low
@@ -397,8 +398,9 @@ Merge SHALL record whether its run succeeded whole, in part or not at all, or wa
 :refines: RUL-merge_outcome_recorded
 :uses: DEF-merge
 
-Merge SHALL write no summary for a run stopped before its execution began — by a precondition, or a plan or journal it
-would not use — nor for a run interrupted, leaving the summary an earlier run wrote as it was.
+Merge SHALL write no summary for a run stopped by anything but the want of a required snapshot or of room in the
+library — a stale plan, a plan or journal it cannot read, or any other refusal of its preflight — nor for a run
+interrupted, leaving the summary an earlier run wrote as it was.
 :::
 
 :::{rul} Merge tells how its run ended
