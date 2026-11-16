@@ -235,10 +235,13 @@ A day is a camera's day by its own clock, so a camera left on home time abroad, 
 the middle of an outing: the outing becomes two days, and the half with no anchor asks for its offset and then for a
 drift confirmation, though the other half settled the clock. The offset the camera's own GPS gave the day before or
 after, in the same place, is a far better guess than the zone's — but it is another day's, and a clock may have been
-set overnight. So it is offered, never applied: the user accepts it, and the drift check then sets it against the
-tracks by the day's own photos, as any offset the day's GPS does not support. Bounding the time between the two days
-would need a new setting and guess at a night's length; the user's acceptance and the check are the bound. The day
-stays the unit: its decision is its own, and taking the neighbour's offset joins nothing.
+set overnight. So it is offered, never applied. But asking for it twice — an acceptance, then a confirmation on the
+tracks of the same offset — is the very cost the proposal was to spare, and the second answer is the better one: it is
+asked once, as a timezone's guess is. Where tracks lie by the day's photos, it goes to the check against them as it
+stands, and the confirmation there, made with the track before the user's eyes, is its acceptance; where none do,
+there is nothing to check it against, and the user accepts it as proposed. Bounding the time between the two days
+would need a new setting and guess at a night's length; the user's answer and the check are the bound. The day stays
+the unit: its decision is its own, and taking the neighbour's offset joins nothing.
 :::
 
 :::{rat} A choice from the camera's positions is evidence, and the user's word

@@ -86,11 +86,17 @@ test("an own position the agreed offset contradicts: kept unless the track's is 
   assert.equal(app.refInvalid(ref), false);
 });
 
-test("a day offered the day next to it: accepted as any proposal, by the offset it names, then checked on the tracks", () => {
+test("a day offered the day next to it: asked once — in the Drift view with tracks by it, else accepted by its offset", () => {
   const p = { proposal_source: "neighbour_day", proposed_offset_seconds: -3600,
     neighbour_day: { day: "2024-07-03", bucket: "C@2024-07-03" }, confidence: "review_required" };
   assert.match(app.neighbourDayNote(p), /3 Jul 2024/);
-  assert.match(app.neighbourDayNote(p), /Drift view/);
+  // tracks by its photos: it went to the drift check unconfirmed — nothing to accept here
+  const unconfirmed = app.neighbourDayNote(p, { offset_seconds: -3600, source: "neighbour_day_unconfirmed" });
+  assert.match(unconfirmed, /Drift view/);
+  assert.match(unconfirmed, /nothing to accept here/);
+  // none: accepted here, the Drift view not named
+  assert.match(app.neighbourDayNote(p, ""), /accept it/);
+  assert.doesNotMatch(app.neighbourDayNote(p, ""), /Drift view/);
   const cell = { proposal: p, user_decision: { ...app.acceptFields(p, true), manual_offset_seconds: "" } };
   assert.equal(app.acceptHolds(cell), true);
   assert.equal(app.acceptHolds({ ...cell, user_decision: { ...cell.user_decision, accepted_offset_seconds: -3601 } }), false);

@@ -1549,12 +1549,17 @@ function offsetCellNotes(c) {
   return out;
 }
 // A day with no anchor of its own offered the offset the camera's GPS gave the day before or after it here (photos-21
-// proposal_source "neighbour_day", BLD-neighbour_day_proposal): to accept, then checked in the Drift view. Pure.
-function neighbourDayNote(p) {
+// proposal_source "neighbour_day", BLD-neighbour_day_proposal): asked once, as a timezone's guess is — with tracks by
+// its photos it takes effect unconfirmed and is confirmed in the Drift view, nothing to accept here; else accepted
+// here. Pure.
+function neighbourDayNote(p, eff) {
   const n = (p && p.neighbour_day) || {};
   return `No photo of this day has its own position, but the camera's GPS fixed its clock on ${fmtDate(n.day)} here: ` +
-    `${fmtOffset(p.proposed_offset_seconds)}. A camera's midnight in the middle of an outing splits it in two — accept it if ` +
-    "the clock was not set in between; the Drift view then checks it on the tracks.";
+    `${fmtOffset(p.proposed_offset_seconds)}. A camera's midnight in the middle of an outing splits it in two — ` +
+    ((eff && eff.source) === "neighbour_day_unconfirmed"
+      ? "tracks lie by these photos, so it is checked against them: confirm it in the Drift view if the clock was not " +
+        "set in between; nothing to accept here."
+      : "accept it if the clock was not set in between.");
 }
 // Why the times the photos' own GPS fixes recorded say nothing of the clock here (gps_time_set_aside,
 // BLD-gps_time_proposal): a stale fix repeating its time, or readings that disagree.
@@ -1851,7 +1856,7 @@ function offsetProposalBlock(ref, p) {
   }
   if (p.proposal_source === "neighbour_day") return el("div", { class: "pblock" },
     el("h3", {}, "Proposal — the day next to it"), el("div", { class: "prop-head" }, fmtOffset(p.proposed_offset_seconds)),
-    el("div", { class: "hint" }, neighbourDayNote(p)));
+    el("div", { class: "hint" }, neighbourDayNote(p, workCell(ref)?.effective_time_anchor)));
   if (p.proposal_source !== "gpx_self_anchor") return jsonBlock("Proposal", p);
   const tz = previewTz(ref.dest)?.tz;
   const wrap = el("div", { class: "pblock" }, el("h3", {}, "Proposal — suggested clock correction"),

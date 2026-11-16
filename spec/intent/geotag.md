@@ -518,21 +518,22 @@ by the camera's own GPS.
 :anti: yes
 :verify: required
 :refines: RUL-neighbour_day_offset_proposed
-:uses: DEF-decision
+:uses: DEF-decision, DEF-tracks
 
-An offset proposed from a neighbouring day SHALL NOT take effect until the user accepts it.
+An offset proposed from a neighbouring day SHALL NOT take effect until the user accepts it — a confirmation of it
+against the tracks counting as its acceptance.
 :::
 
-:::{rul} A neighbouring day's offset is checked against the tracks
+:::{rul} A neighbouring day's offset is asked about once
 :id: RUL-neighbour_day_offset_drift_checked
 :status: ruled
 :criticality: high
 :verify: required
 :refines: RUL-neighbour_day_offset_needs_acceptance
-:uses: RUL-unanchored_offset_confirmed
+:uses: RUL-unanchored_offset_confirmed, RUL-timezone_offset_asked_once
 
-An accepted offset from a neighbouring day SHALL be confirmed against the tracks, as any offset the day's own GPS does
-not support is.
+An offset proposed from a neighbouring day SHALL be asked about once, as a guessed offset is: at the check against the
+tracks where tracks lie by the day's photos, and by acceptance where none do.
 :::
 
 :::{rul} No bound is set on the time between the two days

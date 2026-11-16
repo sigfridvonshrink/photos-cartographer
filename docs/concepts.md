@@ -279,8 +279,9 @@ Each day's offset is proposed, in this order:
 4. **From the camera's own GPS, the day before or after** — where the day has no position of its own here and none
    was shared, the offset the camera's GPS fixed the day before (else after) in this destination. A camera left on
    home time abroad, or a night shoot, has its midnight mid-outing: the half after it is a day of its own, and the
-   half before settled the clock. Only offered — the clock may have been set overnight: you accept it, and the drift
-   check then confirms it on the tracks. The day keeps its own decision.
+   half before settled the clock. Only offered — the clock may have been set overnight — and asked once, as the
+   timezone's guess is: with tracks by the photos it goes straight to the drift check, where you confirm it on them;
+   with none, you accept it here. The day keeps its own decision.
 5. **From the offset the photos record** — a recent camera writes, with each time, the UTC offset its
    clock was set to (`OffsetTimeOriginal`). Where the day's photos here that record one all record the
    same, the clock offset is its negative: a camera left on home time (+01:00) in Japan is proposed

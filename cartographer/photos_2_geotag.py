@@ -1451,8 +1451,9 @@ class GeotagWorkflow:
         `timezone_naive` or `manual_required`, none shared from the same day elsewhere — is proposed the offset of the day
         before, else the day after, of the same camera in the same destination where that day's offset was anchored by
         the camera's own GPS (BLD-neighbour_day_proposal): on its tracks, or by its fixes' times; of a day split at a
-        change of the clock, the part next to it. However far apart in time; to accept, then checked against the
-        tracks by the drift check (RUL-neighbour_day_offset_drift_checked). The day keeps its own cell."""
+        change of the clock, the part next to it. However far apart in time; asked about once, as a timezone's guess
+        is — with tracks by the day's photos at the drift check, else by acceptance here
+        (RUL-neighbour_day_offset_drift_checked). The day keeps its own cell."""
         for (dest, bucket), (group, g, prior_cell, anchor_frames, rep_naive, date, day, sel, tz) in sorted(recall.items()):
             cells = destinations[dest]["camera_group_time_decisions"]
             cell = cells.get(bucket) or {}
@@ -1665,7 +1666,8 @@ class GeotagWorkflow:
                         "confidence": "high" if shared["applied_itself"] else "review_required"}
         if proposal is None and neighbour is not None:
             # no GPS evidence of its own that day, none shared from the same day: the offset the camera's own GPS
-            # gave the day before or after it here, to accept and then check on the tracks (BLD-neighbour_day_proposal)
+            # gave the day before or after it here, asked about once: at the drift check where tracks lie by the
+            # photos, else by acceptance (BLD-neighbour_day_proposal)
             proposal = {"proposal_source": "neighbour_day", "proposed_offset_seconds": neighbour["offset_seconds"],
                         "neighbour_day": {"day": neighbour["day"], "bucket": neighbour["bucket"]},
                         "confidence": "review_required"}
@@ -1792,16 +1794,18 @@ class GeotagWorkflow:
         elif is_shared and shared["applied_itself"]:
             effective = {"offset_seconds": proposal["proposed_offset_seconds"], "source": "same_day_auto"}
             decision_mode = "auto_resolved"
-        elif proposal.get("proposal_source") in self._GUESSED_PROPOSALS and photos:
-            # A guess — the timezone's, or the offset the photos record — is asked about once, where it can be
-            # checked: with tracks by the photos it goes to the drift check as it stands, and the confirmation
-            # there is its acceptance (BLD-timezone_naive_offset, BLD-recorded_offset_proposal) — nothing is planned
-            # until then. With no track to check it against, it is accepted here.
+        elif (proposal.get("proposal_source") in self._GUESSED_PROPOSALS or is_neighbour) and photos:
+            # A guess — the timezone's, the offset the photos record, or the day next to it's — is asked about once,
+            # where it can be checked: with tracks by the photos it goes to the drift check as it stands, and the
+            # confirmation there is its acceptance (BLD-timezone_naive_offset, BLD-recorded_offset_proposal,
+            # BLD-neighbour_day_proposal) — nothing is planned until then. With no track to check it against, it is
+            # accepted here.
             times = [t.replace(tzinfo=timezone.utc) + timedelta(seconds=proposal["proposed_offset_seconds"])
                      for f in photos if (t := _parse_camera_naive(f.get("source_naive_time")))]
             if self._tracks_by(gpx, times, photos):
                 effective = {"offset_seconds": proposal["proposed_offset_seconds"],
-                             "source": "recorded_offset_unconfirmed" if is_recorded else "timezone_unconfirmed"}
+                             "source": "recorded_offset_unconfirmed" if is_recorded
+                             else "neighbour_day_unconfirmed" if is_neighbour else "timezone_unconfirmed"}
                 decision_mode = "to_be_confirmed_against_tracks"
 
         cell = {
@@ -1884,9 +1888,10 @@ class GeotagWorkflow:
 
     _DRIFT_TRIGGER_SOURCES = ("timezone_accepted", "timezone_unconfirmed", "recorded_offset_accepted",
                               "recorded_offset_unconfirmed", "manual", "gpx_anchor_imprecise",
-                              "neighbour_day_accepted")   # another day's clock, checked on this day's tracks
+                              # another day's clock, checked on this day's tracks
+                              "neighbour_day_accepted", "neighbour_day_unconfirmed")
     # A guess nobody has accepted: always given its drift cell, for the confirmation there is its acceptance.
-    _UNCONFIRMED_SOURCES = ("timezone_unconfirmed", "recorded_offset_unconfirmed")
+    _UNCONFIRMED_SOURCES = ("timezone_unconfirmed", "recorded_offset_unconfirmed", "neighbour_day_unconfirmed")
 
     def build_drift_validation(self, files, time_artifact, rows0, gpx, prior):
         """Build/regenerate photos-22 from the COMPLETE photos-21 + the resolved UTC under the
