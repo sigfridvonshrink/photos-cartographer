@@ -283,7 +283,8 @@ def _library_elsewhere(monkeypatch, lib, free):
 
 
 _TWO = [{"fp": "A" * 40, "dest": "Trip", "final_name": "a.jpg"}, {"fp": "B" * 40, "dest": "Trip", "final_name": "b.jpg"}]
-_NEED = 2 * len(_fp_bytes("A" * 40))                                 # 86 bytes: both photos
+_SIZE = 2 * len(_fp_bytes("A" * 40))                                 # 86 bytes: both photos
+_NEED = -(-_SIZE * 105 // 100)                                       # and the default 5% margin, rounded up: 91
 
 
 @pytest.mark.spec("RUL-library_space_checked", "RUL-library_space_short_stops", "RUL-library_space_short_named",
@@ -295,7 +296,8 @@ def test_execute_stops_with_nothing_moved_when_the_library_is_short_of_room(tmp_
     lib_before = _state(lib, but=(".photos-merge.lock",))
     assert merge._run_locked_workflow("execute", str(ws)) == 2
     out = capsys.readouterr()
-    assert f"{_NEED - 1} bytes free" in out.err + out.out and f"need {_NEED} bytes" in out.err + out.out
+    said = out.err + out.out
+    assert f"{_NEED - 1} bytes free" in said and f"need {_NEED} bytes ({_SIZE} bytes and the 5% margin" in said
     assert asked == [str(lib)]
     assert _state(lib, but=(".photos-merge.lock",)) == lib_before   # nothing moved
     assert os.path.exists(_src(ws, "Trip", "a.jpg")) and os.path.exists(_src(ws, "Trip", "b.jpg"))
@@ -310,10 +312,33 @@ def test_execute_counts_only_the_photos_still_to_move(tmp_path, monkeypatch):
     assert merge._run_locked_workflow("plan", str(ws)) == 0
     os.makedirs(lib / "Trip")
     os.rename(_src(ws, "Trip", "a.jpg"), lib / "Trip" / "a.jpg")    # as an interrupted run left it
-    _library_elsewhere(monkeypatch, lib, _NEED // 2)
+    _library_elsewhere(monkeypatch, lib, -(-_SIZE // 2 * 105 // 100))   # room for the one left, and its margin
     assert merge._run_locked_workflow("execute", str(ws)) == 0
     assert _summary(ws)["status"] == "success"
     assert open(lib / "Trip" / "b.jpg", "rb").read() == _fp_bytes("B" * 40)
+
+
+@pytest.mark.parametrize("margin, free, code", [(5, _SIZE, 2), (5, _NEED, 0), (0, _SIZE, 0), (20, _NEED, 2)])
+@pytest.mark.spec("RUL-library_space_margin", "BLD-library_space",
+                  test="TST-filesystem_checks-room_holds_the_margin")
+def test_the_room_asked_holds_the_configured_margin(tmp_path, monkeypatch, margin, free, code):
+    """Room for the photos alone is short by the margin; the margin is the configuration's, 0 asking no more than
+    the photos' size."""
+    ws, lib = _merge_ws(tmp_path, _TWO)
+    assert merge._run_locked_workflow("plan", str(ws)) == 0
+    monkeypatch.setitem(utils.CONFIG["merge"], "library_space_margin_percent", margin)
+    _library_elsewhere(monkeypatch, lib, free)
+    monkeypatch.setattr(merge, "load_config", lambda ws: None)          # keep the margin set above
+    assert merge._run_locked_workflow("execute", str(ws)) == code
+
+
+@pytest.mark.spec("RUL-library_space_margin", "RUL-checked_numbers",
+                  test="TST-filesystem_checks-margin_is_a_number")
+@pytest.mark.parametrize("bad", [-1, "5", None, True])
+def test_a_margin_not_a_number_of_zero_or_more_is_refused(bad):
+    cfg = {"merge": {"library_root": "/x", "library_space_margin_percent": bad}}
+    with pytest.raises(ValueError, match="merge.library_space_margin_percent"):
+        utils.validate_config(cfg)
 
 
 @pytest.mark.spec("RUL-library_space_warned_at_plan", test="TST-filesystem_checks-plan_warns_short_of_room")

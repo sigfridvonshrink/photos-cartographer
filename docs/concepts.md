@@ -610,8 +610,8 @@ its lock may then hold back only the merges of one machine, so never run merges 
 at once (at worst a photo fails, or lands twice under two names — never one overwritten).
 
 **Merge execute** — a library on another filesystem than the workspace with less free space than the photos still to
-move: the stop names both, and nothing moves (merge plan warns of it already). On one filesystem a move is a rename
-and needs no room.
+move and a margin on top of them (`merge.library_space_margin_percent`, 5% by default): the stop names both, and
+nothing moves (merge plan warns of it already). On one filesystem a move is a rename and needs no room.
 
 ---
 

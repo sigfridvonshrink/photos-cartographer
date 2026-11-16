@@ -34,6 +34,7 @@ import argparse
 import concurrent.futures
 import glob
 import json
+import math
 import os
 import shutil
 import sys
@@ -1527,13 +1528,17 @@ def _space_shortfalls(ws, plan, library_root):
             entry = need.setdefault(dev_of[folder], [folder, 0])
             entry[1] += size
     lib_dev = _device(library_root) if os.path.isdir(library_root) else None
+    # the photos' own size and the margin on top of it (RUL-library_space_margin)
+    margin = (CONFIG.get("merge") or {}).get("library_space_margin_percent", 0)
     out = []
     for dev, (folder, total) in sorted(need.items(), key=lambda kv: kv[1][0]):
         where = library_root if dev == lib_dev else folder
         free = _free_bytes(where)
-        if free < total:
+        wanted = math.ceil(total * (100 + margin) / 100)
+        if free < wanted:
             out.append(f"the library's filesystem at {where} has {_size_text(free)} free, but the photos to move "
-                       f"into it need {_size_text(total)}")
+                       f"into it need {_size_text(wanted)} ({_size_text(total)} and the {margin:g}% margin "
+                       "merge.library_space_margin_percent asks)")
     return out
 
 

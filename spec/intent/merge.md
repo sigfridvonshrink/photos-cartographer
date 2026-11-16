@@ -171,6 +171,17 @@ Where the library lies on another filesystem than the workspace, merge's executi
 move, the library's free space with the total size of the photos it is about to move into it.
 :::
 
+:::{rul} The room asked of a library holds a margin
+:id: RUL-library_space_margin
+:status: ruled
+:criticality: med
+:verify: required
+:refines: RUL-library_space_checked
+
+The room merge asks of a library on another filesystem SHALL be the photos' total size and a margin on top of it, a
+share of that size the configuration sets.
+:::
+
 :::{rul} A library short of room stops the execution
 :id: RUL-library_space_short_stops
 :status: ruled

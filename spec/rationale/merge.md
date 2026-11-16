@@ -84,13 +84,17 @@ the library differently, a photo placed under two names.
 :status: ruled
 :forced: no
 :follows_from: RAT-refused_merge_clean, RAT-safe_at_each_change
-:justifies: RUL-library_space_checked, RUL-library_space_short_stops, RUL-library_space_short_named, RUL-library_space_warned_at_plan
+:justifies: RUL-library_space_checked, RUL-library_space_short_stops, RUL-library_space_short_named, RUL-library_space_warned_at_plan, RUL-library_space_margin
 
 Into a library on another filesystem merge copies each photo before removing it from the workspace. A full disk is
 safe — the photo it fails stays in the workspace and the run ends partial — but the shortage shows late, one photo at a
 time, after part of the batch has moved. Comparing the free space with the batch first turns it into a refusal that
 says how much room is needed, before anything moved; the plan says it as a warning, since room can be made before
 execute. On the workspace's own filesystem a move is a rename and takes no room, so there is nothing to compare.
+
+The comparison asks for more than the photos' own size: a filesystem filled to its last byte slows and fragments, and
+the library is not merge's alone — digiKam writes its thumbnails and sidecars beside the photos. The owner, ruling it
+(2026-11-16): *"I think a safety margin is needed. Configurable, too, default say 5% on top of by-dest size?"*
 :::
 
 ## 4. Destination-to-library mapping

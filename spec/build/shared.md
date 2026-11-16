@@ -321,7 +321,7 @@ The areas SHALL be, at least: the `zfs` block and `snapshots_required` ({need}`B
 `filename_timestamp_format` ({need}`BLD-filename_timestamp_format`); `gpx_root` and the GPX thresholds, such as `gpx_direct_match_max_seconds`,
 `gpx_interpolation_max_gap_seconds` and `gpx_anchor_max_point_distance_meters` ({need}`DEF-tracks`), each read for one judgement only; the camera-time policy
 flags, such as `single_anchor_auto_apply` and `multi_anchor_auto_apply` (geotag); `library_root`
-(merge; {need}`DEF-library`); `folders`, a role→name map of the numbered managed folders
+(merge; {need}`DEF-library`) and `library_space_margin_percent` beside it ({need}`BLD-library_space`); `folders`, a role→name map of the numbered managed folders
 `0-sources`…`6-photos-by-dest` ({need}`DEF-managed_folders`), whose code finds each folder by its role; and
 `media_extensions`, mapping `image`, `raw` and `video` to lists of canonical extensions — lowercase, no leading dot
 ({need}`RUL-checked_extension_lists`). `CAMERA_GROUP_KEY_VERSION` is a code constant, never a configuration field.

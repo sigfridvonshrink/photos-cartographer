@@ -164,7 +164,10 @@ CONFIG = {
     # validation — library_root must be an existing directory that is neither the workspace nor
     # inside it (BLD-library_root_validated). Prep only type-validates.
     "merge": {
-        "library_root": "/srv/pictures/5-finished"            # permanent library dir
+        "library_root": "/srv/pictures/5-finished",           # permanent library dir
+        # Room asked of a library on another filesystem beyond the photos' own size, in percent of it
+        # (BLD-library_space): a filesystem near full slows and fragments, and digiKam writes beside them.
+        "library_space_margin_percent": 5
     }
 }
 
@@ -1998,6 +2001,8 @@ def validate_config(cfg: dict, workspace_root: str = None):
         # before it consumes it (BLD-authored_checks_by_phase).
         if not isinstance(mg, dict):
             raise ValueError("config: merge must be an object.")
+        if "library_space_margin_percent" in mg:
+            _check_number("merge.library_space_margin_percent", mg["library_space_margin_percent"], minimum=0)
         if "library_root" in mg:
             _check_path("merge.library_root", mg["library_root"])
 
