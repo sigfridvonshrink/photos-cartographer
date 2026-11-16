@@ -1414,28 +1414,38 @@ journal in the archival package; one that does not says what happened and not wh
 :::{rat} The library is the user's, and already in order
 :id: RAT-library_is_ground_truth
 :status: ruled
-:forced: no
+:forced: yes
 :follows_from: CHC-local_folder_library, RAT-non_destructive_core
-:justifies: RUL-library_never_altered, RUL-library_not_scanned, RUL-collision_by_content, RUL-collision_same_content, RUL-collision_different_content, RUL-unsettled_collision_blocks
+:justifies: RUL-library_never_altered, RUL-collision_by_content, RUL-collision_same_content, RUL-collision_different_content, RUL-unsettled_collision_blocks
 
 The library is the user's curated collection: its organisation and names are the ground truth, and other tools and
-people rely on them. So merge adds to it and changes nothing in it, and assumes it is in order rather than scanning it:
-scanning a whole library to place one batch would cost far more than it saves. Where a name is taken, only the content
-tells a copy already present from a different photo sharing a name — and where the content cannot be read, nothing
-does: a guess either way is a duplicate placed or a photo lost from the workspace, so the photo waits.
+people rely on them. So merge adds to it and changes nothing in it. Where a name is taken, only the content tells a
+copy already present from a different photo sharing a name — and where the content cannot be read, nothing does: a
+guess either way is a duplicate placed or a photo lost from the workspace, so the photo waits.
 :::
 
 :::{rat} A library file costs a full read
 :id: RAT-library_reads_cost
 :status: ruled
 :forced: no
-:follows_from: RAT-idempotent_reruns, RAT-safety_not_on_the_plan
-:justifies: RUL-library_file_read_once, RUL-library_file_rechecked_before_removal
+:follows_from: RAT-idempotent_reruns, RAT-library_is_ground_truth
+:justifies: RUL-library_file_read_once, RUL-library_not_scanned
 
-Fingerprinting a library file means reading and decoding it whole, and the library may sit across a network. Kept in the workspace, a
-fingerprint already taken spares that read on the next run, and stays right while the file is unchanged. A kept
-fingerprint is trusted by size and modification time, though, and removing a photo because the library already holds
-it cannot be undone: that one decision reads the file again rather than trust what was kept.
+Fingerprinting a library file means reading and decoding it whole, and the library may sit across a network. Kept in
+the workspace, a fingerprint already taken spares that read on the next run, and stays right while the file is
+unchanged. Scanning the whole library to place one batch would cost far more than it saves, so merge trusts the library
+to be in order and reads only the places its photos go.
+:::
+
+:::{rat} An irreversible removal does not trust a kept fingerprint
+:id: RAT-removal_reads_the_library_again
+:status: ruled
+:forced: yes
+:follows_from: RAT-safety_not_on_the_plan, RAT-library_reads_cost
+:justifies: RUL-library_file_rechecked_before_removal
+
+A kept fingerprint is trusted by size and modification time, and removing a photo because the library already holds
+it cannot be undone: that one decision reads the library file again rather than trust what was kept.
 :::
 
 :::{rat} One library, many workspaces
@@ -1465,13 +1475,23 @@ keeps the tool from writing into a folder that was never made a library.
 :id: RAT-move_not_copy
 :status: ruled
 :forced: no
-:follows_from: RAT-recoverable_core, RAT-remainder_worklist
-:justifies: RUL-merge_moves, RUL-merge_resumable, RUL-unplaced_photo_stays
+:follows_from: RAT-remainder_worklist
+:justifies: RUL-merge_moves
 
 A copy left in the workspace of a photo already in the library is a duplicate that invites confusion and wastes space,
-so merge moves rather than copies, and removes a copy whose content the library already holds. What stays behind is
-exactly what still needs attention. Removing the workspace's copy last, once the library's is verified, means an
-interruption never loses a photo: running merge again finishes the work.
+so merge moves rather than copies, and removes a copy whose content the library already holds.
+:::
+
+:::{rat} An interrupted or refused merge loses no photo
+:id: RAT-merge_loses_no_photo
+:status: ruled
+:forced: yes
+:follows_from: RAT-recoverable_core, RAT-remainder_worklist, RAT-move_not_copy
+:justifies: RUL-merge_resumable, RUL-unplaced_photo_stays
+
+The workspace's copy is removed last, once the library's is verified, so an interruption never loses a photo: running
+merge again finishes the work. A photo merge cannot place stays where it is, so what stays behind is exactly what
+still needs attention.
 :::
 
 :::{rat} Merge is the end, so the package is remade at once
@@ -1516,12 +1536,22 @@ this one.
 :status: ruled
 :forced: yes
 :follows_from: RAT-workspace_not_recycled, RAT-non_destructive_core
-:justifies: RUL-sealed_refuses, RUL-sealed_new_dump_warned, RUL-editor_refuses_sealed, RUL-sealed_no_library_recorded, RUL-sealed_new_dump_left
+:justifies: RUL-sealed_refuses, RUL-sealed_new_dump_warned, RUL-editor_refuses_sealed, RUL-sealed_no_library_recorded
 
 A second batch processed in a merged workspace would interleave with the first's database, logs and package, and its
 record would no longer describe one dump. So nothing that could change it runs; the records stay readable; and a dump
-dropped there is left untouched and pointed out, for the user to move to a fresh workspace by hand — safer than any
-automated move inside a finished workspace.
+dropped there is pointed out, so the user knows it was not processed.
+:::
+
+:::{rat} A dump in a finished workspace is the user's to move
+:id: RAT-sealed_dump_moved_by_hand
+:status: ruled
+:forced: no
+:follows_from: RAT-sealed_is_final
+:justifies: RUL-sealed_new_dump_left
+
+A dump dropped in a finished workspace is left untouched, for the user to move to a fresh workspace by hand — safer
+than any automated move inside a finished workspace.
 :::
 
 :::{rat} Pruning the quarantine changes nothing controlled
