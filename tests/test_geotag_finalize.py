@@ -446,7 +446,7 @@ def test_finalize_sealed_workspace_blocks(tmp_path, monkeypatch):
     assert _run(monkeypatch, ws, "finalize") == 2                        # sealed -> preflight blocks
 
 
-@pytest.mark.spec("RUL-unchecked_counts_as_changed", "BLD-finalize_checks_prep_log", test="TST-geotag_finalize-finalize_refuses_a_prep_log_the_handoff_does_not_vouch_for")
+@pytest.mark.spec("RUL-unchecked_counts_as_changed", "BLD-prep_log_checked", test="TST-geotag_finalize-finalize_refuses_a_prep_log_the_handoff_does_not_vouch_for")
 @pytest.mark.parametrize("damage", ["changed", "missing"])
 def test_finalize_refuses_a_prep_log_the_handoff_does_not_vouch_for(tmp_path, monkeypatch, capsys, damage):
     """Finalize copies prep's log only as the handoff records it, by hash: a log changed since — or gone,

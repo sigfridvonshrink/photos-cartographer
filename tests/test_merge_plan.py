@@ -408,6 +408,26 @@ def test_dry_run_summarizes_validated_plan(tmp_path, monkeypatch, capsys):
         json.loads(out)
 
 
+@pytest.mark.spec("RUL-dry_run_changes_nothing", test="TST-merge_plan-dry_run_changes_nothing")
+def test_dry_run_changes_nothing(tmp_path, monkeypatch):
+    """Merge's dry run changes nothing in the workspace or the library — no file written, moved or removed, the locks'
+    owner records aside — whether its plan places a photo, finds one already there or gives one a name of its own."""
+    ws, lib, fp = _build_ws(tmp_path, [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"},
+                                       {"fp": "B", "dest": "Trip", "final_name": "b.jpg"},
+                                       {"fp": "C", "dest": "Trip", "final_name": "c.jpg"}],
+                            library_files=[{"fp": "B", "dest": "Trip", "name": "b.jpg", "bytes": b"img-1"},
+                                           {"fp": "OTHER", "dest": "Trip", "name": "c.jpg"}])
+    _patch_fp(monkeypatch, fp)
+    assert merge._run_locked_workflow("plan", str(ws)) == 0
+
+    def tree(root):
+        return {os.path.relpath(os.path.join(r, f), root): open(os.path.join(r, f), "rb").read()
+                for r, _d, fs in os.walk(root) for f in fs if not f.endswith(".lock")}
+    before = (tree(str(ws)), tree(str(lib)))
+    assert merge._run_locked_workflow("dry-run", str(ws)) == 0
+    assert (tree(str(ws)), tree(str(lib))) == before
+
+
 @pytest.mark.spec("RUL-no_plan_no_run", test="TST-merge_plan-dry_run_without_plan_errors")
 def test_dry_run_without_plan_errors(tmp_path, monkeypatch):
     ws, lib, fp = _build_ws(tmp_path, [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"}])

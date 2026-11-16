@@ -39,6 +39,12 @@ it and fails on any warning; `spec/needs.json` is its committed export. The user
 rationale that follows from them. Read the shared contract first for the cross-phase facts, then prep, geotag and merge
 in pipeline order.
 
+Three conventions hold across the corpus. `uses` names the definition — or the rule or build item whose mechanism the
+text relies on — that an item relies on; it is not a refinement. A child rule stating an exception to another links it
+with `excepts`, not `refines`. A folder named in `build/` by its
+default name (`6-photos-by-dest`, `1-strays`, …) stands for the folder of that role, whatever the configuration names it
+(`RUL-folder_names_not_roles`).
+
 The corpus was converted from four documents — the shared contract and one spec per phase — sentence by sentence, each
 recorded verbatim with where it went in a ledger that proved none was lost. Those documents, the ledgers and the old
 clause index are in the repository's history, as they stood at the release `v2.0.0`.

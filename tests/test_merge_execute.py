@@ -687,7 +687,7 @@ def test_execute_cross_fs_move_verifies_and_completes(tmp_path, monkeypatch):
     assert not os.path.exists(_src(ws, "Trip", "a.jpg"))
 
 
-@pytest.mark.spec("RUL-failed_operation_clean", "RUL-merge_moves", "BLD-cross_fs_temp", "RUL-failure_recorded", test="TST-merge_execute-execute_torn_copy_blocks_and_keeps_source")
+@pytest.mark.spec("RUL-failed_operation_clean", "RUL-merge_moves", "RUL-merge_removes_once_placed", "BLD-cross_fs_temp", "RUL-failure_recorded", test="TST-merge_execute-execute_torn_copy_blocks_and_keeps_source")
 def test_execute_torn_copy_blocks_and_keeps_source(tmp_path, monkeypatch):
     _force_cross_fs(monkeypatch)
     monkeypatch.setattr(utils.shutil, "copyfile",
@@ -700,7 +700,7 @@ def test_execute_torn_copy_blocks_and_keeps_source(tmp_path, monkeypatch):
     assert _summary(ws)["totals"]["blocked"] == 1
 
 
-@pytest.mark.spec("RUL-merge_moves", "BLD-merge_move", test="TST-merge_execute-a_copy_damaged_where_the_fingerprint_cannot_see_is_refused")
+@pytest.mark.spec("RUL-merge_moves", "RUL-merge_removes_once_placed", "BLD-merge_move", test="TST-merge_execute-a_copy_damaged_where_the_fingerprint_cannot_see_is_refused")
 def test_a_copy_damaged_where_the_fingerprint_cannot_see_is_refused(tmp_path, monkeypatch):
     """The content fingerprint reads the decoded image, blind to metadata by design. A cross-filesystem
     copy damaged only there — same size, same fingerprint, other bytes — is refused all the same: the
@@ -1851,7 +1851,7 @@ def test_a_file_without_a_fingerprint_elsewhere_does_not_stop_merge(tmp_path):
 
 # --- the same picture in other bytes (RUL-same_pixels_other_file_blocks) -----------
 
-@pytest.mark.spec("RUL-same_pixels_other_file_blocks",
+@pytest.mark.spec("RUL-same_pixels_other_file_blocks", "RUL-same_pixels_both_named",
                   test="TST-merge_execute-the_same_picture_with_other_metadata_blocks_and_both_stay")
 def test_the_same_picture_with_other_metadata_blocks_and_both_stay(tmp_path):
     """The library holds the incoming photo's pixels in other bytes — the same picture without the time and

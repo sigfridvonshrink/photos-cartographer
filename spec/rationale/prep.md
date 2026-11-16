@@ -47,8 +47,8 @@ own, out of the sort.
 :id: RAT-bootstrap_once
 :status: ruled
 :forced: no
+:justifies: RUL-init_moves_dump_to_inbox, RUL-first_dump_at_top_level
 :follows_from: RAT-discrete_stages, CHC-ask_only_what_data_cannot_settle
-:justifies: RUL-init_moves_dump_to_inbox
 
 Dropping a dump into a bare folder is the most natural first gesture, so the first run takes it as it comes: it builds
 the structure around the dump and moves it into the inbox whole, its folders kept, for a dump's folders often carry
@@ -613,8 +613,8 @@ that is already known.
 :id: RAT-dry_run_for_looking
 :status: ruled
 :forced: yes
+:justifies: RUL-prep_dry_run_changes_nothing, RUL-dry_run_changes_nothing
 :follows_from: RAT-no_mutation_outside_plan, RAT-dry_run_reads_the_saved_plan
-:justifies: RUL-prep_dry_run_changes_nothing
 
 A dry run lets the user see what execution would do before it does it. Changing anything would make it a partial
 execution, and the user could no longer look without acting.

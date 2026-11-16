@@ -216,6 +216,12 @@ event/sink seam.
 - **`dry-run` prints a concise summary, not the plan** — operation/move counts by type, blockers, and the
   path to the full plan; the full plan is the saved artifact. Out of spec; the spec keeps that a dry run
   reports on the real saved plan, never a simulation.
+- **A stop on unexpected workspace changes lists them grouped by kind and by folder**, then the command to run
+  again with `--accept-changes <code>` to accept them once (`format_changes`, `BLD-accept_changes`). Out of spec; the
+  spec keeps only that a stop gives a code accepting exactly its list (`RUL-stop_gives_acceptance_code`).
+- **The decision editor shows a decision record holding a field its decision does not have as a record it cannot
+  read**, naming each such field as geotag's blocker does, and saves nothing into it. Out of spec; the spec keeps that
+  such a field is refused (`RUL-unknown_decision_field_refused`).
 
 ---
 
