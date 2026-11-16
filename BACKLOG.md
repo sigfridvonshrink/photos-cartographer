@@ -110,15 +110,18 @@ they are, and the photo's own answer is the most specific there is.
 **Open:** whether a per-photo answer outranks the folder's fallback (and a track?), and how the editor offers it for a
 photo that is not on the worklist.
 
-### 22. A photo with no recorded time has no way through geotag
+### 22. A date fallback per destination, for photos with no recorded time
 
 **Why:** one untimed photo in photos by destination stops geotag for the whole workspace, and the only cure is to
-edit its metadata outside the tool. The promise is every photo on the map, "rough or manual" — a scan could be given
-a position by hand or by its folder's fallback and keep its name. The rationale says only that no phase invents a
-time, not why a position cannot be set without one.
+edit its metadata outside the tool. Ruled 2026-11-16: the stop is kept for now (`RUL-untimed_photo_stops_geotag`);
+letting such a photo through untimed, or giving it a time by a per-photo decision, were set aside. The way the owner
+is considering instead: a date given per destination, as a position is by the folder's fallback — for scanned
+photos above all, whose folder says when they were made better than any one photo can.
 
-**Open:** let such a photo be placed by the user or the fallback and left unrenamed; or give it a time decision; or
-keep the stop. To be ruled.
+**Open:** what the date is (a day, a month, a year?) and how a photo carries a date that is a range, since EXIF has
+no way to say a time is approximate; whether it passes down to subfolders as the position fallback does; whether it
+is written into the photo or recorded only; the name such a photo is given; and what it does to a photo that has a
+time of its own. Not to be built until ruled.
 
 ### 25. A photo that cannot be written holds the whole workspace
 

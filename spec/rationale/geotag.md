@@ -30,6 +30,10 @@ camera's offset or destination's timezone can supply one. Prep sets such a photo
 user to deal with by hand. Sorted into a destination anyway, it would pass through geotag's decisions with nothing to
 ask about it and stop only at the last plan, where nothing the user could decide would clear it. Stopping at the start,
 naming it and where it belongs, makes the one possible fix plain.
+
+Letting such a photo through untimed, placed by hand or by its folder's fallback and left unrenamed, and giving it a
+time by a decision, were weighed and set aside: the stop was ruled kept (2026-11-16). A date given per destination,
+as a position is by its fallback, is the way being considered for scans; it is not built.
 :::
 
 ## 3. Linear dependency inclusion
