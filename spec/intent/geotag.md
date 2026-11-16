@@ -263,6 +263,18 @@ Where geotag renames a RAW in photos by destination, it SHALL rename the JPEG pr
 RAW's new name, extension aside — the one change geotag makes outside photos by destination.
 :::
 
+:::{rul} A JPEG left behind its RAW takes the RAW's name
+:id: RUL-set_aside_jpeg_catches_up
+:status: ruled
+:criticality: med
+:verify: required
+:refines: RUL-set_aside_jpeg_renamed_with_raw
+:uses: DEF-geotag, DEF-managed_folders, RUL-redundant_jpeg_set_aside
+
+Where a RAW in photos by destination that geotag changed on an earlier run holds a name the JPEG prep set aside beside
+it does not, extension aside, geotag SHALL rename that JPEG to the RAW's name, extension aside.
+:::
+
 :::{rul} A set-aside JPEG is renamed, never written
 :id: RUL-set_aside_jpeg_only_renamed
 :status: ruled

@@ -2145,22 +2145,25 @@ def _capture_order(members, fmt):
             min(held_suffix(f) for f in members), min(f["relative_path"] for f in members))
 
 
-def plan_set_aside_rename(raw_rename, jpeg, taken):
-    """The rename of a JPEG prep set aside beside a RAW, made with that RAW's rename operation `raw_rename`
-    (BLD-set_aside_renamed_with_raw): to the RAW's new name, extension aside, the JPEG's own extension in lowercase — a
-    rename only, which `follows` the RAW's and is applied after it. None where the JPEG holds that name already, or
-    where a file in redundant JPEGs holds it or is given it (`taken`, case folded, the name added once given): the JPEG
-    is then left as it is."""
+def plan_set_aside_rename(raw_rel, raw_name, jpeg, taken, follows=None):
+    """The rename of a JPEG prep set aside beside the RAW at `raw_rel` to that RAW's name `raw_name`, extension aside,
+    the JPEG's own extension in lowercase — a rename only, naming its RAW (`with_raw`): the new name the RAW's rename
+    operation `follows` gives, which it is applied after (BLD-set_aside_renamed_with_raw); with none, the name the RAW
+    holds since an earlier run renamed it without the JPEG (BLD-set_aside_jpeg_catches_up). None where the JPEG holds
+    that name already, or where a file in redundant JPEGs holds it or is given it (`taken`, case folded, the name
+    added once given): the JPEG is then left as it is."""
     rel = jpeg["relative_path"]
     name = os.path.basename(rel)
-    to = os.path.splitext(raw_rename["to"])[0] + os.path.splitext(name)[1].lower()
+    to = os.path.splitext(raw_name)[0] + os.path.splitext(name)[1].lower()
     if to.lower() == name.lower() or to.lower() in taken:
         return None
     taken.add(to.lower())
     pre = {"content_fingerprint": jpeg.get("content_fingerprint"),
            "size": jpeg.get("size"), "mtime_ns": jpeg.get("mtime_ns")}
-    return _make_op("rename_no_clobber", rel, "renamed with its RAW",
-                    {"from": name, "to": to, "follows": raw_rename["operation_id"]}, pre)
+    semantic = {"from": name, "to": to, "with_raw": raw_rel}
+    if follows:
+        semantic["follows"] = follows
+    return _make_op("rename_no_clobber", rel, "renamed with its RAW", semantic, pre)
 
 
 # ============================================================================
@@ -2713,7 +2716,7 @@ def build_complete_log(prep_photos, files, resolved_rows, time_artifact, plan, e
         for dd in (p.get("destinations") or {}).values():
             for op in dd.get("operations") or []:
                 fp = (op.get("preconditions") or {}).get("content_fingerprint")
-                if op.get("follows") and fp and fp not in in_model:
+                if op.get("with_raw") and fp and fp not in in_model:
                     aside[fp] = op["relative_path"]
     for fp, rel in sorted(aside.items()):
         entry = photos.setdefault(fp, {"content_fingerprint": fp, "journey": []})

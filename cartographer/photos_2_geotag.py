@@ -2607,10 +2607,13 @@ class GeotagWorkflow:
                 else:
                     no_ops.append(rel)
                 # The JPEG prep set aside beside this RAW is renamed with it, and nothing else is done to it: the one
-                # change geotag makes outside photos by destination (RUL-set_aside_jpeg_renamed_with_raw).
+                # change geotag makes outside photos by destination (RUL-set_aside_jpeg_renamed_with_raw). One an earlier
+                # run left behind its corrected RAW takes the name the RAW holds (RUL-set_aside_jpeg_catches_up).
                 raw_rename = next((o for o in fops if o["type"] == "rename_no_clobber"), None)
-                for j in (aside_by_raw.get(f.get("content_fingerprint")) or []) if raw_rename else []:
-                    jop = plan_set_aside_rename(raw_rename, j, aside_taken)
+                raw_name, follows = ((raw_rename["to"], raw_rename["operation_id"]) if raw_rename
+                                     else (os.path.basename(rel), None) if f.get("geotag_marker") else (None, None))
+                for j in (aside_by_raw.get(f.get("content_fingerprint")) or []) if raw_name else []:
+                    jop = plan_set_aside_rename(rel, raw_name, j, aside_taken, follows)
                     if jop is not None:
                         ops.append(jop)
                         media_pre.append({k: j.get(k) for k in ("relative_path", "content_fingerprint", "size",

@@ -112,14 +112,16 @@ the user's statement that it is ready.
 :status: ruled
 :forced: no
 :follows_from: RAT-redundant_named_like_its_raw, RAT-only_sorted_is_ready
-:justifies: RUL-set_aside_jpeg_renamed_with_raw, RUL-set_aside_jpeg_only_renamed, RUL-set_aside_jpeg_named_as_raw
+:justifies: RUL-set_aside_jpeg_renamed_with_raw, RUL-set_aside_jpeg_only_renamed, RUL-set_aside_jpeg_named_as_raw, RUL-set_aside_jpeg_catches_up
 
 A JPEG set aside beside its RAW is the same shot, named like it so that the two names show it. Once geotag corrects the
 RAW's name, a JPEG left under the camera's time names another moment — eight hours away, for a camera left on home
 time — and the pair no longer shows. Prep knows the pair when it sets the JPEG aside, so it records it, and the rename
 rests on that record, never on a likeness of names, which a suffix given to one and not the other already breaks. A
 rename is all: the JPEG is a copy nobody uses, no time or position is decided for it, and a tag written into it would be
-a guess. Renamed so, its name is its RAW's and no longer its own recorded time, and prep takes it as given.
+a guess. Renamed so, its name is its RAW's and no longer its own recorded time, and prep takes it as given. A run that
+renames the RAW and not its JPEG — the JPEG changed on disk, or its rename not reached — leaves the pair apart, and no
+later run renames that RAW again; so the JPEG catches up with the name the RAW holds, or it stays apart for good.
 :::
 
 :::{rat} A video has no zone to correct its name by
