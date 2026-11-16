@@ -79,14 +79,23 @@ test("wouldResolve: a guess far from all evidence is not resolved by its accepta
   assert.equal(app.wouldResolve(ref), true);
 });
 
-test("clearing a folder fallback (the Clear button payload) resolves to none", () => {
-  const dest = "6-photos-by-dest/Belgium", ref = { file: "gps", dest, kind: "fallback" };
-  const mk = (ud, proposal = {}) => setWork(
-    { gps: { destinations: { [dest]: { folder_fallback: { user_decision: ud, proposal } } } } });
-  mk({ fallback_lat: 50.5, fallback_lon: 4.2 });                              assert.equal(app.wouldResolve(ref), true);   // manual
-  mk({ accept_proposal: true }, { proposed_fallback: { lat: 50, lon: 4 } }); assert.equal(app.wouldResolve(ref), true);   // accept inherited
-  // The Clear button writes exactly this — clears coord AND the accept flag -> effective none:
-  mk({ fallback_lat: "", fallback_lon: "", accept_proposal: false });        assert.equal(app.wouldResolve(ref), false);
+test("a folder fallback is written here or inherited, and applies itself either way; cleared, the inherited one returns", () => {
+  const top = "6-photos-by-dest/Belgium", dest = `${top}/Bruges`, ref = { file: "gps", dest, kind: "fallback" };
+  const mk = (above, here) => setWork({ gps: { destinations: {
+    [top]: { folder_fallback: { user_decision: above } }, [dest]: { folder_fallback: { user_decision: here } } } } });
+  const none = { fallback_lat: "", fallback_lon: "" };
+  mk(none, { fallback_lat: 50.5, fallback_lon: 4.2 });
+  assert.equal(app.wouldResolve(ref), true);                                           // written here
+  assert.equal(app.previewFallback(dest).source, "own");
+  mk({ fallback_lat: 50.8, fallback_lon: 4.3 }, none);
+  assert.equal(app.wouldResolve(ref), true);                                           // inherited: nothing to accept
+  assert.deepEqual(app.previewFallback(dest), { lat: 50.8, lon: 4.3, source: "inherited", from: top });
+  assert.match(app.fallbackNote(dest), /^Inherited from 6-photos-by-dest\/Belgium: it applies here by itself/);
+  mk({ fallback_lat: 50.8, fallback_lon: 4.3 }, { fallback_lat: 51.2, fallback_lon: 3.2 });
+  assert.deepEqual(app.inheritedFallback(dest), { lat: 50.8, lon: 4.3, source: "inherited", from: top });  // what clearing returns to
+  assert.match(app.fallbackNote(dest), /own fallback.*Cleared, the one inherited from 6-photos-by-dest\/Belgium/);
+  mk(none, none);
+  assert.equal(app.wouldResolve(ref), false);                                          // nothing here or above
 });
 
 test("previewTz / previewFallback inherit from the nearest resolved ancestor", () => {
@@ -106,7 +115,7 @@ test("previewTz / previewFallback inherit from the nearest resolved ancestor", (
   assert.equal(inhTz.source, "inherited");
 
   const inhFb = app.previewFallback("6-photos-by-dest/Japan/Kyoto");
-  assert.deepEqual([inhFb.lat, inhFb.lon, inhFb.source], [35.0, 139.0, "inherited"]);
+  assert.deepEqual([inhFb.lat, inhFb.lon, inhFb.source, inhFb.from], [35.0, 139.0, "inherited", "6-photos-by-dest/Japan"]);
 });
 
 test("timezone: an inherited zone applies itself, the configured default is only proposed", () => {

@@ -660,8 +660,7 @@ never applied without the user's answer.
 
 A proposal geotag makes SHALL take effect only once the user accepts it, save one a rule says takes effect without the
 user's answer. A clock offset derived from the destination's timezone, or from the offset a camera's photos record with
-their times, is such a proposal, and so is a folder fallback position inherited from the destination the folder lies
-in.
+their times, is such a proposal.
 :::
 
 :::{rul} A confirmation against the tracks is an acceptance
@@ -2279,8 +2278,53 @@ photo since.
 :verify: required
 :refines: RUL-placement_order
 
-A destination's folder-fallback proposal SHALL be the fallback in effect at the nearest destination it lies in that
-has one.
+The folder fallback a destination inherits SHALL be the one written at the nearest destination it lies in that has one
+written.
+:::
+
+:::{rul} An inherited fallback applies itself and follows the one above
+:id: RUL-inherited_fallback_applies
+:status: ruled
+:criticality: med
+:verify: required
+:refines: RUL-fallback_from_nearest
+
+A destination with no folder fallback written for it SHALL take, without the user's answer, the fallback it inherits as
+that fallback then stands, a later change to it included.
+:::
+
+:::{rul} A fallback written for a destination outranks the one it inherits
+:id: RUL-written_fallback_over_inherited
+:status: ruled
+:criticality: med
+:verify: required
+:refines: RUL-inherited_fallback_applies
+
+A folder fallback the user writes for a destination SHALL take effect there, for every photo there the fallback places,
+over the one it inherits.
+:::
+
+:::{rul} The user is told what the fallback placed, and whose it is
+:id: RUL-fallback_placements_told
+:status: ruled
+:criticality: med
+:verify: required
+:refines: RUL-inherited_fallback_applies
+:uses: DEF-destination
+
+The user SHALL be told, for each destination, how many photos its folder fallback placed, and whether that fallback is
+the destination's own or inherited, naming the destination it is inherited from.
+:::
+
+:::{rul} A photo the fallback places is recorded with why the tracks did not
+:id: RUL-fallback_photo_says_why
+:status: ruled
+:criticality: med
+:verify: required
+:refines: RUL-placement_order
+:uses: DEF-tracks
+
+A photo its folder's fallback places SHALL be recorded with why the tracks did not place it.
 :::
 
 :::{rul} No destination waits on its fallback
@@ -2442,16 +2486,6 @@ A decision made for one photo SHALL stay that photo's when geotag renames it or 
 :refines: RUL-photo_decision_follows_the_photo
 
 A decision made for one photo SHALL never pass to another photo that takes its name.
-:::
-
-:::{rul} An accepted inherited fallback follows the one above
-:id: RUL-accepted_fallback_follows
-:status: ruled
-:criticality: med
-:verify: required
-:refines: RUL-fallback_from_nearest
-
-A destination whose inherited fallback the user accepted SHALL take the fallback then in effect above it, a later change there included.
 :::
 
 

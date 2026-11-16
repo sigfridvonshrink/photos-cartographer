@@ -1121,7 +1121,7 @@ span days (`camera_group_time_decisions.<group>@<date>`), or the `photos-22` dri
 replaced it; a time kept as the true time its entry of the destination's `changed_times`
 (`changed_times[<path>]`); a time a date fallback gave the `date_fallback` cell of the destination it was written at;
 a timezone its destination's cell; a manual position the photo's pin among `photos-23`'s review items or
-the destination's folder fallback, with the destination it was accepted from.
+the destination's folder fallback, with the destination it is inherited from where it is inherited.
 :::
 
 :::{bld} Geotag's steps in the log

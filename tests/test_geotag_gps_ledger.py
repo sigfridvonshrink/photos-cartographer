@@ -302,3 +302,19 @@ def test_a_pin_executed_then_withdrawn_plans_and_executes_again(tmp_path, monkey
     assert plan["status"] == "ready"
     assert {o["type"] for dd in plan["destinations"].values() for o in dd["operations"]} <= _FORWARD
     assert _run(monkeypatch, ws, "execute") == 0
+
+
+@pytest.mark.spec("RUL-fallback_placements_told", "BLD-fallback_placements_printed", "RUL-fallback_photo_says_why",
+                  "BLD-placed_photos", test="TST-geotag_gps_ledger-geotag_plan_tells_what_the_fallback_placed")
+def test_geotag_plan_tells_what_the_fallback_placed(tmp_path, monkeypatch, capsys):
+    """`geotag plan` says, for the destination, how many photos its fallback placed and whose fallback it is; photos-23
+    lists the photo with why the tracks missed it and its camera's day, the camera-GPS photos beside it."""
+    ws, ctl = _exec_ws(tmp_path, monkeypatch)
+    _mock_tools(monkeypatch, ws)
+    _drive_ready(monkeypatch, ws, ctl)
+    assert f"  {BYDEST}/T: 1 photo(s) placed by its own fallback." in capsys.readouterr().out
+    placed = json.load(open(ctl / "photos-23-gps-decisions.json"))["destinations"][f"{BYDEST}/T"]["gps_decisions"]
+    fb = [p for p in placed["placed_photos"] if p["placed_by"] == "folder_fallback"]
+    assert [(p["relative_path"], p["tracks"]["reason"], p["camera_bucket"]) for p in fb] == \
+        [(f"{BYDEST}/T/2024-07-03--14-30-00.arw", "track_gap", CAM)]
+    assert sorted(p["placed_by"] for p in placed["placed_photos"]) == ["folder_fallback", "own_position", "own_position"]

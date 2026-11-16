@@ -107,19 +107,96 @@ function withChosenCells(art) {
   return art;
 }
 // What a review item offers, in order (BLD-chosen_position, docs/design/decisions.md): a photo nothing places is
-// offered its folder's fallback FIRST — set once, it places every unplaced photo of the folder, and below it once
-// accepted there — and a position for this photo alone second. Any other item offers the photo's own position. Pure.
+// offered its folder's fallback FIRST — set once, it places every unplaced photo of the folder, and of the folders
+// beneath, which inherit it — and a position for this photo alone second. Any other item offers the photo's own
+// position. Pure.
 function reviewOffers(c) {
   if (c && c.reason === "no_reliable_gps_source") return ["folder_fallback", "position"];
   return ["position"];
 }
-// How a photo of photos-23's `placed_photos` is placed, as its row says it. Pure.
-const placedByLabel = (pp) => (pp && pp.placed_by === "folder_fallback" ? "fallback" : "tracks");
-// The folded list's heading: how many photos the tracks and the fallback place. Pure.
-function placedSummary(placed) {
-  const n = (placed || []).length, fb = (placed || []).filter((p) => p && p.placed_by === "folder_fallback").length;
-  const parts = [n - fb ? `${n - fb} by the tracks` : null, fb ? `${fb} by the fallback` : null].filter(Boolean);
-  return `${n} placed — ${parts.join(", ")}: set a position for one`;
+// --- the editor's views grouped by what can differ (docs/design/decisions.md) ------------------------------------------
+// Four rules: a level exists only where its members can carry different answers; a level of one member folds into its
+// parent; what waits for an answer is open and first, what is settled folded; and every view runs destination tree →
+// the destination's own decisions → per-camera ones → single photos.
+//
+// GPS view: per destination, under its fallback row, the photos in up to two buckets — "Unplaced" (nothing places
+// them: no fallback in effect at or above) or "Fallback" (the folder fallback placed them), and "Placed" — each split by
+// why the tracks missed the photo, or by how it was placed. Photos-23 carries all of it (BLD-placed_photos).
+const MISSED_BY = ["outside_track", "track_gap", "track_jump", "tracks_disagree", "no_tracks", "time_from_date_fallback"];
+const MISSED_LABEL = { outside_track: "away from the tracks", track_gap: "in a gap of the tracks",
+  track_jump: "where the track jumps", tracks_disagree: "tracks disagree", no_tracks: "no tracks",
+  time_from_date_fallback: "time from a date fallback", unknown: "no reason recorded" };
+const PLACED_BY = ["own_position", "own_position_contradicted", "direct_match", "interpolated", "extrapolated", "set_by_hand"];
+const PLACED_LABEL = { own_position: "camera GPS", own_position_contradicted: "camera GPS its offset doubts",
+  direct_match: "track point", interpolated: "between points", extrapolated: "past track end", set_by_hand: "set by hand" };
+// One photo of a destination's GPS record, as the GPS view lists it: its bucket, its sub-group, the cell its row edits
+// (`review` for a review item, `chosen` for a placed photo; none for a photo holding its own position, which no
+// position set here may replace — RUL-chosen_position_names_a_photo). Pure.
+function gpsPhoto(dest, e, isReview) {
+  const ref = (kind) => ({ file: "gps", dest, kind, path: e.relative_path });
+  if (isReview) {
+    if (e.reason === "no_reliable_gps_source")
+      return { bucket: "unplaced", sub: (e.tracks && e.tracks.reason) || "unknown", ref: ref("review"), entry: e };
+    return { bucket: "placed", sub: e.reason === "own_position_contradicted" ? e.reason : "set_by_hand", ref: ref("review"), entry: e };
+  }
+  if (e.placed_by === "folder_fallback")
+    return { bucket: "fallback", sub: (e.tracks && e.tracks.reason) || "unknown", ref: ref("chosen"), entry: e };
+  if (e.placed_by === "own_position") return { bucket: "placed", sub: "own_position", ref: null, entry: e };
+  return { bucket: "placed", sub: e.method || "interpolated", ref: ref("chosen"), entry: e };
+}
+const BUCKET_TITLE = { unplaced: "Unplaced", fallback: "Fallback", placed: "Placed" };
+// A destination's photos in their buckets, in the order the view lists them: what waits first and open (Unplaced),
+// then the settled ones folded (Fallback, Placed). Each bucket: {kind, title, count, open, groups: [{sub, label,
+// photos}], photos} — `photos` listed straight under the bucket: all of them where they share one sub-group (its label
+// joins the bucket's title: "Placed (212) · between points"), else each sub-group of one (no group of one), labelled.
+// Pure — unit-tested.
+function gpsBuckets(dest, destCell) {
+  const gd = destCell?.gps_decisions || {};
+  const all = [...(gd.review_items || []).map((e) => gpsPhoto(dest, e, true)),
+    ...(gd.placed_photos || []).map((e) => gpsPhoto(dest, e, false))];
+  const out = [];
+  for (const kind of ["unplaced", "fallback", "placed"]) {
+    const mine = all.filter((x) => x.bucket === kind);
+    if (!mine.length) continue;
+    const order = kind === "placed" ? PLACED_BY : [...MISSED_BY, "unknown"];
+    const label = (sub) => (kind === "placed" ? PLACED_LABEL : MISSED_LABEL)[sub] || sub;
+    const subs = [...new Set(mine.map((x) => x.sub))].sort((a, b) => order.indexOf(a) - order.indexOf(b));
+    const by = (sub) => mine.filter((x) => x.sub === sub).sort((a, b) => a.entry.relative_path < b.entry.relative_path ? -1 : 1);
+    const b = { kind, title: `${BUCKET_TITLE[kind]} (${mine.length})`, count: mine.length, open: kind === "unplaced",
+      groups: [], photos: [] };
+    if (subs.length === 1) { b.title += ` · ${label(subs[0])}`; b.photos = by(subs[0]); }
+    else for (const sub of subs) {
+      const ps = by(sub);
+      if (ps.length === 1) b.photos.push({ ...ps[0], label: label(sub) });
+      else b.groups.push({ sub, label: `${label(sub)} (${ps.length})`, photos: ps });
+    }
+    out.push(b);
+  }
+  return out;
+}
+// Did the tracks have points near this photo's day? Its reason says so, unless no track exists, its time is a date
+// fallback's, or the nearest point is a day or more away — then no clock offset could have let the tracks place it. Pure.
+const tracksNearThatDay = (t) => !!t && !!t.reason && !["no_tracks", "time_from_date_fallback"].includes(t.reason)
+  && !(t.seconds_from_track >= 86400);
+// The camera buckets (`<group>@<date>`, as the Time view keys its offset rows) of a destination whose photos there all
+// fell to the fallback or wait unplaced, where the tracks had points that day: a whole camera day the tracks missed
+// points at its clock offset, not at the folder. Sorted keys. Pure — unit-tested.
+function fellBackCameras(destCell) {
+  const gd = destCell?.gps_decisions || {}, byKey = new Map();
+  const add = (e, fell) => {
+    if (!e || !e.camera_bucket) return;
+    const k = byKey.get(e.camera_bucket) || { all: true, near: false };
+    k.all = k.all && fell; k.near = k.near || (fell && tracksNearThatDay(e.tracks));
+    byKey.set(e.camera_bucket, k);
+  };
+  for (const e of gd.review_items || []) add(e, e.reason === "no_reliable_gps_source");
+  for (const e of gd.placed_photos || []) add(e, e.placed_by === "folder_fallback");
+  return [...byKey.entries()].filter(([, k]) => k.all && k.near).map(([key]) => key).sort();
+}
+// "<group> · <day>" for a camera bucket key. Pure.
+function cameraDayLabel(key) {
+  const m = /^(.*)@(\d{4}-\d\d-\d\d)$/.exec(key || "");
+  return m ? `${m[1]} · ${fmtDate(m[2])}` : key;
 }
 const workCell = (ref) => cellAt(state.work, ref);
 const baseCell = (ref) => cellAt(state.base, ref);
@@ -232,6 +309,23 @@ function offsetGroups(destCell) {
   }
   return out;
 }
+// Has the user answered this offset cell — anything written in its decision? Pure.
+function offsetAnswered(c) {
+  return Object.values((c && c.user_decision) || {}).some((v) => v !== "" && v != null && v !== false
+    && !(typeof v === "object" && Object.keys(v).length === 0));
+}
+// An offset cell the photos settle — in effect with no answer, asking nothing (a GPS anchor applied as configured, an
+// offset kept as recorded): no answer is needed, so it folds away (docs/design/decisions.md). Pure.
+const offsetSettledByPhotos = (c) => !!c && !c.requires_user_input && !c.stale_user_decision && !offsetAnswered(c)
+  && !!c.effective_time_anchor && typeof c.effective_time_anchor === "object";
+// A destination's offset rows for the Time view: the cameras that ask or that the user answered (`shown`), and the
+// cameras the photos settle (`settled`), folded into one line; `oneCamera` where the destination has a single camera,
+// which has no camera level. Pure — unit-tested.
+function offsetSections(destCell) {
+  const groups = offsetGroups(destCell);
+  const settled = groups.filter((g) => g.buckets.every((b) => offsetSettledByPhotos(b.cell)));
+  return { shown: groups.filter((g) => !settled.includes(g)), settled, oneCamera: groups.length === 1 };
+}
 // Compact a sorted list of YYYY-MM-DD dates: single → "3 Jul 2024", contiguous-ish range → "3–7 Jul",
 // else "first … last". Purely for the row label of a collapsed multi-day cluster.
 function dateRange(dates) {
@@ -305,13 +399,11 @@ function wouldResolve(ref) {
   if (ref.kind === "changed") return changedHolds(c);
   if (ref.kind === "drift")                       // confirmed for this offset (zero-scrub or a valid correction)
     return driftConfirmHolds(c) && validOffset(u.corrected_offset_seconds);
-  if (ref.kind === "fallback")
-    return (u.fallback_lat !== "" && u.fallback_lat != null && u.fallback_lon !== "" && u.fallback_lon != null)
-      || (!!u.accept_proposal && !!p.proposed_fallback);
+  if (ref.kind === "fallback") return !!previewFallback(ref.dest);   // written here, or inherited: it applies itself
   if (c.reason === "own_position_contradicted") return true;      // its own position kept, or the one set for it
   if (ref.kind === "chosen") return true;                         // the tracks or the fallback place it already
   return (u.manual_lat !== "" && u.manual_lat != null && u.manual_lon !== "" && u.manual_lon != null)
-    || (c.reason === "no_reliable_gps_source" && !!fbOwnDecision(ref.dest));   // its folder's fallback places it
+    || (c.reason === "no_reliable_gps_source" && !!previewFallback(ref.dest));   // its folder's fallback places it
 }
 // A cell's status as [kind, label], or null: the last run's, unless the decisions being edited settle it. Pure.
 function statusOf(ref) {
@@ -506,17 +598,16 @@ function previewEffective(ref) {
     ? "accepted — the next `geotag execute` takes this content as the photo's, and goes on with it"
     : "— (held: its writes and rename wait for an answer)";
   if (ref.kind === "fallback") {
-    if (u.fallback_lat !== "" && u.fallback_lon !== "") return `${u.fallback_lat}, ${u.fallback_lon}`;
-    if (u.accept_proposal && p.proposed_fallback) return `${p.proposed_fallback.lat}, ${p.proposed_fallback.lon} (inherited)`;
     const pv = previewFallback(ref.dest);
-    if (pv && pv.source === "inherited") return `${pv.lat}, ${pv.lon} (inherited ⟵ ${leaf(pv.from)}, preview)`;
-    return "— (optional)";
+    if (pv && pv.source === "own") return `${pv.lat}, ${pv.lon} (this destination's own)`;
+    if (pv) return `${pv.lat}, ${pv.lon} (inherited ⟵ ${pv.from})`;
+    return "— (none: the photos nothing else places wait)";
   }
   if (u.manual_lat !== "" && u.manual_lat != null && u.manual_lon !== "" && u.manual_lon != null)
     return `${u.manual_lat}, ${u.manual_lon} (manual)`;
   if (c.reason === "own_position_contradicted") return "its own position kept";
   if (ref.kind === "chosen") return c.placed_by === "folder_fallback" ? "placed by its folder's fallback" : "placed by the tracks";
-  const fb = fbOwnDecision(ref.dest);
+  const fb = previewFallback(ref.dest);
   if (fb) return `${fb.lat}, ${fb.lon} (its folder's fallback)`;
   return "— (needs its folder's fallback, or a position for this photo)";
 }
@@ -627,16 +718,15 @@ function showsDate(dest) {
   if ((own.user_decision?.date ?? "") !== "") return true;
   return Object.entries(dests).some(([d, v]) => (d === dest || d.startsWith(dest + "/")) && (v.date_fallback?.untimed_photos || []).length);
 }
-// Same advisory walk for the GPS folder-fallback: a destination with no own fallback shows the one it
-// would inherit from its nearest resolved ancestor (e.g. a parent/container you just set), updating live.
+// The GPS folder fallback in effect at `dest` in the WORKING decisions: the position written there (`own`), else the
+// one written at the nearest destination above it, which applies itself (`inherited`, naming where it is written —
+// RUL-inherited_fallback_applies), updating live as the destinations above are edited. {lat, lon, source, from} or null.
 function fbOwnDecision(dest) {
   const c = state.work.gps?.destinations?.[dest]?.folder_fallback;
   if (!c) return null;
   const u = c.user_decision || {};
   if (u.fallback_lat !== "" && u.fallback_lat != null && u.fallback_lon !== "" && u.fallback_lon != null)
-    return { lat: u.fallback_lat, lon: u.fallback_lon, source: "manual" };
-  if (u.accept_proposal && c.proposal?.proposed_fallback)
-    return { lat: c.proposal.proposed_fallback.lat, lon: c.proposal.proposed_fallback.lon, source: "accept" };
+    return { lat: u.fallback_lat, lon: u.fallback_lon, source: "own", from: dest };
   return null;
 }
 function previewFallback(dest) {
@@ -644,13 +734,26 @@ function previewFallback(dest) {
   if (own) return own;
   const parts = dest.split("/");
   for (let i = parts.length - 1; i > 0; i--) {
-    const anc = parts.slice(0, i).join("/");
-    if (state.work.gps?.destinations?.[anc]) {
-      const a = previewFallback(anc);
-      if (a) return { lat: a.lat, lon: a.lon, source: "inherited", from: anc };
-    }
+    const a = fbOwnDecision(parts.slice(0, i).join("/"));
+    if (a) return { lat: a.lat, lon: a.lon, source: "inherited", from: a.from };
   }
   return null;
+}
+// The fallback `dest` would inherit were nothing written there: what clearing its own returns to. Pure over state.
+function inheritedFallback(dest) {
+  const parts = dest.split("/");
+  const a = parts.length > 1 ? previewFallback(parts.slice(0, -1).join("/")) : null;
+  return a ? { lat: a.lat, lon: a.lon, source: "inherited", from: a.from } : null;
+}
+// What a destination's fallback cell says of where its fallback comes from. Pure over state.
+function fallbackNote(dest) {
+  const pv = previewFallback(dest), above = inheritedFallback(dest);
+  const what = "Every photo here nothing else places takes it, and the destinations beneath inherit it.";
+  if (pv && pv.source === "own")
+    return `This destination's own fallback. ${what}` + (above ? ` Cleared, the one inherited from ${above.from} (${above.lat}, ${above.lon}) applies again.` : "");
+  if (pv) return `Inherited from ${pv.from}: it applies here by itself. Write a position to give this destination its own — ${what.charAt(0).toLowerCase()}${what.slice(1)}`;
+  return "No fallback here or above: a photo here nothing else places waits for one. Write a position — " +
+    "every such photo here takes it, and the destinations beneath inherit it.";
 }
 
 // --- list views --------------------------------------------------------------
@@ -669,6 +772,7 @@ function tags(ref) {
   } else if (ref.kind === "fallback") {
     const pv = previewFallback(ref.dest);                 // live preview, updates as ancestors change
     if (pv && pv.source === "inherited") out.push(chip("inherited", `inherited ⟵ ${leaf(pv.from)}`));
+    if (pv && pv.source === "own") out.push(chip("inherited", "own"));
   } else if (ref.kind === "date") {
     const pv = previewDate(ref.dest);                     // live preview, updates as ancestors change
     if (pv && pv.source === "inherited") out.push(chip("inherited", `inherited ⟵ ${leaf(pv.from)}`));
@@ -737,25 +841,44 @@ function offsetRow(dest, keys, sub, cell, pr, indent) {
   if (indent) r.classList.add("off-sub");
   return r;
 }
-// Render a destination's offset decisions. Single-day common case → one plain row. A group spanning >1
-// naive date → a header + one row per distinct proposal, equal proposals collapsed into a single
-// multi-day cluster row (a chevron expands it to per-day rows for divergent manual edits).
+// Render a destination's offset decisions (docs/design/decisions.md): the cameras that ask or were answered, then the
+// cameras the photos settle folded into one line, openable and still answerable. A camera is a level only where the
+// destination has several; its days split only where their answers differ — equal days are one row, a chevron opening
+// them for a day of its own.
 function renderOffsetRows(dest, destCell, n) {
+  const { shown, settled, oneCamera } = offsetSections(destCell);
+  for (const g of shown) renderOffsetGroup(dest, destCell, g, oneCamera, n);
+  if (!settled.length) return;
+  const keys = settled.flatMap((g) => g.buckets.map((b) => b.key)), id = `${dest}|settled`;
+  const sel = state.selected && state.selected.file === "time" && state.selected.dest === dest && keys.includes(state.selected.key);
+  const fold = el("details", { class: "fold", open: sel || (state.openFolds || []).includes(id) ? "" : null,
+    ontoggle: (ev) => toggleFold(id, ev.target.open) },
+    el("summary", {}, `Offset · settled by the photos (${settled.map((g) => g.group).join(", ")})`));
+  for (const g of settled) renderOffsetGroup(dest, destCell, g, oneCamera, fold);
+  n.append(fold);
+}
+function toggleFold(id, open) {
+  const o = new Set(state.openFolds || []);
+  if (open) o.add(id); else o.delete(id);
+  state.openFolds = [...o];
+}
+function renderOffsetGroup(dest, destCell, g, oneCamera, n) {
   const cells = destCell.camera_group_time_decisions || {};
-  for (const g of offsetGroups(destCell)) {
-    if (g.buckets.length === 1 && !g.buckets[0].date) { n.append(offsetRow(dest, [g.buckets[0].key], g.group, g.buckets[0].cell, null, false)); continue; }
-    n.append(el("div", { class: "offset-grp" }, `Offset · ${g.group}`, el("span", { class: "sub" }, `  ${g.buckets.length} days`)));
-    for (const pr of g.proposals) {
-      if (pr.keys.length === 1) { const k = pr.keys[0]; n.append(offsetRow(dest, [k], fmtDate(cells[k].date) || g.group, cells[k], pr, true)); continue; }
-      const expKey = `${dest}|${pr.keys.join(",")}`;
-      if (!state.offsetExpand.has(expKey)) {
-        const r = offsetRow(dest, pr.keys, dateRange(pr.dates), cells[pr.keys[0]], pr, true);
-        r.prepend(el("span", { class: "off-chevron", title: "show each day", onclick: (e) => { e.stopPropagation(); state.offsetExpand.add(expKey); render(); } }, "▸"));
-        n.append(r);
-      } else {
-        n.append(el("div", { class: "off-collapse", onclick: () => { state.offsetExpand.delete(expKey); render(); } }, `▾ ${dateRange(pr.dates)} — collapse`));
-        for (const k of pr.keys) n.append(offsetRow(dest, [k], fmtDate(cells[k].date), cells[k], pr, true));
-      }
+  if (g.buckets.length === 1 && !g.buckets[0].date) { n.append(offsetRow(dest, [g.buckets[0].key], g.group, g.buckets[0].cell, null, false)); return; }
+  // a camera of several days is a level of its own only where the destination has other cameras and its days differ
+  const header = !oneCamera && g.proposals.length > 1;
+  if (header) n.append(el("div", { class: "offset-grp" }, `Offset · ${g.group}`, el("span", { class: "sub" }, `  ${g.buckets.length} days`)));
+  const named = (sub) => (header || oneCamera ? sub : `${g.group} · ${sub}`);
+  for (const pr of g.proposals) {
+    if (pr.keys.length === 1) { const k = pr.keys[0]; n.append(offsetRow(dest, [k], named(fmtDate(cells[k].date) || g.group), cells[k], pr, header)); continue; }
+    const expKey = `${dest}|${pr.keys.join(",")}`;
+    if (!state.offsetExpand.has(expKey)) {
+      const r = offsetRow(dest, pr.keys, named(dateRange(pr.dates)), cells[pr.keys[0]], pr, header);
+      r.prepend(el("span", { class: "off-chevron", title: "show each day", onclick: (e) => { e.stopPropagation(); state.offsetExpand.add(expKey); render(); } }, "▸"));
+      n.append(r);
+    } else {
+      n.append(el("div", { class: "off-collapse", onclick: () => { state.offsetExpand.delete(expKey); render(); } }, `▾ ${named(dateRange(pr.dates))} — collapse`));
+      for (const k of pr.keys) n.append(offsetRow(dest, [k], named(fmtDate(cells[k].date)), cells[k], pr, true));
     }
   }
 }
@@ -818,39 +941,65 @@ function renderGps(list) {
   if (!g?.destinations) return list.append(recordAbsent(g, "photos-23-gps-decisions.json"));
   if (!state.base.demo && (state.timeChangedSinceRerun || state.driftChangedSinceRerun))
     list.append(el("div", { class: "gate warn" }, "Time or drift decisions changed since the last geotag run — re-run `photos-cartographer geotag plan` and reload to recompute GPS. The decisions below are stale until you do."));
-  for (const dest of Object.keys(g.destinations).sort()) {
-    const d = g.destinations[dest], fb = d.folder_fallback, s = d.gps_decisions?.summary || {};
-    list.append(el("div", { class: "group-title" }, dest,
-      d.file_less ? el("span", { class: "container-tag", title: "no photos here — its fallback only seeds sub-destinations" }, "container") : null));
-    const fbpv = previewFallback(dest);
-    list.append(row({ file: "gps", dest, kind: "fallback" }, "Folder fallback", null,
-      fb.effective_fallback ? `${fb.effective_fallback.lat}, ${fb.effective_fallback.lon}` : (fbpv ? `${fbpv.lat}, ${fbpv.lon}` : "—")));
-    const order = (d.gps_decisions?.review_items || []).map((ri) => ri.relative_path);
-    for (const ri of d.gps_decisions?.review_items || []) {
-      const ref = { file: "gps", dest, kind: "review", path: ri.relative_path };
-      list.append(el("div", { class: "row" + (isSel(ref) ? " sel" : ""), onclick: (ev) => selectReview(ev, dest, ri.relative_path, order),
-          onmouseenter: (ev) => showHoverPreview(ri.relative_path, ev), onmousemove: moveHoverPreview, onmouseleave: hideHoverPreview },
-        el("span", { class: "label" }, ri.relative_path.split("/").pop()), chip("reason", ri.reason), ...tags(ref), statusChip(ref)));
-    }
-    // The photos the tracks or the fallback place, folded: each can be given a position of its own (`set position`),
-    // which outranks both (BLD-chosen_position). Folded, since nothing about them waits (docs/design/decisions.md).
-    const placed = d.gps_decisions?.placed_photos || [];
-    if (placed.length) {
-      const fold = el("details", { class: "placed", open: (state.openPlaced || []).includes(dest) ? "" : null,
-        ontoggle: (ev) => { const o = new Set(state.openPlaced || []); ev.target.open ? o.add(dest) : o.delete(dest); state.openPlaced = [...o]; } },
-        el("summary", {}, placedSummary(placed)));
-      for (const pp of placed) {
-        const ref = { file: "gps", dest, kind: "chosen", path: pp.relative_path };
-        fold.append(el("div", { class: "row" + (isSel(ref) ? " sel" : ""),
-            onmouseenter: (ev) => showHoverPreview(pp.relative_path, ev), onmousemove: moveHoverPreview, onmouseleave: hideHoverPreview },
-          el("span", { class: "label" }, pp.relative_path.split("/").pop()), chip("reason", placedByLabel(pp)), ...tags(ref),
-          isDirty(ref) ? statusChip(ref) : null,
-          el("button", { class: "mini", onclick: () => { state.selected = ref; render(); } }, "set position")));
-      }
-      list.append(fold);
-    }
-    list.append(el("div", { class: "summary" }, `${s.files_total ?? 0} files — preserve ${s.preserve_native_gps ?? 0}, interp ${s.automatic_gpx_interpolation ?? 0}, extrap ${s.automatic_gpx_extrapolation ?? 0}, fallback ${s.automatic_folder_fallback ?? 0}, blocked ${s.blocked ?? 0}`));
+  const root = buildTree(g.destinations);
+  for (const k of Object.keys(root.children).sort()) renderGpsNode(root.children[k], list);
+}
+// One destination of the GPS view, its fallback the header row, its photos in their buckets, then the destinations
+// inside it (docs/design/decisions.md).
+function renderGpsNode(node, box) {
+  const n = el("div", { class: "node" });
+  if (node.dest) {
+    const dest = node.path, d = node.dest, pv = previewFallback(dest);
+    n.append(el("div", { class: "dest" }, node.seg || "(root)",
+      d.file_less ? el("span", { class: "container-tag", title: "no photos here — its fallback only reaches the destinations inside" }, "container") : null));
+    n.append(row({ file: "gps", dest, kind: "fallback" }, "Fallback", null, pv ? `${pv.lat}, ${pv.lon}` : "—"));
+    const fell = fellBackCameras(d);
+    for (const b of gpsBuckets(dest, d)) n.append(gpsBucket(dest, b, b.kind === "placed" ? [] : fell));
   }
+  const kids = Object.keys(node.children).sort();
+  if (kids.length) { const w = el("div", { class: "kids" }); for (const k of kids) renderGpsNode(node.children[k], w); n.append(w); }
+  box.append(n);
+}
+// A bucket of a destination's photos, folded unless it waits (Unplaced) or holds the selected photo. `fell` are the
+// camera days whose photos here all fell back or wait, where the tracks had points that day: each a link to its offset
+// row in the Time view — the cure may be the camera's clock, not a position.
+function gpsBucket(dest, b, fell) {
+  const id = `${dest}|${b.kind}`, holds = (ps) => ps.some((x) => x.ref && isSel(x.ref));
+  const sel = holds(b.photos) || b.groups.some((gr) => holds(gr.photos));
+  const fold = el("details", { class: "fold" + (b.kind === "unplaced" ? " waits" : ""),
+    open: b.open || sel || (state.openFolds || []).includes(id) ? "" : null, ontoggle: (ev) => toggleFold(id, ev.target.open) },
+    el("summary", {}, b.title, ...fell.map((key) => el("button", { class: "chip needs cam-link",
+      title: "every photo of this camera's day here fell to the fallback, though the tracks had points that day: check its offset",
+      onclick: (ev) => { ev.preventDefault(); state.view = "time"; state.selected = { file: "time", dest, kind: "offset", key }; render(); } },
+      `${cameraDayLabel(key)} — check its offset`))));
+  const order = b.kind === "unplaced"
+    ? [...b.groups.flatMap((gr) => gr.photos), ...b.photos].map((x) => x.entry.relative_path) : [];
+  for (const gr of b.groups) {
+    const gid = `${id}|${gr.sub}`;
+    const sub = el("details", { class: "fold sub", open: b.kind === "unplaced" || holds(gr.photos) || (state.openFolds || []).includes(gid) ? "" : null,
+      ontoggle: (ev) => toggleFold(gid, ev.target.open) }, el("summary", {}, gr.label));
+    for (const x of gr.photos) sub.append(gpsPhotoRow(dest, x, order));
+    fold.append(sub);
+  }
+  for (const x of b.photos) fold.append(gpsPhotoRow(dest, x, order));   // single photos last
+  return fold;
+}
+// One photo's row: hover-previewable; a photo nothing places selects (shift-click a run of them), a placed one offers
+// "set position" (BLD-chosen_position); one holding its own position is listed only.
+function gpsPhotoRow(dest, x, order) {
+  const path = x.entry.relative_path, ref = x.ref;
+  const r = el("div", { class: "row" + (ref && isSel(ref) ? " sel" : ""),
+      onmouseenter: (ev) => showHoverPreview(path, ev), onmousemove: moveHoverPreview, onmouseleave: hideHoverPreview },
+    el("span", { class: "label" }, leaf(path)), x.label ? chip("reason", x.label) : null);
+  if (!ref) return r;
+  if (ref.kind === "review") {
+    r.onclick = (ev) => (x.bucket === "unplaced" ? selectReview(ev, dest, path, order) : (state.selected = ref, render()));
+    r.append(...[...tags(ref), statusChip(ref)].filter(Boolean));
+  } else {
+    r.append(...[...tags(ref), isDirty(ref) ? statusChip(ref) : null,
+      el("button", { class: "mini", onclick: () => { state.selected = ref; render(); } }, "set position")].filter(Boolean));
+  }
+  return r;
 }
 
 function renderDrift(list) {
@@ -1231,19 +1380,19 @@ function controls(ref) {
   } else if (ref.kind === "changed") {
     wrap.append(changedControls(ref));
   } else if (ref.kind === "fallback") {
-    const hasProp = p.proposal_source === "inherited";
-    const cb = checkbox(hasProp ? `accept inherited (${p.proposed_fallback.lat}, ${p.proposed_fallback.lon})` : "accept inherited — none",
-      u.accept_proposal, (v) => edit(ref, "accept_proposal", v), !hasProp);
-    // The folder fallback is optional. Once authored (a manual coord OR an accepted inherited value)
-    // there was no way to take it back; offer an explicit reset to NONE right beside the checkbox —
-    // clears the coordinate AND the accept flag in one action, so effective_fallback becomes null and
-    // descendants re-inherit from above. (To inherit instead of none, re-tick "accept inherited".)
-    const authored = !!u.accept_proposal
-      || (u.fallback_lat !== "" && u.fallback_lat != null) || (u.fallback_lon !== "" && u.fallback_lon != null);
-    const row = el("div", { class: "ctl-row" }, cb);
-    if (authored) row.append(el("button", { class: "mini", title: "remove this folder fallback (back to none)",
-      onclick: () => editMany(ref, { fallback_lat: "", fallback_lon: "", accept_proposal: false }) }, "clear"));
-    wrap.append(row, coordField(ref));
+    // An inherited fallback applies itself (RUL-inherited_fallback_applies); the one answer here is a position written
+    // for this destination, which every photo here the fallback places takes, and the destinations beneath inherit
+    // (RUL-written_fallback_over_inherited). Cleared, the inherited one applies again. There is no "none" to write.
+    wrap.append(el("div", { class: "hint" }, fallbackNote(ref.dest)));
+    wrap.append(coordField(ref));
+    const written = (u.fallback_lat !== "" && u.fallback_lat != null) || (u.fallback_lon !== "" && u.fallback_lon != null);
+    if (written) {
+      const above = inheritedFallback(ref.dest);
+      wrap.append(el("div", { class: "ctl-row" }, el("button", { class: "mini",
+        title: above ? "take this destination's own position away: the inherited one applies again" : "take this destination's own position away",
+        onclick: () => editMany(ref, { fallback_lat: "", fallback_lon: "" }) },
+        above ? `back to the inherited (${above.lat}, ${above.lon})` : "clear")));
+    }
   } else if (c.reason === "own_position_contradicted") {
     // a photo's own position its camera's agreed clock offset contradicts (BLD-contradicted_position): its own is
     // kept unless the user takes the track's — or sets another — as manual_lat/lon (RUL-own_position_replaced_on_answer)
@@ -1269,11 +1418,11 @@ function controls(ref) {
       if (offer === "folder_fallback") {
         // the folder's fallback first: one answer places every photo of the folder nothing else places
         // (docs/design/decisions.md)
-        const fbRef = { file: "gps", dest: ref.dest, kind: "fallback" }, fb = fbOwnDecision(ref.dest);
+        const fbRef = { file: "gps", dest: ref.dest, kind: "fallback" }, fb = previewFallback(ref.dest);
         wrap.append(el("div", { class: "ctl-row" },
           el("button", { class: "btn", onclick: () => { state.selected = fbRef; render(); } }, "set the folder's fallback"),
-          el("span", { class: "hint" }, fb ? `set: ${fb.lat}, ${fb.lon} — it places this photo`
-            : "places every photo of this folder the tracks do not")));
+          el("span", { class: "hint" }, fb ? `set: ${fb.lat}, ${fb.lon}${fb.source === "inherited" ? ` (inherited ⟵ ${leaf(fb.from)})` : ""} — it places this photo`
+            : "places every photo of this folder the tracks do not, and of the folders beneath")));
         wrap.append(el("div", { class: "hint" }, "or a position for this photo alone:"));
       } else wrap.append(coordField(ref));
     }
@@ -1431,15 +1580,16 @@ function currentCoord(ref) {
   return isNum(u[la]) && isNum(u[lo]) ? { lat: u[la], lon: u[lo] } : null;
 }
 function destFallbackCoord(dest) {
-  const fb = state.work.gps?.destinations?.[dest]?.folder_fallback;
-  const e = fb?.effective_fallback || fb?.proposal?.proposed_fallback;
+  const e = previewFallback(dest);
   return e && isNum(e.lat) && isNum(e.lon) ? { lat: e.lat, lon: e.lon } : null;
 }
 function gpsRefMarkers(ref) {
-  const c = workCell(ref), p = c.proposal || {}, out = [];
+  const out = [];
   if (ref.kind === "fallback") {
-    if (c.effective_fallback) out.push({ ...c.effective_fallback, label: "effective fallback", color: "#4f9cf9" });
-    if (p.proposed_fallback) out.push({ ...p.proposed_fallback, label: `inherited (${p.inherited_from || "ancestor"})`, color: "#e0a85e" });
+    const own = fbOwnDecision(ref.dest), above = inheritedFallback(ref.dest);
+    if (own && isNum(own.lat) && isNum(own.lon)) out.push({ lat: own.lat, lon: own.lon, label: "this destination's own", color: "#4f9cf9" });
+    if (above && isNum(above.lat) && isNum(above.lon))
+      out.push({ lat: above.lat, lon: above.lon, label: `inherited (${above.from})`, color: "#e0a85e" });
   } else {
     const fb = destFallbackCoord(ref.dest);
     if (fb) out.push({ ...fb, label: "folder fallback", color: "#e0a85e" });
@@ -2111,8 +2261,8 @@ function renderPanel() {
   const scroll = el("div", { class: "panel-scroll" });
   if (isScrub) scroll.append(scrubBlock(ref));
   if (isGpsCoord) scroll.append(mapBlock(ref));   // the review photo is now a thumbnail in "Your decision" + a hover preview in the worklist
-  // No raw "Proposal" JSON box for fallback — the inherited proposal is already shown in the
-  // "accept inherited (lat, lon)" checkbox label, so the JSON dump was redundant clutter.
+  // No raw "Proposal" JSON box for fallback: it proposes nothing — the inherited one, which applies itself, is said
+  // in its decision box.
   if (c.proposal && ref.kind !== "drift" && ref.kind !== "fallback" && ref.kind !== "reading" && ref.kind !== "fingerprint" && ref.kind !== "camera" && ref.kind !== "bodies")
     scroll.append(ref.kind === "offset" ? offsetProposalBlock(ref, c.proposal) : jsonBlock("Proposal", c.proposal));
   p.replaceChildren(top, scroll);
@@ -2240,7 +2390,8 @@ export {
   groupChoice, chosenOffset, inConflict, proposalTaken, proposalNotes, driftConfirmHolds, driftConfirmFields, driftCorrectionFields, driftTracksHold, driftStaleReason, acceptFields, acceptHolds, tracksNote,
   zoneContradiction, offsetCellNotes, zoneSpokenFor, zoneDespiteFields, effectiveCountry, clearCountriesInside,
   clockChangeHolds, clockChangePartsGiven, clockChangeFields, clockChangePart, contradictedNote, takeTrackPosition, neighbourDayNote,
-  scrubOffset, scrubSeedIndex, mapKeyFor, savePayload, withChosenCells, reviewOffers, placedByLabel, placedSummary,
+  scrubOffset, scrubSeedIndex, mapKeyFor, savePayload, withChosenCells, reviewOffers, gpsBuckets, fellBackCameras,
+  cameraDayLabel, tracksNearThatDay, offsetSections, offsetAnswered, offsetSettledByPhotos, fallbackNote, inheritedFallback,
   ambiguousTimeNote, gpsTimeAsideNote, zoneOffer, validReading, keepHolds, keepFields, keepOffered, phoneNote,
   trueInstant, parseUtcOff, mismatchAccepted, recordAbsentText, DEVICE_CLASSES, changedHolds, changedFields, changedKeepLabel, keptTagNote, unidentifiedHolds, unidentifiedFields, loadRefusal, hasUnsavedEdits, utcOff,
   dateFallbackDay, validDateFallback, previewDate, showsDate,

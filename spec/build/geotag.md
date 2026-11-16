@@ -104,7 +104,7 @@ A GPX self-anchor offset SHALL be set as `effective_time_anchor` with `decision_
 anchors do not conflict and `camera_time_and_timezone_policy.multi_anchor_auto_apply` holds for two or more anchors,
 or `single_anchor_auto_apply` for one — a phone's one anchor never ({need}`BLD-phone_offset_cell`); a destination's `inherited` timezone proposal is set as its
 `effective_iana_timezone` likewise, a `config_default` one never; a `recorded_offset`, `timezone_naive` or `neighbour_day` offset proposal
-and an `inherited` folder fallback become effective only with `accept_proposal: true`.
+becomes effective only with `accept_proposal: true`.
 :::
 
 :::{bld} How an offset is accepted
@@ -652,8 +652,22 @@ a `summary` counting `files_total`, `preserve_native_gps`, `automatic_gpx_interp
 `automatic_decision_summary` naming the track files used; `review_items` — one per photo `blocked`
 (`no_reliable_gps_source`, requiring input) or `manual_locked`, each with `manual_lat` and `manual_lon` — and one per
 photo whose own position its camera's agreed offset contradicts ({need}`BLD-contradicted_position`); and, where there
-are any, `placed_photos` ({need}`BLD-chosen_position`). No other photo is named, and the executable plan reads no
-automatic position from the record: it derives each again from its own inputs.
+are any, `placed_photos`, every other photo ({need}`BLD-placed_photos`). The executable plan reads no automatic position
+from the record: it derives each again from its own inputs.
+:::
+
+:::{bld} The placed photos, and each photo's camera day
+:id: BLD-placed_photos
+:status: ruled
+:realises: RUL-fallback_photo_says_why
+:uses: BLD-gps_decisions_record, BLD-placement_order, BLD-review_item_identity, BLD-offset_buckets
+
+A destination's `gps_decisions.placed_photos` SHALL list, with its `relative_path` and `content_fingerprint`, each
+photo no review item names, by what places it: its own position (`placed_by: "own_position"`), the tracks (`"tracks"`,
+with the `method` of the placing track: `direct_match`, `interpolated` or `extrapolated`) or its destination's effective
+fallback (`"folder_fallback"`, with `tracks`, why the tracks did not place it, as a review item carries it). Each of
+them, and each review item, carries `camera_bucket` where its camera has an offset cell in the destination's photos-21
+record and the photo a time its camera recorded: the key of the cell of its day, `<group>@<date>`, else `<group>`.
 :::
 
 :::{bld} A position chosen for a photo the tracks or the fallback place
@@ -663,7 +677,8 @@ automatic position from the record: it derives each again from its own inputs.
 :uses: BLD-gps_decisions_record, BLD-placement_order, BLD-review_item_identity
 
 A destination's `gps_decisions.placed_photos` SHALL list each photo the tracks place (`placed_by: "tracks"`) or its
-effective fallback places (`placed_by: "folder_fallback"`), with its `relative_path` and `content_fingerprint`. An entry
+effective fallback places (`placed_by: "folder_fallback"`), with its `relative_path` and `content_fingerprint`
+({need}`BLD-placed_photos`). An entry
 of its `review_items` with `reason: "chosen_by_user"`, the `relative_path` of one of them and `manual_lat`/`manual_lon`
 — written by hand, or by the decision editor — is that photo's decision: `classify_gps` gives it `manual_locked`, and
 photos-23 writes it back as a `manual_locked` review item, which stays while its decision holds a position, found
@@ -698,12 +713,24 @@ replaces, which the log keeps ({need}`BLD-geotag_log_steps`).
 :::{bld} The folder-fallback cell
 :id: BLD-folder_fallback_cell
 :status: ruled
-:realises: RUL-fallback_from_nearest, RUL-fallback_optional, RUL-proposals_need_acceptance, RUL-accepted_fallback_follows
+:realises: RUL-fallback_from_nearest, RUL-fallback_optional, RUL-inherited_fallback_applies, RUL-written_fallback_over_inherited
 
-Destinations SHALL be built parent first; each one's `folder_fallback` proposes, as `inherited` with `inherited_from`,
-the `effective_fallback` of its nearest ancestor that has one, else `manual_required`. Its `effective_fallback` is the
-`fallback_lat`/`fallback_lon` written there, else the inherited proposal when `accept_proposal` is true, else none; an
-accepted proposal that does not exist is `stale_user_decision`. Its `requires_user_input` is always false.
+Destinations SHALL be built parent first; each one's `folder_fallback` carries as `inherited_fallback` the
+`fallback_lat`/`fallback_lon` written at its nearest ancestor that has them, as `lat`, `lon` and `from` (that ancestor),
+else null. Its `user_decision` holds `fallback_lat` and `fallback_lon`. Its `effective_fallback` is the position written
+there (`fallback_source: "own"`), else the inherited one (`fallback_source: "inherited"`, with `inherited_from`), else
+null (`fallback_source: "none"`). Its `requires_user_input` is always false.
+:::
+
+:::{bld} What the fallback placed, printed and recorded
+:id: BLD-fallback_placements_printed
+:status: ruled
+:realises: RUL-fallback_placements_told
+:uses: BLD-folder_fallback_cell, BLD-gps_decisions_record
+
+`geotag plan` SHALL print, for each destination whose folder fallback placed photos, how many, and whether the fallback
+is its own or inherited, naming the destination it is inherited from — what photos-23 records as the destination's
+`summary.automatic_folder_fallback` and its `folder_fallback`'s `fallback_source` and `inherited_from`.
 :::
 
 :::{bld} How a track places a photo

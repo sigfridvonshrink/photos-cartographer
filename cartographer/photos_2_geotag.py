@@ -310,6 +310,34 @@ def unknown_review_fields(gps_record):
     return out
 
 
+def _camera_bucket(cells, f):
+    """The key of the photos-21 offset cell of `f`'s camera on its day, among its destination's `cells`
+    (BLD-placed_photos): `<group>@<date>` where the destination keys the camera by day, else `<group>` — None where
+    the camera has no offset cell there, or the photo no time its camera recorded (a date fallback's photo)."""
+    group, date = f.get("camera_group_key"), _naive_date(f.get("source_naive_time"))
+    if date is None:
+        return None
+    key = f"{group}@{date}"
+    key = key if key in cells else group
+    return key if key in cells else None
+
+
+def fallback_placement_lines(gps_artifact):
+    """For each destination of photos-23 whose folder fallback placed photos, a line saying how many, and whose
+    fallback it is — the destination's own, or inherited from the destination named (RUL-fallback_placements_told,
+    BLD-fallback_placements_printed)."""
+    out = []
+    for dest, d in sorted(((gps_artifact or {}).get("destinations") or {}).items()):
+        n = ((d.get("gps_decisions") or {}).get("summary") or {}).get("automatic_folder_fallback") or 0
+        if not n:
+            continue
+        fb = d.get("folder_fallback") or {}
+        whose = (f"the fallback inherited from {fb.get('inherited_from')}" if fb.get("fallback_source") == "inherited"
+                 else "its own fallback")
+        out.append(f"  {dest}: {n} photo(s) placed by {whose}.")
+    return out
+
+
 def _decision_flag(ud, field, where, blockers):
     """A yes-or-no the user writes: absent (or null) means no; true or false as written; anything else
     — "false", 1, "yes" — is a located blocker, never coerced (RUL-checked_shapes)."""
@@ -2190,14 +2218,17 @@ class GeotagWorkflow:
     # its own choosing (BLD-chosen_position); geotag keeps it as a `manual_locked` item.
     _CHOSEN = "chosen_by_user"
 
-    def build_gps_decisions(self, files, resolved_rows, gpx, prior, resolved_fp, contradicted=()):
+    def build_gps_decisions(self, files, resolved_rows, gpx, prior, resolved_fp, contradicted=(), time_decisions=None):
         """Build/regenerate photos-23 (BLD-gps_decisions_record): the BLD-placement_order decision per by-dest file,
-        grouped by destination as automatic-category SUMMARIES with file paths only for review/blocker items.
-        Destinations are processed parent-first so a folder_fallback inherits its nearest resolved
-        ancestor's effective fallback (BLD-folder_fallback_cell). `contradicted` are the photos whose own position the
-        offset agreed from their camera's GPS contradicts (`contradicted_positions`): each is set against the tracks at
-        its corrected time (BLD-contradicted_position). Returns (artifact, blockers)."""
+        grouped by destination: a summary of counts, the photos that ask or were answered as `review_items`, every
+        other photo in `placed_photos` (BLD-placed_photos). Destinations are processed parent-first so a
+        folder_fallback inherits its nearest ancestor's effective fallback (BLD-folder_fallback_cell). `contradicted`
+        are the photos whose own position the offset agreed from their camera's GPS contradicts
+        (`contradicted_positions`): each is set against the tracks at its corrected time (BLD-contradicted_position).
+        `time_decisions` is photos-21, whose offset cells name each photo's camera bucket. Returns (artifact,
+        blockers)."""
         contradicted = set(contradicted)
+        time_dests = (time_decisions or {}).get("destinations") or {}
         reach = CONFIG["gpx_anchor_max_point_distance_meters"]
         blockers = _decision_shape_blockers(prior, "gps")
         if blockers:
@@ -2211,7 +2242,7 @@ class GeotagWorkflow:
         destinations = {}
         disagreeing = {}                                      # (track, track) -> photos they place apart
         outranked = {}                                        # (lower track, the one placing) -> photos apart
-        fallback_eff = {}                                     # (dest, None) -> effective fallback coord
+        fallback_eff = {}                                     # (dest, None) -> the fallback written there
         ordered, containers = _expand_destinations(by_dest)
         self.coordinator.start_phase("deciding GPS placement", len(files))
         for dest in ordered:
@@ -2221,12 +2252,15 @@ class GeotagWorkflow:
             inherited = _nearest_ancestor(dest, fallback_eff, None)
             fb_cell = self._folder_fallback_cell(dest, prior_d.get("folder_fallback") or {}, inherited, blockers)
             eff_fb = fb_cell["effective_fallback"]
-            fallback_eff[(dest, None)] = eff_fb
+            if fb_cell["fallback_source"] == "own":
+                # only a written fallback is one to inherit from: one inherited passes through, naming where it is written
+                fallback_eff[(dest, None)] = eff_fb
 
             items = (prior_d.get("gps_decisions") or {}).get("review_items") or []
             prior_reviews = ({ri["content_fingerprint"]: ri for ri in items if ri.get("content_fingerprint")},
                              {ri["relative_path"]: ri for ri in items if not ri.get("content_fingerprint")})
             self._check_chosen_items(dest, items, by_dest.get(dest, []), blockers)
+            cells = (time_dests.get(dest) or {}).get("camera_group_time_decisions") or {}
             counts = {k: 0 for k in self._SUMMARY_KEYS}
             review_items, gpx_files, untracked, placed = [], set(), [], []
             for f in sorted(by_dest.get(dest, []), key=lambda x: x["relative_path"]):
@@ -2256,6 +2290,8 @@ class GeotagWorkflow:
                         k = (lt["gpx_file"], coord["gpx_file"])
                         outranked[k] = outranked.get(k, 0) + 1
                 counts["files_total"] += 1
+                bucket = _camera_bucket(cells, f)
+                n_review, n_placed = len(review_items), len(placed)
                 if own is not None:
                     # the photo's own position kept, or replaced by the position the user set — the item asks nothing
                     # (RUL-contradicted_position_kept_unless_taken)
@@ -2263,12 +2299,14 @@ class GeotagWorkflow:
                     review_items.append(dict(self._review_item(f, self._OWN_CONTRADICTED, fd, False), **own))
                 elif cat == "preserve_native":
                     counts["preserve_native_gps"] += 1
+                    placed.append(self._placed_photo(f, "own_position"))
                 elif cat in ("gpx_interpolation", "gpx_extrapolation"):
                     counts[f"automatic_{cat}"] += 1; gpx_files.add(coord.get("gpx_file"))
-                    placed.append(self._placed_photo(f, "tracks"))
+                    placed.append(dict(self._placed_photo(f, "tracks"), method=coord["method"]))
                 elif cat == "manual_fallback":
+                    # placed by the fallback: recorded with why the tracks did not (RUL-fallback_photo_says_why)
                     counts["automatic_folder_fallback"] += 1
-                    placed.append(self._placed_photo(f, "folder_fallback"))
+                    placed.append(dict(self._placed_photo(f, "folder_fallback"), **({"tracks": why} if why else {})))
                 elif cat == "manual_locked":
                     # a position the user set for it — on a photo nothing else placed, or one they chose over the
                     # tracks or the fallback (`chosen_by_user`): kept while it holds one (RUL-chosen_position_kept)
@@ -2277,6 +2315,10 @@ class GeotagWorkflow:
                 else:                                          # blocked
                     counts["blocked"] += 1
                     review_items.append(self._review_item(f, "no_reliable_gps_source", fd, True, why))
+                if bucket is not None:
+                    # the photo's camera day, as photos-21 keys its offset cell (BLD-placed_photos)
+                    for entry in review_items[n_review:] + placed[n_placed:]:
+                        entry["camera_bucket"] = bucket
                 self.coordinator.increment_completed(1)
             counts["manual_review_required"] = sum(1 for ri in review_items if ri["requires_user_input"])
             destinations[dest] = {
@@ -2300,8 +2342,9 @@ class GeotagWorkflow:
                 # (RUL-contradicted_position_without_track_noted)
                 destinations[dest]["gps_decisions"]["contradicted_without_track"] = untracked
             if placed:
-                # the photos the tracks or the fallback place, by path: what a position chosen for one of them names
-                # (BLD-chosen_position) — never read by the plan, which places them again from its own inputs
+                # every photo no review item names, by path and how it is placed (BLD-placed_photos) — what a position
+                # chosen for one of them names (BLD-chosen_position); never read by the plan, which places them again
+                # from its own inputs
                 destinations[dest]["gps_decisions"]["placed_photos"] = placed
             if is_container:
                 destinations[dest]["file_less"] = True
@@ -2354,35 +2397,31 @@ class GeotagWorkflow:
                 "proposed_position": {"lat": p["lat"], "lon": p["lon"], "method": p["method"], "gpx_file": p["gpx_file"]}}
 
     def _folder_fallback_cell(self, dest, prior_fb, inherited, blockers):
+        """A destination's `folder_fallback` (BLD-folder_fallback_cell): the fallback it inherits from the nearest
+        destination above it that has one written, applied by itself (RUL-inherited_fallback_applies), unless a
+        position is written for the destination, which outranks it there and passes to the destinations beneath
+        (RUL-written_fallback_over_inherited); emptied, the inherited one applies again. `inherited` is
+        (ancestor, coordinate) or None. Never asks (RUL-fallback_optional)."""
         ud = prior_fb.get("user_decision") or {}
         flat, flon = ud.get("fallback_lat", ""), ud.get("fallback_lon", "")
-        accept = _decision_flag(ud, "accept_proposal", f"{dest}: folder_fallback.user_decision", blockers)
         if _half_position(flat, flon):
             blockers.append(f"{dest}: folder_fallback.user_decision fallback_lat/lon must both be set, or neither.")
-        if inherited is not None:
-            anc_path, anc_coord = inherited
-            proposal = {"proposal_source": "inherited", "proposed_fallback": anc_coord,
-                        "inherited_from": anc_path}
-        else:
-            proposal = {"proposal_source": "manual_required"}
-        effective, stale = None, False
+        cell = {
+            "inherited_fallback": ({**inherited[1], "from": inherited[0]} if inherited is not None else None),
+            "user_decision": {"fallback_lat": flat, "fallback_lon": flon},
+            "effective_fallback": None,
+            "fallback_source": "none",
+            "requires_user_input": False,                     # the fallback is optional, never blocks
+        }
         if flat not in (None, "") and flon not in (None, ""):
             if _valid_coord(flat, flon):
-                effective = {"lat": flat, "lon": flon}
+                cell["effective_fallback"], cell["fallback_source"] = {"lat": flat, "lon": flon}, "own"
             else:
                 blockers.append(f"{dest}: folder_fallback.user_decision fallback_lat/lon out of range.")
-        elif accept:
-            if proposal["proposal_source"] == "inherited":
-                effective = proposal["proposed_fallback"]
-            else:
-                stale = True                                  # accepted a fallback that does not exist
-        return {
-            "proposal": proposal,
-            "user_decision": {"fallback_lat": flat, "fallback_lon": flon, "accept_proposal": accept},
-            "effective_fallback": effective,
-            "requires_user_input": False,                     # the fallback is optional, never blocks
-            "stale_user_decision": stale,
-        }
+        elif inherited is not None:
+            cell["effective_fallback"], cell["fallback_source"] = dict(inherited[1]), "inherited"
+            cell["inherited_from"] = inherited[0]
+        return cell
 
     def _validate_review_decision(self, dest, rel, ud, blockers):
         mlat, mlon = ud.get("manual_lat", ""), ud.get("manual_lon", "")
@@ -2412,7 +2451,8 @@ class GeotagWorkflow:
                                 f"{self._CHOSEN} entry.")
 
     def _placed_photo(self, f, placed_by):
-        """A photo the tracks or the folder fallback place, as photos-23's `placed_photos` lists it (BLD-chosen_position)."""
+        """A photo its own position, the tracks or the folder fallback place, as photos-23's `placed_photos` lists it
+        (BLD-placed_photos)."""
         return {"relative_path": f["relative_path"], "content_fingerprint": f.get("content_fingerprint"),
                 "placed_by": placed_by}
 
@@ -4015,7 +4055,8 @@ def run(args):
                     prior_gps, problem = _load_prior_decisions(gdp)
                     if problem:
                         _stop_on_unreadable_decisions(reporter, problem)
-                    gps_artifact, gps_blockers = wf.build_gps_decisions(files, rows, gpx, prior_gps, fp, contradicted)
+                    gps_artifact, gps_blockers = wf.build_gps_decisions(files, rows, gpx, prior_gps, fp, contradicted,
+                                                                        time_decisions=artifact)
                     if gps_blockers:
                         reporter.error("\nGeotag cannot proceed: invalid value(s) in "
                               f"{GPS_DECISIONS_ARTIFACT}:")
@@ -4028,10 +4069,13 @@ def run(args):
                         reporter.log(f"  Previous {GPS_DECISIONS_ARTIFACT} backed up to {_gd_bak}")
                     tot = {k: sum(d["gps_decisions"]["summary"][k] for d in gps_artifact["destinations"].values())
                            for k in ("automatic_gpx_interpolation", "automatic_gpx_extrapolation",
-                                     "preserve_native_gps", "blocked")}
+                                     "automatic_folder_fallback", "preserve_native_gps", "blocked")}
                     reporter.log(f"Wrote {GPS_DECISIONS_ARTIFACT}: status={gps_artifact['status']} "
                           f"({tot['preserve_native_gps']} native, {tot['automatic_gpx_interpolation']} interp, "
-                          f"{tot['automatic_gpx_extrapolation']} extrap, {tot['blocked']} blocked).", stream="stdout")
+                          f"{tot['automatic_gpx_extrapolation']} extrap, {tot['automatic_folder_fallback']} fallback, "
+                          f"{tot['blocked']} blocked).", stream="stdout")
+                    for line in fallback_placement_lines(gps_artifact):
+                        reporter.log(line, stream="stdout")
                     for ld in wf.lower_track_disagreements:
                         reporter.log(f"  Track {ld['gpx_file']} put {ld['photos']} photo(s) more than "
                                      f"{CONFIG['gpx_tracks_agree_max_distance_meters']:g} m from where the "

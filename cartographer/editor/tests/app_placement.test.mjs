@@ -20,8 +20,8 @@ import assert from "node:assert/strict";
 import * as app from "../web/app.js";
 
 const D = "6-photos-by-dest/Japan";
-const fallback = (ud) => ({ proposal: { proposal_source: "manual_required" }, effective_fallback: null,
-  user_decision: { fallback_lat: "", fallback_lon: "", accept_proposal: false, ...ud } });
+const fallback = (ud) => ({ inherited_fallback: null, effective_fallback: null, fallback_source: "none",
+  user_decision: { fallback_lat: "", fallback_lon: "", ...ud } });
 const unplaced = (rel) => ({ relative_path: rel, reason: "no_reliable_gps_source", requires_user_input: true,
   user_decision: { manual_lat: "", manual_lon: "" } });
 
@@ -40,7 +40,7 @@ test("the folder's fallback, once set, resolves the photo nothing else places; l
   work.gps.destinations[D].gps_decisions.review_items[0].user_decision.accept_unlocated = true;   // no such answer
   assert.equal(app.wouldResolve(ref), false);
   delete work.gps.destinations[D].gps_decisions.review_items[0].user_decision.accept_unlocated;
-  work.gps.destinations[D].folder_fallback.user_decision = { fallback_lat: 35.6, fallback_lon: 139.6, accept_proposal: false };
+  work.gps.destinations[D].folder_fallback.user_decision = { fallback_lat: 35.6, fallback_lon: 139.6 };
   assert.equal(app.wouldResolve(ref), true);                                    // the fallback places it
   work.gps.destinations[D].folder_fallback = fallback({});
   work.gps.destinations[D].gps_decisions.review_items[0].user_decision = { manual_lat: 35.0, manual_lon: 135.7 };
@@ -54,9 +54,6 @@ test("a placed photo is listed, given an empty answer, and saved as a chosen pos
   const loaded = app.withChosenCells({ gps: { destinations: { [D]: { folder_fallback: fallback({}),
     gps_decisions: { review_items: [], placed_photos: placed } } } } });
   assert.deepEqual(loaded.gps.destinations[D].gps_decisions.placed_photos[0].user_decision, { manual_lat: "", manual_lon: "" });
-  assert.equal(app.placedByLabel(placed[0]), "tracks");
-  assert.equal(app.placedByLabel(placed[1]), "fallback");
-  assert.equal(app.placedSummary(placed), "2 placed — 1 by the tracks, 1 by the fallback: set a position for one");
   app.state.base = loaded; app.state.work = JSON.parse(JSON.stringify(loaded));
   assert.equal(app.cellAt(app.state.work, ref).placed_by, "tracks");
   assert.equal(app.isDirty(ref), false);

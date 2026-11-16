@@ -114,8 +114,7 @@ the same way:
   - **drift** (§5a): a confirmation whose `confirmed_offset_seconds` is no longer the current offset
     (the photos-21 offset changed), or one of whose `confirmed_against_tracks` is gone from `gpx_root` or
     changed since (or which named none, and tracks now lie by the photos);
-  - **folder fallback** (§5.3): `accept_proposal` with no inherited fallback to accept.
-
+  
 Top-level **`status`** is `"complete"` when nothing requires input, else `"requires_user_input"`;
 **`requires_user_input`** (top level) is the OR of all cells. The editor can use these to show overall
 progress and to know when the file is "done". (Both are system-owned; don't set them.)
@@ -575,7 +574,7 @@ Same wrapper as §4.1 with `artifact_type: "gps_decisions"` / `artifact_name:
       "max_distance_to_track_m": 50, "confidence": "automatic", "notes": ["…"]   // confidence: "automatic", or "mixed" if the destination has blocked files
     },
     "review_items": [ /* §5.4 — the per-file editable list */ ],
-    "placed_photos": [ /* SYSTEM, optional — the photos the tracks or the fallback place, by path (below) */ ]
+    "placed_photos": [ /* SYSTEM, optional — every photo no review item names, by path and how it is placed (below) */ ]
   },
   "file_less": true                        // SYSTEM, optional: a container destination (§4.2) — its fallback
 }                                          //   only seeds the destinations inside it
@@ -584,36 +583,44 @@ Same wrapper as §4.1 with `artifact_type: "gps_decisions"` / `artifact_name:
 **Editable surface in this file = `folder_fallback` (per destination) + `review_items` (per file).**
 Every photo leaves geotag with a position: there is no answer that leaves one without. A photo the tracks
 and the fallback both miss waits until you give **its folder a fallback** — one answer that places every
-such photo of the folder (and, once accepted there, of the folders inside it) — or **it a position of its
-own**.
+such photo of the folder, and of the folders inside it, which inherit it — or **it a position of its own**.
 
-Photos with their own position are **only counted** in `summary`. Photos the tracks or the fallback place
-are counted too, and listed by path in `placed_photos` (read-only) so that you can give one of them a
-position of its own (§5.4, `chosen_by_user`); the exact per-file writes live in
-`photos-24-executable-plan.json`, which the editor does not touch.
+Every photo is listed: the ones that ask, or that you answered, in `review_items` (§5.4); every other one, read-only,
+in `placed_photos`, with how it is placed — so that you can see what the fallback placed and why the tracks missed
+it, and give a photo the tracks or the fallback place a position of its own (§5.4, `chosen_by_user`). The exact
+per-file writes live in `photos-24-executable-plan.json`, which the editor does not touch.
 
 | `placed_photos[]` field | Type | Meaning |
 |-------|------|---------|
 | `relative_path` | string | The photo's workspace-relative path. |
 | `content_fingerprint` | string \| null | Its identity. |
-| `placed_by` | `"tracks"` \| `"folder_fallback"` | What places it now. |
+| `placed_by` | `"own_position"` \| `"tracks"` \| `"folder_fallback"` | What places it now: its own GPS position, the tracks, or the destination's folder fallback. A position can be chosen (§5.4, `chosen_by_user`) only for a photo the tracks or the fallback place. |
+| `method` | `"direct_match"` \| `"interpolated"` \| `"extrapolated"` | Placed by the tracks: on a track point, between two, or past a track's end. |
+| `tracks` | object | Placed by the fallback: why the tracks did not place it — the same `reason` and evidence as a review item's (§5.4). |
+| `camera_bucket` | string | The photo's camera day: the key of its offset cell in the destination's photos-21 `camera_group_time_decisions` (`<group>@<date>`, or `<group>` where the camera's photos there are of one day). Absent where the camera has no offset cell there (a phone read by its own offsets), or the photo has no recorded time. Review items carry it too. |
 
 `placed_photos` is present only when some photo of the destination is placed so.
 
 ### 5.3 `folder_fallback` cell
 
 A destination-level default coordinate, applied to files with no better source. **Optional — never
-blocks** (`requires_user_input` is always `false`).
+blocks** (`requires_user_input` is always `false`). A destination with none written takes the one written at the
+nearest destination above it — by itself, nothing to accept — and follows it when it changes. A position written here
+outranks the inherited one, for every photo here the fallback places, and is the one the destinations inside inherit;
+emptied, the inherited one applies again. There is no "none" to write.
 
 | Field | Type | Editable | Meaning |
 |-------|------|----------|---------|
-| `proposal` | object | no | `{ "proposal_source": "inherited", "proposed_fallback": {lat,lon}, "inherited_from": "<ancestor>" }` or `{ "proposal_source": "manual_required" }`. |
+| `inherited_fallback` | null \| `{lat, lon, from}` | no | The fallback written at the nearest destination above (`from`), what this destination takes with none of its own. |
 | **`user_decision.fallback_lat`** | number \| `""` | **yes** | Fallback latitude (set both lat and lon). |
 | **`user_decision.fallback_lon`** | number \| `""` | **yes** | Fallback longitude. |
-| **`user_decision.accept_proposal`** | bool | **yes** | Accept an inherited fallback. |
-| `effective_fallback` | null \| `{lat,lon}` | no | The resolved fallback. |
+| `effective_fallback` | null \| `{lat,lon}` | no | The fallback in effect: the one written here, else the inherited one. |
+| `fallback_source` | `"own"` \| `"inherited"` \| `"none"` | no | Where `effective_fallback` comes from. |
+| `inherited_from` | string | no | Present when `fallback_source` is `"inherited"`: the destination it is written at. |
 | `requires_user_input` | bool (always `false`) | no | The fallback is optional. |
-| `stale_user_decision` | bool | no | Accepted a fallback that no longer exists. |
+
+`geotag plan` prints, for each destination whose fallback placed photos, how many (`summary.automatic_folder_fallback`)
+and whose fallback it is.
 
 ### 5.4 `review_items[]` — the per-file decisions
 
@@ -657,8 +664,9 @@ the record as one it cannot read until the field is removed.
 
 (So resolving a `no_reliable_gps_source` item → after re-run it becomes `manual_locked` with
 `requires_user_input: false` — or, placed by the folder fallback you set, it leaves the review items and is
-listed in `placed_photos`. A photo with its own GPS is preserved and never listed, but as
-`own_position_contradicted`. The editor's per-file to-do list is the `no_reliable_gps_source` items.)
+listed in `placed_photos`. A photo with its own GPS is preserved and listed in `placed_photos`
+(`own_position`), or as `own_position_contradicted`. The editor's per-file to-do list is the
+`no_reliable_gps_source` items.)
 
 **A position for a photo the tracks or the fallback already place.** Add to its destination's
 `gps_decisions.review_items` an entry naming it, with the reason `chosen_by_user` and the position:
@@ -673,8 +681,8 @@ The next `geotag plan` places the photo there (`manual_locked`, which outranks t
 and rewrites the entry as a `manual_locked` item. It stays the photo's while it holds a position, whatever
 tracks or fallback come to cover the photo later; empty both fields to give it back to them. An entry
 `chosen_by_user` whose `relative_path` names no photo of that destination, or a photo holding its own
-position, is a blocker naming it. The editor's **set position**, in a destination's folded list of placed
-photos, writes this entry for you.
+position, is a blocker naming it. The editor's **set position**, on a photo of a destination's **Fallback** or
+**Placed** bucket, writes this entry for you.
 
 The record's top-level `track_disagreements` (read-only, present only when it happened) lists each pair of
 tracks that cover the same time in places farther apart than `gpx_tracks_agree_max_distance_meters`, and how
@@ -944,7 +952,8 @@ UI should make the *effective* choice obvious and ideally offer them as mutually
 - **Drift:** `confirmed` holding for the current offset (`confirmed_offset_seconds` equal to it) and for the
   tracks (`confirmed_against_tracks` each unchanged under `gpx_root`, or `[]` with no track shown) →
   `corrected_offset_seconds` if given, else the current offset; otherwise nothing.
-- **Folder fallback:** `fallback_lat`+`fallback_lon` (if both set & valid) → `accept_proposal`.
+- **Folder fallback:** `fallback_lat`+`fallback_lon` (if both set & valid) → the one inherited from above, which
+  applies itself.
 - **Per-file GPS:** the photo's own GPS (preserved; no decision read) → `manual_lat`+`manual_lon` (if both set
   & valid, on its item or on a `chosen_by_user` entry you added) → the tracks at its resolved time → the folder
   fallback. (If none applies the file stays blocked = `no_reliable_gps_source`, and no plan is made until its

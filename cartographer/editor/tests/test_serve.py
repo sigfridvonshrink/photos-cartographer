@@ -272,7 +272,7 @@ def test_apply_edits_fallback_and_review():
     review_path = "6-photos-by-dest/Japan/blocked-a.arw"
     n = serve._apply_edits(art, [
         {"dest": dest, "kind": "fallback",
-         "user_decision": {"accept_proposal": False, "fallback_lat": 35.0, "fallback_lon": 139.0}},
+         "user_decision": {"fallback_lat": 35.0, "fallback_lon": 139.0}},
         {"dest": dest, "kind": "review", "path": review_path,
          "user_decision": {"manual_lat": 35.6, "manual_lon": 139.7}},
     ])
@@ -293,7 +293,7 @@ def test_a_position_chosen_for_a_placed_photo_is_saved_as_its_entry(tmp_path):
     dest, rel = "6-photos-by-dest/Japan", "6-photos-by-dest/Japan/interp.arw"
     gps = os.path.join(ws, serve.CONTROL, serve.GPS_NAME)
     placed = json.load(open(gps))["destinations"][dest]["gps_decisions"]["placed_photos"]
-    assert {"relative_path": rel, "content_fingerprint": f"fp-{rel}", "placed_by": "tracks"} in placed
+    assert any(p["relative_path"] == rel and p["placed_by"] == "tracks" for p in placed)
     for lat in (35.1, 35.2):
         res = serve._save(ws, {"gps": [{"dest": dest, "kind": "chosen", "path": rel,
                                         "user_decision": {"manual_lat": lat, "manual_lon": 135.7}}],

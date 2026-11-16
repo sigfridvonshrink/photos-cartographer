@@ -157,9 +157,10 @@ typing offsets by hand. → *[Clock offset vs. GPS drift](concepts.md#clock-offs
 
 ### GPS view — place whatever the track couldn't
 
-A worklist of only the photos no automatic source could locate, plus a per-destination **folder
-fallback**. Place a photo on the map, paste a `lat, lon` from Google Maps, or set one fallback
-coordinate that a whole destination (and its children) can inherit.
+The destination tree, each destination headed by its **folder fallback** (its own, or inherited from above), its
+photos in buckets: the ones nothing places waiting first, then what the fallback placed and what was placed otherwise,
+folded. Place a photo on the map, paste a `lat, lon` from Google Maps, or set one fallback coordinate that a whole
+destination and its children inherit.
 
 ![GPS — folder fallback](screenshots/carto-25-geotag-edit-gps-fallback.png)
 ![GPS — place a photo on the map](screenshots/carto-26-geotag-edit-gps-per-photo.png)
