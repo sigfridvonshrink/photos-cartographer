@@ -1934,22 +1934,20 @@ CASE_RENAME_MARK = ".carto-case"
 
 
 # The field that holds the fraction of a second beside each recorded-time field, as prep reads them.
-_SUB_SECOND_FIELD = {"DateTimeOriginal": "SubSecTimeOriginal", "CreateDate": "SubSecCreateDate",
-                     "ModifyDate": "SubSecModifyDate"}
+_SUB_SECOND_FIELD = {"DateTimeOriginal": "SubSecTimeOriginal", "CreateDate": "SubSecTimeDigitized",
+                     "ModifyDate": "SubSecTime"}
 
 
 def recorded_sub_second(parsed):
     """The fraction of a second a photo records with its recorded time, as a number below 1, or None where it records
-    none (RUL-suffix_in_capture_order): the fraction written in the recorded time itself, else the one in the
-    sub-second field beside that time — its digits (`SubSecTimeOriginal`, `"045"` is .045), or the fraction of a
-    whole time it holds."""
+    none (RUL-suffix_in_capture_order): the fraction written in the recorded time itself, else the digits of the
+    sub-second field beside that time (`SubSecTimeOriginal`, `"045"` is .045) (BLD-sub_second_read)."""
     value = parsed.get("selected_source_naive_timestamp")
     tag = (parsed.get("selected_source_timestamp_tag") or "").rsplit(":", 1)[-1]
     frac = re.match(r"\.(\d+)", str(value)[19:]) if parse_naive_time(value) else None
     sub = parsed.get(_SUB_SECOND_FIELD.get(tag, ""))
     if frac is None and sub is not None:
-        sub = str(sub).strip()
-        frac = re.match(r"\.(\d+)", sub[19:]) if parse_naive_time(sub) else re.fullmatch(r"(\d+)", sub)
+        frac = re.fullmatch(r"(\d+)", str(sub).strip())
     return float("0." + frac.group(1)) if frac else None
 
 

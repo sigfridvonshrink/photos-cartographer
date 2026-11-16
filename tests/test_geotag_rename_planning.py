@@ -316,15 +316,19 @@ def test_repeated_hour_names_sort_by_local_time():
                   test="TST-geotag_rename_planning-sub_second_read_from_the_record")
 def test_sub_second_read_from_the_record():
     """The fraction of a second is read from prep's record: written in the recorded time itself, else from the
-    sub-second field beside it — its digits, or the fraction of the whole time it holds; none where neither holds one."""
+    EXIF sub-second field beside it — its digits; none where neither holds one."""
     rec = {"selected_source_naive_timestamp": "2024:07:03 12:00:00",
            "selected_source_timestamp_tag": "EXIF:DateTimeOriginal"}
     assert cal.recorded_sub_second(dict(rec, SubSecTimeOriginal="045")) == 0.045
     assert cal.recorded_sub_second(dict(rec, SubSecTimeOriginal=7)) == 0.7
     assert cal.recorded_sub_second(dict(rec, selected_source_naive_timestamp="2024:07:03 12:00:00.25",
                                         SubSecTimeOriginal="9")) == 0.25
-    assert cal.recorded_sub_second(dict(rec, selected_source_timestamp_tag="EXIF:CreateDate",
-                                        SubSecCreateDate="2024:07:03 12:00:00.6+02:00")) == 0.6
+    created = dict(rec, selected_source_timestamp_tag="EXIF:CreateDate")
+    assert cal.recorded_sub_second(dict(created, SubSecTimeDigitized="6", SubSecTimeOriginal="9")) == 0.6
+    assert cal.recorded_sub_second(dict(created, SubSecTime="9")) is None              # ModifyDate's, not this one's
+    assert cal.recorded_sub_second(dict(rec, selected_source_timestamp_tag="QuickTime:ModifyDate",
+                                        SubSecTime=" 25 ")) == 0.25
+    assert cal.recorded_sub_second(dict(created, SubSecTimeDigitized="2024:07:03 12:00:00.6")) is None  # no digits
     assert cal.recorded_sub_second(rec) is None
     assert cal.recorded_sub_second(dict(rec, SubSecTimeOriginal="")) is None
     assert cal.recorded_sub_second({}) is None

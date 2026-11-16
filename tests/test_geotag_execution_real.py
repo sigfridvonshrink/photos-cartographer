@@ -224,6 +224,27 @@ def test_the_other_time_fields_are_rewritten_in_a_real_photo(tmp_path):
     assert (b["XMP:DateCreated"], b["IPTC:DateCreated"], b["IPTC:TimeCreated"]) == (None, None, None)
 
 
+@pytest.mark.spec("RUL-suffix_in_capture_order", "BLD-sub_second_read", "BLD-metadata_extraction",
+                  test="TST-geotag_execution_real-a_burst_timed_by_create_date_keeps_its_order")
+def test_a_burst_timed_by_create_date_keeps_its_order(tmp_path):
+    """Against the real binary: two photos of one second recording no DateTimeOriginal, timed by CreateDate, the one
+    whose name sorts first taken later by SubSecTimeDigitized. Prep reads the EXIF sub-second field beside CreateDate,
+    and geotag gives the earlier photo the bare name, the later the first suffix — not their names' order."""
+    files = []
+    for name, digits in (("a.jpg", "70"), ("b.jpg", "30")):
+        img = tmp_path / name; shutil.copy(FIXTURE, img)
+        subprocess.run(["exiftool", "-q", "-q", "-overwrite_original", "-DateTimeOriginal=", "-SubSecTimeOriginal=",
+                        f"-SubSecTimeDigitized={digits}", str(img)], check=True)
+        parsed = _prep_read(img)
+        assert parsed["selected_source_timestamp_tag"].endswith(":CreateDate")
+        assert parsed["SubSecTimeDigitized"] is not None
+        files.append({"relative_path": "6-photos-by-dest/T/" + name, "resolved_utc": "2026-05-15T09:32:29Z",
+                      "destination_timezone": "Europe/Brussels", "sub_second": cal.recorded_sub_second(parsed)})
+    assert [f["sub_second"] for f in files] == [0.7, 0.3]
+    planned = {r["current_name"]: r["planned_name"] for r in cal.plan_renames(files, "%Y-%m-%d--%H-%M-%S")}
+    assert planned == {"b.jpg": "2026-05-15--11-32-29.jpg", "a.jpg": "2026-05-15--11-32-29-001.jpg"}
+
+
 @pytest.mark.spec("RUL-failed_write_reason_recorded", "BLD-write_failure_reason",
                   test="TST-geotag_execution_real-a_photo_exiftool_cannot_write_gives_its_reason")
 def test_a_photo_exiftool_cannot_write_gives_its_reason(tmp_path):

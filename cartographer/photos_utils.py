@@ -2230,7 +2230,9 @@ def _zfs_snapshot_exists(snap: str) -> bool:
 # 2: every field taken from an explicit group order (METADATA_GROUP_ORDER), the group-qualified
 #    XMP:/QuickTime: date fields gone (they were never filled), no raw payload kept.
 # 3: the other time fields geotag rewrites kept as well, each from its own group (OTHER_TIME_FIELDS).
-FIELD_SET_VERSION = 3
+# 4: the sub-second fields beside CreateDate and ModifyDate read from EXIF (SubSecTimeDigitized, SubSecTime), not
+#    the Composite ones, which no group of the order holds.
+FIELD_SET_VERSION = 4
 # 2: a file's recorded time is the first field holding a valid time, not the first present.
 METADATA_SCHEMA_VERSION = 2
 CAMERA_GROUP_KEY_VERSION = 1
@@ -2842,7 +2844,7 @@ POSITION_FIELDS = ("GPSLatitude", "GPSLongitude", "GPSAltitude", "GPSDateTime")
 METADATA_FIELDS = (
     # times, uncorrected
     "DateTimeOriginal", "CreateDate", "ModifyDate",
-    "SubSecTimeOriginal", "SubSecCreateDate", "SubSecModifyDate",
+    "SubSecTimeOriginal", "SubSecTimeDigitized", "SubSecTime",
     "OffsetTime", "OffsetTimeOriginal", "OffsetTimeDigitized", "TimeZone",
     "DateCreated", "TrackCreateDate", "TrackModifyDate", "MediaCreateDate", "MediaModifyDate",
     # camera identity

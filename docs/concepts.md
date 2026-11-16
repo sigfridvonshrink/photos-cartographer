@@ -398,8 +398,9 @@ corrects to its corrected time, in its destination's local time, with a `-001`, 
 another photo has that name.
 
 - **Photos of one second keep the order they were taken in.** Their suffixes go by the fraction of a
-  second each records (`SubSecTimeOriginal`, where the camera writes one), then by the suffix prep gave
-  them — so a burst named `T`, `T-001`, `T-002` keeps that order under its new time.
+  second each records beside the time it is named by (`SubSecTimeOriginal`, `SubSecTimeDigitized` or
+  `SubSecTime`, where the camera writes one), then by the suffix prep gave them — so a burst named `T`,
+  `T-001`, `T-002` keeps that order under its new time.
 - **A pair takes one name.** Photos of a destination that share a name, extension aside — a RAW and its
   JPEG, a HEIC and its partner — and have one corrected time get one new name and one suffix, each its
   own extension. No new name is one another photo holds under another extension, so a RAW never lands
