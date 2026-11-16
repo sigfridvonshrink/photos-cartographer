@@ -31,8 +31,7 @@ and finalize sealed those records into the package. A newer ImageMagick may read
 back for that alone, the photo could reach the library only under the version that prepped it, which in time is gone.
 The archive outlives any one ImageMagick. So merge does not rewrite what is sealed — geotag's records stay as finalize
 left them, keyed by the old value — and writes, in its own package, the old value beside the new, each with its
-version: the records stay readable from either side. The owner, ruling it (2026-11-16): *"Merge records the mapping
-and rewrites nothing."*
+version: the records stay readable from either side.
 
 A mapping is only as good as the proof that the two values are one photo's. Finalize's record of each photo's path,
 size and modification time proves the file merge reads is the one geotag treated, and a new value that no other photo
