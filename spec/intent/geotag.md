@@ -494,8 +494,10 @@ user's answer.
 :criticality: med
 :verify: required
 :refines: RUL-country_gives_its_timezone
+:excepts: RUL-user_writes_decisions
 
-A country said of a destination within one already said to be in a country SHALL be taken out of the decision.
+A country said of a destination within one already said to be in a country SHALL be taken out of the decision — the one
+value the tool takes out of what the user wrote.
 :::
 
 :::{rul} A country taken out is told, with why

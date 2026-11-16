@@ -289,15 +289,17 @@ enough to be said.
 :justifies: RUL-country_gives_its_timezone, RUL-country_chosen_once
 
 A zone passed down from a country of several is false for most of what lies inside it, and where the photos record no
-offset of their own nothing shows it. The zone database knows which countries those are; it cannot know which country
-a folder is in — a name is spelt as its owner spells it, in any language, and some names are two places. So the user
-says it, once, by picking the country from the database's own list — of the folder that is the country, or of a city
-or a park with no folder for its country above it; being in the country is all that needs saying. The tool does what
-follows: a country of one timezone gives it to that folder and everything inside, as an answered zone would; a
-country of several gives none, lets none through from above, and holds every zone written there to its own. What lies
-inside a folder is in that folder's country, so a country said again inside is a slip or a tree laid out by something
-other than place: it is taken out, aloud, rather than left to contradict the one above — the by-destination tree is
-one of places, and this is the one place the tool can hold it to that.
+offset of their own nothing shows it. The zone database knows which countries those are; it cannot know which country a
+folder is in — a name is spelt as its owner spells it, in any language, and some names are two places. So the user says
+it, once, by picking the country from the database's own list — of the folder that is the country, or of a city or a
+park with no folder for its country above it; being in the country is all that needs saying. The tool does what follows:
+a country of one timezone gives it to that folder and everything inside, as an answered zone would; a country of several
+gives none, lets none through from above, and holds every zone written there to its own. What lies inside a folder is in
+that folder's country, so a country said again inside is a slip or a tree laid out by something other than place: it is
+taken out, aloud, rather than left to contradict the one above — the by-destination tree is one of places, and this is
+the one place the tool can hold it to that. It is also the one place the tool takes back what the user wrote: the folder
+now lies inside the other country, so the country said above it is the right one, and the value inside can only repeat
+it or contradict it.
 :::
 
 :::{rat} The table of countries is found wherever the host lacks one, and fetched only when the user says so
