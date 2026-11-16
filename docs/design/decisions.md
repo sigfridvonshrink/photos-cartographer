@@ -169,6 +169,11 @@ event/sink seam.
 - **Stop/interrupt**: async-raise `KeyboardInterrupt` + kill worker children. Safe only because phases
   are crash-safe / idempotent / resumable (#226).
 - Opens on an **uninitialized** workspace (prep `plan` only) (#225).
+- **A plan the console cannot read names its way on in its one blocker.** Prep's and geotag's name planning again,
+  since their planning sets such a plan aside (`_read_plan`). Merge's names repairing the file or restoring it from a
+  `-NNN` copy beside it, never `merge plan`, since merge's planning stops on an unreadable plan of its own too
+  (`_merge_summary`). That the summary shows the plan with that blocker and offers no execution is behaviour, in the
+  spec (`BLD-console_unreadable_merge_plan`).
 - **A stop on changes to the workspace is offered for acceptance in a dialog** (BACKLOG 50): the same
   list the command printed, grouped as printed, and an **Accept these** button that re-sends the same run
   (an execute's confirmation and reviewed plan id included) with the stop's code as `--accept-changes`.

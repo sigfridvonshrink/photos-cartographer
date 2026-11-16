@@ -6,7 +6,7 @@ to — most of merge's rules are there, in its section on the library and the se
 
 ## 1. Scope and boundary
 
-:::{rul} Merge checks prep's fingerprints under another ImageMagick
+:::{rul} Merge checks prep's fingerprints under another image engine
 :id: RUL-merge_rechecks_under_new_engine
 :status: ruled
 :criticality: high
@@ -15,7 +15,7 @@ to — most of merge's rules are there, in its section on the library and the se
 :refines: RUL-engine_change_is_checked
 :uses: DEF-fingerprint, DEF-library
 
-Under an ImageMagick version other than the one prep's fingerprints were taken by, merge SHALL take each photo's
+Under an image engine version other than the one prep's fingerprints were taken by, merge SHALL take each photo's
 fingerprint again before comparing it with the library's.
 :::
 
@@ -41,13 +41,14 @@ version.
 :uses: DEF-fingerprint, RUL-phase_writes_own_records
 
 For each photo merged under a changed fingerprint, merge's own records SHALL hold its old value and its new, each with
-the ImageMagick version that took it.
+the image engine version that took it.
 :::
 
 :::{rul} A changed fingerprint not proven one to one is left unmerged
 :id: RUL-merge_changed_fingerprint_unmerged
 :status: ruled
 :criticality: high
+:anti: yes
 :verify: required
 :refines: RUL-merge_rechecks_under_new_engine
 :uses: DEF-fingerprint, DEF-library, RUL-merge_merges_changed_fingerprint
@@ -114,6 +115,7 @@ A merge a precondition stops SHALL change nothing in the library, the workspace'
 :criticality: high
 :anti: yes
 :verify: required
+:uses: DEF-fingerprint, DEF-managed_folders
 
 Merge SHALL NOT plan or execute while a photo in photos by destination has no fingerprint.
 :::
@@ -124,11 +126,12 @@ Merge SHALL NOT plan or execute while a photo in photos by destination has no fi
 :criticality: high
 :anti: yes
 :verify: required
+:uses: DEF-managed_folders
 
 Merge SHALL NOT proceed while photos by destination holds a hidden file or folder.
 :::
 
-:::{rul} Merge stops without ImageMagick
+:::{rul} Merge stops without its image engine
 :id: RUL-imagemagick_absent_stops_merge
 :status: ruled
 :criticality: high
@@ -136,7 +139,7 @@ Merge SHALL NOT proceed while photos by destination holds a hidden file or folde
 :verify: required
 :uses: DEF-merge, DEF-fingerprint
 
-Merge SHALL NOT plan, dry-run or execute while ImageMagick, by which it fingerprints a file, is absent.
+Merge SHALL NOT plan, dry-run or execute while the image engine, by which it fingerprints a file, is absent.
 :::
 
 
@@ -236,7 +239,6 @@ The report of a library short of room SHALL name the space the photos need and t
 :status: ruled
 :criticality: low
 :verify: required
-:refines: RUL-library_space_checked
 
 Merge's plan SHALL warn of a library its execution would find short of room, the plan written all the same.
 :::
@@ -292,7 +294,7 @@ recorded the move.
 :uses: DEF-merge, DEF-library, DEF-fingerprint
 
 A library place an earlier execute recorded filling SHALL count as holding its photo while it holds the very bytes
-placed there, whatever ImageMagick version now takes the fingerprints.
+placed there, whatever image engine version now takes the fingerprints.
 :::
 
 :::{rul} An earlier place counts only inside this library
@@ -386,10 +388,11 @@ taking it for an empty one.
 :refines: RUL-merge_records_landing
 :uses: DEF-merge
 
-Merge SHALL record whether its run succeeded whole, in part or not at all, or was refused before changing anything.
+Merge SHALL record whether its execution succeeded whole, in part or not at all, or stopped before its first move for
+want of a required snapshot or of room in the library.
 :::
 
-:::{rul} Merge's summary is written only for an execution
+:::{rul} No other stop writes merge's summary
 :id: RUL-merge_summary_only_for_execution
 :status: ruled
 :criticality: low
@@ -397,8 +400,9 @@ Merge SHALL record whether its run succeeded whole, in part or not at all, or wa
 :refines: RUL-merge_outcome_recorded
 :uses: DEF-merge
 
-Merge SHALL write no summary for a run stopped before its execution began — by a precondition, or a plan or journal it
-would not use — nor for a run interrupted, leaving the summary an earlier run wrote as it was.
+Merge SHALL write no summary for a run stopped by anything but the want of a required snapshot or of room in the library
+— a stale plan, a plan or journal it cannot read, or any other refusal of its preflight — nor for a run interrupted,
+leaving the summary an earlier run wrote as it was.
 :::
 
 :::{rul} Merge tells how its run ended

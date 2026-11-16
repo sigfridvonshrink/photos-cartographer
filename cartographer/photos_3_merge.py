@@ -1202,8 +1202,9 @@ class MergeWorkflow:
     def execute_plan(self, ws, library_root, jobs, now_iso, execution_id, workspace_changes=()):
         """Apply photos-30 after revalidating its dependencies, taking the optional snapshots,
         moving each file (concurrent), journaling confirmed completions (single-writer, main thread),
-        and writing photos-31-merge-summary.json. Returns the result dict (status no_plan / rejected /
-        success / partial)."""
+        and writing photos-31-merge-summary.json — also, `rejected`, for a required snapshot not taken or the library
+        short of room, never for a stale or unreadable plan or journal. Returns the result dict (status no_plan /
+        unreadable / rejected / success / partial / failed)."""
         p = merge_plan_path(ws)
         if not os.path.exists(p):
             return {"status": "no_plan"}
@@ -1230,9 +1231,13 @@ class MergeWorkflow:
 
         # The library's free space, where it lies on another filesystem, against the photos still to move into it —
         # before the snapshots and the first move, so a shortage stops the run with nothing moved
-        # (RUL-library_space_short_stops).
+        # (RUL-library_space_short_stops). Like a required snapshot not taken, the refusal is recorded as the
+        # execution's outcome, `rejected` (RUL-merge_outcome_recorded); no snapshot was taken yet.
         short = _space_shortfalls(ws, plan, library_root)
         if short:
+            summary = self._build_summary(ws, plan, library_root, [], None, "rejected",
+                                          now_iso, execution_id, jobs, extra_failures=short)
+            write_json_artifact(merge_summary_path(ws), summary)
             return {"status": "rejected", "plan_id": plan.get("plan_id"), "space_refusal": short}
 
         # Pre-mutation snapshots (BLD-merge_snapshots), labelled "merge": the workspace, and

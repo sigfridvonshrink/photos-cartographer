@@ -48,7 +48,7 @@ cannot prove.
 :status: ruled
 :forced: yes
 :follows_from: RAT-discrete_stages, RAT-non_destructive_core
-:justifies: RUL-merge_rechecks_gates
+:justifies: RUL-merge_rechecks_gates, RUL-merge_gates_leave_out_residue
 
 Geotag's gates held when geotag ran; merge runs later, often much later, and the user may have dropped a new dump into
 the inbox, moved a photo back to photos by date, or put a video or a development folder among the photos by
@@ -197,7 +197,7 @@ repair or restore, and has lost nothing.
 :id: RAT-merged_means_in_this_library
 :status: ruled
 :forced: no
-:follows_from: RAT-non_destructive_core
+:follows_from: RAT-non_destructive_core, RAT-library_is_evidence_of_move, RAT-seal_not_folder_state
 :justifies: RUL-earlier_place_in_this_library
 
 The seal says the workspace's photos are in the library it names. A photo placed where the setting used to point is somewhere else, and counting it would seal the workspace over a library that does not hold it.
@@ -225,10 +225,13 @@ tell a refusal from a run that found nothing to do; a recorded outcome says whic
 :follows_from: RAT-merge_outcome_decides_next, RAT-refused_merge_clean
 :justifies: RUL-merge_summary_only_for_execution
 
-The summary is the record of an execution: what it placed, what it left and how it ended. A run stopped at the door
-executed nothing, and the terminal has said why; a summary written for it would put a record of nothing over that of
-the last merge that ran. An interrupted run reached no end to record: its journal holds what it confirmed, and the
-run that finishes it writes the summary.
+The summary is the record of an execution: what it placed, what it left and how it ended. An execution that took its
+plan as current and then could not make its first move — no required snapshot, no room in the library — was refused for
+what the machine lacked, not for what the plan or the workspace held; its summary records the refusal and its reason, so
+a fix with nothing to undo is told from a run that found nothing to do. A run stopped at the door — its plan stale or
+unreadable, its preflight refused — executed nothing, and the terminal has said why; a summary written for it would put
+a record of nothing over that of the last merge that ran. An interrupted run reached no end to record: its journal holds
+what it confirmed, and the run that finishes it writes the summary.
 :::
 
 :::{rat} Merge is the step the user watches

@@ -342,7 +342,7 @@ def _rmdirs(plan):
     return [op.source for op in plan.operations if op.type == "rmdir"]
 
 
-@pytest.mark.spec("RUL-emptied_folders_removed", "BLD-folder_removals",
+@pytest.mark.spec("RUL-emptied_folders_removed", "RUL-folder_removed_only_as_planned", "BLD-folder_removals",
                   test="TST-guards_quarantine-folders_left_empty_are_planned_removals")
 def test_folders_left_empty_are_planned_removals(tmp_path, monkeypatch):
     """The folders a plan leaves empty — emptied by its moves, or empty already — are planned removals,

@@ -128,7 +128,8 @@ def test_stray_not_fingerprinted_and_not_cached(tmp_path, monkeypatch):
 @pytest.mark.spec("RUL-strays_leave_no_trace", "BLD-stray_records", test="TST-strays-a_stray_is_named_only_in_the_plan_that_moves_it")
 def test_a_stray_is_named_only_in_the_plan_that_moves_it(tmp_path, monkeypatch):
     """The plan names the stray — it moves it — and nothing else does: not the journal beyond the move's id, not the
-    database, the plan memo, the handoff or the log."""
+    database's rows of files, the plan memo, the handoff or the log; only the record of the workspace's state holds
+    it, as it holds every file there."""
     _install(monkeypatch)
     ws = _ws(tmp_path)
     (ws / "0-sources" / "notes-stray.txt").write_bytes(b"hello")
@@ -143,6 +144,9 @@ def test_a_stray_is_named_only_in_the_plan_that_moves_it(tmp_path, monkeypatch):
         assert "notes-stray" not in open(record).read(), record
     assert move.operation_id in open(journal).read()
     assert not any("notes-stray" in p for p in _cached_paths(ws))
+    # the record of the workspace's state holds it as it holds every file there, unfingerprinted
+    (stray_entry,) = [e for p, e in utils.read_workspace_record(str(ws))[1].items() if "notes-stray" in p]
+    assert stray_entry["fingerprint"] is None
     memo = utils.plan_memo_db_path(str(ws))
     if os.path.exists(memo):
         conn = sqlite3.connect(memo)
