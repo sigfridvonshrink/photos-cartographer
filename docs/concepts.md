@@ -54,7 +54,11 @@ is expected to do passes:
   destination's folder;
 - edit the configuration and the decision files (they keep checks of their own);
 - delete photos — cull — in `5-photos-by-date/`, `6-photos-by-dest/`, `4-videos-by-date/` or
-  `3-redundant-jpgs/`;
+  `3-redundant-jpgs/`. Culling a RAW culls its JPEG too: the next `prep plan` moves the JPEG prep set aside
+  beside it into the quarantine — recoverable until `prep prune-quarantine` — and prep's log notes on the JPEG
+  that its RAW was culled, naming the RAW by where it was and by its fingerprint. A RAW you moved or renamed is
+  not culled (prep knows it by its content, not its name), nor is one whose JPEG prep never paired with it; a
+  phone's live video is no pair and is never taken;
 - move a photo back from `6-photos-by-dest/` to `5-photos-by-date/`;
 - give a photo or video in `2-missing-metadata/` a time by hand, where it lies (with `exiftool
   -overwrite_original`, or delete the `_original` copy exiftool leaves beside it — that copy is a file
@@ -408,7 +412,8 @@ another photo has that name.
   name with its own `.jpg`: a rename only, nothing written into it, the one change geotag makes outside
   `6-photos-by-dest/`. Prep records which RAW each JPEG was set aside beside when it sets it aside, so the
   pair is known exactly, whatever their names. A JPEG whose RAW is not in `6-photos-by-dest/`, or not
-  renamed, keeps its name. Prep's later runs take the JPEG's new name, its RAW's, as rightly given.
+  renamed, keeps its name. Prep's later runs take the JPEG's new name, its RAW's, as rightly given; and if
+  you cull the RAW afterwards, the next `prep plan` takes the JPEG into the quarantine with it.
 - **A video keeps the name prep gave it** — its camera's time, uncorrected — for good. Videos are not
   sorted into destinations, so there is no zone to correct their names by; one guessed from the camera's
   day would be wrong on a day spent in two zones. A camera left on home time therefore names its videos

@@ -332,6 +332,54 @@ Prep SHALL move into redundant JPEGs no file but a JPEG in the inbox that shares
 aside, with a raw file.
 :::
 
+:::{rul} A culled RAW takes its set-aside JPEG
+:id: RUL-culled_raw_takes_its_jpeg
+:status: ruled
+:criticality: med
+:verify: required
+:uses: DEF-managed_folders, DEF-fingerprint
+
+When the user culls a RAW beside which prep set a JPEG aside — from photos by date or photos by destination, at any
+time before the workspace is sealed — prep's next plan SHALL quarantine that JPEG.
+:::
+
+:::{rul} A RAW is culled only when its content is gone by hand
+:id: RUL-culled_raw_known_by_content
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+:refines: RUL-culled_raw_takes_its_jpeg
+:uses: DEF-managed_folders, DEF-fingerprint
+
+Prep SHALL NOT take a set-aside JPEG with a RAW unless it recorded the two as a pair, no file in the managed folders
+holds the RAW's fingerprint, and a comparison with a recorded state found the RAW deleted by hand — so a RAW moved or
+renamed, under any name, is never taken for culled.
+:::
+
+:::{rul} Prep's log says the JPEG went with its culled RAW
+:id: RUL-culled_raw_jpeg_logged
+:status: ruled
+:criticality: med
+:verify: required
+:refines: RUL-culled_raw_takes_its_jpeg
+:uses: DEF-transformation_log, DEF-fingerprint
+
+Prep's log SHALL record the quarantine of a JPEG taken with its culled RAW as that, naming the RAW by the place it was
+culled from and by its fingerprint.
+:::
+
+:::{rul} The JPEG's move is recorded as prep's own
+:id: RUL-culled_raw_jpeg_recorded
+:status: ruled
+:criticality: med
+:verify: required
+:refines: RUL-culled_raw_takes_its_jpeg
+
+Prep's execution SHALL record the move of a JPEG taken with its culled RAW as its own change, so that the next
+comparison with the recorded state finds no change in it.
+:::
+
 :::{rul} Of identical media, one copy is kept
 :id: RUL-duplicates_quarantined
 :status: ruled

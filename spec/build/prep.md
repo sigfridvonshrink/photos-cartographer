@@ -259,6 +259,24 @@ each prep execution writes the latest one of each JPEG into its record of the ha
 a JPEG names neither.
 :::
 
+:::{bld} A culled RAW, found by its fingerprint
+:id: BLD-culled_raw_found
+:status: ruled
+:realises: RUL-culled_raw_takes_its_jpeg, RUL-culled_raw_known_by_content, RUL-culled_raw_jpeg_logged, RUL-culled_raw_jpeg_recorded
+:uses: BLD-set_aside_pair_recorded, BLD-workspace_changes_logged
+
+At plan, after duplicates are set aside and before any name is checked, prep SHALL plan a `quarantine_move` of kind
+`raw_culled` for each JPEG in `3-redundant-jpgs` whose `raw_fingerprint` in the prep log
+({need}`BLD-set_aside_pair_recorded`) no file prep scanned holds — the inbox and `6-photos-by-dest` among them — and
+which a workspace check found `deleted`: this run's, an earlier prep run's as `workspace_changes` of
+`photos-15-prep-log.json` keeps it, or a geotag execution's as `photos-25-execution-summary.json` or a `-NNN` copy of it
+keeps it ({need}`BLD-workspace_changes_logged`). The move carries the JPEG's `content_fingerprint`, and the RAW's
+`raw_path` — the path the check found it deleted at — and `raw_fingerprint`, into the quarantine manifest; the JPEG's
+entry in the prep log gains the step `raw_culled` with `from`, `to`, `raw_path` and `raw_fingerprint`, its `prep_path`
+the quarantine path; and the execution's workspace record holds the JPEG in the quarantine like any file prep
+quarantined.
+:::
+
 :::{bld} The database is reconciled by planned operations
 :id: BLD-database_ops
 :status: ruled
@@ -387,11 +405,11 @@ the quarantine manifest and the handoff record, the handoff also under the desti
 :status: ruled
 :realises: RUL-only_duplicates_recorded_as_duplicates, RUL-set_aside_counted_by_reason
 
-Each quarantine move SHALL carry its `kind` — `duplicate`, `exiftool_leftover` or `dump_dotfile` — into its manifest
-entry; the plan's report counts the moves by kind in `quarantined_by_reason`, its duplicate counts taking only
-`duplicate`; the handoff's `diagnostics.duplicates_or_conflicts` and each destination folder's duplicates hold the
-duplicates alone, the others listed under `diagnostics.quarantined_not_duplicates` with their kind; and prep's log
-records the duplicates alone.
+Each quarantine move SHALL carry its `kind` — `duplicate`, `exiftool_leftover`, `dump_dotfile` or `raw_culled`
+({need}`BLD-culled_raw_found`) — into its manifest entry; the plan's report counts the moves by kind in
+`quarantined_by_reason`, its duplicate counts taking only `duplicate`; the handoff's `diagnostics.duplicates_or_conflicts`
+and each destination folder's duplicates hold the duplicates alone, the others listed under
+`diagnostics.quarantined_not_duplicates` with their kind; and prep's log records the duplicates alone as duplicates.
 :::
 
 

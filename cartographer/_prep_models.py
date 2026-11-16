@@ -73,8 +73,8 @@ def empty_cache_freshness_counts() -> dict:
     }
 
 # Why a file is quarantined, as each quarantine move's `kind` records it (BLD-quarantine_reasons): a copy of a file
-# kept, a leftover of an interrupted metadata write, a hidden file of a dump.
-QUARANTINE_KINDS = ("duplicate", "exiftool_leftover", "dump_dotfile")
+# kept, a leftover of an interrupted metadata write, a hidden file of a dump, a set-aside JPEG whose RAW was culled.
+QUARANTINE_KINDS = ("duplicate", "exiftool_leftover", "dump_dotfile", "raw_culled")
 
 STATUS_TO_CACHE_FRESHNESS_KEY = {
     "reused_from_cache": "metadata_reused_from_cache",
