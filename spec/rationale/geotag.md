@@ -222,10 +222,12 @@ answer.
 :follows_from: CHC-ask_only_what_data_cannot_settle, CHC-photos_matter
 :justifies: RUL-proposals_need_acceptance
 
-An offset derived from the timezone assumes the camera was set to local time that day; a fallback inherited from a
-parent folder assumes the photos were taken near the parent's point. Both are often right and sometimes badly wrong,
-and nothing in the photos can tell which. Applied silently, a wrong one would place a whole day of photos in the wrong
-place or the wrong hour, written into the originals; offered for acceptance, it costs one confirmation.
+An offset derived from the timezone assumes the camera was set to local time that day; one read from the offset the
+photos record assumes the camera recorded its own. Either is often right and sometimes badly wrong, and nothing in the
+photos can tell which. Applied silently, a wrong one would shift a whole day of photos by the hour — and with them every
+position the tracks give them — written into the originals with all the look of a measurement; offered for acceptance,
+it costs one confirmation. A fallback inherited from the folder above is an assumption too, of another weight, and is
+not asked ({need}`RAT-fallback_nested`).
 :::
 
 :::{rat} What the photos record outranks what the folder assumes
@@ -443,21 +445,6 @@ act and names the offset itself. Where no track covers the photos there is no ch
 :justifies: RUL-acceptance_holds_for_its_proposal, RUL-content_acceptance_is_of_that_content
 
 A user accepts a proposal by looking at it: this offset, for this camera, on this evidence. Kept as a bare yes, the acceptance would pass to whatever is proposed next — an offset from another timezone once the zone above changes, one from GPS that two photos tie on — and a value the user never saw would take effect over their name. So the acceptance names what it accepted, and holds for that. A changed picture is accepted the same way: as the content that was reported, under the plan that reported it.
-:::
-
-:::{rat} An accepted fallback follows, where an accepted offset does not
-:id: RAT-fallback_acceptance_follows
-:status: ruled
-:forced: no
-:follows_from: RAT-assumptions_need_acceptance, RAT-acceptance_is_of_what_was_shown
-:justifies: RUL-accepted_fallback_follows
-
-Accepting an offset accepts a number, and holds only for that number. Accepting an inherited fallback is another kind
-of answer: not "this coordinate" but "this folder is placed like the one above". A fallback is coarse by nature — one
-point for every photo nothing better places — so a correction to the point above is as right for the folder that
-follows it as for its own; and pinning the coordinate shown would make one edit high in the tree ask again at every
-folder beneath, for no gain in precision. So the two acceptances differ, on purpose: the offset's is of a value, the
-fallback's of a relation.
 :::
 
 
@@ -1162,16 +1149,42 @@ coming later does not take it back; only the user does, by emptying it. An answe
 one not in that folder, or one keeping a position of its own — would be passed over in silence, so it stops the run.
 :::
 
-:::{rat} A place inside a place is near it
+:::{rat} A place inside a place is near it, so its fallback applies itself
 :id: RAT-fallback_nested
 :status: ruled
-:forced: yes
-:follows_from: RAT-folder_gps_fallback, RAT-assumptions_need_acceptance
-:justifies: RUL-fallback_from_nearest
+:forced: no
+:follows_from: RAT-folder_gps_fallback, RAT-decisions_cascade, RAT-no_photo_unlocated
+:justifies: RUL-fallback_from_nearest, RUL-inherited_fallback_applies, RUL-written_fallback_over_inherited
 
-A destination inside another lies within it, so the place set for the outer one is a fair guess for the inner one —
-and the nearer the ancestor, the fairer. It is only a guess, so it waits for the user's acceptance; once accepted, the
-user has chosen to inherit, and a fallback changed above flows down to it, as a timezone does.
+A destination inside another lies within it, so the place set for the outer one is a fair stand-in for the inner one —
+and the nearer the one it is written at, the fairer. The owner: *"My idea was that once a destination gets a fallback
+position, it should propagate by default to child destinations, but show up as "inherited" or "propagated", and be
+overridable. The idea is not to manually accept it for all children but to manually override if I want for the
+children."* — and, ruling it: *"An inherited fallback applies itself - yes but I should be able to be overriden at child
+destination level, in one go, not to be overriden at image level."* So the inherited fallback applies itself, and
+follows the one above when that changes, as an inherited timezone does; where the user knows better, they write the
+child's own, which every photo there the fallback places takes, and the folders beneath inherit — one answer for the
+folder, not one per photo; emptied, the child inherits again. An offset is asked where a fallback is not
+({need}`RAT-assumptions_need_acceptance`) because the two cost differently when wrong: a fallback claims no precision —
+one point for the photos nothing better places, marked in each as the folder's fallback — so a wrong one is a coarse
+position the user sees and replaces at the folder, where a wrong offset moves every photo of a day, its time and its
+place, with the look of a measurement. And there is no "none" to write in its place: a photo the fallback did not place
+would be left with no position, which the tool does not do ({need}`RAT-no_photo_unlocated`).
+:::
+
+:::{rat} A fallback that applies itself is shown where it acted
+:id: RAT-applied_fallback_shown
+:status: ruled
+:forced: no
+:follows_from: RAT-fallback_nested, RAT-remainder_says_why
+:justifies: RUL-fallback_placements_told, RUL-fallback_photo_says_why
+
+An answer applied unasked is cheap only while the user can see where it acted. Told, per destination, how many photos
+the fallback placed and whose fallback it was — the destination's own, or the one inherited from a folder named — the
+user sees a folder placed by a point meant for another, and writes it its own. And a photo the fallback placed is one
+the tracks missed; why they missed it is the lead it is for a photo left unplaced ({need}`RAT-remainder_says_why`): a
+day's photos all fallen back, an hour past the end of a track that day, point at a clock, not at the folder — a cure the
+fallback would otherwise hide.
 :::
 
 :::{rat} A fallback is a convenience, not a gate

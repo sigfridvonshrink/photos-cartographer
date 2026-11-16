@@ -193,9 +193,8 @@ def test_container_fallback_propagates_to_children(tmp_path):
     assert d[f"{BYDEST}/Trip"]["gps_decisions"]["summary"]["files_total"] == 0
     assert d[f"{BYDEST}/Trip"]["folder_fallback"]["effective_fallback"] == {"lat": 50.0, "lon": 4.0}
     child = d[f"{BYDEST}/Trip/Day1"]["folder_fallback"]
-    assert child["proposal"]["proposal_source"] == "inherited"
-    assert child["proposal"]["inherited_from"] == f"{BYDEST}/Trip"
-    assert child["proposal"]["proposed_fallback"] == {"lat": 50.0, "lon": 4.0}
+    assert child["fallback_source"] == "inherited" and child["inherited_from"] == f"{BYDEST}/Trip"
+    assert child["effective_fallback"] == {"lat": 50.0, "lon": 4.0}
 
 
 def test_determinism_with_containers(tmp_path):

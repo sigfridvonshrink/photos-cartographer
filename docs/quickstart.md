@@ -284,10 +284,10 @@ The order is forced (the editor enforces the same gates — **Time → Drift →
    you confirmed.
 3. **Place GPS leftovers** (GPS view). Whatever native GPS and the tracks couldn't place shows up as a
    short worklist, each photo with the reason the tracks didn't place it. Every photo needs a position: set
-   the folder's fallback coordinate first — one answer places every leftover in that destination — or place
-   a photo on the map (paste a `lat, lon`, search a place, or pan a crosshair; shift-click to place a run at
-   once). A photo the tracks did place can still be given a position of its own (**set position**, in the
-   destination's folded list of placed photos).
+   the folder's fallback coordinate first — one answer places every leftover in that destination and the ones
+   inside it — or place a photo on the map (paste a `lat, lon`, search a place, or pan a crosshair; shift-click to
+   place a run at once). A photo the tracks or the fallback did place can still be given a position of its own
+   (**set position**, in the destination's folded **Fallback** or **Placed** bucket).
 
 The cycle each time is **edit → Save → `geotag plan` → reload**. Repeat until `geotag plan` says the
 executable plan is `ready` and points you at `geotag execute`. Full editor mechanics:

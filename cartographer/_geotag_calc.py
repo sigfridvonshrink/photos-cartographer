@@ -2491,13 +2491,12 @@ def offset_decision_pointer(row, dest, cells):
 
 def manual_gps_pointer(category, dest, rel, fallback_cell):
     """Where a manual position was decided: the photo's own pin among photos-23's review items, or the
-    destination's folder fallback (with the destination it was inherited from, when accepted from one)."""
+    destination's folder fallback (with the destination it is inherited from, when inherited — BLD-log_format)."""
     if category == "manual_locked":
         return f"photos-23 destinations.{dest}.gps_decisions.review_items[{os.path.basename(rel)}]"
     p = f"photos-23 destinations.{dest}.folder_fallback"
-    prop = (fallback_cell or {}).get("proposal") or {}
-    if prop.get("proposal_source") == "inherited" and ((fallback_cell or {}).get("user_decision") or {}).get("accept_proposal"):
-        p += f" (accepted from {prop.get('inherited_from')})"
+    if (fallback_cell or {}).get("fallback_source") == "inherited":
+        p += f" (inherited from {fallback_cell.get('inherited_from')})"
     return p
 
 

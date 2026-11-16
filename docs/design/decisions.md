@@ -104,20 +104,46 @@ affordance.
   places, where a position typed per photo places one. The order is presentation; what places a photo is the
   placement order, in the spec. Code site `reviewOffers` / `controls` in `web/app.js`, tested in
   `app_placement.test.mjs`.
-- **The photos the tracks or the fallback place are a folded list per destination, each with "set position"**: under
-  the worklist, `N placed — by the tracks, by the fallback` folds open to the photos photos-23 lists as placed
-  (`placed_photos`, which geotag writes for this — the editor's source, as it already loads photos-23; the server
-  computes nothing); **set position** opens a coordinate panel for that photo alone, and a save writes the entry a
-  hand would write — a `chosen_by_user` review item with the photo's path and position, added to the destination's
-  `review_items` (the one save that adds an entry rather than filling a `user_decision`, since a photo placed
-  automatically has no item to fill). Folded, because nothing about these photos waits. Code site
-  `withChosenCells` / `placedSummary` / `renderGps` in `web/app.js` and `_chosen_item` in `server.py`, tested in
-  `app_placement.test.mjs` and `test_serve.py` (BACKLOG 21).
+- **The editor's views are grouped by what can differ**: four rules, the same in every view —
+  1. a level exists only where its members can carry different answers;
+  2. a level with one member folds into its parent (`Placed (212) · between points`, never a group of one — a
+     photo alone in its kind is listed under the bucket with its kind beside it);
+  3. what waits for an answer is open and sorted first; what is settled is folded;
+  4. the same order everywhere: destination tree → the destination's own decisions → per-camera ones → single
+     photos.
+
+  Per view: **GPS** — the destination tree; each destination's first row is its fallback (its point, **own** or
+  **inherited ⟵ <destination>**, the map to write its own); under it two buckets, **Fallback** (the photos the
+  fallback placed, by why the tracks missed them) and **Placed** (camera GPS, track point, between points, past track
+  end, set by hand) — or, where no fallback is in effect here or above, **Unplaced** (by why), open and first, in
+  place of Fallback (the two cannot meet: a fallback in effect places every photo nothing else does). No camera
+  level: a camera day whose photos in the destination all fell back or wait, while the tracks had points that day —
+  some photo's nearest track point under a day away, its reason not "no tracks" nor a date fallback's time — is named
+  on that bucket as a chip linking to its offset row in the Time view, the cure being its clock rather than a
+  position. **Time** — the tree; per destination its timezone, date fallback, then the offset rows of the cameras
+  that ask or that the user answered, the cameras the photos settle themselves (an offset in effect, nothing asked,
+  nothing written) folded into one **settled by the photos (<cameras>)** line, openable and still answerable; a
+  camera's days split only where their answers differ, and a camera is a level of its own only beside other
+  cameras. **Drift**, **Cameras**, **Execution** — unchanged (a drift check is per camera day already, each a
+  confirmation). Photos stay hover-previewable, and those the tracks or the fallback place keep **set position**,
+  which writes what a hand would: a `chosen_by_user` review item with the photo's path and position (the one save
+  that adds an entry rather than filling a `user_decision`, since a photo placed automatically has no item to fill).
+  The editor computes nothing geotag does not record: photos-23 lists every photo with how it is placed, why the
+  tracks missed one the fallback placed, and its camera day (`placed_photos`, `camera_bucket`). Why: the owner —
+  *"I would like the "fallback" photos to be seen as a macro group in the editor. By macro group I mean that for
+  each destination the editor should start with two big buckets - inherited and placed - and only then break them
+  down further."* — and *"the per camera buckets should be showed only if there are decisions that might be
+  different for different cameras."*; the four rules were put to the owner and taken ("yes"). The flat list it
+  replaced mixed the tracks and the fallback in one fold and showed camera-GPS photos only as a count. Code site
+  `gpsBuckets` / `fellBackCameras` / `renderGpsNode` / `offsetSections` / `renderOffsetRows` in `web/app.js`,
+  tested in `app_grouping.test.mjs` (BACKLOG 56).
 - **A photos-23 holding a field a position decision does not have is shown as unreadable**: the server reads it with
   geotag's own check (`unknown_review_fields`) and shows it as a record that does not parse, naming the field —
   `accept_unlocated` from an older record among them — rather than show answers geotag refuses (BACKLOG 21).
-- **Folder GPS fallback modelled as presence/absence** — no enum; an unset fallback reads `none`, not
-  `resolved`, so it cannot falsely propagate; a **Clear** button resets to none (#241–#243).
+- **Folder GPS fallback modelled as presence/absence** — no enum; a destination with none written here or above reads
+  `none`, not `resolved`. An inherited one applies itself (behaviour, `RUL-inherited_fallback_applies`): the
+  accept-inherited checkbox is gone, and the one button takes a written fallback away — **back to the inherited
+  (lat, lon)**, or **clear** where nothing above has one (#241–#243, BACKLOG 56).
 - Served as **package data via importlib.resources, no bundler**; folded into the package as the `edit`
   subcommand (#93, #127); operates on the **cwd workspace**, with `--demo` the only no-workspace mode
   (#137).

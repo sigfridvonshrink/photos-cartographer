@@ -1699,6 +1699,14 @@
           }
         }
       },
+      "date_fallback": {
+        "effective_date": null,
+        "requires_user_input": false,
+        "stale_user_decision": false,
+        "user_decision": {
+          "date": ""
+        }
+      },
       "destination_path": "6-photos-by-dest",
       "destination_timezone": {
         "effective_iana_timezone": "Europe/Brussels",
@@ -1742,6 +1750,14 @@
             "accepted_offset_seconds": "",
             "manual_offset_seconds": ""
           }
+        }
+      },
+      "date_fallback": {
+        "effective_date": null,
+        "requires_user_input": false,
+        "stale_user_decision": false,
+        "user_decision": {
+          "date": ""
         }
       },
       "destination_path": "6-photos-by-dest/Belgium",
@@ -1789,6 +1805,14 @@
             "accepted_offset_seconds": "",
             "manual_offset_seconds": ""
           }
+        }
+      },
+      "date_fallback": {
+        "effective_date": null,
+        "requires_user_input": false,
+        "stale_user_decision": false,
+        "user_decision": {
+          "date": ""
         }
       },
       "destination_path": "6-photos-by-dest/Belgium/Bruges",
@@ -1893,6 +1917,14 @@
             "accepted_offset_seconds": "",
             "manual_offset_seconds": ""
           }
+        }
+      },
+      "date_fallback": {
+        "effective_date": null,
+        "requires_user_input": false,
+        "stale_user_decision": false,
+        "user_decision": {
+          "date": ""
         }
       },
       "destination_path": "6-photos-by-dest/Belgium/Brussels",
@@ -2013,6 +2045,14 @@
           }
         }
       },
+      "date_fallback": {
+        "effective_date": null,
+        "requires_user_input": false,
+        "stale_user_decision": false,
+        "user_decision": {
+          "date": ""
+        }
+      },
       "destination_path": "6-photos-by-dest/Japan",
       "destination_timezone": {
         "decision_mode": "auto_resolved",
@@ -2031,6 +2071,14 @@
     },
     "6-photos-by-dest/PhoneOnly": {
       "camera_group_time_decisions": {},
+      "date_fallback": {
+        "effective_date": null,
+        "requires_user_input": false,
+        "stale_user_decision": false,
+        "user_decision": {
+          "date": ""
+        }
+      },
       "destination_path": "6-photos-by-dest/PhoneOnly",
       "destination_timezone": {
         "decision_mode": "auto_resolved",

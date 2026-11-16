@@ -182,10 +182,9 @@ def test_each_step_names_its_exact_decision():
         f"photos-22 destinations.{BYDEST}/T.drift_decisions.{CAM}"
     assert cal.manual_gps_pointer("manual_locked", f"{BYDEST}/T", f"{BYDEST}/T/m.jpg", None) == \
         f"photos-23 destinations.{BYDEST}/T.gps_decisions.review_items[m.jpg]"
-    inherited = {"proposal": {"proposal_source": "inherited", "inherited_from": BYDEST},
-                 "user_decision": {"accept_proposal": True}}
+    inherited = {"fallback_source": "inherited", "inherited_from": BYDEST}
     assert cal.manual_gps_pointer("manual_fallback", f"{BYDEST}/T", f"{BYDEST}/T/m.jpg", inherited) == \
-        f"photos-23 destinations.{BYDEST}/T.folder_fallback (accepted from {BYDEST})"
+        f"photos-23 destinations.{BYDEST}/T.folder_fallback (inherited from {BYDEST})"
     files = [_file(f"{BYDEST}/T/m.jpg", "fpM")]
     plan = {"destinations": {f"{BYDEST}/T": {"operations": [
         {"type": "metadata_gps_write", "relative_path": f"{BYDEST}/T/m.jpg", "gps_origin": "apply_manual",

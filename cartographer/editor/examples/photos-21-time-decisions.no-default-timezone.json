@@ -1670,6 +1670,14 @@
   "destinations": {
     "6-photos-by-dest": {
       "camera_group_time_decisions": {},
+      "date_fallback": {
+        "effective_date": null,
+        "requires_user_input": false,
+        "stale_user_decision": false,
+        "user_decision": {
+          "date": ""
+        }
+      },
       "destination_path": "6-photos-by-dest",
       "destination_timezone": {
         "asked_for": [
@@ -1709,6 +1717,14 @@
             "accepted_offset_seconds": "",
             "manual_offset_seconds": ""
           }
+        }
+      },
+      "date_fallback": {
+        "effective_date": null,
+        "requires_user_input": false,
+        "stale_user_decision": false,
+        "user_decision": {
+          "date": ""
         }
       },
       "destination_path": "6-photos-by-dest/Nowhere",

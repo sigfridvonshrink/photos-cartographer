@@ -17,13 +17,10 @@
       "destination_path": "6-photos-by-dest",
       "folder_fallback": {
         "effective_fallback": null,
-        "proposal": {
-          "proposal_source": "manual_required"
-        },
+        "fallback_source": "none",
+        "inherited_fallback": null,
         "requires_user_input": false,
-        "stale_user_decision": false,
         "user_decision": {
-          "accept_proposal": false,
           "fallback_lat": "",
           "fallback_lon": ""
         }
@@ -38,6 +35,14 @@
             "Automatic decisions are summarized here; exact file-level write operations are listed only in photos-24-executable-plan.json."
           ]
         },
+        "placed_photos": [
+          {
+            "camera_bucket": "NIKON|D750|B",
+            "content_fingerprint": "fp-6-photos-by-dest/root-cam.arw",
+            "placed_by": "own_position",
+            "relative_path": "6-photos-by-dest/root-cam.arw"
+          }
+        ],
         "review_items": [],
         "summary": {
           "automatic_folder_fallback": 0,
@@ -55,13 +60,10 @@
       "destination_path": "6-photos-by-dest/Belgium",
       "folder_fallback": {
         "effective_fallback": null,
-        "proposal": {
-          "proposal_source": "manual_required"
-        },
+        "fallback_source": "none",
+        "inherited_fallback": null,
         "requires_user_input": false,
-        "stale_user_decision": false,
         "user_decision": {
-          "accept_proposal": false,
           "fallback_lat": "",
           "fallback_lon": ""
         }
@@ -76,8 +78,16 @@
             "Automatic decisions are summarized here; exact file-level write operations are listed only in photos-24-executable-plan.json."
           ]
         },
+        "placed_photos": [
+          {
+            "content_fingerprint": "fp-6-photos-by-dest/Belgium/bel-phone.jpg",
+            "placed_by": "own_position",
+            "relative_path": "6-photos-by-dest/Belgium/bel-phone.jpg"
+          }
+        ],
         "review_items": [
           {
+            "camera_bucket": "NIKON|D750|B",
             "content_fingerprint": "fp-6-photos-by-dest/Belgium/bel-cam.arw",
             "reason": "no_reliable_gps_source",
             "relative_path": "6-photos-by-dest/Belgium/bel-cam.arw",
@@ -109,13 +119,10 @@
       "destination_path": "6-photos-by-dest/Belgium/Bruges",
       "folder_fallback": {
         "effective_fallback": null,
-        "proposal": {
-          "proposal_source": "manual_required"
-        },
+        "fallback_source": "none",
+        "inherited_fallback": null,
         "requires_user_input": false,
-        "stale_user_decision": false,
         "user_decision": {
-          "accept_proposal": false,
           "fallback_lat": "",
           "fallback_lon": ""
         }
@@ -130,6 +137,14 @@
             "Automatic decisions are summarized here; exact file-level write operations are listed only in photos-24-executable-plan.json."
           ]
         },
+        "placed_photos": [
+          {
+            "camera_bucket": "NIKON|D750|B",
+            "content_fingerprint": "fp-6-photos-by-dest/Belgium/Bruges/bruges.arw",
+            "placed_by": "own_position",
+            "relative_path": "6-photos-by-dest/Belgium/Bruges/bruges.arw"
+          }
+        ],
         "review_items": [],
         "summary": {
           "automatic_folder_fallback": 0,
@@ -147,13 +162,10 @@
       "destination_path": "6-photos-by-dest/Belgium/Brussels",
       "folder_fallback": {
         "effective_fallback": null,
-        "proposal": {
-          "proposal_source": "manual_required"
-        },
+        "fallback_source": "none",
+        "inherited_fallback": null,
         "requires_user_input": false,
-        "stale_user_decision": false,
         "user_decision": {
-          "accept_proposal": false,
           "fallback_lat": "",
           "fallback_lon": ""
         }
@@ -168,6 +180,26 @@
             "Automatic decisions are summarized here; exact file-level write operations are listed only in photos-24-executable-plan.json."
           ]
         },
+        "placed_photos": [
+          {
+            "camera_bucket": "SONY|ILCE-6400|A@2024-07-03",
+            "content_fingerprint": "fp-6-photos-by-dest/Belgium/Brussels/bru-summer-1.arw",
+            "placed_by": "own_position",
+            "relative_path": "6-photos-by-dest/Belgium/Brussels/bru-summer-1.arw"
+          },
+          {
+            "camera_bucket": "SONY|ILCE-6400|A@2024-07-04",
+            "content_fingerprint": "fp-6-photos-by-dest/Belgium/Brussels/bru-summer-2.arw",
+            "placed_by": "own_position",
+            "relative_path": "6-photos-by-dest/Belgium/Brussels/bru-summer-2.arw"
+          },
+          {
+            "camera_bucket": "SONY|ILCE-6400|A@2024-12-22",
+            "content_fingerprint": "fp-6-photos-by-dest/Belgium/Brussels/bru-winter.arw",
+            "placed_by": "own_position",
+            "relative_path": "6-photos-by-dest/Belgium/Brussels/bru-winter.arw"
+          }
+        ],
         "review_items": [],
         "summary": {
           "automatic_folder_fallback": 0,
@@ -185,13 +217,10 @@
       "destination_path": "6-photos-by-dest/Japan",
       "folder_fallback": {
         "effective_fallback": null,
-        "proposal": {
-          "proposal_source": "manual_required"
-        },
+        "fallback_source": "none",
+        "inherited_fallback": null,
         "requires_user_input": false,
-        "stale_user_decision": false,
         "user_decision": {
-          "accept_proposal": false,
           "fallback_lat": "",
           "fallback_lon": ""
         }
@@ -210,23 +239,42 @@
         },
         "placed_photos": [
           {
+            "camera_bucket": "SONY|ILCE-6400|A",
+            "content_fingerprint": "fp-6-photos-by-dest/Japan/anchor-1.arw",
+            "placed_by": "own_position",
+            "relative_path": "6-photos-by-dest/Japan/anchor-1.arw"
+          },
+          {
+            "camera_bucket": "SONY|ILCE-6400|A",
+            "content_fingerprint": "fp-6-photos-by-dest/Japan/anchor-2.arw",
+            "placed_by": "own_position",
+            "relative_path": "6-photos-by-dest/Japan/anchor-2.arw"
+          },
+          {
+            "camera_bucket": "SONY|ILCE-6400|A",
             "content_fingerprint": "fp-6-photos-by-dest/Japan/extrap.arw",
+            "method": "extrapolated",
             "placed_by": "tracks",
             "relative_path": "6-photos-by-dest/Japan/extrap.arw"
           },
           {
+            "camera_bucket": "SONY|ILCE-6400|A",
             "content_fingerprint": "fp-6-photos-by-dest/Japan/interp-chosen.arw",
+            "method": "direct_match",
             "placed_by": "tracks",
             "relative_path": "6-photos-by-dest/Japan/interp-chosen.arw"
           },
           {
+            "camera_bucket": "SONY|ILCE-6400|A",
             "content_fingerprint": "fp-6-photos-by-dest/Japan/interp.arw",
+            "method": "direct_match",
             "placed_by": "tracks",
             "relative_path": "6-photos-by-dest/Japan/interp.arw"
           }
         ],
         "review_items": [
           {
+            "camera_bucket": "SONY|ILCE-6400|A",
             "content_fingerprint": "fp-6-photos-by-dest/Japan/blocked-a.arw",
             "reason": "no_reliable_gps_source",
             "relative_path": "6-photos-by-dest/Japan/blocked-a.arw",
@@ -242,6 +290,7 @@
             }
           },
           {
+            "camera_bucket": "SONY|ILCE-6400|A",
             "content_fingerprint": "fp-6-photos-by-dest/Japan/blocked-b.arw",
             "reason": "no_reliable_gps_source",
             "relative_path": "6-photos-by-dest/Japan/blocked-b.arw",
@@ -273,13 +322,10 @@
       "destination_path": "6-photos-by-dest/PhoneOnly",
       "folder_fallback": {
         "effective_fallback": null,
-        "proposal": {
-          "proposal_source": "manual_required"
-        },
+        "fallback_source": "none",
+        "inherited_fallback": null,
         "requires_user_input": false,
-        "stale_user_decision": false,
         "user_decision": {
-          "accept_proposal": false,
           "fallback_lat": "",
           "fallback_lon": ""
         }
@@ -294,6 +340,13 @@
             "Automatic decisions are summarized here; exact file-level write operations are listed only in photos-24-executable-plan.json."
           ]
         },
+        "placed_photos": [
+          {
+            "content_fingerprint": "fp-6-photos-by-dest/PhoneOnly/phone-only.jpg",
+            "placed_by": "own_position",
+            "relative_path": "6-photos-by-dest/PhoneOnly/phone-only.jpg"
+          }
+        ],
         "review_items": [],
         "summary": {
           "automatic_folder_fallback": 0,

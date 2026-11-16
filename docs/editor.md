@@ -195,7 +195,12 @@ them. See [why grouping is per-day](concepts.md#why-grouping-is-per-day-within-a
 
 Days of one group with the same proposal are collapsed into one row (e.g. "3 Jul 2024 … 9 Jul 2024
 (7 days)"); an answer there applies to every day in it. Click **▸** to show each day and answer one
-separately.
+separately. A camera gets a heading of its own only where its days need different answers and the
+destination has other cameras; a destination with one camera lists its days directly.
+
+Only the cameras that ask, or that you answered, are listed open. The cameras whose photos settle their
+offset themselves — an offset their own GPS fixed as configured, nothing for you to answer — fold into one
+line, **Offset · settled by the photos (<cameras>)**; open it to see them, or to answer one anyway.
 
 You answer in one of two ways:
 
@@ -395,10 +400,25 @@ recomputed times on the next run.
 
 ## GPS view
 
-Per destination: a **folder fallback**, a worklist of only the photos nothing automatic could place, and
-a summary line — files in total, how many keep their own GPS (`preserve`), are placed on or between
-track points (`interp`), past a track's end (`extrap`), by the folder fallback, or still blocked. Geotag
-marks every position it writes from the tracks as `matched`, `interpolated` or `extrapolated` in the
+The destination tree, as in the Time view. Each destination's first row is its **folder fallback** — its
+point, badged **own** or **inherited ⟵ <destination>** — and under it its photos in at most two buckets:
+
+- **Fallback** — the photos the folder fallback placed, grouped by why the tracks missed them (away from the
+  tracks, in a gap, where the track jumps, tracks disagree, no tracks, a time from a date fallback);
+- **Placed** — the rest, grouped by how they were placed: **camera GPS** (their own position), **track
+  point**, **between points**, **past track end**, **set by hand**.
+
+Where no fallback is in effect here or above, the photos nothing places are listed as **Unplaced** instead
+of Fallback — open and first, since geotag waits on them. The settled buckets are folded. A bucket or group
+of one kind says it in its title (**Placed (212) · between points**), and a group of one photo is no group:
+the photo is listed with its kind beside it.
+
+When every photo of one camera's day in a destination fell to the fallback (or waits unplaced), though the
+tracks had points that day, the bucket names that camera day — **<camera> · <day> — check its offset** —
+and a click opens its offset in the Time view: a whole day the tracks missed is more likely a wrong clock
+offset than a folder without tracks.
+
+Geotag marks every position it writes from the tracks as `matched`, `interpolated` or `extrapolated` in the
 photo itself, so a rough position is never taken for a precise one.
 
 Photos are placed in this order: the photo's own GPS → a coordinate you set for it → the tracks → the
@@ -407,16 +427,19 @@ no plan is made — until you give its folder a fallback or it a coordinate, and
 photo that holds none.
 
 **A blocked photo** offers its **folder's fallback first**: **set the folder's fallback** opens that
-destination's fallback, and one coordinate there places every photo of the folder nothing else places
-(and, once they accept it, the folders inside it). Below it, **or a position for this photo alone**.
+destination's fallback, and one coordinate there places every photo of the folder nothing else places —
+and of the folders inside it, which inherit it. Below it, **or a position for this photo alone**.
 
 **Folder GPS fallback** — a single coordinate that places any photo in that destination nothing above
-it could. It cascades downward like the timezone (badged `inherited ⟵ <ancestor>`), but unlike the
-timezone it is **never applied by itself and never blocks**: an inherited fallback is a proposal you
-*may* take with **accept inherited**. A fallback you set **re-roots the chain** for the destinations
-beneath. Photos it places are marked as such (`manual_fallback`), so it's always clear the position
-wasn't measured. **clear** takes a fallback back (to *no fallback*; destinations beneath then inherit
-from above again).
+it could. It cascades downward like the timezone and, like it, **applies itself**: a destination with no
+fallback of its own takes the one written at the nearest destination above it, badged
+`inherited ⟵ <destination>`, and follows it when it changes — there is nothing to accept. Where the
+inherited one is wrong, write this destination's own: every photo here the fallback places takes it, in
+one go, and the destinations beneath inherit it. **back to the inherited** takes your own away again (or
+**clear**, with nothing above). There is no "no fallback here" — a photo the fallback did not place would be
+left with no position. It **never blocks**. Photos it places are marked as such (`manual_fallback`), so
+it's always clear the position wasn't measured; `geotag plan` says, per destination, how many it placed
+and whose fallback it was.
 
 ![GPS view — a per-destination folder fallback](screenshots/carto-25-geotag-edit-gps-fallback.png)
 
@@ -451,9 +474,9 @@ name in the worklist for a larger preview):
   `lat, lon` to your system clipboard); "paste" applies it to the current photo. The next photo opens
   centred where you last placed one.
 
-**A photo the tracks or the fallback already place** can be given a position of its own: under each
-destination, a folded list — **N placed — by the tracks, by the fallback** — names those photos, each with
-**set position**. A coordinate set there is that photo's alone and outranks both; it stays while it is set,
+**A photo the tracks or the fallback already place** can be given a position of its own: in the
+**Fallback** and **Placed** buckets each such photo has **set position**. A coordinate set there is that
+photo's alone and outranks both; it stays while it is set,
 whatever tracks or fallback come to cover the photo later (**back to the tracks** / **back to the fallback**
 takes it away). Saved, it is written as the entry you would write by hand: a `chosen_by_user` review item.
 
@@ -496,7 +519,7 @@ Two reset behaviors worth knowing (both take effect on the next run):
   renamed it. A photo you move to another folder (or whose folder you rename) is asked again: its
   coordinate was given for the folder it was in. An answer whose question has changed is never silently applied to the new one — it is
   marked **stale** and asked again: an acceptance of an offset no longer proposed, a confirmation of an
-  offset no longer in effect or made on a track since taken out or changed, an inherited fallback that no longer exists, a zone kept for photos when
+  offset no longer in effect or made on a track since taken out or changed, a zone kept for photos when
   one arrives recording yet another offset.
 
 ---

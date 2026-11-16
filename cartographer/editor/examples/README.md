@@ -39,8 +39,9 @@ by the real edit→re-run round-trip, so they also illustrate the loop the edito
 - **Effective offset source:** `gpx_anchor_auto`, `gpx_anchor_accepted`, `timezone_accepted`,
   `manual`.
 - **GPS categories:** preserve-native, GPX interpolation, GPX extrapolation, folder fallback
-  (manual + inherited+accepted); review reasons `no_reliable_gps_source`, `manual_locked`; `placed_photos`
-  by the tracks and by the fallback.
+  (`fallback_source` own, inherited — applying itself — and none); review reasons `no_reliable_gps_source`,
+  `manual_locked`; `placed_photos` by their own position, by the tracks (with the `method`) and by the fallback (with
+  why the tracks missed it), each with its `camera_bucket`.
 - **GPS-drift validation (`photos-22`):** a per-camera drift cell `requires_user_input` (proposed
   offset awaiting review) and resolved (`effective_drift_offset`, source `gps_drift_validated`).
 - **Cell flags:** `requires_user_input` true/false; `stale_user_decision` true.

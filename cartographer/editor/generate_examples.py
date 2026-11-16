@@ -200,14 +200,14 @@ def scenario_trip():
     # GPS is built on the completed-time resolved rows (geotag only reaches GPS once time is done).
     rows = cal.compute_resolved_utc(files, groups, time_comp)
     rfp = "example-resolved-utc-fingerprint"
-    gps_req, blk = wf.build_gps_decisions(files, rows, gpx, None, rfp)
+    gps_req, blk = wf.build_gps_decisions(files, rows, gpx, None, rfp, time_decisions=time_comp)
     assert not blk, blk
 
     def fill_gps(a):
         d = a["destinations"]
         d[BE]["folder_fallback"]["user_decision"]["fallback_lat"] = 50.8503      # manual fallback
         d[BE]["folder_fallback"]["user_decision"]["fallback_lon"] = 4.3517
-        d[BR]["folder_fallback"]["user_decision"]["accept_proposal"] = True       # inherit Belgium's
+        # Bruges, writing none of its own, inherits Belgium's: it applies itself (RUL-inherited_fallback_applies)
         for ri in d[JP]["gps_decisions"]["review_items"]:
             if ri["relative_path"].endswith("blocked-a.arw"):
                 ri["user_decision"]["manual_lat"] = 35.0116
@@ -221,7 +221,7 @@ def scenario_trip():
              "user_decision": {"manual_lat": 35.0, "manual_lon": 135.75}})
         return a
 
-    gps_comp, blk = wf.build_gps_decisions(files, rows, gpx, fill_gps(_copy(gps_req)), rfp)
+    gps_comp, blk = wf.build_gps_decisions(files, rows, gpx, fill_gps(_copy(gps_req)), rfp, time_decisions=time_comp)
     assert not blk, blk
     assert time_comp["status"] == "complete" and gps_comp["status"] == "complete", \
         (time_comp["status"], gps_comp["status"])
@@ -402,7 +402,8 @@ def _verify():
         '"confidence": "high"', '"confidence": "medium"', '"confidence": "review_required"',
         '"stale_user_decision": true',
         '"reason": "no_reliable_gps_source"', '"reason": "manual_locked"',
-        '"placed_by": "tracks"', '"placed_by": "folder_fallback"',
+        '"placed_by": "tracks"', '"placed_by": "folder_fallback"', '"placed_by": "own_position"', '"camera_bucket"',
+        '"fallback_source": "own"', '"fallback_source": "inherited"', '"fallback_source": "none"',
         '"effective_split"', '"clock_change_part"',
     ]
     missing = [m for m in required if m not in blob]

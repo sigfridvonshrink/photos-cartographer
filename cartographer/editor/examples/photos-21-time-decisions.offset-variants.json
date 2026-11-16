@@ -1671,6 +1671,14 @@
   "destinations": {
     "6-photos-by-dest": {
       "camera_group_time_decisions": {},
+      "date_fallback": {
+        "effective_date": null,
+        "requires_user_input": false,
+        "stale_user_decision": false,
+        "user_decision": {
+          "date": ""
+        }
+      },
       "destination_path": "6-photos-by-dest",
       "destination_timezone": {
         "effective_iana_timezone": "Europe/Brussels",
@@ -2080,6 +2088,14 @@
           }
         }
       },
+      "date_fallback": {
+        "effective_date": null,
+        "requires_user_input": false,
+        "stale_user_decision": false,
+        "user_decision": {
+          "date": ""
+        }
+      },
       "destination_path": "6-photos-by-dest/ClockChange",
       "destination_timezone": {
         "decision_mode": "auto_resolved",
@@ -2246,6 +2262,14 @@
           }
         }
       },
+      "date_fallback": {
+        "effective_date": null,
+        "requires_user_input": false,
+        "stale_user_decision": false,
+        "user_decision": {
+          "date": ""
+        }
+      },
       "destination_path": "6-photos-by-dest/Conflict",
       "destination_timezone": {
         "decision_mode": "auto_resolved",
@@ -2353,6 +2377,14 @@
           }
         }
       },
+      "date_fallback": {
+        "effective_date": null,
+        "requires_user_input": false,
+        "stale_user_decision": false,
+        "user_decision": {
+          "date": ""
+        }
+      },
       "destination_path": "6-photos-by-dest/Revisit",
       "destination_timezone": {
         "decision_mode": "auto_resolved",
@@ -2448,6 +2480,14 @@
           }
         }
       },
+      "date_fallback": {
+        "effective_date": null,
+        "requires_user_input": false,
+        "stale_user_decision": false,
+        "user_decision": {
+          "date": ""
+        }
+      },
       "destination_path": "6-photos-by-dest/Segment",
       "destination_timezone": {
         "decision_mode": "auto_resolved",
@@ -2541,6 +2581,14 @@
             "accepted_offset_seconds": -7200,
             "manual_offset_seconds": ""
           }
+        }
+      },
+      "date_fallback": {
+        "effective_date": null,
+        "requires_user_input": false,
+        "stale_user_decision": false,
+        "user_decision": {
+          "date": ""
         }
       },
       "destination_path": "6-photos-by-dest/SinglePoint",

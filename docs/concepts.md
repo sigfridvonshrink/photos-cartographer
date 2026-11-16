@@ -505,7 +505,7 @@ parent→child only (never sibling→sibling):
 | Fact | Inherits? | Applied automatically? | A value written on a folder… |
 |---|---|---|---|
 | **Timezone** (from a zone written above, or a country of one zone) | yes, downward | yes — unless the destination's own photos speak against it; the configured default is only offered | **re-roots the chain** at that folder for everything inside |
-| **Folder GPS fallback** | yes, downward | no — an inherited fallback must be **accepted** | **re-roots the chain** at that folder for everything inside |
+| **Folder GPS fallback** | yes, downward | yes — shown as inherited, naming the folder it comes from | **re-roots the chain** at that folder for everything inside |
 | **Date fallback** (photos with no recorded time) | yes, downward | yes | **re-roots the chain** at that folder for everything inside |
 | **Clock offset** | **no** | only one the camera's own GPS fixed, when its photos agree | n/a — each day's offset is proposed from its own evidence |
 
@@ -513,19 +513,23 @@ parent→child only (never sibling→sibling):
 that value becomes the folder's own and the new basis its descendants inherit — replacing whatever would
 have flowed from further up. On the next run, descendants that merely inherited the old value follow the
 new one; a descendant with its *own* value keeps it (and itself re-roots the chain for *its*
-descendants). A destination that accepted its inherited fallback follows the fallback above it, a later
-change there included.
+descendants). An inherited fallback is not a question: you override it where it is wrong, at that folder, in
+one go — every photo there the fallback places takes the one you write — never photo by photo; emptied, the
+folder inherits again. There is no "no fallback here" to write: a photo it did not place would be left with no
+position.
 
-The folder fallback is **optional and never blocks**: a destination without one simply leaves its
-unplaced photos in the worklist. A fallback placement is written as a manual position
-(`manual_fallback`), so it's always clear it wasn't measured, and it is undone like any decision.
+The folder fallback is **optional and never blocks**: a destination without one, here or above, simply leaves
+its unplaced photos in the worklist. A fallback placement is written as a manual position
+(`manual_fallback`), so it's always clear it wasn't measured, and it is undone like any decision. `geotag plan`
+says, per destination, how many photos the fallback placed and whose fallback it was — the folder's own, or
+inherited from which folder — and records, for each such photo, why the tracks did not place it.
 
 ### A date for photos with no time — scans
 
 A scanned print records no time, and prep sets a photo with none aside in `2-missing-metadata/`. Sorted into a
 destination anyway — a folder of scans from 1985 — it can be timed by a **date fallback**: a date you give the folder,
 as much of it as you know — a year (`1985`), a month (`1985-06`) or a day (`1985-06-14`), a month or day left out
-being the first. It cascades like the folder fallback, but needs no accepting: the date given on the nearest folder up,
+being the first. It cascades like the folder fallback, applying itself: the date given on the nearest folder up,
 the photo's own included, covers it. Write it once on `Scans/1985` and every folder inside takes it.
 
 It times **only photos with no recorded time**; a photo with a time of its own keeps it. Such a photo takes the filled
