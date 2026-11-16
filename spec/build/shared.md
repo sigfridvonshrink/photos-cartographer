@@ -68,6 +68,31 @@ The decision editor's save SHALL take the workspace lock for the time it writes,
 the editor's display reads take none, each record being replaced whole. The editor is given, with each record it loads, the SHA-256 of its bytes, and sends them back with a save; under the lock the save compares them with the records on disk and checks that every edit names a decision its record holds, writing none of the records otherwise, and returns the hashes of what it leaves.
 :::
 
+:::{bld} The order of the editor's save
+:id: BLD-editor_save_order
+:status: ruled
+:realises: RUL-save_writes_in_order
+:uses: BLD-editor_save_locks
+
+The decision editor's save SHALL write, of the records it changes, `photos-21-time-decisions.json`,
+`photos-22-gps-drift-validation.json`, `photos-23-gps-decisions.json`, `photos-25-execution-summary.json` and then
+`photos-00-config.json`, in that order, each replaced atomically and synced to disk before the next is begun; a write
+that fails ends the save there, the records before it written and those after it as they were.
+:::
+
+:::{bld} The editor's save keeps the replaced record under `-NNN`
+:id: BLD-editor_keeps_replaced_record
+:status: ruled
+:realises: RUL-save_keeps_the_replaced
+:uses: BLD-plan_backups
+
+Before it writes a record whose new bytes differ from those it loaded, the decision editor's save SHALL copy the record
+to its next free `-NNN` sibling through `backup_existing_artifact`, the set-aside {need}`BLD-plan_backups` makes, so a
+save's copies and a re-plan's are numbered as one series; a record whose bytes would not change is written with nothing
+set aside. The configuration, written through `write_json_artifact`, keeps no copy, as merge's `init-library` keeps
+none.
+:::
+
 :::{bld} Every question is a decision field the editor answers
 :id: BLD-editor_answers_every_question
 :status: ruled

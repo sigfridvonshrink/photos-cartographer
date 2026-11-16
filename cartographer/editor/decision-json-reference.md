@@ -971,6 +971,8 @@ when the workspace is sealed. Under the lock it is refused — **nothing written
 may have rewritten it — reload and edit again); or an edit names a decision its record does not hold (no such
 destination, cell, bucket key, review item or mismatch) or carries no `user_decision` object. Otherwise each named
 cell's `user_decision` is **replaced whole** by the one sent (nothing else in the record is touched), each
-edited record is written atomically (sorted keys, two-space indent), and the reply is
+edited record is written atomically (sorted keys, two-space indent) — in the order photos-21, photos-22, photos-23,
+photos-25, then the configuration, each one whose bytes change first copied to its next free `-NNN` sibling (the
+configuration keeps no copy) — and the reply is
 `{ "ok": true, "written": [<record names>], "hashes": { … } }` — the records' new hashes, which the next save
 must carry. A refusal is `{ "ok": false, "error": "…" }`. Demo mode (`--demo`) refuses every save.

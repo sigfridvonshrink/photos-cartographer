@@ -182,6 +182,35 @@ def set_aside_partners(log_photos) -> dict:
     return out
 
 
+def hand_deletions(workspace_root, workspace_changes=()) -> dict:
+    """{fingerprint: the path it was deleted at} of every file a workspace check found deleted by hand — a cull
+    (RUL-culling_passes) — whichever run's check found it: this run's (`workspace_changes`), an earlier prep run's, as
+    prep's log keeps it, or a geotag execution's, as its summary and the summaries kept under -NNN keep it
+    (BLD-workspace_changes_logged). A record that cannot be read adds nothing: its own reader reports it
+    (BLD-culled_raw_found)."""
+    import glob as _glob
+    from .photos_utils import prep_log_path, CONTROL_DIR
+    sources = [list(workspace_changes or [])]
+
+    def kept_changes(path):
+        try:
+            with open(path) as f:
+                changes = json.load(f).get("workspace_changes")
+        except (OSError, ValueError, AttributeError):
+            return []
+        return changes if isinstance(changes, list) else []
+    sources.append(kept_changes(prep_log_path(workspace_root)))
+    summary = os.path.join(workspace_root, CONTROL_DIR, "photos-25-execution-summary")
+    for p in [summary + ".json"] + sorted(_glob.glob(_glob.escape(summary) + "-[0-9][0-9][0-9]*.json")):
+        sources.append(kept_changes(p))
+    out = {}
+    for changes in sources:
+        for c in changes:
+            if isinstance(c, dict) and c.get("kind") == "deleted" and c.get("content_fingerprint"):
+                out.setdefault(c["content_fingerprint"], c.get("path"))
+    return out
+
+
 def read_prior_workspace_changes(workspace_root) -> list:
     """The earlier prep log's `workspace_changes` — the changes by hand earlier runs named or accepted
     (BLD-workspace_changes_logged) — [] where there is no log yet. Read after `read_prior_prep_log` has found the log
@@ -271,6 +300,17 @@ def build_prep_log(prior_photos, operations, cache_files, quarantine_evidence, r
         if fp:
             run_steps_by_fp.setdefault(fp, []).extend(j["steps"])
 
+    # 3a. A JPEG set aside beside a RAW the user culled, quarantined by this run: its step names the RAW by where it
+    #     was and by its fingerprint, and the photo is left where the quarantine holds it (RUL-culled_raw_jpeg_logged).
+    culled_to = {}
+    for op in operations:
+        v = op.verification or {}
+        if op.type == "quarantine_move" and v.get("kind") == "raw_culled" and v.get("content_fingerprint"):
+            run_steps_by_fp.setdefault(v["content_fingerprint"], []).append(_step(
+                "raw_culled", **{"from": op.source, "to": op.destination, "raw_path": v.get("raw_path"),
+                                 "raw_fingerprint": v.get("raw_fingerprint")}))
+            culled_to[v["content_fingerprint"]] = op.destination
+
     # 4. Quarantined duplicates, keyed by content fingerprint (same content as the retained file).
     quarantined_by_fp = {}
     for ev in (quarantine_evidence or []):
@@ -322,7 +362,7 @@ def build_prep_log(prior_photos, operations, cache_files, quarantine_evidence, r
         prior = prior_photos.get(fp)
         run_steps = run_steps_by_fp.get(fp, [])
         quar = quarantined_by_fp.get(fp)
-        current = fp_to_current.get(fp) or (prior.get("prep_path") if prior else None)
+        current = fp_to_current.get(fp) or culled_to.get(fp) or (prior.get("prep_path") if prior else None)
         if not (prior or run_steps or quar):
             # No prep transformation recorded for this content. In a prep-organized band that
             # means lost history (warn + partial, RUL-partial_history_shown); by-dest/user-curated media is skipped.
@@ -1242,13 +1282,17 @@ class _PlanState:
 
 
 class WorkspacePrepWorkflow:
-    def __init__(self, workspace_root: str, cache: WorkspaceCache):
+    def __init__(self, workspace_root: str, cache: WorkspaceCache, workspace_changes=None):
         self.workspace_root = workspace_root
         self.cache = cache
+        # The changes by hand the run's check found: a RAW deleted among them takes its set-aside JPEG
+        # (BLD-culled_raw_found).
+        self.workspace_changes = list(workspace_changes or [])
         self.managed_folders = managed_folder_names(CONFIG)
         from .photos_utils import ProgressCoordinator
         self.coordinator = ProgressCoordinator()
         self._raw_partners = {}             # set-aside JPEG -> its RAW, by fingerprint: read from the log at plan
+        self._hand_deleted = {}             # fingerprint -> path of each file a check found deleted by hand
 
     def _allocate_suffix(self, base: str, ext: str, index: set, start_idx: int = 1,
                          bare_first: bool = False) -> str:
@@ -2256,6 +2300,41 @@ class WorkspacePrepWorkflow:
                     quarantined.add(dup['relative_path'])
                     st.current_paths[dup['relative_path']] = quarantine_dest
 
+    def _plan_culled_raw_jpegs(self, st, all_db_files, db_files, quarantined, plan_id_for_quarantine):
+        """A JPEG set aside beside a RAW the user has culled goes to the quarantine (RUL-culled_raw_takes_its_jpeg,
+        BLD-culled_raw_found). The RAW is known culled by its fingerprint, never its path: the one the prep log records
+        as the JPEG's partner, held by no file prep scanned — inbox and photos by destination included — and found
+        deleted by hand by a workspace check. A RAW moved or renamed still holds it; a JPEG whose pair was never
+        recorded has no partner; a video is never a partner. Records each JPEG in `quarantined`, so no later stage
+        moves it or checks its name. Mutates the op-building cluster on `st`."""
+        if not self._raw_partners or not self._hand_deleted:
+            return
+        held = {_fingerprint_value(f.get('content_hash')) for f in all_db_files} - {None}
+        aside = folder_name('redundant_jpgs') + '/'
+        for f in db_files:
+            if f['relative_path'] in quarantined or f['media_class'] != 'image':
+                continue
+            rel_path = st.current_paths[f['relative_path']]
+            jpeg_fp = _fingerprint_value(f.get('content_hash'))
+            raw_fp = self._raw_partners.get(jpeg_fp)
+            if not rel_path.startswith(aside) or not raw_fp or raw_fp in held or raw_fp not in self._hand_deleted:
+                continue
+            q_dest = os.path.join(".photos-ingest-quarantine", plan_id_for_quarantine, rel_path)
+            st.media_mutated_originals.add(f["relative_path"])
+            st.operations.append(Operation(
+                operation_id=f"op-{uuid.uuid4().hex[:8]}",
+                type="quarantine_move",
+                reason=f"Set-aside JPEG whose RAW was culled ({self._hand_deleted[raw_fp]})",
+                source=rel_path,
+                destination=q_dest,
+                preconditions={"size": f["size"], "mtime_ns": f["mtime_ns"]},
+                verification={"original_path": rel_path, "quarantine_path": q_dest, "plan_id": plan_id_for_quarantine,
+                              "kind": "raw_culled", "content_fingerprint": jpeg_fp,
+                              "raw_path": self._hand_deleted[raw_fp], "raw_fingerprint": raw_fp},
+                database_effects_after_verification=[{"action": "remove", "relative_path": rel_path}]))
+            quarantined.add(f['relative_path'])
+            st.current_paths[f['relative_path']] = q_dest
+
     def _recorded_filename_format(self):
         """The filename format the last prep execute named this workspace's files in, from the handoff
         it wrote; None when there is none yet."""
@@ -2633,6 +2712,8 @@ class WorkspacePrepWorkflow:
         except ValueError as e:
             self._raw_partners = {}
             blockers.append(str(e))
+        # the files a check found deleted by hand, by fingerprint: a culled RAW among them (BLD-culled_raw_found)
+        self._hand_deleted = hand_deletions(self.workspace_root, self.workspace_changes) if self._raw_partners else {}
 
         self.coordinator.start_phase("planning - scanning inventory")
         self._scan_inventory(files, blockers)
@@ -2813,6 +2894,8 @@ class WorkspacePrepWorkflow:
         self._plan_quarantine_artifacts(st, exiftool_leftovers, dump_dotfiles, plan_id_for_quarantine)
 
         self._plan_dedup(st, content_groups, quarantined, plan_id_for_quarantine)
+
+        self._plan_culled_raw_jpegs(st, all_db_files, db_files, quarantined, plan_id_for_quarantine)
 
         self._plan_extension_case(st, db_files, quarantined)
 
@@ -3358,7 +3441,7 @@ def _run_locked(args, workspace_root, reporter):
             cache.close()
             reporter.error(_schema_stop)
             sys.exit(2)
-        workflow = WorkspacePrepWorkflow(workspace_root, cache)
+        workflow = WorkspacePrepWorkflow(workspace_root, cache, workspace_changes=workspace_changes)
         plan = workflow.plan()
         cache.close()
 

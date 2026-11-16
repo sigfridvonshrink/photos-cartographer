@@ -295,6 +295,23 @@ evidence is trusted: a name shared within a folder, as the camera wrote it. Anot
 the camera's JPEG, and a JPEG and a RAW in different folders, or matched only by time, may be two shots.
 :::
 
+:::{rat} A set-aside JPEG goes with its RAW
+:id: RAT-jpeg_goes_with_its_raw
+:status: ruled
+:forced: no
+:follows_from: RAT-raw_is_master, RAT-no_automatic_deletion, RAT-expected_hand_work
+:justifies: RUL-culled_raw_takes_its_jpeg, RUL-culled_raw_known_by_content, RUL-culled_raw_jpeg_logged, RUL-culled_raw_jpeg_recorded
+
+A JPEG set aside beside its RAW is that RAW's dependent: the same shot, kept only as a copy of it. Culling the RAW is
+the user's verdict on the frame. Left behind, the JPEG is a frame the user threw out still in the workspace — and,
+renamed by geotag with its RAW, under a name that is neither its own time nor its partner's, stopping the next plan for
+a rename nobody wants. Taken into the quarantine it is out of the way and recoverable, purged only by the user's prune
+like everything set aside. The RAW is known culled by its content, never its name: one sorted, renamed or copied
+elsewhere still holds its fingerprint; and only where a comparison saw it deleted by hand, for a fingerprint taken
+again another way leaves the same absence with no frame culled. The log names the RAW, so the user sees why the JPEG
+went; the move is prep's own, recorded as such, so the next run does not ask the user to accept it.
+:::
+
 :::{rat} Identical media is kept once
 :id: RAT-identical_kept_once
 :status: ruled

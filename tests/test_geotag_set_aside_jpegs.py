@@ -244,6 +244,57 @@ def test_prep_after_geotag_takes_the_renamed_jpeg_as_named(tmp_path, monkeypatch
     assert [b for b in plan().blockers if "3-redundant-jpgs/2024-07-03--13-00-00.jpg" in b]
 
 
+@pytest.mark.spec("RUL-culled_raw_takes_its_jpeg", "RUL-culled_raw_jpeg_logged", "RUL-culled_raw_jpeg_recorded",
+                  "BLD-culled_raw_found",
+                  test="TST-geotag_set_aside_jpegs-a_raw_culled_after_geotag_takes_its_renamed_jpeg")
+def test_a_raw_culled_after_geotag_takes_its_renamed_jpeg(tmp_path, monkeypatch):
+    """A RAW culled from photos by destination after geotag renamed it and its JPEG: prep's next plan does not stop on
+    the JPEG as misnamed — it quarantines it, its step naming the RAW by the path it was culled at and by
+    fingerprint — and the execution leaves a workspace the next check finds unchanged."""
+    ws, ctl = _workspace(tmp_path, monkeypatch)
+    with open(ctl / "photos-11-handoff.json") as f:                 # the record prep's execution would have written
+        utils.write_workspace_record(str(ws), cache_rows={r["relative_path"]: r for r in json.load(f)["files"]})
+    held = _tools(monkeypatch, ws)
+    assert _geotag(monkeypatch, ws, "execute") == 0
+    jpeg = ws / "3-redundant-jpgs" / f"{HOME}.jpg"
+    assert jpeg.exists()
+    os.remove(ws / "6-photos-by-dest" / "T" / f"{HOME}.arw")                         # culled by hand
+
+    times = {jpeg.stat().st_ino: "2024:07:03 15:00:00"}
+    for p in (ws / "6-photos-by-dest" / "T").iterdir():
+        times[p.stat().st_ino] = (held.get(p.stat().st_ino) or {}).get("DateTimeOriginal")
+
+    def meta(folders, max_workers=4, progress_coordinator=None):
+        out = {}
+        for folder in folders:
+            for n in os.listdir(folder):
+                p = os.path.join(folder, n)
+                out[p] = {"DateTimeOriginal": times.get(os.stat(p).st_ino), "extraction_status": "extracted_ok"}
+        return out, set()
+    monkeypatch.setattr(utils.MetadataReader, "read_metadata_concurrently", meta)
+    prep.CONFIG["jobs"] = 1
+    prep.CONFIG["zfs"] = {"enabled": False}
+
+    changes, stop = utils.check_workspace(str(ws), "prep", "plan")
+    assert stop is None
+    cache = prep.WorkspaceCache(str(ws))
+    try:
+        plan = prep.WorkspacePrepWorkflow(str(ws), cache, workspace_changes=changes).plan()
+    finally:
+        cache.close()
+    assert not [b for b in plan.blockers if b.startswith("Misnamed")], plan.blockers
+    [op] = [op for op in plan.operations if op.type == "quarantine_move"]
+    assert op.source == f"3-redundant-jpgs/{HOME}.jpg" and op.verification["kind"] == "raw_culled"
+    assert (op.verification["raw_path"], op.verification["raw_fingerprint"]) == \
+        (f"6-photos-by-dest/T/{HOME}.arw", f"fp-6-photos-by-dest/T/{AWAY}.arw")
+    assert not plan.blockers, plan.blockers
+    prep.PlanExecutor(str(ws), workspace_changes=changes).execute(plan)
+    assert not jpeg.exists() and (ws / op.destination).exists()
+    steps = json.load(open(ctl / "photos-15-prep-log.json"))["photos"][f"fp-3-redundant-jpgs/{AWAY}.jpg"]["journey"]
+    assert (steps[-1]["action"], steps[-1]["raw_path"]) == ("raw_culled", f"6-photos-by-dest/T/{HOME}.arw")
+    assert utils.check_workspace(str(ws), "prep", "plan") == ([], None)
+
+
 @pytest.mark.spec("RUL-video_name_stays_uncorrected", "RUL-video_never_changed",
                   test="TST-geotag_set_aside_jpegs-a_video_keeps_its_name")
 def test_a_video_keeps_its_name(tmp_path, monkeypatch):

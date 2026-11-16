@@ -866,6 +866,68 @@ def test_finalize_stops_on_an_unreadable_record_of_a_pass(tmp_path, monkeypatch,
     assert not list(ctl.glob("photos-26-*"))
 
 
+_TORN_PLANS = {"torn": '{"plan_id": "abc", "destinations": {', "not_json": "plan", "not_an_object": "[]"}
+
+
+@pytest.mark.spec("RUL-unreadable_plan_replanned", "BLD-unreadable_plan",
+                  test="TST-geotag_finalize-execute_sends_an_unreadable_plan_to_plan_again")
+@pytest.mark.parametrize("torn", sorted(_TORN_PLANS))
+def test_execute_sends_an_unreadable_plan_to_plan_again(tmp_path, monkeypatch, capsys, torn):
+    """A photos-24 that cannot be read — torn, not JSON, not an object — stops execute with exit 2 and the way on,
+    `geotag plan`, never a traceback: nothing is written to a photo, no summary or journal is written, and the file is
+    left as it is."""
+    ws, ctl = _ready_ws(tmp_path, monkeypatch)
+    _planned(monkeypatch, ws, ctl)
+    plan = ctl / "photos-24-executable-plan.json"
+    plan.write_text(_TORN_PLANS[torn])
+    written = []
+    monkeypatch.setattr(cal.GeotagWorkflow, "_exiftool_write", lambda self, p, t: written.append(p) or True)
+    capsys.readouterr()
+    assert _run(monkeypatch, ws, "execute") == 2
+    out = capsys.readouterr()
+    said = out.out + out.err
+    assert str(plan) in said and "cannot be read" in said and "`geotag plan` again" in said
+    assert "Traceback" not in said
+    assert written == [] and not (ctl / "photos-25-execution-summary.json").exists()
+    assert not list(ctl.glob("journal-*.json"))
+    assert plan.read_text() == _TORN_PLANS[torn]
+
+
+@pytest.mark.spec("RUL-unreadable_plan_replanned", "BLD-unreadable_plan",
+                  test="TST-geotag_finalize-finalize_sends_an_unreadable_plan_to_plan_again")
+@pytest.mark.parametrize("torn", sorted(_TORN_PLANS))
+def test_finalize_sends_an_unreadable_plan_to_plan_again(tmp_path, monkeypatch, capsys, torn):
+    """The executed plan, unreadable at finalize, stops it with exit 2, sending the user to `geotag plan`; no part of
+    the package is written."""
+    ws, ctl = _ready_ws(tmp_path, monkeypatch)
+    _to_executed(monkeypatch, ws, ctl)
+    plan = ctl / "photos-24-executable-plan.json"
+    plan.write_text(_TORN_PLANS[torn])
+    capsys.readouterr()
+    assert _run(monkeypatch, ws, "finalize") == 2
+    out = capsys.readouterr()
+    said = out.out + out.err
+    assert str(plan) in said and "`geotag plan` again" in said and "Traceback" not in said
+    assert not list(ctl.glob("photos-26-*"))
+    assert plan.read_text() == _TORN_PLANS[torn]
+
+
+@pytest.mark.spec("RUL-unreadable_plan_replanned", "BLD-unreadable_plan",
+                  test="TST-geotag_finalize-a_plan_made_again_after_an_unreadable_one_executes")
+def test_a_plan_made_again_after_an_unreadable_one_executes(tmp_path, monkeypatch):
+    """The way on works: `geotag plan` makes the plan anew — the unreadable one set aside under -NNN, as a re-plan sets
+    aside any plan — and execute then carries it out."""
+    ws, ctl = _ready_ws(tmp_path, monkeypatch)
+    _planned(monkeypatch, ws, ctl)
+    plan = ctl / "photos-24-executable-plan.json"
+    plan.write_text("[]")
+    assert _run(monkeypatch, ws, "plan") == 0
+    assert isinstance(json.loads(plan.read_text()), dict)
+    assert [p.read_text() for p in ctl.glob("photos-24-executable-plan-*.json")] == ["[]"]
+    assert _run(monkeypatch, ws, "execute") == 0
+    assert json.load(open(ctl / "photos-25-execution-summary.json"))["status"] == "success"
+
+
 @pytest.mark.spec("RUL-geotag_run_records_kept", "BLD-geotag_records_versioned",
                   test="TST-geotag_finalize-summary_and_package_made_again_keep_the_earlier")
 def test_summary_and_package_made_again_keep_the_earlier(tmp_path, monkeypatch):

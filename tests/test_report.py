@@ -172,7 +172,7 @@ def test_quarantine_moves_counted_by_reason(tmp_path, monkeypatch):
     (ws / "0-sources" / ".DS_Store").write_bytes(b"junk")
     plan = _plan(ws)
     r = plan.summary["report"]
-    assert r["quarantined_by_reason"] == {"duplicate": 1, "exiftool_leftover": 1, "dump_dotfile": 1}
+    assert r["quarantined_by_reason"] == {"duplicate": 1, "exiftool_leftover": 1, "dump_dotfile": 1, "raw_culled": 0}
     assert (r["duplicates_against_mutable"], r["duplicates_against_by_dest"]) == (1, 0)
     prep.PlanExecutor(str(ws)).execute(plan)
     with open(utils.handoff_path(str(ws))) as f:

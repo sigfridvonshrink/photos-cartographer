@@ -527,6 +527,108 @@ def test_a_class_given_moves_a_group_listed_in_both_arrays_and_the_result_is_che
     assert res["ok"] is False and "gpx_root" in res["error"] and open(path).read() == before
 
 
+def _every_record_workspace(tmp_path):
+    """The camera workspace with a photos-22 besides, and a save payload that changes photos-21, -22, -23 and the
+    configuration at once."""
+    ws, _cfg = _camera_workspace(tmp_path)
+    shutil.copy(os.path.join(EXAMPLES, "photos-22-gps-drift-validation.requires-input.json"),
+                os.path.join(ws, serve.CONTROL, serve.DRIFT_NAME))
+    payload = {
+        "time": [{"dest": "6-photos-by-dest/Japan", "kind": "timezone",
+                  "user_decision": {"confirmed_despite_recorded_offsets": [], "country": "",
+                                    "manual_iana_timezone": "Asia/Tokyo"}}],
+        "drift": [{"dest": "6-photos-by-dest/DriftTown", "kind": "drift", "key": "CAM|drift|D",
+                   "user_decision": {"accept_proposal": True}}],
+        "gps": [{"dest": "6-photos-by-dest/Japan", "kind": "fallback",
+                 "user_decision": {"fallback_lat": 35.0, "fallback_lon": 139.0}}],
+        "cameras": [{"kind": "camera", "key": "Apple|iPhone 15", "user_decision": {"device_class": "phones"}}],
+        "hashes": serve._load_artifacts(ws)["hashes"]}
+    return ws, payload
+
+
+@pytest.mark.spec("RUL-save_writes_in_order", "BLD-editor_save_order",
+                  test="TST-serve-a_save_writes_its_records_in_order")
+def test_a_save_writes_its_records_in_order(tmp_path, monkeypatch):
+    """A save changing every record writes photos-21, photos-22, photos-23 and then the configuration, one after
+    another."""
+    from cartographer import photos_utils as utils
+    ws, payload = _every_record_workspace(tmp_path)
+    order = []
+    real_record, real_config = serve._write_json, utils.write_json_artifact
+    monkeypatch.setattr(serve, "_write_json", lambda p, o: (order.append(os.path.basename(p)), real_record(p, o))[1])
+    monkeypatch.setattr(utils, "write_json_artifact",
+                        lambda p, o: (order.append(os.path.basename(p)), real_config(p, o))[1])
+    res = serve._save(ws, payload)
+    assert res["ok"] is True
+    assert order == res["written"] == [serve.TIME_NAME, serve.DRIFT_NAME, serve.GPS_NAME, serve.CONFIG_NAME]
+
+
+@pytest.mark.spec("RUL-save_writes_in_order", "BLD-editor_save_order",
+                  test="TST-serve-a_save_cut_short_leaves_only_its_leading_records")
+def test_a_save_cut_short_leaves_only_its_leading_records(tmp_path, monkeypatch):
+    """A save whose write of photos-22 fails has written photos-21 and left photos-22, photos-23 and the configuration
+    as they were: what it leaves is a leading part of it."""
+    ws, payload = _every_record_workspace(tmp_path)
+    cd = os.path.join(ws, serve.CONTROL)
+    before = {n: open(os.path.join(cd, n), "rb").read()
+              for n in (serve.TIME_NAME, serve.DRIFT_NAME, serve.GPS_NAME, serve.CONFIG_NAME)}
+    real = serve._write_json
+
+    def cut(path, obj):
+        if os.path.basename(path) == serve.DRIFT_NAME:
+            raise OSError("no space left on device")
+        real(path, obj)
+    monkeypatch.setattr(serve, "_write_json", cut)
+    with pytest.raises(OSError):
+        serve._save(ws, payload)
+    after = {n: open(os.path.join(cd, n), "rb").read() for n in before}
+    assert after[serve.TIME_NAME] != before[serve.TIME_NAME]
+    assert json.loads(after[serve.TIME_NAME])["destinations"]["6-photos-by-dest/Japan"]["destination_timezone"][
+        "user_decision"]["manual_iana_timezone"] == "Asia/Tokyo"
+    assert {n: after[n] for n in (serve.DRIFT_NAME, serve.GPS_NAME, serve.CONFIG_NAME)} == \
+        {n: before[n] for n in (serve.DRIFT_NAME, serve.GPS_NAME, serve.CONFIG_NAME)}
+    lock = serve.photos_utils.WorkspaceLock(ws, create=False)
+    assert lock.acquire()                                                   # the lock was let go
+    lock.release()
+
+
+@pytest.mark.spec("RUL-save_keeps_the_replaced", "BLD-editor_keeps_replaced_record",
+                  test="TST-serve-a_save_keeps_the_record_it_replaces_under_nnn")
+def test_a_save_keeps_the_record_it_replaces_under_nnn(tmp_path):
+    """Each save that changes a record first keeps the one it replaces beside it under -NNN, numbered on from the
+    copies a re-plan left: two saves leave two copies, in order. A save that changes nothing in the record sets nothing
+    aside; the configuration keeps no copy."""
+    ws, payload = _every_record_workspace(tmp_path)
+    cd = os.path.join(ws, serve.CONTROL)
+    gps = os.path.join(cd, serve.GPS_NAME)
+    replanned = os.path.join(cd, "photos-23-gps-decisions-001.json")      # a re-plan's copy, already there
+    with open(replanned, "w") as f:
+        f.write('{"earlier": "plan"}')
+    original = open(gps, "rb").read()
+    fallback = payload["gps"][0]
+    res = serve._save(ws, {"gps": [fallback], "hashes": payload["hashes"]})
+    assert res["ok"] is True
+    first = open(gps, "rb").read()
+    res = serve._save(ws, {"gps": [dict(fallback, user_decision={"fallback_lat": 36.0, "fallback_lon": 139.0})],
+                           "hashes": res["hashes"]})
+    assert res["ok"] is True
+    copies = sorted(n for n in os.listdir(cd) if n.startswith("photos-23-gps-decisions-"))
+    assert copies == ["photos-23-gps-decisions-001.json", "photos-23-gps-decisions-002.json",
+                      "photos-23-gps-decisions-003.json"]
+    assert open(replanned).read() == '{"earlier": "plan"}'
+    assert open(os.path.join(cd, copies[1]), "rb").read() == original
+    assert open(os.path.join(cd, copies[2]), "rb").read() == first
+    assert json.load(open(gps))["destinations"]["6-photos-by-dest/Japan"]["folder_fallback"]["user_decision"][
+        "fallback_lat"] == 36.0
+    # the same answer saved again changes nothing in the record: nothing more set aside
+    res = serve._save(ws, {"gps": [dict(fallback, user_decision={"fallback_lat": 36.0, "fallback_lon": 139.0})],
+                           "hashes": res["hashes"]})
+    assert res["ok"] is True and len([n for n in os.listdir(cd) if n.startswith("photos-23-gps-decisions-")]) == 3
+    # the configuration, rewritten by a camera group's class, keeps no copy
+    res = serve._save(ws, {"cameras": payload["cameras"], "hashes": res["hashes"]})
+    assert res["ok"] is True and not [n for n in os.listdir(cd) if n.startswith("photos-00-config-")]
+
+
 def test_apply_edits_ignores_unknown_targets():
     art = _time_art()
     n = serve._apply_edits(art, [

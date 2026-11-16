@@ -120,23 +120,31 @@ def _make_target(phase, command, extra=None, pre=None):
     return target
 
 
-def _read_plan(path):
+def _read_plan(path, replan):
+    """(the saved plan, None), or (None, the summary of a plan absent or unreadable). A plan there that cannot be read —
+    torn, not JSON, not an object — is shown as one with a blocker naming `replan`, the command that makes it anew,
+    never executable (BLD-unreadable_plan)."""
     if not os.path.exists(path):
         return None, {"exists": False}
     try:
         with open(path) as f:
-            return json.load(f), None
+            plan = json.load(f)
+        if not isinstance(plan, dict):
+            raise ValueError("not a JSON object")
     except (OSError, ValueError) as e:
-        return None, {"exists": True, "error": f"could not read plan: {e}", "blockers": ["unreadable plan"]}
+        why = f"{os.path.basename(path)} cannot be read ({e}) — run `{replan}` again"
+        return None, {"exists": True, "error": why, "blockers": [why]}
+    return plan, None
 
 
 def _json_status(path):
     """The `status` field of a JSON artifact, or None if absent/unreadable — a cheap visible-state read."""
     try:
         with open(path) as f:
-            return (json.load(f) or {}).get("status")
+            obj = json.load(f)
     except (OSError, ValueError):
         return None
+    return obj.get("status") if isinstance(obj, dict) else None
 
 
 def _current_fingerprints(workspace):
@@ -189,7 +197,7 @@ def _staleness(workspace, plan, cur):
 
 
 def _prep_summary(workspace, cur=None):
-    plan, miss = _read_plan(U.prep_plan_path(workspace))
+    plan, miss = _read_plan(U.prep_plan_path(workspace), "prep plan")
     if plan is None:
         return miss
     ops = plan.get("operations", []) or []
@@ -210,7 +218,7 @@ def _prep_summary(workspace, cur=None):
 
 def _geotag_summary(workspace, cur=None):
     from ..photos_2_geotag import executable_plan_path
-    plan, miss = _read_plan(executable_plan_path(workspace))
+    plan, miss = _read_plan(executable_plan_path(workspace), "geotag plan")
     if plan is None:
         return miss
     dests = plan.get("destinations", {}) or {}
@@ -226,7 +234,7 @@ def _geotag_summary(workspace, cur=None):
 
 def _merge_summary(workspace, cur=None):
     from ..photos_3_merge import merge_plan_path
-    plan, miss = _read_plan(merge_plan_path(workspace))
+    plan, miss = _read_plan(merge_plan_path(workspace), "merge plan")
     if plan is None:
         return miss
     t = plan.get("totals", {}) or {}

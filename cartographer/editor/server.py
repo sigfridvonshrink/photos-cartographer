@@ -525,12 +525,21 @@ def _save(workspace, payload):
             if cfg is None:
                 return {"ok": False, "error": why}
         written = []
+        # One record after another, in `_RECORDS` order — photos-21, photos-22, photos-23, then photos-25 — and the
+        # configuration last, each replaced whole: each decision record's answers stand on the one before, so a save
+        # cut short leaves a leading part written and no answer on one left unsaved (RUL-save_writes_in_order,
+        # BLD-editor_save_order).
         for key, name in _RECORDS:
             if key in arts:
                 _apply_edits(arts[key], edits[key])
-                _write_json(os.path.join(cd, name), arts[key])
+                path = os.path.join(cd, name)
+                if json.dumps(arts[key], indent=2, sort_keys=True).encode() != raws[key]:
+                    # the record it replaces kept beside it first, in the -NNN series a re-plan's copies form
+                    # (RUL-save_keeps_the_replaced, BLD-editor_keeps_replaced_record)
+                    photos_utils.backup_existing_artifact(path)
+                _write_json(path, arts[key])
                 written.append(name)
-                current[key] = _record_hash(_read_record(os.path.join(cd, name)))
+                current[key] = _record_hash(_read_record(path))
         if cfg is not None:
             # the configuration written whole, every other setting keeping its value (BLD-editor_writes_device_groups)
             photos_utils.write_json_artifact(cfg_path, cfg)

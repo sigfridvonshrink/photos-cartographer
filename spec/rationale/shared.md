@@ -1148,6 +1148,34 @@ geotag's; a prep that asked would hold up the inbox on questions it does not nee
 A decision is the user's answer to a proposal they were shown. A plan run since the editor loaded may have changed the proposal; a save laid over it would record an acceptance of something the user never saw, or drop an answer whose question is gone and report success.
 :::
 
+:::{rat} A save cut short leaves its earlier records, not its later ones
+:id: RAT-save_in_dependency_order
+:status: ruled
+:forced: no
+:follows_from: RAT-save_what_was_seen, RAT-recoverable_core
+:justifies: RUL-save_writes_in_order
+
+A save of several records is several writes, and a power cut or a killed editor can fall between two of them. The
+drift validation is proposed from the times the time decisions settle, and the GPS decisions from both; written in
+that order, a save cut short leaves the earlier records with their new answers and the later ones as they were — no
+answer stands on an earlier one left unsaved, and saving again finishes the rest. The summary's acceptances and a
+camera group's class stand on none of the three, and come after them.
+:::
+
+:::{rat} The editor's save, too, keeps what it replaces
+:id: RAT-save_keeps_the_replaced
+:status: ruled
+:forced: no
+:follows_from: RAT-superseded_plans_recoverable, RAT-recoverable_core
+:justifies: RUL-save_keeps_the_replaced
+
+The decision records hold the user's typed answers. A re-plan already keeps the earlier record; the save is their other
+writer, and without a copy an answer lost to a mistaken save or a fault of the editor is gone, recoverable from
+nowhere. Kept among the re-plan's copies, every earlier version of a record is in one series, in the order it was
+replaced. The configuration is left out: nothing else that rewrites it keeps a copy, and the save's change to it is one
+camera group's class, plain to see and to change back.
+:::
+
 :::{rat} One editing session answers the decisions
 :id: RAT-one_editing_session
 :status: ruled
