@@ -96,3 +96,13 @@ test("a photo's time at a daylight-saving change: one of its two readings, or fo
   const p = app.savePayload([ref], (r) => app.cellAt(app.state.work, r), { time: "h" });
   assert.deepEqual(p.time, [{ dest: DEST, kind: "reading", key: rel, path: undefined, user_decision: { utc_offset_seconds: 15 * 3600 } }]);
 });
+
+test("an acceptance within the tolerance previews the offset accepted, which is the one taking effect", () => {
+  const ref = { file: "time", dest: DEST, kind: "offset", key: "C" };
+  const p = { proposal_source: "gps_time", proposed_offset_seconds: -32430, acceptance_tolerance_seconds: 120 };
+  setWork({ time: { destinations: { [DEST]: { camera_group_time_decisions: { C: { camera_group: "C", proposal: p,
+    user_decision: { accept_proposal: true, accepted_offset_seconds: -32400, manual_offset_seconds: "" } } } } } } });
+  const shown = app.previewEffective(ref);
+  assert.ok(shown.startsWith(app.fmtOffset(-32400)), shown);
+  assert.ok(!shown.includes(app.fmtOffset(-32430)), shown);
+});

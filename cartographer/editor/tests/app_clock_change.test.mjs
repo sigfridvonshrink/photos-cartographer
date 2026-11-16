@@ -112,3 +112,17 @@ test("the split resolves the day's offset cell, and its parts are shown on their
   const groups = app.offsetGroups(app.state.work.time.destinations[DEST]);
   assert.deepEqual(groups[0].buckets.map((b) => b.key), ["C"]);
 });
+
+test("a split accepted for a change no longer proposed is seen as written, and cleared to nothing", () => {
+  const cell = dayCell();
+  assert.equal(app.clockChangeWritten(cell), false);                                // nothing answered yet
+  Object.assign(cell.user_decision, app.clockChangeFields(cell, true, { [Q1]: 1, [Q2]: 2 }));
+  delete cell.clock_change;                                                         // the next run proposes no change
+  cell.stale_user_decision = true;
+  assert.equal(app.clockChangeWritten(cell), true);                                 // so the editor offers its clear
+  Object.assign(cell.user_decision, app.clockChangeFields(cell, false));
+  assert.equal(app.clockChangeWritten(cell), false);
+  assert.deepEqual([cell.user_decision.accept_clock_change, cell.user_decision.accepted_change_offsets_seconds,
+    cell.user_decision.photo_parts], [false, "", {}]);
+  assert.equal(app.clockChangeWritten({ user_decision: { photo_parts: { [Q1]: 2 } } }), true);
+});

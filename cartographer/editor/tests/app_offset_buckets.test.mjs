@@ -115,8 +115,9 @@ test("peerKeys: cluster ref fans out to its peers, plain ref to itself", () => {
 // --- picking a correction group (a place visited on several days, RUL-revisit_matched_to_its_day) ---
 test("groupChoice: the recommended group accepts the proposal, another sets its offset", () => {
   const p = { proposed_offset_seconds: -7200, groups: [{ offset_seconds: -7200, count: 3 }, { offset_seconds: -93600, count: 3 }] };
-  assert.deepEqual(app.groupChoice(p, p.groups[0]), { accept_proposal: true, accepted_offset_seconds: -7200, manual_offset_seconds: "" });
-  assert.deepEqual(app.groupChoice(p, p.groups[1]), { accept_proposal: false, accepted_offset_seconds: "", manual_offset_seconds: -93600 });
+  const c = { proposal: p };
+  assert.deepEqual(app.groupChoice(c, p.groups[0]), { accept_proposal: true, accepted_offset_seconds: -7200, manual_offset_seconds: "" });
+  assert.deepEqual(app.groupChoice(c, p.groups[1]), { accept_proposal: false, accepted_offset_seconds: "", manual_offset_seconds: -93600 });
   assert.equal(app.chosenOffset(p, { accept_proposal: true, accepted_offset_seconds: -7200, manual_offset_seconds: "" }), -7200);
   assert.equal(app.chosenOffset(p, { accept_proposal: false, manual_offset_seconds: -93600 }), -93600);
   assert.equal(app.chosenOffset(p, { accept_proposal: false, manual_offset_seconds: "" }), null);
@@ -127,9 +128,10 @@ test("groupChoice / proposalTaken: in a same-day conflict the proposal is taken 
   const p = { proposal_source: "gpx_self_anchor", proposed_offset_seconds: -7200,
     groups: [{ offset_seconds: -7200, count: 3 }, { offset_seconds: -93600, count: 1 }] };
   // an acceptance there counts as what the GPS gave by itself and is withheld again: the offset is written instead
-  assert.deepEqual(app.groupChoice(p, p.groups[0], true), { accept_proposal: false, accepted_offset_seconds: "", manual_offset_seconds: -7200 });
-  assert.deepEqual(app.groupChoice(p, p.groups[1], true), { accept_proposal: false, accepted_offset_seconds: "", manual_offset_seconds: -93600 });
   const k = [{ destination: "6-photos-by-dest/Other", bucket: "K", offset_seconds: -3600, chosen: false }];
+  const c = { proposal: p, conflicts_with: k };
+  assert.deepEqual(app.groupChoice(c, p.groups[0]), { accept_proposal: false, accepted_offset_seconds: "", manual_offset_seconds: -7200 });
+  assert.deepEqual(app.groupChoice(c, p.groups[1]), { accept_proposal: false, accepted_offset_seconds: "", manual_offset_seconds: -93600 });
   assert.equal(app.inConflict({ conflicts_with: k }), true);
   assert.equal(app.inConflict({ conflicts_with: [] }), false);
   assert.equal(app.inConflict({}), false);
@@ -267,4 +269,38 @@ test("offsetCellNotes / fmtSpan: a guess far from all evidence says how far, and
   assert.match(withTrack[0], /10 days from .* and 5 hours from the nearest track point/);
   assert.equal(app.fmtSpan(90), "2 minutes");
   assert.equal(app.fmtSpan(-7200), "2 hours");
+});
+
+// --- a cluster's one answer is written into each of its days: never into a day that takes it otherwise ---
+test("offsetGroups: a day in a same-day conflict, kept as recorded, or far from all evidence is a row of its own", () => {
+  const gpx = (date, extra = {}, ud = {}) => ({ camera_group: "CAM", date, ...extra, user_decision: ud,
+    proposal: { proposal_source: "gpx_self_anchor", proposed_offset_seconds: -7200, ...(extra.proposal || {}) } });
+  const k = [{ destination: "6-photos-by-dest/Other", bucket: "K", offset_seconds: -3600, chosen: false }];
+  const rows = (cells) => app.offsetGroups({ camera_group_time_decisions: cells })[0].proposals.map((p) => p.keys);
+  // taking the proposal on the first day's row would write an acceptance geotag withholds in the conflicted day
+  assert.deepEqual(rows({ "CAM@2024-07-03": gpx("2024-07-03"), "CAM@2024-07-04": gpx("2024-07-04", { conflicts_with: k }) }),
+    [["CAM@2024-07-03"], ["CAM@2024-07-04"]]);
+  assert.deepEqual(rows({ "CAM@2024-07-03": gpx("2024-07-03", { conflicts_with: k }), "CAM@2024-07-04": gpx("2024-07-04", { conflicts_with: k }) }),
+    [["CAM@2024-07-03", "CAM@2024-07-04"]]);                    // both taken as the user's own offset: one row
+  const far = { proposal: { proposal_source: "recorded_offset", far_from_evidence: { nearest_other_photo_seconds: 99999 } } };
+  assert.deepEqual(rows({ "CAM@2024-07-03": gpx("2024-07-03", { proposal: { proposal_source: "recorded_offset" } }),
+    "CAM@2024-07-04": gpx("2024-07-04", far) }), [["CAM@2024-07-03"], ["CAM@2024-07-04"]]);
+  // a phone kept as it records itself on one day, not the other: the row shows each day's own answer
+  const phone = { phone: { applies_to: "every_photo", photos: 2, read_by_offsets: [-3600] } };
+  assert.deepEqual(rows({ "CAM@2024-07-03": gpx("2024-07-03", phone, { keep_as_recorded: true }),
+    "CAM@2024-07-04": gpx("2024-07-04", phone, { keep_as_recorded: false }) }), [["CAM@2024-07-03"], ["CAM@2024-07-04"]]);
+});
+
+test("groupChoice: on a phone's day kept as recorded, either group ends the keeping, so the answer takes effect", () => {
+  const p = { proposal_source: "gpx_self_anchor", proposed_offset_seconds: -3600, acceptance_tolerance_seconds: 120,
+    groups: [{ offset_seconds: -3600, count: 3 }, { offset_seconds: -90000, count: 1 }] };
+  const c = { camera_group: "P", phone: { applies_to: "every_photo", photos: 3, read_by_offsets: [-7200] }, proposal: p,
+    user_decision: { accept_proposal: false, accepted_offset_seconds: "", manual_offset_seconds: "", keep_as_recorded: true } };
+  assert.deepEqual(app.groupChoice(c, p.groups[0]),
+    { accept_proposal: true, accepted_offset_seconds: -3600, manual_offset_seconds: "", keep_as_recorded: false });
+  assert.deepEqual(app.groupChoice(c, p.groups[1]),
+    { accept_proposal: false, accepted_offset_seconds: "", manual_offset_seconds: -90000, keep_as_recorded: false });
+  const taken = { ...c, user_decision: { ...c.user_decision, ...app.groupChoice(c, p.groups[0]) } };
+  assert.equal(app.keepHolds(taken), false);
+  assert.equal(app.chosenOffset(p, taken.user_decision), -3600);
 });

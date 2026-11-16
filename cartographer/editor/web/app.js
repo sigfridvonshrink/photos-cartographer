@@ -274,7 +274,10 @@ const anyInvalid = () => allRefs().some(refInvalid);
 // to local time each morning has a per-day offset). Group those buckets by camera group, then collapse
 // undecided buckets that share the SAME proposed offset into one actionable cluster (equal proposals —
 // e.g. all summer days — confirm together; winter falls into its own cluster). A bucket with its own
-// user_decision stays its own cluster so a divergent manual day is never hidden. Pure logic — unit-tested.
+// user_decision stays its own cluster so a divergent manual day is never hidden; so does a day where one answer is taken
+// otherwise — kept as the phone records itself, in a same-day conflict, or its proposal far from all evidence — for an
+// answer fanned out to a cluster is computed once and would write into such a day what geotag withholds or ignores
+// there (BLD-editor_answers_every_question). Pure logic — unit-tested.
 function offsetGroups(destCell) {
   const cells = destCell?.camera_group_time_decisions || {};
   const byGroup = new Map();
@@ -294,6 +297,7 @@ function offsetGroups(destCell) {
     for (const b of buckets) {
       const u = b.cell.user_decision || {}, p = b.cell.proposal || {};
       const udSig = `${u.accept_proposal === true ? 1 : 0}|${u.accepted_offset_seconds ?? ""}|${u.manual_offset_seconds ?? ""}` +
+        `|${u.keep_as_recorded === true ? "kept" : ""}|${inConflict(b.cell) ? "conflict" : ""}|${p.far_from_evidence ? "far" : ""}` +
         (b.cell.clock_change ? `|change:${b.key}` : "");      // a day whose clock changed is a row of its own
       const pk = `${udSig}@${"proposed_offset_seconds" in p ? p.proposed_offset_seconds : "none"}`;
       if (!byProp.has(pk)) byProp.set(pk, []);
@@ -555,7 +559,8 @@ function previewEffective(ref) {
         : "— (accepted another change — accept again)";
     if (acceptHolds(c) && p.far_from_evidence) return "— (accepting is not enough here — set the offset)";
     if (acceptHolds(c) && inConflict(c)) return "— (an acceptance is withheld here — take the offset as your own)";
-    if (acceptHolds(c)) return `${fmtOffset(p.proposed_offset_seconds)} (accept proposal)`;
+    // what takes effect is the offset accepted, within the tolerance of the one now proposed (BLD-offset_acceptance)
+    if (acceptHolds(c)) return `${fmtOffset(u.accepted_offset_seconds)} (accept proposal)`;
     if (u.accept_proposal) return "— (accepted another proposal — accept again)";
     return "— (GPX auto-resolves on re-run, else needs input)";
   }
@@ -607,6 +612,9 @@ function previewEffective(ref) {
     return `${u.manual_lat}, ${u.manual_lon} (manual)`;
   if (c.reason === "own_position_contradicted") return "its own position kept";
   if (ref.kind === "chosen") return c.placed_by === "folder_fallback" ? "placed by its folder's fallback" : "placed by the tracks";
+  // a position the user set, emptied: the photo is placed as before it was set (BLD-chosen_position) — by the tracks
+  // or its folder's fallback, which the editor cannot tell apart; else it asks again
+  if (c.reason === "manual_locked") return "placed as before — by the tracks or its folder's fallback, else it asks again (re-run)";
   const fb = previewFallback(ref.dest);
   if (fb) return `${fb.lat}, ${fb.lon} (its folder's fallback)`;
   return "— (needs its folder's fallback, or a position for this photo)";
@@ -1188,7 +1196,7 @@ function offsetEditor(ref) {
   // In a same-day conflict the proposal taken is the user's own offset: shown as the proposal taken until a view is opened.
   const ownTaken = conflict && manualSet && Number(manualOff) === p.proposed_offset_seconds && !mine;
   const active = (accepted && !far) || ownTaken ? "accept" : manualSet ? view : far && mine && mine.open ? view : "";
-  const eff = accepted && !far ? p.proposed_offset_seconds : manualSet ? Number(manualOff)
+  const eff = accepted && !far ? Number(u.accepted_offset_seconds) : manualSet ? Number(manualOff)
     : (hasProp && !far ? p.proposed_offset_seconds : null);
   const cur = Number(eff) || 0, abs = Math.abs(cur);
 
@@ -1357,6 +1365,14 @@ function controls(ref) {
   } else if (ref.kind === "offset") {
     for (const note of offsetCellNotes(c)) wrap.append(el("div", { class: "hint warn" }, note));
     if (c.clock_change) wrap.append(clockChangeControls(ref));
+    else if (clockChangeWritten(c)) {
+      // a split accepted for a change no longer proposed: geotag keeps it, stale, and it would take effect unasked
+      // should the change come back — so it is withdrawn here (BLD-editor_answers_every_question)
+      wrap.append(el("div", { class: "hint warn" }, "A split of this day where its clock changed was accepted, but no change " +
+        "is proposed now — clear it."));
+      wrap.append(el("button", { class: "mini", onclick: () => { state.offsetEdit = null; editMany(ref, clockChangeFields(c, false)); } },
+        "clear the split"));
+    }
     if (c.phone && keepOffered(c)) {
       // a phone's own reading kept, its GPS's finding set aside: the track was someone else's (BLD-phone_offset_cell)
       wrap.append(checkbox("keep this phone as its photos record themselves — its GPS here is wrong", !!u.keep_as_recorded,
@@ -1740,12 +1756,14 @@ function jsonBlock(title, obj) { return obj === undefined ? null : el("div", { c
 // Picking a correction group of a GPX self-anchor proposal (BLD-anchor_matching): the recommended one is
 // accepting the proposal; any other sets its offset — which geotag counts as anchored by the GPS
 // (gpx_anchor_chosen), so no drift check follows. One click, for every day bundled with this proposal.
-// In a same-day conflict (`conflict`) the recommended one is taken as the user's own offset too: an acceptance there is
-// withheld again.
-function groupChoice(p, g, conflict = false) {
-  return g.offset_seconds === p.proposed_offset_seconds && !conflict
-    ? { ...acceptFields(p, true), manual_offset_seconds: "" }
-    : { ...acceptFields(p, false), manual_offset_seconds: g.offset_seconds };
+// In a same-day conflict the recommended one is taken as the user's own offset too: an acceptance there is withheld
+// again (proposalTaken). On a phone's day either answer ends keeping it as recorded, which would otherwise outrank an
+// acceptance (BLD-phone_offset_cell).
+function groupChoice(c, g) {
+  const p = (c && c.proposal) || {};
+  return g.offset_seconds === p.proposed_offset_seconds
+    ? { ...proposalTaken(c), ...unkept(c) }
+    : { ...acceptFields(p, false), manual_offset_seconds: g.offset_seconds, ...unkept(c) };
 }
 // A cell geotag found in a same-day conflict (`conflicts_with`, BLD-offset_shared_within_day): one clock read two ways in
 // two destinations. An acceptance there counts as what the camera's GPS gave by itself, and is withheld again; the user's
@@ -1897,6 +1915,12 @@ function clockChangeFields(c, on, parts = {}) {
     photo_parts: { ...parts }, accept_proposal: false, accepted_offset_seconds: "", manual_offset_seconds: "" }
     : { accept_clock_change: false, accepted_change_offsets_seconds: "", photo_parts: {} };
 }
+// Is any answer of a split written in the cell — an acceptance, the offsets accepted, a photo's part? Pure.
+function clockChangeWritten(c) {
+  const u = (c && c.user_decision) || {};
+  return u.accept_clock_change === true || (Array.isArray(u.accepted_change_offsets_seconds) && u.accepted_change_offsets_seconds.length > 0)
+    || Object.keys(u.photo_parts || {}).length > 0;
+}
 // One photo's part given (1 or 2), the others' kept: the cell's new photo_parts.
 function clockChangePart(c, file, part) {
   return { ...(((c && c.user_decision) || {}).photo_parts || {}), [file]: part };
@@ -1971,7 +1995,9 @@ function trueInstant(camTime, utcOffset) {
 // A destination's files naming no camera and recording no offset (photos-21 unidentified_files,
 // BLD-unidentified_files_question): one question — read them as local time in the destination's zone? The answer names
 // the zone it is given for (accepted_timezone) and holds while that is the zone in effect: the one the run checked,
-// or the one the working decisions now give (previewTz), whichever the user is looking at.
+// or the one the working decisions now give (previewTz), whichever the user is looking at. Deliberately, where the
+// working decisions give none (a manual zone cleared), the last run's zone is still offered: the next run marks an
+// answer for a zone no longer in effect stale, and asks again.
 function unidentifiedZone(dest, c) {
   return previewTz(dest)?.tz || c.proposed_iana_timezone || "";
 }
@@ -2003,8 +2029,10 @@ function changedHolds(c) {
   const u = (c && c.user_decision) || {}, a = u.answered_for, h = (c && c.held_time) || {};
   return CHANGED_ANSWERS.includes(u.keep) && !!a && typeof a === "object"
     && a.DateTimeOriginal === h.DateTimeOriginal && (a.OffsetTimeOriginal ?? null) === (h.OffsetTimeOriginal ?? null)
-    && (u.keep !== "new" || !!h.DateTimeOriginal);
+    && (u.keep !== "new" || heldTimeKeepable(c));
 }
+// Does the photo hold a time "keep" can keep — one geotag reads as a camera time? Else keeping it is a blocker there.
+const heldTimeKeepable = (c) => camNaiveMs(((c && c.held_time) || {}).DateTimeOriginal) != null;
 const changedFields = (c, keep) => ({ keep, answered_for: keep ? { ...(c.held_time || {}) } : "" });
 // "keep" says what the owner ruled it means: the true local time, never corrected by a clock offset.
 const changedKeepLabel = (c) => `keep ${timePair(c.held_time)} — this is the true local time: read by the ` +
@@ -2025,7 +2053,7 @@ function changedControls(ref) {
   const on = changedHolds(c) ? u.keep : "";
   const opt = (keep, label, disabled) => el("div", { class: "off-opt" + (on === keep ? " on" : "") + (disabled ? " disabled" : ""),
     onclick: disabled ? undefined : () => editMany(ref, changedFields(c, keep)) }, el("span", { class: "off-dot" }, on === keep ? "●" : "○"), el("span", {}, label));
-  wrap.append(opt("new", changedKeepLabel(c), !(c.held_time || {}).DateTimeOriginal));
+  wrap.append(opt("new", changedKeepLabel(c), !heldTimeKeepable(c)));
   wrap.append(opt("geotag", "take back geotag's time — written again as geotag decided it"));
   const note = keptTagNote(c);
   if (note) wrap.append(el("div", { class: "hint warn" }, note));
@@ -2198,7 +2226,7 @@ function offsetProposalBlock(ref, p) {
     wrap.append(el("div", { class: "prop-group" + (on ? " on" : "") },
       el("div", { class: "prop-group-h" }, `${g.count} photo${g.count === 1 ? "" : "s"} → ${fmtOffset(g.offset_seconds)}`,
         on ? el("span", { class: "muted" }, " ✓ chosen")
-          : el("button", { class: "mini", onclick: () => { state.offsetEdit = null; editMany(ref, groupChoice(p, g, inConflict(workCell(ref)))); } },
+          : el("button", { class: "mini", onclick: () => { state.offsetEdit = null; editMany(ref, groupChoice(workCell(ref), g)); } },
             g.offset_seconds === p.proposed_offset_seconds && !inConflict(workCell(ref)) ? "accept" : "use this")),
       el("div", { class: "hint" }, `e.g. ${g.representative.source_file}` +
         (g.representative.gpx_file ? ` · track ${g.representative.gpx_file}` : "")),
@@ -2389,7 +2417,7 @@ export {
   offsetGroups, dateRange, fmtDate, peerKeys, parseLatLon, coordText, contiguousRange,
   groupChoice, chosenOffset, inConflict, proposalTaken, proposalNotes, driftConfirmHolds, driftConfirmFields, driftCorrectionFields, driftTracksHold, driftStaleReason, acceptFields, acceptHolds, tracksNote,
   zoneContradiction, offsetCellNotes, zoneSpokenFor, zoneDespiteFields, effectiveCountry, clearCountriesInside,
-  clockChangeHolds, clockChangePartsGiven, clockChangeFields, clockChangePart, contradictedNote, takeTrackPosition, neighbourDayNote,
+  clockChangeHolds, clockChangePartsGiven, clockChangeFields, clockChangePart, clockChangeWritten, previewEffective, heldTimeKeepable, contradictedNote, takeTrackPosition, neighbourDayNote,
   scrubOffset, scrubSeedIndex, mapKeyFor, savePayload, withChosenCells, reviewOffers, gpsBuckets, fellBackCameras,
   cameraDayLabel, tracksNearThatDay, offsetSections, offsetAnswered, offsetSettledByPhotos, fallbackNote, inheritedFallback,
   ambiguousTimeNote, gpsTimeAsideNote, zoneOffer, validReading, keepHolds, keepFields, keepOffered, phoneNote,
