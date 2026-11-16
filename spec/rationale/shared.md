@@ -1969,7 +1969,8 @@ The decision records hold the user's typed answers. A re-plan already keeps the 
 writer, and without a copy an answer lost to a mistaken save or a fault of the editor is gone, recoverable from
 nowhere. Kept among the re-plan's copies, every earlier version of a record is in one series, in the order it was
 replaced. The configuration is left out: nothing else that rewrites it keeps a copy, and the save's change to it is a
-camera group's class or its naming as several bodies, plain to see and to change back.
+camera group's class or its naming as several bodies, plain to see and to change back. The answer to whether to
+download the table of countries replaces nothing: the editor gives it only where none is recorded.
 :::
 
 :::{rat} Every question can be answered in the editor, and by hand
@@ -1986,5 +1987,6 @@ question gets its view as it is built. The editor is the easier way, never the o
 possibility to answer, I need to keep the option to manually give answers, so the snippet added for a new camera needs
 to stay"* — every answer is a field of a record, written there by hand as well, and documented; a camera group's class,
 and its naming as several bodies, are the answers kept in the configuration, where geotag's printed lists are pasted
-and where the editor writes them.
+and where the editor writes them; the answer to whether to download the table of countries, though prep asks it, is
+answered there too, in the record that keeps it ({need}`RAT-zone_table_answered_anywhere`).
 :::

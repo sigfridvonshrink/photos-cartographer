@@ -327,6 +327,22 @@ wrong by another, so the plan names the table it was made from: another one make
 does.
 :::
 
+:::{rat} The question of the table is answered where the others are
+:id: RAT-zone_table_answered_anywhere
+:status: ruled
+:forced: no
+:follows_from: RAT-zone_table_where_host_lacks, RAT-every_question_answerable
+:justifies: RUL-zone_table_answered_in_editor, RUL-zone_table_answered_by_hand
+
+The question of the table of countries is prep's, asked at a terminal when the workspace is made; a workspace made
+with no one at the terminal leaves it open, and the user who opens the editor to answer geotag's questions would
+otherwise have to leave it to answer this one. The owner ruled *"the user should be able to answer all questions in
+the editor"* — this one too, though prep asks it. Given there, it is the same answer: recorded as prep records it, a
+permission downloading the table then, on the user's word. And as every answer is a field of a record the user may
+write by hand, so is this one: written into the record that keeps it, a refusal stands as given, and a permission is
+acted on by prep's next plan — the one run that downloads.
+:::
+
 :::{rat} A camera that records its offset says which zone its clock was on
 :id: RAT-camera_records_its_clock_zone
 :status: ruled

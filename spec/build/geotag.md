@@ -421,6 +421,32 @@ plan read, `revalidate_plan` holding the plan stale where the table read now dif
 A destination holding photos, in a country whose `country_zones` are several, with no zone reaching it from above within the country nor one of a country of one timezone, SHALL be proposed `_zone_from_photos`: the one of `country_zones` at which, for each photo `_recorded_readings` gives — not a fixed-clock camera's, not yet corrected, not a kept true time, with an offset recorded beside its time — the zone's offset at the instant that offset gives, to the minute, is the offset recorded; none where no photo is read, or where none or several zones fit them all. It is `proposal_source: "photos_in_country"`, ahead of `config_default`, and takes effect like an inherited zone, `decision_mode: "auto_resolved"`, a `manual_iana_timezone` overriding it; the destinations within it inherit it.
 :::
 
+:::{bld} The question of the table of countries in the editor
+:id: BLD-editor_answers_zone_table
+:status: ruled
+:realises: RUL-zone_table_answered_in_editor
+:uses: BLD-zone_table_question
+
+The decision editor SHALL send, with the records it loads, `zone_table`: while `zone_table_question_pending`,
+`{"question": zone_table_question(…), "user_decision": {"download": ""}}`, shown at the head of its Time view, else
+null, and null in the demo. A save carrying `zone_table: [{"user_decision": {"download": "yes"|"no"}}]` is refused,
+nothing written, unless the answer is `yes` or `no` and, under the workspace lock, the question is still pending;
+otherwise, after the decision records and the configuration, it calls `settle_zone_table` with that answer, as `prep
+plan` does with `--download-zone-table`, lists `photos-02-zone-table.json` as written and returns what it said.
+:::
+
+:::{bld} The answer to the table of countries written by hand
+:id: BLD-zone_table_answered_by_hand
+:status: ruled
+:realises: RUL-zone_table_answered_by_hand
+:uses: BLD-zone_table_question
+
+`settle_zone_table` SHALL take a `photos-02-zone-table.json` holding `"download": "accepted"` with neither `copy` nor
+`failure` — written by hand — as the answer `yes` given to that `prep plan`, fetching and recording as
+{need}`BLD-zone_table_question` says, the record it replaces kept under `-NNN`; one holding `"download": "declined"` is
+a refusal, kept as given.
+:::
+
 
 ## 11. Clock offsets from the camera's own GPS
 

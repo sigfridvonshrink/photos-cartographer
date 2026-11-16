@@ -574,6 +574,29 @@ A workspace's answer to whether to download the table of countries SHALL be kept
 again.
 :::
 
+:::{rul} The question of the table is answered in the editor too
+:id: RUL-zone_table_answered_in_editor
+:status: ruled
+:criticality: med
+:verify: required
+:refines: RUL-zone_table_asked_once
+
+The question whether to download the table of countries SHALL be answerable in the decision editor, the answer kept
+as one given to prep is.
+:::
+
+:::{rul} The question of the table is answered by hand too
+:id: RUL-zone_table_answered_by_hand
+:status: ruled
+:criticality: med
+:verify: required
+:refines: RUL-zone_table_asked_once
+:uses: DEF-control_records
+
+The question whether to download the table of countries SHALL be answerable by hand, in the record that keeps its
+answer — a permission written there downloading the table at prep's next plan.
+:::
+
 :::{rul} An unreadable record of the answer stops the run
 :id: RUL-unreadable_zone_table_record_stops
 :status: ruled

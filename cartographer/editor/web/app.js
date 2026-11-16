@@ -89,6 +89,7 @@ function cellAt(arts, ref) {
   if (ref.file === "cameras")                  // a camera group the configuration does not class, by its key; or a
     // fixed-clock camera group, whether it is several bodies (BLD-editor_marks_several_bodies)
     return (ref.kind === "bodies" ? arts.cameras?.bodies?.[ref.key] : arts.cameras?.groups?.[ref.key]) || null;
+  if (ref.file === "zone_table") return arts.zone_table || null;   // whether to download the table of countries
   if (ref.file === "execution")                // photos-25: a photo whose content changed after a write, by its path
     return (arts.execution?.fingerprint_mismatches || []).find((m) => m && m.relative_path === ref.path) || null;
   const d = arts.gps?.destinations?.[ref.dest]; if (!d) return null;
@@ -203,6 +204,7 @@ const baseCell = (ref) => cellAt(state.base, ref);
 
 function allRefs() {
   const out = [];
+  if (state.work.zone_table) out.push({ file: "zone_table", kind: "zone_table" });
   for (const key of Object.keys(state.work.cameras?.groups || {})) out.push({ file: "cameras", kind: "camera", key });
   for (const key of Object.keys(state.work.cameras?.bodies || {})) out.push({ file: "cameras", kind: "bodies", key });
   for (const [dest, d] of Object.entries(state.work.time?.destinations || {})) {
@@ -242,6 +244,7 @@ function refInvalid(ref) {
   if (ref.kind === "fingerprint") return typeof u.accept_fingerprint_change !== "boolean";
   if (ref.kind === "camera") return !["", ...DEVICE_CLASSES].includes(u.device_class ?? "");
   if (ref.kind === "bodies") return typeof u.several_bodies !== "boolean";
+  if (ref.kind === "zone_table") return !ZONE_TABLE_ANSWERS.includes(u.download ?? "");
   if (ref.kind === "changed") return !["", ...CHANGED_ANSWERS].includes(u.keep ?? "");
   if (ref.kind === "fallback") return !validLat(u.fallback_lat) || !validLon(u.fallback_lon) || !bothOrNeither(u.fallback_lat, u.fallback_lon);
   return !validLat(u.manual_lat) || !validLon(u.manual_lon) || !bothOrNeither(u.manual_lat, u.manual_lon);
@@ -373,6 +376,9 @@ function cellStatus(cell) {
   // a photos-25 fingerprint mismatch carries no flags: it asks until its changed content is accepted
   if ("actual_fingerprint" in cell) return mismatchAccepted(cell) ? ["ok", "accepted"] : ["needs", "needs input"];
   if (cell.requires_user_input) return ["needs", "needs input"];
+  // the question of the table of countries never holds a run up: open until answered (BLD-editor_answers_zone_table)
+  if ("question" in cell && "download" in (cell.user_decision || {}))
+    return cell.user_decision.download ? ["ok", "answered"] : ["none", "unanswered"];
   if (cell.stale_user_decision) return ["stale", "stale"];
   if (cell.decision_mode === "auto_resolved") return ["auto", "auto"];
   // The folder fallback is OPTIONAL (requires_user_input is always false), so "resolved" must mean it
@@ -400,6 +406,7 @@ function wouldResolve(ref) {
   if (ref.kind === "fingerprint") return mismatchAccepted(c);
   if (ref.kind === "camera") return DEVICE_CLASSES.includes(u.device_class);
   if (ref.kind === "bodies") return typeof u.several_bodies === "boolean";   // a setting: either answer stands
+  if (ref.kind === "zone_table") return ["yes", "no"].includes(u.download);
   if (ref.kind === "changed") return changedHolds(c);
   if (ref.kind === "drift")                       // confirmed for this offset (zero-scrub or a valid correction)
     return driftConfirmHolds(c) && validOffset(u.corrected_offset_seconds);
@@ -593,6 +600,9 @@ function previewEffective(ref) {
   if (ref.kind === "changed") return !changedHolds(c) ? (u.keep ? "— (answered for another time — answer again)" : "— (needs input)")
     : u.keep === "new" ? `keeps ${timePair(c.held_time)} — the true local time, no clock offset applied`
       : `geotag's time written back${c.geotag_wrote ? ` (${timePair(c.geotag_wrote)})` : ""}`;
+  if (ref.kind === "zone_table") return u.download === "yes" ? "downloaded on Save, kept in photos-02-zone-table.json"
+    : u.download === "no" ? "the carried copy, which may be stale — the answer kept in photos-02-zone-table.json"
+      : "— (unanswered: the carried copy is used)";
   if (ref.kind === "bodies") return u.several_bodies
     ? "several bodies — written into several_bodies_groups: an offset from its GPS is always a proposal"
     : "one camera — an offset its GPS agrees on applies itself as the configuration allows";
@@ -901,7 +911,29 @@ function recordAbsent(art, name) {
   return art && art._error ? el("div", { class: "gate warn" }, el("div", { class: "gate-title" }, `${name} cannot be read`),
     recordAbsentText(art, name)) : el("div", { class: "empty" }, recordAbsentText(art, name));
 }
+// The question `prep plan` asks where the host's zone database has no table of countries (BLD-editor_answers_zone_table):
+// whether to download the current one, once, into the workspace. Answered here, Save records it as
+// `prep plan --download-zone-table yes|no` does — yes downloads it then. It holds nothing up: unanswered, the copy
+// photos-cartographer carries is used.
+const ZONE_TABLE_ANSWERS = ["", "yes", "no"];
+function renderZoneTable(list) {
+  if (!state.work.zone_table) return;
+  const ref = { file: "zone_table", kind: "zone_table" };
+  list.append(el("div", { class: "row" + (isSel(ref) ? " sel" : ""), onclick: () => { state.selected = ref; render(); } },
+    el("span", { class: "label" }, "The table of countries", el("span", { class: "sub" }, "  download it, or keep the carried copy?")),
+    ...tags(ref), statusChip(ref)));
+}
+function zoneTableControls(ref) {
+  const c = workCell(ref), u = c.user_decision || {}, wrap = el("div", { class: "ctl-block" });
+  wrap.append(el("div", { class: "hint" }, c.question || ""));
+  const opt = (v, label) => el("div", { class: "off-opt" + (u.download === v ? " on" : ""), onclick: () => edit(ref, "download", v) },
+    el("span", { class: "off-dot" }, u.download === v ? "●" : "○"), el("span", {}, label));
+  wrap.append(opt("yes", "download it now, once, into this workspace"));
+  wrap.append(opt("no", "keep the copy carried inside photos-cartographer"));
+  return wrap;
+}
 function renderTime(list) {
+  renderZoneTable(list);
   const t = state.work.time;
   if (!t?.destinations) return list.append(recordAbsent(t, "photos-21-time-decisions.json"));
   if (!state.base.demo && state.timeChangedSinceRerun)
@@ -1393,6 +1425,8 @@ function controls(ref) {
     wrap.append(cameraControls(ref));
   } else if (ref.kind === "bodies") {
     wrap.append(bodiesControls(ref));
+  } else if (ref.kind === "zone_table") {
+    wrap.append(zoneTableControls(ref));
   } else if (ref.kind === "changed") {
     wrap.append(changedControls(ref));
   } else if (ref.kind === "fallback") {
@@ -2259,10 +2293,11 @@ function renderPanel() {
     : ref.kind === "fingerprint" ? "Content changed after a write"
     : ref.kind === "camera" ? "A new camera group"
     : ref.kind === "bodies" ? "One camera, or several bodies"
+    : ref.kind === "zone_table" ? "The table of countries"
     : ref.kind === "review" ? (multi ? `GPS review · ${ref.peers.length} photos` : "GPS review item")
     : ref.kind === "chosen" ? "A position for one placed photo"
       : ref.kind === "fallback" ? "Folder fallback" : "Timezone";
-  p.append(el("h2", {}, title), el("div", { class: "path" }, ref.path || (["reading", "camera", "bodies", "changed"].includes(ref.kind) ? ref.key : ref.dest)));
+  p.append(el("h2", {}, title), el("div", { class: "path" }, ref.path || (["reading", "camera", "bodies", "changed"].includes(ref.kind) ? ref.key : ref.kind === "zone_table" ? "photos-02-zone-table.json" : ref.dest)));
   const head = el("div", { class: "pblock" }, ...(statusChip(ref) ? [statusChip(ref)] : []), ...tags(ref));
   // A multi-cell ref edits several siblings at once — say so. Offset cluster → which days; review run → how many.
   if (ref.kind === "offset" && multi) {
@@ -2280,7 +2315,7 @@ function renderPanel() {
   if (isDirty(ref)) head.append(el("button", { class: "mini", onclick: () => resetRef(ref) }, "reset"));
   // Fixed top: title + status + the decision controls + the effective preview — always visible, no scroll.
   const top = el("div", { class: "panel-top" },
-    el("h2", {}, title), el("div", { class: "path" }, ref.path || (["reading", "camera", "bodies", "changed"].includes(ref.kind) ? ref.key : ref.dest)), head,
+    el("h2", {}, title), el("div", { class: "path" }, ref.path || (["reading", "camera", "bodies", "changed"].includes(ref.kind) ? ref.key : ref.kind === "zone_table" ? "photos-02-zone-table.json" : ref.dest)), head,
     el("div", { class: "pblock" }, el("h3", {}, "Your decision"), decisionThumb(ref), controls(ref)),
     el("div", { class: "pblock eff" }, el("h3", {}, "Effective (advisory — re-run to apply)"), el("div", { class: "eff-val" }, previewEffective(ref))));
   // Scroll area, the only thing that scrolls. For a GPS coord cell the MAP comes first — directly under
@@ -2291,7 +2326,7 @@ function renderPanel() {
   if (isGpsCoord) scroll.append(mapBlock(ref));   // the review photo is now a thumbnail in "Your decision" + a hover preview in the worklist
   // No raw "Proposal" JSON box for fallback: it proposes nothing — the inherited one, which applies itself, is said
   // in its decision box.
-  if (c.proposal && ref.kind !== "drift" && ref.kind !== "fallback" && ref.kind !== "reading" && ref.kind !== "fingerprint" && ref.kind !== "camera" && ref.kind !== "bodies")
+  if (c.proposal && ref.kind !== "drift" && ref.kind !== "fallback" && ref.kind !== "reading" && ref.kind !== "fingerprint" && ref.kind !== "camera" && ref.kind !== "bodies" && ref.kind !== "zone_table")
     scroll.append(ref.kind === "offset" ? offsetProposalBlock(ref, c.proposal) : jsonBlock("Proposal", c.proposal));
   p.replaceChildren(top, scroll);
 }
@@ -2318,7 +2353,8 @@ async function save() {
       state.work.hashes = r.hashes; state.base = clone(state.work);
       // an answer in photos-25 is read by the next execution; every other, by the next plan
       const next = r.written.length && r.written.every((n) => n.startsWith("photos-25")) ? "geotag execute" : "geotag plan";
-      state.message = `saved ${r.written.join(", ")} — run \`photos-cartographer ${next}\` then reload to apply`;
+      state.message = `saved ${r.written.join(", ")} — run \`photos-cartographer ${next}\` then reload to apply`
+        + ((r.notes || []).length ? ` · ${r.notes.join(" ")}` : "");
     }
     else state.message = "save failed: " + (r.error || "unknown");
   } catch (e) { state.message = "save failed: " + e; }
@@ -2421,7 +2457,7 @@ export {
   scrubOffset, scrubSeedIndex, mapKeyFor, savePayload, withChosenCells, reviewOffers, gpsBuckets, fellBackCameras,
   cameraDayLabel, tracksNearThatDay, offsetSections, offsetAnswered, offsetSettledByPhotos, fallbackNote, inheritedFallback,
   ambiguousTimeNote, gpsTimeAsideNote, zoneOffer, validReading, keepHolds, keepFields, keepOffered, phoneNote,
-  trueInstant, parseUtcOff, mismatchAccepted, recordAbsentText, DEVICE_CLASSES, changedHolds, changedFields, changedKeepLabel, keptTagNote, unidentifiedHolds, unidentifiedFields, loadRefusal, hasUnsavedEdits, utcOff,
+  trueInstant, parseUtcOff, mismatchAccepted, ZONE_TABLE_ANSWERS, recordAbsentText, DEVICE_CLASSES, changedHolds, changedFields, changedKeepLabel, keptTagNote, unidentifiedHolds, unidentifiedFields, loadRefusal, hasUnsavedEdits, utcOff,
   dateFallbackDay, validDateFallback, previewDate, showsDate,
   fmtSpan, utcToZonedWallMs, zonedWallToUtcMs, offsetFromTrueTime, trueTimeOf,
 };

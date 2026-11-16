@@ -303,14 +303,26 @@ def _camera_question(workspace, raw_config):
     return {"groups": groups, "bodies": bodies}
 
 
+def _zone_table_cell(workspace):
+    """The question of downloading the table of countries, while this workspace has it unanswered (the host's zone
+    database has no `zone.tab` and no answer is recorded): {"question": the words `prep plan` asks it in,
+    "user_decision": {"download": ""}} — answered `yes` or `no` here as by `prep plan --download-zone-table`
+    (BLD-editor_answers_zone_table). None where nothing is to be asked, and in the demo."""
+    if not workspace or not photos_utils.zone_table_question_pending(workspace):
+        return None
+    return {"question": photos_utils.zone_table_question(photos_utils.bundled_zone_table()["tzdata_version"]),
+            "user_decision": {"download": ""}, "requires_user_input": False, "stale_user_decision": False}
+
+
 def _load_artifacts(workspace):
-    """Return {workspace, demo, time, drift, gps, execution, hashes, zones}. `hashes` holds the SHA-256 of each record's bytes
+    """Return {workspace, demo, time, drift, gps, execution, cameras, zone_table, hashes, zones}. `hashes` holds the SHA-256 of each record's bytes
     as loaded (None for one absent); a save carries them back, so it is refused when a record has changed
     since (RUL-save_only_what_was_shown). `zones` is the host's list of timezones geotag accepts (`_host_zones`).
     Demo mode loads requires-input fixtures."""
     if workspace:
         cd = os.path.join(workspace, CONTROL)
-        out = {"workspace": os.path.abspath(workspace), "demo": False, "hashes": {}, "zones": _host_zones()}
+        out = {"workspace": os.path.abspath(workspace), "demo": False, "hashes": {}, "zones": _host_zones(),
+               "zone_table": _zone_table_cell(workspace)}
         for key, name in _RECORDS:
             try:
                 raw = _read_record(os.path.join(cd, name))
@@ -331,7 +343,7 @@ def _load_artifacts(workspace):
             "drift": _example_json("photos-22-gps-drift-validation.requires-input.json"),
             "gps": _example_json("photos-23-gps-decisions.requires-input.json"),
             "execution": None,                          # no execution in the demo: nothing has been written
-            "cameras": {"groups": {}, "bodies": {}}}
+            "cameras": {"groups": {}, "bodies": {}}, "zone_table": None}
 
 
 def _write_json(path, obj):
@@ -495,8 +507,21 @@ def _save(workspace, payload):
         current["cameras"] = _record_hash(raw_cfg)      # the configuration, a camera group's class written into it
         edits = {key: (payload or {}).get(key) or [] for key, _name in _RECORDS}
         cameras = (payload or {}).get("cameras") or []
-        if not any(edits.values()) and not cameras:
+        zone = (payload or {}).get("zone_table") or []
+        if not any(edits.values()) and not cameras and not zone:
             return {"ok": True, "written": [], "hashes": current}
+        # The answer to whether to download the table of countries, given where the question is still open
+        # (BLD-editor_answers_zone_table): one answered since — by `prep plan` or by hand — is not answered over.
+        answer = None
+        if zone:
+            ud = zone[0].get("user_decision") if len(zone) == 1 and isinstance(zone[0], dict) else None
+            answer = ud.get("download") if isinstance(ud, dict) else None
+            if answer not in ("yes", "no"):
+                return {"ok": False, "error": "the answer about the table of countries is yes or no; nothing was saved"}
+            if not photos_utils.zone_table_question_pending(workspace):
+                return {"ok": False, "error": f"{photos_utils.ZONE_TABLE_ARTIFACT} already holds an answer about "
+                                              "the table of countries (or cannot be read) — reload the editor; "
+                                              "nothing was saved"}
         # Save only what was shown (RUL-save_only_what_was_shown): the edits were made against the records as
         # the editor loaded them. Each of them is compared, under the lock, with the hash the page was
         # given for it before any is written — a geotag plan may have rewritten one since, and an edit made
@@ -552,7 +577,17 @@ def _save(workspace, payload):
             photos_utils.write_json_artifact(cfg_path, cfg)
             written.append(CONFIG_NAME)
             current["cameras"] = _record_hash(_read_record(cfg_path))
-        return {"ok": True, "written": written, "hashes": current}
+        notes = []
+        if answer is not None:
+            # the answer recorded as `prep plan --download-zone-table` records it, `yes` downloading the table now
+            # (BLD-editor_answers_zone_table, BLD-zone_table_question): what it says is shown with the save
+            from ..reporting import CaptureSink, Reporter
+            cap = CaptureSink()
+            photos_utils.settle_zone_table(workspace, answer, Reporter([cap]))
+            notes = [e.msg for e in cap.logs()]
+            if os.path.exists(photos_utils.zone_table_path(workspace)):
+                written.append(photos_utils.ZONE_TABLE_ARTIFACT)
+        return {"ok": True, "written": written, "hashes": current, "notes": notes}
     finally:
         lock.release()
 

@@ -197,8 +197,9 @@ one clock.
 :forced: yes
 :follows_from: RAT-format_editor_split
 
-The editor writes **only the user's answers** — the decision fields of geotag's records, and a camera group's class
-and its naming as several bodies in the configuration — never derived or evidence fields.
+The editor writes **only the user's answers** — the decision fields of geotag's records, a camera group's class
+and its naming as several bodies in the configuration, and the answer to whether to download the table of countries in
+its own record — never derived or evidence fields.
 :::
 
 :::{rat} Minimal, cascading asks

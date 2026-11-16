@@ -479,13 +479,20 @@ def settle_zone_table(ws, answer, reporter) -> None:
     `answer` is "yes", "no" or None — not answered. Where the host has its own table nothing is asked or recorded.
     "no" records the refusal; "yes" downloads the table once, now, and records it — or, where the download fails,
     records the answer and warns, the carried copy (or a copy downloaded earlier) staying in use. Unanswered with
-    nothing recorded says how to answer: prep is never stopped by the question (RUL-zone_table_never_stops_prep)."""
+    nothing recorded says how to answer: prep is never stopped by the question (RUL-zone_table_never_stops_prep). A
+    record holding `"download": "accepted"` alone — written by hand — is acted on as "yes". The decision editor calls
+    this with its answer as `prep plan` does (BLD-editor_answers_zone_table)."""
     version = bundled_zone_table()["tzdata_version"]
     if host_has_zone_table():
         if answer is not None:
             reporter.log("This host's zone database has its own table of countries: nothing to download.")
         return
     prior = read_zone_table_record(ws)
+    if answer is None and prior is not None and prior.get("download") == "accepted" \
+            and "copy" not in prior and "failure" not in prior:
+        # a permission written into the record by hand (BLD-zone_table_answered_by_hand): the table is downloaded now,
+        # as for one given to this run
+        answer = "yes"
     if answer is None:
         if prior is None:
             reporter.warn(f"Note: this host's zone database has no table of countries (zone.tab); geotag uses the "

@@ -147,6 +147,15 @@ they never block; you answer on them only to pass a value down.
 input" now applies itself unless the destination's photos speak against it, and the panel now also
 offers an "In country" choice.*
 
+### The table of countries
+
+On a host whose zone database has no table of countries, while the workspace has not yet answered whether to download
+the current one, the Time view opens with a row **The table of countries**. Pick *download it* or *keep the carried
+copy* and Save: the answer is recorded in `photos-02-zone-table.json` exactly as `prep plan --download-zone-table
+yes|no` records it, and *download it* fetches the table then. Unanswered, it holds nothing up — the copy carried
+inside photos-cartographer is used. The answer can also be written by hand: `{"download": "declined"}` keeps the
+carried copy, `{"download": "accepted"}` has the next `prep plan` download it.
+
 ### Timezone
 
 A destination has **one timezone** for all its photos. You answer it once, high in the tree; everything

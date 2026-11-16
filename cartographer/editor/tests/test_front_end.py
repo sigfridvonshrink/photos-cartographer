@@ -98,3 +98,11 @@ def test_a_position_chosen_for_a_photo_is_kept_and_emptied_places_it_as_before()
     """A photo nothing places is offered its folder's fallback, then a position; a placed photo is given one as a
     `chosen_by_user` item; a position the user set, emptied, is shown placed as before."""
     _node_test("app_placement.test.mjs")
+
+
+@pytest.mark.spec("RUL-zone_table_answered_in_editor", "BLD-editor_answers_zone_table",
+                  test="TST-front_end-the_table_of_countries_is_answered_in_the_editor")
+def test_the_table_of_countries_is_answered_in_the_editor():
+    """The question of downloading the table of countries, while the workspace has it open, is a cell of the editor's
+    own, answered yes or no and saved as an edit of its own; unanswered, it holds nothing up."""
+    _node_test("app_zone_table.test.mjs")
