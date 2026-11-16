@@ -1000,9 +1000,8 @@ that cannot be read.
 
 Where `photos-24-executable-plan.json` is there and cannot be opened or parsed as a JSON object, `geotag execute` and
 `geotag finalize` SHALL stop, exit 2, before they read another record, take a snapshot or write anything, naming the
-file and `geotag plan` as the way on; `merge plan` reports it as a blocker naming the same; and the console's summary
-of the geotag plan shows it as a plan with that blocker, which no execution is offered for. The file is left as it is:
-the next `geotag plan` sets it aside under `-NNN` as it sets aside any plan it replaces.
+file and `geotag plan` as the way on; and `merge plan` reports it as a blocker naming the same. The file is left as it
+is: the next `geotag plan` sets it aside under `-NNN` as it sets aside any plan it replaces.
 :::
 
 :::{bld} The execution summary

@@ -243,7 +243,8 @@ def test_a_cull_seen_by_an_earlier_run_still_takes_the_jpeg(tmp_path, monkeypatc
 
 
 @pytest.mark.spec("RUL-culled_raw_takes_its_jpeg", "RUL-allowed_changes_named", "BLD-workspace_changes_logged",
-                  "BLD-culled_raw_found", test="TST-culled_raw-a_cull_passed_by_a_failed_execute_still_takes_the_jpeg")
+                  "BLD-culled_raw_found", "RUL-failed_prep_logs_hand_changes",
+                  test="TST-culled_raw-a_cull_passed_by_a_failed_execute_still_takes_the_jpeg")
 def test_a_cull_passed_by_a_failed_execute_still_takes_the_jpeg(tmp_path, monkeypatch):
     """An execute whose check passed a cull, and whose quarantine move then fails, still logs the cull in prep's log
     before recording the state it leaves: the next check sees nothing, and the next plan quarantines the JPEG."""

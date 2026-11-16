@@ -161,7 +161,7 @@ library alone; with no snapshot of the workspace it takes none at all, and says 
 :id: RAT-one_snapshot_mechanism
 :status: ruled
 :forced: no
-:follows_from: RAT-snapshot_is_extra, RAT-one_source_per_fact
+:follows_from: RAT-snapshot_is_extra
 :justifies: BLD-one_snapshot_mechanism
 
 Each phase that mutates uses the same mechanism so the phases behave identically and cannot diverge.
@@ -755,7 +755,7 @@ settled; the tracks' hash in each record turns the change into staleness instead
 :justifies: INV-no_stale_use
 
 The facts the dependencies are built from — the configuration, the control records, the camera-group derivation's
-version, the filename format, the tracks, the snapshot mechanism — are each defined once, for every phase, so that a
+version, the filename format, the tracks — are each defined once, for every phase, so that a
 single change has one authoritative source and a predictable staleness footprint everywhere.
 :::
 
@@ -919,6 +919,7 @@ recognised as corrected whichever workspace it is in.
 :forced: no
 :follows_from: RAT-rerun_is_safe, CHC-ask_only_what_data_cannot_settle, RAT-every_question_answerable
 :justifies: RUL-changed_time_stops_plan, RUL-changed_time_asked, RUL-changed_time_kept_is_true, RUL-changed_time_restored, RUL-kept_time_not_clock_evidence, RUL-kept_time_tag_disagreement_told, RUL-kept_time_tag_disagreement_recorded
+:uses: DEF-own_values
 
 Geotag decides from what a photo held before it first wrote to it. A time the photo holds that is neither that nor
 what geotag wrote was put there since, by someone: a correction made in another tool, or a slip. Geotag cannot tell
@@ -1191,11 +1192,13 @@ open-ended store of events.
 :forced: yes
 :follows_from: RAT-decisions_reread_cache_only, RAT-decision_withdrawable, CHC-local_folder_library
 :justifies: RUL-database_is_record, RUL-one_database, RUL-other_databases_scratch
+:uses: DEF-own_values
 
 The database is not only a cache that makes re-runs cheap: it holds what nothing else does — the values a photo held
-before geotag first changed it, which let any change be undone, and each photo's identity across its moves. Discarded
-with the workspace, that knowledge would be lost; kept in two places, the two could disagree. The library keeps no
-database because it is the user's own collection, organised as they choose, and merge only adds to it.
+before geotag first changed it, which let any change be undone, each photo's identity across its moves, the track points
+geotag decided by, and the state the last execution left. Discarded with the workspace, that knowledge would be lost;
+kept in two places, the two could disagree. The library keeps no database because it is the user's own collection,
+organised as they choose, and merge only adds to it.
 :::
 
 :::{rat} A database shows only now
@@ -1292,9 +1295,10 @@ offset in hours and minutes — need no program to decode.
 :follows_from: RAT-coordinate_carries_its_method, RAT-consolidated_log
 :justifies: RUL-log_records_gps_reverts
 
-Withdrawing a manual position changes the photo as much as applying one: its position goes back to what it held, or to
-none. Logged with what it replaced or restored, every position the photo ever carried can be traced; left out, the log
-would show a position the photo no longer has.
+Withdrawing a manual position changes the photo as much as applying one: its position becomes the one it would hold
+without it — its own, the tracks' or its folder's fallback — or none, the photo then waiting for one. Logged with what
+it replaced or restored, every position the photo ever carried can be traced; left out, the log would show a position
+the photo no longer has.
 :::
 
 :::{rat} The package answers what the workspace could
@@ -1676,13 +1680,14 @@ library free of litter — hygiene, not safety.
 :status: ruled
 :forced: yes
 :follows_from: RAT-no_mutation_outside_plan
-:justifies: RUL-planning_changes_no_media
+:justifies: RUL-planning_changes_no_media, RUL-planning_writes_only_its_records
 
 A plan is there to be read before anything happens — by the user, and by the dry run that checks it. Planning that
 changed a file would leave the workspace neither as it was nor as the plan intends, before anyone agreed to either; and
 planning again, which the user may do as often as they like, would change it again. So planning only reads, and writes
-only what reading produced: the plan, the decisions it asks for, and what spares the next run reading it all again —
-and once, the configuration the plan itself is made under.
+only what reading produced: the plan, the decisions it asks for, what spares the next run reading it all again, the
+changes the user accepts and their answer on the table of countries, with the table — and once, the configuration
+the plan itself is made under.
 :::
 
 :::{rat} What was reviewed is what happens
@@ -1771,7 +1776,7 @@ renaming them, throwing out the poor ones, putting back one sorted wrongly, givi
 hand. Each is expected, so none stops a run. A deletion in missing metadata, the strays or the quarantine is not: those
 hold what prep set aside, and the quarantine changes only by prune. The maintenance commands are not runs on the photos
 — prune changes the quarantine itself, the library's setup touches no file of the workspace, the editor writes only
-decisions — so they compare nothing.
+the user's answers — so they compare nothing.
 :::
 
 :::{rat} The entries tell a moved, changed or copied file
@@ -1947,8 +1952,8 @@ camera group's class stand on none of the three, and come after them.
 The decision records hold the user's typed answers. A re-plan already keeps the earlier record; the save is their other
 writer, and without a copy an answer lost to a mistaken save or a fault of the editor is gone, recoverable from
 nowhere. Kept among the re-plan's copies, every earlier version of a record is in one series, in the order it was
-replaced. The configuration is left out: nothing else that rewrites it keeps a copy, and the save's change to it is one
-camera group's class, plain to see and to change back.
+replaced. The configuration is left out: nothing else that rewrites it keeps a copy, and the save's change to it is a
+camera group's class or its naming as several bodies, plain to see and to change back.
 :::
 
 :::{rat} Every question can be answered in the editor, and by hand
@@ -1963,6 +1968,7 @@ find the field — the work the editor exists to spare — and a question answer
 tool keeps track of. The owner ruled *"the user should be able to answer all questions in the editor"*, so each
 question gets its view as it is built. The editor is the easier way, never the only one: *"the editor is not the only
 possibility to answer, I need to keep the option to manually give answers, so the snippet added for a new camera needs
-to stay"* — every answer is a field of a record, written there by hand as well, and documented; a new camera's class is
-the one answer kept in the configuration, where geotag's printed lists are pasted and where the editor writes it.
+to stay"* — every answer is a field of a record, written there by hand as well, and documented; a camera group's class,
+and its naming as several bodies, are the answers kept in the configuration, where geotag's printed lists are pasted
+and where the editor writes them.
 :::

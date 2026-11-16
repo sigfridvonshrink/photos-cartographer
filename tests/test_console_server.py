@@ -215,12 +215,11 @@ def test_geotag_and_merge_plan_summaries(tmp_path):
     assert ms["exists"] and ms["plan_id"] == "m1" and ms["operations"] == 5   # placed_new
 
 
-@pytest.mark.spec("RUL-unreadable_plan_replanned", "BLD-unreadable_plan",
-                  test="TST-console_server-unreadable_geotag_plan_summarised_as_a_blocker")
 @pytest.mark.parametrize("torn", ['{"plan_id": "g1", "destinations": {', "[]"], ids=["torn", "not_an_object"])
 def test_unreadable_geotag_plan_summarised_as_a_blocker(tmp_path, torn):
     """A photos-24 that cannot be read — torn, or not an object — is summarised as a plan with a blocker sending the
-    user to `geotag plan` again, never an error of the server; the gate refuses to execute it."""
+    user to `geotag plan` again, never an error of the server; the gate refuses to execute it. The summary is the
+    owner's preference, not a rule (docs/design/decisions.md)."""
     from cartographer.photos_2_geotag import executable_plan_path
     g = executable_plan_path(str(tmp_path)); os.makedirs(os.path.dirname(g), exist_ok=True)
     with open(g, "w") as f:
@@ -259,8 +258,6 @@ def test_accept_with_no_remembered_execute_opens_the_gate():
         {"phase": "prep", "command": "plan", "jobs": 2, "accept_changes": code}]
 
 
-@pytest.mark.spec("RUL-merge_unreadable_record_stops", "BLD-console_unreadable_merge_plan",
-                  test="TST-console_server-unreadable_merge_plan_summarised_with_its_repair")
 @pytest.mark.parametrize("torn", ['{"plan_id": "m1", "destinations": {', "[]", '{"destinations": {}}',
                                   '{"plan_id": "m1", "destinations": [], "totals": {}}'],
                          ids=["torn", "not_an_object", "no_plan_id", "another_shape"])
@@ -268,7 +265,7 @@ def test_unreadable_merge_plan_summarised_with_its_repair(tmp_path, torn):
     """A photos-30 merge cannot read — torn, not an object, without its plan id, or in another shape than merge reads
     — is summarised as a plan with one blocker naming the file and the way on that merge itself gives: repair it or
     restore a `-NNN` copy, never `merge plan` again, which stops on it; never an error of the server, and the gate
-    refuses to execute it."""
+    refuses to execute it. The summary is the owner's preference, not a rule (docs/design/decisions.md)."""
     from cartographer.photos_3_merge import merge_plan_path
     m = merge_plan_path(str(tmp_path)); os.makedirs(os.path.dirname(m), exist_ok=True)
     with open(m, "w") as f:

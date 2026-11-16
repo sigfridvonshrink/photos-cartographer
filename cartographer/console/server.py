@@ -123,7 +123,7 @@ def _make_target(phase, command, extra=None, pre=None):
 def _read_plan(path, replan):
     """(the saved plan, None), or (None, the summary of a plan absent or unreadable). A plan there that cannot be read —
     torn, not JSON, not an object — is shown as one with a blocker naming `replan`, the command that makes it anew,
-    never executable (BLD-unreadable_plan) — for prep and geotag, whose planning sets such a plan aside; merge's
+    never executable (the owner's preferences, docs/design/decisions.md) — for prep and geotag, whose planning sets such a plan aside; merge's
     planning stops on one, so its summary reads the plan as merge does (`_merge_summary`)."""
     if not os.path.exists(path):
         return None, {"exists": False}
@@ -239,7 +239,7 @@ def _merge_summary(workspace, cur=None):
     if not os.path.exists(path):
         return {"exists": False}
     # Read as merge reads it: a plan merge cannot read is one `merge plan` stops on too, so the way on is to repair
-    # it or restore a `-NNN` copy, never to plan again (BLD-console_unreadable_merge_plan).
+    # it or restore a `-NNN` copy, never to plan again (the owner's preferences, docs/design/decisions.md).
     try:
         plan = read_merge_plan(path)
     except UnreadableRecord as e:

@@ -418,6 +418,26 @@ def test_accepted_changes_are_recorded_and_stop_no_later_run(tmp_path, monkeypat
     logged = {c["path"]: c.get("accepted") for c in _log(ws)["workspace_changes"]}
     assert logged == {first: stop.code, second: stop3.code}
     assert ".photos-ingest/photos-01-accepted-changes.json" in utils.control_archive_members(str(ws))
+
+
+@pytest.mark.spec("RUL-restored_file_is_new", "RUL-unexpected_change_stops", "RUL-stop_gives_acceptance_code",
+                  test="TST-workspace_check-a_file_restored_from_the_quarantine_is_new_once_accepted")
+def test_a_file_restored_from_the_quarantine_is_new_once_accepted(tmp_path, monkeypatch):
+    """A duplicate the user moves from the quarantine back into the inbox is a change in the quarantine: the plan stops,
+    naming it. Accepted by its code, the file is a new file of the dump — still a copy, so set aside again."""
+    ws, q = _with_quarantine(monkeypatch, tmp_path)
+    back = ws / "0-sources" / os.path.basename(q)
+    os.rename(q, back)
+    rc, said, stop = _prep(monkeypatch, ws, "plan")
+    assert rc == 2 and os.path.relpath(q, ws) in "\n".join(stop.lines), said
+    rc, said, _ = _prep(monkeypatch, ws, "plan", stop.code)
+    assert rc == 0, said
+    rc, said, _ = _prep(monkeypatch, ws, "execute")
+    assert rc == 0, said
+    assert not back.exists()                                                     # the inbox is empty again ...
+    again = [p for p in glob.glob(str(ws / ".photos-ingest-quarantine" / "**" / "*"), recursive=True)
+             if os.path.isfile(p) and not p.endswith("manifest.json") and open(p, "rb").read() == b"AAAA"]
+    assert len(again) == 1 and again[0] != q, again                              # ... the copy set aside anew
     rc, said, _ = _prep(monkeypatch, ws, "plan")
     assert rc == 0 and "accepted earlier" not in said, said                     # part of the record now
 

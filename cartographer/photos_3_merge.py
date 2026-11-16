@@ -206,8 +206,9 @@ class MergeWorkflow:
         self.workspace_root = workspace_root
         self.handoff = None
         self.calib_plan = None      # photos-24 parsed once in preflight; reused by the plan builder
-        # Library fingerprints this run took from the cache / read from the file. Reported, never put in
-        # the plan, which an unchanged re-plan must leave byte-identical (BLD-summary_counts_reuse).
+        # Library fingerprints this run took from the cache / read from the file. Reported (the owner's preference,
+        # docs/design/decisions.md), never put in the plan, which an unchanged re-plan must leave byte-identical
+        # (RUL-unchanged_replan_writes_nothing).
         self.library_fp_counts = {"cached": 0, "read": 0}
         self.engine_rechecks = 0    # by-dest photos fingerprinted again under another ImageMagick
 
