@@ -1127,7 +1127,8 @@ one value to fill in, its place already right.
 
 Prep's work — sorting by type and date, setting duplicates aside, recording what is where — follows from the files and
 the configuration with nothing left to judge. The questions only the user can answer are about time and place, which are
-geotag's; a prep that asked would hold up the inbox on questions it does not need answered.
+geotag's; a prep that asked would hold up the inbox on questions it does not need answered. Its one question, whether
+to download the table of countries a host lacks, is about the host, not the photos, and never holds it up.
 :::
 
 

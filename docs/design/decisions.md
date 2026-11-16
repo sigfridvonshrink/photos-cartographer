@@ -172,8 +172,8 @@ event/sink seam.
 - **A plan the console cannot read names its way on in its one blocker.** Prep's and geotag's name planning again,
   since their planning sets such a plan aside (`_read_plan`). Merge's names repairing the file or restoring it from a
   `-NNN` copy beside it, never `merge plan`, since merge's planning stops on an unreadable plan of its own too
-  (`_merge_summary`). That the summary shows the plan with that blocker and offers no execution is behaviour, in the
-  spec (`BLD-console_unreadable_merge_plan`).
+  (`_merge_summary`). That the summary shows the plan with that blocker and offers no execution is one of the
+  owner's preferences (below).
 - **A stop on changes to the workspace is offered for acceptance in a dialog** (BACKLOG 50): the same
   list the command printed, grouped as printed, and an **Accept these** button that re-sends the same run
   (an execute's confirmation and reviewed plan id included) with the stop's code as `--accept-changes`.
@@ -222,6 +222,30 @@ event/sink seam.
 - **The decision editor shows a decision record holding a field its decision does not have as a record it cannot
   read**, naming each such field as geotag's blocker does, and saves nothing into it. Out of spec; the spec keeps that
   such a field is refused (`RUL-unknown_decision_field_refused`).
+
+---
+
+## The owner's preferences
+
+Choices that change nothing that counts, ruled by the owner as preferences, out of the spec. In the owner's words:
+*"this does not affect the behaviour that counts in the sense that it can happen before or after without affecting
+what matters. Such choices are build choices and should be ruled under a separate heading as my preferences."*
+
+- **The console's summary of a plan the phase cannot read** shows it as a plan with one blocker naming the file, and
+  offers no execution for it; the blocker names the way on. The execution itself refuses an unreadable plan in every
+  case (`RUL-unreadable_plan_replanned`).
+- **The workspace's filesystem is checked to be local, and its requirements tried, before the lock is taken**, so
+  that a filesystem that cannot lock is named for what it lacks, never taken for a run in progress. Before or after
+  the lock, the run stops before it changes anything, and the trial leaves nothing behind
+  (`RUL-filesystem_trial_leaves_nothing`).
+- **What a report counts as reused**: each phase's report counts the files already right and the work it reused —
+  prep its cache hits, merge the library fingerprints it reused; geotag reuses no result of an earlier plan, its
+  resolved-UTC table being written again by each, so counts none. The spec keeps only that earlier work is never
+  treated as an error (`RUL-no_op_run_reports_reuse`).
+- **Where merge reads in the library**: only at the folders its photos go to and its top folder, besides its mark,
+  lock and trial files, and a library file only when one is there — never scanning or indexing it. The spec keeps
+  only that merge looks for an incoming photo at its own place, never de-duplicating the library as a whole
+  (`RUL-library_not_scanned`).
 
 ---
 

@@ -280,6 +280,38 @@ def _to_executed(monkeypatch, ws, ctl):
     _run(monkeypatch, ws, "execute")
 
 
+@pytest.mark.spec("RUL-geotag_gates", "BLD-loop_gates", test="TST-geotag_finalize-execute_stops_on_a_gate")
+def test_execute_stops_on_a_gate(tmp_path, monkeypatch, capsys):
+    """A dump dropped into the inbox after the plan was made stops its execution, as it stops planning: nothing is
+    written to a photo, and no execution is recorded."""
+    ws, ctl = _ready_ws(tmp_path, monkeypatch)
+    _run(monkeypatch, ws, "plan")
+    _run(monkeypatch, ws, "plan")
+    assert (ctl / "photos-24-executable-plan.json").exists()
+    (ws / "0-sources" / "new-dump.jpg").write_bytes(b"new")
+    writes = []
+    monkeypatch.setattr(cal.GeotagWorkflow, "_exiftool_write", lambda self, p, t: writes.append(p) or True)
+    capsys.readouterr()
+    assert _run(monkeypatch, ws, "execute") == 2
+    assert "0-sources/ is not empty" in capsys.readouterr().err
+    assert writes == [] and not (ctl / "photos-25-execution-summary.json").exists()
+
+
+@pytest.mark.spec("RUL-geotag_gates", "BLD-loop_gates", test="TST-geotag_finalize-finalize_stops_on_a_gate")
+def test_finalize_stops_on_a_gate(tmp_path, monkeypatch, capsys):
+    """A dump dropped into the inbox after a successful execution stops finalize: no package is made."""
+    ws, ctl = _ready_ws(tmp_path, monkeypatch)
+    _to_executed(monkeypatch, ws, ctl)
+    assert json.load(open(ctl / "photos-25-execution-summary.json"))["status"] == "success"
+    (ws / "0-sources" / "new-dump.jpg").write_bytes(b"new")
+    capsys.readouterr()
+    assert _run(monkeypatch, ws, "finalize") == 2
+    assert "0-sources/ is not empty" in capsys.readouterr().err
+    assert not (ctl / "photos-26-archive-manifest.json").exists()
+    (ws / "0-sources" / "new-dump.jpg").unlink()
+    assert _run(monkeypatch, ws, "finalize") == 0          # the same workspace, the inbox empty again
+
+
 def test_finalize_refuses_before_execute(tmp_path, monkeypatch):
     ws, ctl = _ready_ws(tmp_path, monkeypatch)
     _run(monkeypatch, ws, "plan")                                         # only photos-21 yet
@@ -689,7 +721,11 @@ def test_a_photo_not_as_execution_left_it_stops_finalize(tmp_path, monkeypatch, 
     capsys.readouterr()
     assert _run(monkeypatch, ws, "finalize") == 2
     said = capsys.readouterr()
-    assert "not as the execution left" in said.out + said.err
+    if change == "added":
+        # a photo neither prep nor the plan records stops finalize at its gates first (RUL-geotag_gates)
+        assert "is out of date" in said.err and "dropped-in.jpg" in said.err
+    else:
+        assert "not as the execution left" in said.out + said.err
     assert not (ctl / "photos-26-finalized-media.json").exists()
 
 
@@ -1047,6 +1083,45 @@ def test_the_tracks_decided_by_are_sealed_in_the_archive(tmp_path, monkeypatch):
         names = {m.name for m in tar.getmembers()}
     assert any(n.endswith("photos-00-ingest.db") for n in names) and any(n.endswith("photos-26-geotag-ingest.db")
                                                                          for n in names)
+
+
+@pytest.mark.spec("BLD-archive_manifest", "BLD-gpx_root", "RUL-unused_points_not_kept",
+                  test="TST-geotag_finalize-tracks_in_the_control_directory_are_left_out_of_the_package")
+def test_tracks_in_the_control_directory_are_left_out_of_the_package(tmp_path, monkeypatch):
+    """With the tracks kept under the control directory, the package carries none of their files: the points the
+    decisions rest on are in the database it archives, and no other point of any track is kept."""
+    import shutil
+    import tarfile
+    ws, ctl = _ready_ws(tmp_path, monkeypatch)
+    shutil.move(str(tmp_path / "gpx"), str(ctl / "gpx"))
+    (ctl / "gpx" / "notes.txt").write_text("where the logger was")
+    cfg = json.load(open(ctl / "photos-00-config.json"))
+    cfg["gpx_root"] = ".photos-ingest/gpx"
+    (ctl / "photos-00-config.json").write_text(json.dumps(cfg))
+    _to_executed(monkeypatch, ws, ctl)
+    assert _run(monkeypatch, ws, "finalize") == 0
+    manifest = json.load(open(ctl / "photos-26-archive-manifest.json"))
+    assert not any(e["path"].startswith(".photos-ingest/gpx") for e in manifest["contents"].values())
+    with tarfile.open(ctl / "photos-26-archive.tar.gz") as tar:
+        names = {m.name for m in tar.getmembers()}
+    assert not any("/gpx/" in n for n in names) and ".photos-ingest/photos-00-ingest.db" in names
+    assert _track_rows(ctl, "SELECT COUNT(*) FROM gpx_track_points") == [(2,)]
+
+
+@pytest.mark.spec("BLD-archive_manifest", "RUL-unused_points_not_kept",
+                  test="TST-geotag_finalize-tracks_that_are_the_control_directory_leave_only_their_files_out")
+def test_tracks_that_are_the_control_directory_leave_only_their_files_out(tmp_path, monkeypatch):
+    """Tracks kept in the control directory itself: the package leaves out the track files, and carries every
+    record beside them."""
+    ws = tmp_path / "ws"
+    (ws / ".photos-ingest").mkdir(parents=True)
+    ctl = ws / ".photos-ingest"
+    for n in ("t.gpx", "u.KML", "photos-21-time-decisions.json"):
+        (ctl / n).write_text("x")
+    monkeypatch.setitem(utils.CONFIG, "gpx_root", ".photos-ingest")
+    assert utils.control_archive_members(str(ws)) == [".photos-ingest/photos-21-time-decisions.json"]
+    monkeypatch.setitem(utils.CONFIG, "gpx_root", str(tmp_path / "elsewhere"))
+    assert len(utils.control_archive_members(str(ws))) == 3
 
 
 @pytest.mark.spec("RUL-withdrawn_track_points_kept", "BLD-withdrawn_track_points", "RUL-gone_track_told",
