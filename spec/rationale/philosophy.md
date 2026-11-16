@@ -113,6 +113,7 @@ a downstream expression of the "local, owned" ethos (P1, P2), not a structural d
 :status: ruled
 :forced: yes
 :follows_from: CHC-photos_matter
+:uses: DEF-own_values
 
 plan / validate / execute; atomic no-clobber; quarantine, not delete; a ledger of each photo's **own values**.
 :::
@@ -150,9 +151,11 @@ Duplicates are **quarantined**, never removed; pruning is an explicit, separate 
 :status: ruled
 :forced: yes
 :follows_from: RAT-non_destructive_core
+:uses: DEF-own_values
 
 A ledger of each photo's **own values** keeps what each photo held before the tool first changed it, and every plan
-decides from it, so deleting a decision *restores* the prior state.
+decides from it, so deleting a decision *undoes* it: the photo is decided again from its own values, as if the
+decision had never been made.
 :::
 
 ### From F2 + P3 — drift makes the decisions intricate; P3 keeps them cheap
@@ -173,8 +176,10 @@ A camera's clock drifts, and is set again — to local time, on a trip, often ea
 user went, not when: one offset per camera, or per destination over several days, would be wrong for every day but one.
 A day in one place is the unit within which the error stays put, so it is the unit decided.
 
-The offset is **inferred and applied per (camera group, destination, day)**; corrections fall *between* destinations
-and between days, never within one destination's day — which is why **one destination = one coherent shoot**.
+The offset is **inferred per (camera group, destination, day)**: the day is the unit within which the error stays
+put. Where the camera's clock was set again during a day, the day is decided in parts; and the offset a camera's own
+positions gave on a day in one destination is offered to its photos of that day in the others, since a camera has
+one clock.
 :::
 
 :::{rat} Intricate, evidence-specific decisions are too error-prone to hand-edit
@@ -192,7 +197,8 @@ and between days, never within one destination's day — which is why **one dest
 :forced: yes
 :follows_from: RAT-format_editor_split
 
-The editor writes **only the `user_decision` field** — never derived or evidence fields.
+The editor writes **only the user's answers** — the decision fields of geotag's records, and a camera group's class
+and its naming as several bodies in the configuration — never derived or evidence fields.
 :::
 
 :::{rat} Minimal, cascading asks
@@ -234,8 +240,8 @@ inherit at all, and every value would fall back to per-photo entry.
 :forced: yes
 :follows_from: RAT-minimal_cascading_asks
 
-Timezone, clock offset, and GPS fallback are **piggybacked on the destination sort** one would do anyway for real albums
-(P2).
+Timezone and GPS fallback are **piggybacked on the destination sort** one would do anyway for real albums (P2), and
+the sort groups each camera's days for its clock offset.
 :::
 
 :::{rat} The tedious part of a judgment call should be pre-computed
@@ -345,8 +351,8 @@ interpolated between two, extrapolated past a track's end, set by hand for the p
 photo itself, so a rough pin is never mistaken for a precise one, in the library as in the workspace.
 
 *Why it is kept:* "I still want to be able to know, at a later date, how that GPS position was assigned - maybe I want
-to refine it by image/place recognition for example." A new track needs no tag: it changes the GPX folder, which makes
-the GPS decisions stale, and they are regenerated.
+to refine it by image/place recognition for example." A new track needs no tag: where it reaches a photo's time it makes
+the GPS decisions it bears on stale, and they are regenerated.
 
 *The traceability:* "every decision must be traced, and by incorporating the precision, I allow it even in the final
 library."
@@ -402,10 +408,12 @@ are **zero-cost benefits** that fall out of building for resumability.
 :status: ruled
 :forced: yes
 :follows_from: RAT-durable_record
+:uses: DEF-own_values
 
 Decisions are **idempotently re-read each run**, never kept in the fast store, **SQLite**: what it holds is derived
-and rebuildable — but for each photo's own values, pinned before the tool first wrote to it, which nothing else holds
-once it has, and which the archived image of the database keeps.
+and rebuildable — but for what nothing else holds once it is taken: each photo's own values, pinned before the tool
+first wrote to it, the track points its decisions rest on, and the state the last execution left — which the
+archived image of the database keeps.
 :::
 
 :::{rat} A choice made weeks earlier must still explain itself on return
@@ -458,7 +466,7 @@ robustness, but the spread thresholds, the tie-breaks, and the confidence grades
 :follows_from: RAT-destination_tree_is_a_hierarchy, CHC-local_folder_library
 
 **The downstream library, not the tree.** A *hierarchical* destination tree is **forced**, not chosen: the timezone /
-offset / GPS-fallback cascade rides on the folder nesting, so a flat or tag-based layout would make inheritance
+GPS-fallback cascade rides on the folder nesting, so a flat or tag-based layout would make inheritance
 impossible and drive the per-photo workload straight back up. What is actually free is only *which* folder-based
 library consumes the result — digiKam, or any other — and the cosmetic naming of the levels.
 :::

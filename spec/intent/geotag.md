@@ -3015,8 +3015,8 @@ execution's summary names it, and no execution's journal can be its.
 :verify: required
 :uses: DEF-geotag
 
-Each command that reads geotag's executable plan — its execution, finalize, merge's plan and the summary shown before
-an execution — SHALL stop on one it cannot read, changing nothing, and send the user to plan again.
+Each command that reads geotag's executable plan — its execution, finalize and merge's plan — SHALL stop on one it
+cannot read, changing nothing, and send the user to plan again.
 :::
 
 :::{rul} Geotag's summary is written only for an execution

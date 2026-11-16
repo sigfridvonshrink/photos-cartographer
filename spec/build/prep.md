@@ -14,13 +14,15 @@ Prep's execute SHALL carry out only folder creations, moves, renames, quarantine
 plan that holds any other operation — a metadata write among them.
 :::
 
-:::{bld} No operation touches `6-photos-by-dest`
+:::{bld} No file operation touches `6-photos-by-dest`
 :id: BLD-by_dest_ops_refused
 :status: ruled
 :realises: RUL-prep_leaves_by_dest_as_found
 
-Prep's plan SHALL hold no operation whose source or destination lies in `6-photos-by-dest`, its execute refusing a plan
-that holds one; prep reads the files there for their fingerprint and metadata only ({need}`RUL-move_recognized`, {need}`RUL-copy_kept_by_folder`).
+Prep's plan SHALL hold no move, rename, quarantine move or folder removal whose source or destination lies in
+`6-photos-by-dest`, its execute refusing a plan that holds one; its database operations may name paths there, and prep
+reads the files there for their fingerprint and metadata only ({need}`RUL-move_recognized`,
+{need}`RUL-copy_kept_by_folder`).
 :::
 
 ## 2. The workspace's first run, and the strays
@@ -179,7 +181,7 @@ workspace's state yet ({need}`BLD-workspace_record`), so that prep's execute rec
 :::{bld} A log not vouched for is not "nothing to do"
 :id: BLD-prep_fast_stop_checks_log
 :status: ruled
-:realises: RUL-unchecked_counts_as_changed
+:realises: RUL-unchecked_counts_as_changed, RUL-prepped_nothing_to_do
 
 Prep's stop on an already-prepped workspace SHALL not apply while the log's hash differs from what the handoff records,
 so that prep's next execute rewrites both.
@@ -450,11 +452,12 @@ and each destination folder's duplicates hold the duplicates alone, the others l
 :status: ruled
 :realises: RUL-metadata_kept_for_geotag, RUL-metadata_group_order, RUL-metadata_freshness, RUL-time_field_first_valid
 
-Prep SHALL read metadata with `exiftool -json -n -a -G0`, taking each field from the first group holding it in the
-order `EXIF`, `XMP`, `MakerNotes`, `IPTC`, `QuickTime`, `File` — `Composite` first for the GPS position — and a time
-field from the first group holding a valid time in it; it keeps the fields in `metadata_cache.parsed_json` with the
-recorded time's field and group, stamped with `exiftool`, its version, the field-set version, the SHA-256 of the
-options, the metadata-schema version and the camera-group-key version.
+Prep SHALL read metadata with `exiftool -json -n -a -G0`, taking each field from the first group holding it in the order
+`EXIF`, `XMP`, `MakerNotes`, `IPTC`, `QuickTime`, `File` — `Composite` first for the GPS position, the recorded position
+signed by its hemisphere reference, which EXIF holds apart from it — and a time field from the first group holding a
+valid time in it; it keeps the fields in `metadata_cache.parsed_json` with the recorded time's field and group, stamped
+with `exiftool`, its version, the field-set version, the SHA-256 of the options, the metadata-schema version and the
+camera-group-key version.
 :::
 
 :::{bld} A metadata read that failed is a blocker

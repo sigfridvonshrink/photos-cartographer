@@ -150,7 +150,7 @@ Merge SHALL NOT plan, dry-run or execute while the image engine, by which it fin
 :anti: yes
 :verify: required
 :refines: RUL-filesystem_agnostic
-:uses: DEF-merge, DEF-library, RUL-library_confirmed_before_lock
+:uses: DEF-merge, DEF-library, RUL-library_confirmed_before_lock, DEF-filesystem_requirements
 
 Merge's plan, dry run and execution SHALL try on the library's filesystem its lock, the move that fails where its
 target exists, and syncing a file and a folder — once the library's mark has confirmed it, and before its lock is
@@ -355,7 +355,7 @@ it — whatever the journal or the plan says.
 A photo gone from photos by destination whose library place does not hold it SHALL block.
 :::
 
-:::{rul} A run with a photo gone from both places is partial
+:::{rul} A run with a photo gone from both places is never whole
 :id: RUL-resume_block_makes_partial
 :status: ruled
 :criticality: high
@@ -363,7 +363,8 @@ A photo gone from photos by destination whose library place does not hold it SHA
 :refines: RUL-resume_blocks_missing
 :uses: DEF-merge, DEF-library, DEF-fingerprint
 
-A run in which a photo gone from photos by destination blocks SHALL be partial.
+A run in which a photo gone from photos by destination blocks SHALL NOT end whole: it ends partial, or failed where
+every photo was blocked.
 :::
 
 :::{rul} A record of merge's own that cannot be read stops it

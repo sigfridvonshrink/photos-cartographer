@@ -38,8 +38,9 @@ renaming, quarantining, deleting or writing one there.
 :verify: required
 :uses: RUL-first_dump_at_top_level, DEF-managed_folders, DEF-control_records
 
-Initializing a workspace, prep SHALL move every entry at its top level that is not a managed folder or the control
-records' place — files and whole folders alike, their structure kept — into the inbox.
+Initializing a workspace, prep SHALL move every entry at its top level that is not a managed folder, the control
+records' place or hidden ({need}`RUL-dump_hidden_files_quarantined`) — files and whole folders alike, their
+structure kept — into the inbox.
 :::
 
 :::{rul} A dump folder named as a managed folder is that folder
@@ -122,6 +123,7 @@ A video in photos by date or photos by destination, or a photo in videos by date
 :criticality: high
 :anti: yes
 :verify: required
+:excepts: RUL-inbox_non_media_never_blocks
 :uses: DEF-development
 
 An editing sidecar — a file holding a photo's development beside it — found anywhere prep inventories SHALL block
@@ -201,8 +203,9 @@ leaves the inbox.
 :verify: required
 :uses: DEF-managed_folders
 
-A media file outside the inbox SHALL stay in the folder it is in, unless prep sets it aside as a duplicate, it is a
-dated file outside its day folder, or it lies in missing metadata and has gained a recorded time.
+A media file outside the inbox SHALL stay in the folder it is in, unless prep sets it aside as a duplicate or as the
+JPEG of a culled RAW, it is a dated file outside its day folder or with no recorded time, or it lies in missing
+metadata and has gained a recorded time.
 :::
 
 :::{rul} A dated file lies in its day folder
@@ -222,6 +225,7 @@ band; prep moves one that does not into it.
 :criticality: med
 :verify: required
 :refines: RUL-by_date_in_day_folder
+:excepts: RUL-filed_file_stays
 :uses: DEF-managed_folders, DEF-recorded_time
 
 Prep SHALL move a file in photos by date or videos by date that has no recorded time into missing metadata.
@@ -277,7 +281,9 @@ under the inbox and with its name unchanged.
 :verify: required
 :refines: RUL-inbox_non_media_to_strays
 
-A file of no media class in the inbox SHALL NOT block a run.
+A file of no media class in the inbox SHALL NOT block a run for being of no media class, nor for a failed read of
+its metadata — an editing sidecar ({need}`RUL-sidecar_blocks`) and a track file ({need}`RUL-track_files_block_prep`)
+excepted.
 :::
 
 :::{rul} A file given a time in missing metadata is filed on
@@ -298,7 +304,8 @@ photo into photos by date, a video into videos by date, in its day's folder unde
 :verify: required
 :uses: DEF-managed_folders
 
-Each media file prep files, or finds outside the inbox, SHALL end with its extension in lowercase.
+Each media file prep files, or finds outside the inbox and photos by destination, SHALL end with its extension in
+lowercase.
 :::
 
 :::{rul} A duplicate is set aside as it was found
@@ -320,8 +327,8 @@ moving or renaming it first.
 :verify: required
 :uses: DEF-managed_folders
 
-Prep SHALL move into redundant JPEGs each JPEG in the inbox that shares its folder and its name, extension aside, with
-a raw file.
+Prep SHALL move into redundant JPEGs each JPEG in the inbox that shares its folder and its name, with case, extension
+aside, with a raw file.
 :::
 
 :::{rul} Only a JPEG beside its RAW is set aside
@@ -341,6 +348,7 @@ aside, with a raw file.
 :status: ruled
 :criticality: med
 :verify: required
+:excepts: RUL-filed_file_stays
 :uses: DEF-managed_folders, DEF-fingerprint
 
 When the user culls a RAW beside which prep set a JPEG aside — from photos by date or photos by destination, at any
@@ -565,7 +573,7 @@ A file prep has quarantined SHALL NOT be in the workspace database.
 :criticality: med
 :verify: required
 :refines: RUL-handoff_describes_workspace
-:uses: DEF-workspace_database
+:uses: DEF-workspace_database, DEF-handoff
 
 A file prep has quarantined SHALL NOT be in the handoff.
 :::
@@ -798,7 +806,7 @@ any change.
 :criticality: med
 :anti: yes
 :verify: required
-:refines: RUL-dry_run_summarises_the_real_plan
+:refines: RUL-dry_run_changes_nothing
 
 Prep's dry run SHALL change nothing in the workspace.
 :::
@@ -809,9 +817,9 @@ Prep's dry run SHALL change nothing in the workspace.
 :criticality: med
 :verify: required
 
-On an initialized workspace whose inbox holds nothing — no file, and no folder — and where nothing the user moved,
-removed or changed since the last run waits to be recorded, prep's dry run and execution SHALL stop, changing nothing,
-and not carry out the saved plan.
+On an initialized workspace whose inbox holds nothing — no file, and no folder — where nothing the user moved, removed
+or changed since the last run waits to be recorded and prep's log is the one its handoff vouches for, prep's dry run and
+execution SHALL stop, changing nothing, and not carry out the saved plan.
 :::
 
 :::{rul} The journal is never left torn
@@ -861,8 +869,8 @@ Prep SHALL remove a folder its plan leaves empty only while the folder is empty.
 :criticality: high
 :verify: required
 
-After an interrupted execution, prep SHALL plan again from the workspace as it stands, never resuming or replaying the
-interrupted plan.
+After an interrupted execution, prep SHALL never resume the interrupted plan from its journal: it carries out only a
+plan the workspace as it stands still matches, and plans again where it does not.
 :::
 
 :::{rul} A plan executed again keeps the earlier attempt's journal
@@ -873,8 +881,8 @@ interrupted plan.
 :verify: required
 :uses: DEF-prep
 
-A prep execution of a plan already executed SHALL never overwrite the earlier attempt's journal: it is first set aside,
-recoverably.
+A prep execution of a plan an earlier execution already began SHALL never overwrite the earlier attempt's journal: it is
+first set aside, recoverably.
 :::
 
 
@@ -984,7 +992,8 @@ A prune's record SHALL never be written over by a later prune's: the earlier is 
 :criticality: med
 :verify: required
 
-A file the user moves from the quarantine back into the inbox SHALL be handled as a new file of the dump.
+A file the user moves from the quarantine back into the inbox SHALL, once its leaving the
+quarantine is accepted ({need}`RUL-stop_gives_acceptance_code`), be handled as a new file of the dump.
 :::
 
 :::{rul} A restored file's quarantine record is left as it is
@@ -1017,6 +1026,18 @@ newest.
 :verify: required
 
 Prep SHALL write its log and its handoff only at the end of an execution all of whose operations succeeded.
+:::
+
+:::{rul} A failed prep execution still logs the changes by hand it passed
+:id: RUL-failed_prep_logs_hand_changes
+:status: ruled
+:criticality: med
+:verify: required
+:refines: RUL-allowed_changes_named
+:excepts: RUL-prep_records_on_success
+
+A prep execution that fails SHALL still add to prep's log the changes by hand its check passed, the rest of the log left
+as it was.
 :::
 
 :::{rul} Prep's records are written whole

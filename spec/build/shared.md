@@ -891,22 +891,12 @@ whole configuration's hash, a costly result on the hash of the areas it reads.
 :::{bld} An operation only where the file differs
 :id: BLD-operation_only_where_different
 :status: ruled
-:realises: RUL-mutate_on_difference, RUL-no_op_run
+:realises: RUL-mutate_on_difference, RUL-no_op_run, RUL-no_op_run_reports_reuse
 
 A file's operation SHALL be planned only where the file does not already hold the target: prep does not move or rename a
 file already in place, geotag plans no write a file already holds and recomputes an already-final name to itself
 ({need}`BLD-rename_planning`, {need}`BLD-rerun_writes_only_differences`), and merge records a photo already in the
 library as already present ({need}`RUL-collision_same_content`).
-:::
-
-:::{bld} A run's summary counts what it reused
-:id: BLD-summary_counts_reuse
-:status: ruled
-:realises: RUL-no_op_run_reports_reuse
-
-Each phase's report SHALL count the files already right, and the work it took from a cache: prep's summary its cache
-hits, merge's plan the library fingerprints it reused — in what it prints, never in the plan, which an unchanged
-re-plan leaves byte-identical. Geotag keeps no cache of results, so has none to count.
 :::
 
 ## 11. Nothing changes that the user did not write down
@@ -918,7 +908,9 @@ re-plan leaves byte-identical. Geotag keeps no cache of results, so has none to 
 
 The decisions SHALL live in the `user_decision` fields of geotag's `photos-21`, `photos-22` and `photos-23`, each field
 created by geotag and preserved across regeneration ({need}`RUL-decision_stage_writes_record`,
-{need}`RUL-decision_kept`), the decision editor writing only those fields.
+{need}`RUL-decision_kept`), and in `fingerprint_mismatches` of `photos-25-execution-summary.json`, the decision editor
+writing only those fields and, in the configuration, a camera group's class and its several bodies
+({need}`BLD-editor_answers_every_question`).
 :::
 
 :::{bld} How a change is traced to its decision
@@ -950,7 +942,9 @@ automatic position is recomputed, never rolled back.
 :status: ruled
 :realises: RUL-record_whole_each_phase, RUL-carry_forward_by_copy
 
-Each phase SHALL write its log: prep `photos-15-prep-log.json` at the end of every prep run ({need}`BLD-prep_log_build`); geotag's
+Each phase SHALL write its log: prep `photos-15-prep-log.json` at the end of every prep execution that
+succeeds ({need}`BLD-prep_log_build`), and of one that fails, its changes by hand alone
+({need}`BLD-workspace_changes_logged`); geotag's
 finalize copies it to `photos-26-complete-log.json` and appends each photo's geotag steps
 ({need}`BLD-geotag_log_steps`); merge copies that to `photos-35-merge-log.json` and appends its own.
 :::
@@ -1403,10 +1397,10 @@ thus itself the check that its name is free ({need}`RUL-target_free_at_execute`)
 :status: ruled
 :realises: RUL-target_free_ignores_case, RUL-suffix_case_insensitive
 
-Every phase SHALL take two names that differ only in case for one, on every filesystem, whether or not it tells them
-apart: prep's execute refuses a move onto a name that differs only in case from one there or planned before it;
-geotag's renames and merge's placements are planned with names compared ignoring case, merge settling a library file
-under such a name by its content ({need}`BLD-library_file_fingerprinted`).
+Every phase SHALL take a name as taken where it differs only in case from one on disk or planned, on every filesystem,
+whether or not it tells them apart: prep's execute refuses a move onto a name that differs only in case from one there
+or planned before it; geotag's renames and merge's placements are planned with names compared ignoring case, merge
+settling a library file under such a name by its content ({need}`BLD-library_file_fingerprinted`).
 :::
 
 :::{bld} Only merge's moves fall back to a copy
@@ -1574,7 +1568,7 @@ never written over. It lies in the control directory, so the archival package ca
 :::{bld} Where the changes by hand are named
 :id: BLD-workspace_changes_logged
 :status: ruled
-:realises: RUL-allowed_changes_named, RUL-accepted_changes_logged
+:realises: RUL-allowed_changes_named, RUL-accepted_changes_logged, RUL-failed_prep_logs_hand_changes
 
 The check SHALL print the changes it passes, `sorted` aside, and those accepted, and return them — `kind`, `path`,
 `from`, the `accepted` code, an interrupted run's `phase` and `plan_id` and, where the record holds one, the

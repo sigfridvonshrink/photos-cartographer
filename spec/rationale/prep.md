@@ -98,7 +98,8 @@ and the next simply initializes again.
 :follows_from: RAT-class_decides_handling, RAT-consolidated_log
 :justifies: RUL-strays_leave_no_trace
 
-A stray is a file cartographer does not understand — a document, a sidecar it has no use for. Recorded beside the media,
+A stray is a file cartographer does not understand — a document, a thumbnail a camera writes beside a
+video, a file of a format the lists do not name. Recorded beside the media,
 it would make cartographer answer for what it cannot reason about; parked whole, it waits for the user to keep or clear
 it, and clearing it is a change the user accepts once, by its code. Moving it is a change like any other, planned and
 journaled, so the plan names it, where it was and where it goes, and that plan is kept with the workspace's records; it
@@ -192,9 +193,9 @@ in the plan.
 :justifies: RUL-filed_file_stays
 
 A file outside the inbox was filed by an earlier run or moved there by the user. Moving it again on a later run would
-undo either for nothing and churn the names the user and later phases know it by. Only three things move it: a copy of
-it found to be better filed, its own recorded time no longer matching its day, and a time given at last to one set
-apart for having none.
+undo either for nothing and churn the names the user and later phases know it by. Only these move it: a copy of it found
+to be better filed, its own recorded time no longer matching its day or gone, a time given at last to one set apart
+for having none, and its RAW culled when it is the JPEG set aside beside it.
 :::
 
 :::{rat} A day of photos is one folder
@@ -717,7 +718,8 @@ visibly, until the user prunes it: by a command of its own, which shows what it 
 
 Moving a file back is the user's way of saying it should not have been set aside. Handled as a new file it is checked
 afresh — set aside again if it is still a copy, filed if its twin is gone — and no second path into the pipeline needs
-keeping in step with the first ({need}`RAT-time_given_filed_where_it_lies`). The old record stays: it is history of what that run did.
+keeping in step with the first ({need}`RAT-time_given_filed_where_it_lies`). Taking it from the quarantine is a change
+there like any other, accepted once by its code. The old record stays: it is history of what that run did.
 :::
 
 :::{rat} A growing cost is shown
@@ -764,11 +766,12 @@ what `--all` exists to say out loud. An age is counted in whole days, so one und
 :status: ruled
 :forced: yes
 :follows_from: RAT-discrete_stages, RAT-durable_record
-:justifies: RUL-prep_records_on_success
+:justifies: RUL-prep_records_on_success, RUL-failed_prep_logs_hand_changes
 
 The handoff tells geotag what prep left, and the log what prep did; written by a run that failed partway, either would
 describe a workspace that does not exist. Written only at the end of a run that succeeded, and whole each time, they are
-true of the workspace they stand beside, or absent.
+true of the workspace they stand beside, or absent. Only the changes by hand a failed run passed are added even so:
+they are the user's, true whatever the run did, and lost from every record otherwise.
 :::
 
 :::{rat} Geotag reads the handoff, not the photos

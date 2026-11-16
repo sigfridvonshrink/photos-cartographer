@@ -167,17 +167,6 @@ present, is not an object or `blockers` not a list; and a journal whose `operati
 is not an object.
 :::
 
-:::{bld} The console's summary of a merge plan merge cannot read
-:id: BLD-console_unreadable_merge_plan
-:status: ruled
-:realises: RUL-merge_unreadable_record_stops
-:uses: BLD-merge_record_shape
-
-Where `photos-30-merge-plan.json` is there and merge would read it as unreadable — it cannot be opened, does not parse as
-a JSON object, holds no `plan_id` or is not in the shape of {need}`BLD-merge_record_shape` — the console's summary of the
-merge plan SHALL show it as a plan with one blocker naming the file, and no execution is offered for it.
-:::
-
 ## 7. Plan / dry-run / execute lifecycle
 
 :::{bld} Merge's plan

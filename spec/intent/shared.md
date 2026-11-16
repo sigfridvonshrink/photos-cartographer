@@ -170,8 +170,8 @@ A workspace SHALL have exactly one lock, shared by every command.
 :upholds: INV-one_run_at_a_time
 
 A run SHALL hold the lock before it reads any of the workspace's content — before it plans, scans, fingerprints,
-reads metadata, dry-runs or executes. Planning changes nothing but the fingerprints it keeps for later runs, and is
-inside the lock all the same.
+reads metadata, dry-runs or executes. Planning, though it changes no media, is inside the lock
+all the same.
 :::
 
 :::{rul} The lock lasts the whole run, and no longer
@@ -747,6 +747,7 @@ Nothing SHALL process the strays folder's contents again: prep writes into it, b
 :status: ruled
 :criticality: med
 :verify: required
+:excepts: RUL-init_moves_dump_to_inbox
 :uses: DEF-quarantine, DEF-dump
 
 Hidden files and hidden folders that arrive in a dump area — the workspace's top level on the run that initializes it, or the inbox — SHALL
@@ -899,14 +900,15 @@ Re-planning that sets a saved plan or decision record aside SHALL tell the user 
 A plan or decision record being replaced, by re-planning or by the editor's save, SHALL be at its path at every instant — the earlier version until the new one is whole — so that a run killed in between finds the decisions, never an empty place.
 :::
 
-:::{rul} An unchanged re-plan writes nothing
+:::{rul} An unchanged re-plan rewrites none of its records
 :id: RUL-unchanged_replan_writes_nothing
 :status: ruled
 :criticality: med
 :verify: required
 :refines: RUL-replanning_keeps_the_prior
 
-A re-plan whose result is identical to what is saved SHALL write nothing and set nothing aside.
+A re-plan whose result is identical to what is saved SHALL rewrite none of its plan and decision records
+and set nothing aside.
 :::
 
 :::{rul} Geotag verifies the handoff by its content
@@ -1528,9 +1530,10 @@ anywhere prep inventories, in the dump or in a managed folder, SHALL block prep'
 :anti: yes
 :verify: required
 :refines: RUL-track_files_block_prep
+:excepts: RUL-inbox_non_media_to_strays
 
-Prep SHALL leave a track file where it is: never moving it, to the strays folder or anywhere else, and never treating it
-as a file of no media class.
+Prep SHALL leave a track file where it is: never moving it, to the strays folder or anywhere else, and never handling it
+as a file of no media class is handled.
 :::
 
 :::{rul} The tracks are a dependency of what geotag derives from them
@@ -2144,15 +2147,14 @@ Planning a workspace whose relevant state has not changed SHALL produce the same
 fingerprints and names.
 :::
 
-:::{rul} A run over unchanged inputs reports what it reused, never an error
+:::{rul} A run over unchanged inputs never takes earlier work for an error
 :id: RUL-no_op_run_reports_reuse
 :status: ruled
 :criticality: low
 :verify: required
 :refines: RUL-no_op_run
 
-A run over unchanged inputs SHALL report the work it reused and the files already right, never treating earlier work as
-an error.
+A run over unchanged inputs SHALL never treat earlier work as an error.
 :::
 
 ## 11. Nothing changes that the user did not write down
@@ -2253,10 +2255,11 @@ mutated files repaired by hand.
 :criticality: med
 :verify: required
 :refines: RUL-decision_revisable
+:uses: DEF-own_values
 
 Withdrawing a decision SHALL undo its effect, not merely stop asserting it: a manual position withdrawn gives the file
-the position it would have had without it — from the tracks or its folder's fallback; a position derived by the tool is
-derived again.
+the position it would have had without it — its own, one from the tracks or its folder's fallback, or none, the
+photo then waiting ({need}`RUL-unplaced_photo_waits`); a position derived by the tool is derived again.
 :::
 
 :::{rul} After a withdrawal the time and the name are recomputed in place
@@ -2319,8 +2322,9 @@ phase not yet run reading as the workspace not having advanced, never as a recor
 :verify: required
 :uses: DEF-control_records
 
-Each numbered record SHALL be written by the phase whose number it carries, and by no other: a phase MAY create, rewrite
-or extend its own records across its runs, and reads every other phase's records read-only.
+Each phase's records SHALL be written by that phase and by no other phase — the configuration
+({need}`RUL-config_writers`) and the database ({need}`RUL-database_regions_disjoint`) under rules of their own: a phase
+MAY create, rewrite or extend its own records across its runs, and reads every other phase's records read-only.
 :::
 
 :::{rul} An earlier record is carried forward by copying it
@@ -2653,9 +2657,10 @@ The workspace database SHALL be archived in the package.
 :uses: DEF-workspace_database
 :refines: RUL-phase_writes_own_records
 
-Each phase SHALL write only its own part of the workspace database, no two phases writing the same rows — but the
-record of the state the last execution left the workspace's files in, which every execution rewrites whole
-({need}`RUL-execution_records_state`).
+Each phase SHALL write only its own part of the workspace database, no two phases writing the same rows — but the record
+of the state the last execution left the workspace's files in, which every execution rewrites whole
+({need}`RUL-execution_records_state`) and a prune trims of what it removes
+({need}`RUL-quarantine_changed_only_by_prune`).
 :::
 
 :::{rul} Finalize only reads the database
@@ -3071,15 +3076,15 @@ Merge SHALL remove the workspace's copy of a photo it places only once the libra
 A photo merge cannot place SHALL stay where it is.
 :::
 
-:::{rul} A run that leaves a photo unplaced is partial
+:::{rul} A run that leaves a photo unplaced is never whole
 :id: RUL-unplaced_photo_run_partial
 :status: ruled
 :criticality: high
 :verify: required
 :refines: RUL-seal_on_success_only
 
-A merge run that leaves a photo unplaced SHALL end partial: recorded as such ({need}`RUL-merge_outcome_recorded`)
-and leaving the workspace unsealed.
+A merge run that leaves a photo unplaced SHALL NOT end whole: recorded partial, or failed where it left every photo
+unplaced ({need}`RUL-merge_outcome_recorded`), and leaving the workspace unsealed.
 :::
 
 :::{rul} Merge resumes
@@ -3693,7 +3698,8 @@ Planning SHALL change no media file.
 Planning SHALL write nothing but its plan, its decision records, what it keeps so that later runs need not compute it
 again, the changes to the workspace the user accepts ({need}`RUL-acceptance_recorded`), the user's answer to whether to
 download the table of countries with the table downloaded ({need}`RUL-zone_table_asked_once`), and — on a workspace's
-first run — the configuration it seeds.
+first run — the configuration it seeds; a prep execution that geotag's plan runs
+({need}`RUL-auto_reprep_moves_no_media`) being prep's execution, not planning.
 :::
 
 :::{rul} Execution carries out the plan, and only the plan
@@ -3882,7 +3888,8 @@ files in, whether or not each of its operations succeeded.
 :verify: required
 :refines: RUL-execution_records_state
 
-No plan, dry run or finalize SHALL change the recorded state of the workspace's files.
+No plan, dry run or finalize SHALL change the recorded state of the workspace's files — a prep execution that
+geotag's plan runs ({need}`RUL-auto_reprep_moves_no_media`) being prep's execution, not planning.
 :::
 
 :::{rul} An interrupted execution's own work passes
@@ -4026,7 +4033,7 @@ A workspace SHALL lie on a local filesystem — on the machine's own disks or in
 network — whatever its configuration says.
 :::
 
-:::{rul} The workspace's filesystem is checked to be local first
+:::{rul} The workspace's filesystem is checked to be local before anything changes
 :id: RUL-local_filesystem_checked_first
 :status: ruled
 :criticality: high
@@ -4035,7 +4042,7 @@ network — whatever its configuration says.
 :refines: RUL-workspace_local_filesystem
 
 Every run of every phase on a workspace, and every save of the decision editor, SHALL check that the workspace lies on
-a local filesystem before it does anything else, its lock included.
+a local filesystem before it changes anything.
 :::
 
 :::{rul} A filesystem not known to be local stops the run
@@ -4069,9 +4076,9 @@ The report of a workspace not on a local filesystem SHALL name the filesystem's 
 :refines: RUL-filesystem_agnostic
 :uses: DEF-filesystem_requirements
 
-Every run of every phase on a workspace, and every save of the decision editor, SHALL try on the workspace's
-filesystem each thing {need}`DEF-filesystem_requirements` names, before it does anything else but check that the
-filesystem is local — never taking it as done because an earlier run found it so.
+Every run of every phase on a workspace, and every save of the decision editor, SHALL try on the workspace's filesystem
+each thing {need}`DEF-filesystem_requirements` names, before it changes anything — never taking it as done because an
+earlier run found it so.
 :::
 
 :::{rul} A filesystem lacking one stops the run
