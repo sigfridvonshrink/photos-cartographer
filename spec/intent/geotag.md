@@ -2078,6 +2078,29 @@ A destination whose inherited fallback the user accepted SHALL take the fallback
 
 ## 17. The corrected time
 
+:::{def} A corrected time
+:id: DEF-corrected_time
+:status: ruled
+:uses: DEF-geotag, DEF-recorded_time
+
+A photo's time is **corrected** when geotag writes its true time into the photo, the photo holding another, and stays
+corrected once written: a time geotag wrote on an earlier run is a corrected one. A true time the photo already holds
+is resolved, not corrected.
+:::
+
+:::{rul} Only a corrected time is marked
+:id: RUL-only_corrected_time_marked
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+:refines: RUL-mutate_on_difference
+:uses: DEF-geotag, DEF-corrected_time
+
+Geotag SHALL NOT record in a photo that its time was corrected unless the time is corrected: a photo already holding
+its true time, its position and its name gets no operation.
+:::
+
 :::{rul} The corrected time is written as the destination's local time
 :id: RUL-corrected_time_written_local
 :status: ruled

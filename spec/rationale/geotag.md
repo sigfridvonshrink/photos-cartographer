@@ -1096,6 +1096,20 @@ Completeness is bought with precision that varies: one photo sits on a track poi
 
 ## 17. The corrected time
 
+:::{rat} Only a time geotag wrote is marked as corrected
+:id: RAT-only_corrected_time_marked
+:status: ruled
+:forced: no
+:follows_from: RAT-no_redo_to_be_safe, RAT-mark_in_the_file
+:justifies: RUL-only_corrected_time_marked
+
+An original is touched only where it needs to be. A photo already holding its true time — a phone keeping the
+network's local time, beside its own position — needs nothing from geotag; marking it would write to it for nothing,
+and the mark would tell digiKam, and every reader after it, that a time was fixed which geotag never touched. So the
+mark goes only on a photo whose time geotag writes, or wrote on an earlier run. Left unmarked, the other is decided
+from its own values again on every re-run, and comes to the same: nothing to write.
+:::
+
 :::{rat} The time a person would have read on the wall
 :id: RAT-time_written_as_lived
 :status: ruled

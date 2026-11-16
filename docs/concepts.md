@@ -411,7 +411,10 @@ log records what it removed. One without is placed by the first of:
 A photo none of these places waits in the editor's GPS worklist, with why the tracks didn't place it,
 until you give it a position or leave it unlocated. Every position geotag writes says in the photo
 (`GPSProcessingMethod`) how it was found — `matched`, `interpolated`, `extrapolated`, or set by you
-(`manual_locked`, `manual_fallback`) — and `geotag finalize` prints the count of each.
+(`manual_locked`, `manual_fallback`) — and `geotag finalize` prints the count of each. A photo whose
+time geotag writes and whose position it leaves as it is gets `+carto-time` appended to that field instead,
+the device's own value kept before it. A photo already holding its true time — a phone keeping the local
+time, say — has nothing written, no mark either: geotag never touches an original that needs nothing.
 
 The tracks are read from `gpx_root`: every `*.gpx` file beneath it. Each file is one device's record,
 and each track in a file a track of its own: no photo is placed, and no clock found, from points of two

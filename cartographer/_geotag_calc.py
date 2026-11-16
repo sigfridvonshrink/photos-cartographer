@@ -1883,9 +1883,10 @@ _GPS_OP_MARKER = {"gpx_interpolation": "interpolated", "gpx_extrapolation": "ext
 # (`extrapolated`). Keyed by place_gps's method.
 _TRACK_MARKER = {"direct_match": "matched", "interpolated": "interpolated", "extrapolated": "extrapolated"}
 # What geotag records in GPSProcessingMethod. A bare position marker means geotag set the position
-# and so fixed the time too; a re-run ignores the position and places the file again. The suffix,
-# appended to whatever the field held (the device's own value, or nothing), means geotag fixed the
-# time and kept the device's GPS or has set none. Anything else is the device's own: GPS native.
+# at the photo's true time — written, or already held; a re-run ignores the position and places the file again.
+# The suffix, appended to whatever the field held (the device's own value, or nothing), means geotag wrote the
+# time and kept the device's GPS or has set none — never on a photo whose time it did not write
+# (RUL-only_corrected_time_marked). Anything else is the device's own: GPS native.
 POSITION_MARKERS = ("matched", "interpolated", "extrapolated", "manual_locked", "manual_fallback")
 TIME_FIXED_SUFFIX = "+carto-time"   # EXIF sets no length on the field; a JPEG's whole EXIF block is 64 KB
 
@@ -2125,15 +2126,18 @@ def plan_file_ops(file, resolved_utc, tz, gps_category, gps_coord, rename):
     ops = []
 
     held = held_values(file)                      # what the file holds now: the comparison side
-    marker = file.get("geotag_marker")            # the decision side: geotag's mark on the basis values
-    time_corrected = bool(marker)                 # geotag wrote this file's time on an earlier run
+    # Corrected is the time geotag writes, never merely the one resolved (DEF-corrected_time): marked only when this
+    # plan writes it, or when the field the photo holds already carries geotag's mark from an earlier run. A photo
+    # holding its true time already is decided from its own values again on a re-run, with the same result: nothing
+    # to write (RUL-only_corrected_time_marked).
+    time_corrected = geotag_marker(held.get("method")) is not None
     dto, off = _local_time_and_offset(resolved_utc, tz)
     if dto is not None:
         writes = {"DateTimeOriginal": dto, "OffsetTimeOriginal": off}   # a local time always comes with its offset
         writes.update(_other_time_writes(held, dto, off))
-        time_corrected = True
         if any(held.get(k) != v for k, v in writes.items()):         # already held -> nothing to write
             ops.append(_make_op("metadata_time_write", rel, "corrected capture time", {"writes": writes}, pre))
+            time_corrected = True
 
     if gps_category in _GPS_OP_ORIGIN and gps_coord is not None:
         new_marker = _TRACK_MARKER.get(gps_coord.get("method")) or _GPS_OP_MARKER[gps_category]
