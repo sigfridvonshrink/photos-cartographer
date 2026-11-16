@@ -387,6 +387,24 @@ time is itself one the zone skips or repeats, none is proposed: type it.
 
 ---
 
+## The names geotag gives
+
+Prep names a file by the time its camera recorded — a provisional name. Geotag renames each photo it
+corrects to its corrected time, in its destination's local time, with a `-001`, `-002`, … suffix where
+another photo has that name.
+
+- **A JPEG set aside beside its RAW** (in `3-redundant-jpgs/`) is renamed with its RAW, to the RAW's new
+  name with its own `.jpg`: a rename only, nothing written into it, the one change geotag makes outside
+  `6-photos-by-dest/`. Prep records which RAW each JPEG was set aside beside when it sets it aside, so the
+  pair is known exactly, whatever their names. A JPEG whose RAW is not in `6-photos-by-dest/`, or not
+  renamed, keeps its name. Prep's later runs take the JPEG's new name, its RAW's, as rightly given.
+- **A video keeps the name prep gave it** — its camera's time, uncorrected — for good. Videos are not
+  sorted into destinations, so there is no zone to correct their names by; one guessed from the camera's
+  day would be wrong on a day spent in two zones. A camera left on home time therefore names its videos
+  hours away from its photos of the same minutes.
+
+---
+
 ## Placing each photo
 
 GPS is placed only once every photo's true time is resolved. A photo keeps its own GPS position — unless you

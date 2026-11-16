@@ -60,10 +60,11 @@ execute compares the plan's `metadata_field_set_version` likewise ({need}`BLD-ge
 :::{bld} Geotag's file model
 :id: BLD-geotag_file_model
 :status: ruled
-:realises: RUL-geotag_changes_only_by_dest
+:realises: RUL-geotag_changes_only_by_dest, RUL-video_name_stays_uncorrected
 
 Geotag's `build_file_model` SHALL take, from the handoff, only the records whose `folder_class` is `6-photos-by-dest`
-and whose `media_class` is `image` or `raw`; every operation of `photos-24-executable-plan.json` names one of them.
+and whose `media_class` is `image` or `raw`; every operation of `photos-24-executable-plan.json` names one of them, but
+the renames of the JPEGs set aside beside them ({need}`BLD-set_aside_renamed_with_raw`).
 :::
 
 ## 6. Human decision field rule
@@ -695,7 +696,23 @@ whose name already carries its timestamp, suffix and all, and ends with a lowerc
 name carries its timestamp but whose extension is not lowercase that name with its extension lowercased, unless
 another photo there holds the name case folded; and give any other the first free name of its timestamp by
 `allocate_suffix`, adding it to the names taken. Every planned name ends with the photo's extension in lowercase.
-Execution applies these renames and no other, each by a no-clobber move.
+Execution applies these renames, and those of {need}`BLD-set_aside_renamed_with_raw`, and no other, each by a
+no-clobber move.
+:::
+
+:::{bld} A set-aside JPEG renamed with its RAW
+:id: BLD-set_aside_renamed_with_raw
+:status: ruled
+:realises: RUL-set_aside_jpeg_renamed_with_raw, RUL-set_aside_jpeg_only_renamed
+
+For each photo whose `rename_no_clobber` the plan holds, `build_executable_plan` SHALL add a `rename_no_clobber` of each
+handoff record in `3-redundant-jpgs` whose `raw_fingerprint` is the photo's fingerprint
+({need}`BLD-set_aside_pair_recorded`) and which is on disk at its recorded size and time: to the photo's new name,
+extension aside, with the JPEG's own extension in lowercase; `follows` naming the photo's rename; its preconditions
+among the plan's `media_preconditions`. None is added where the JPEG holds that name, or where another file in
+`3-redundant-jpgs` holds it or is given it, case folded: the JPEG is left as it is. Execution applies such a rename
+after every other photo's operations, and only where the rename it follows is confirmed; it writes no tag. Finalize
+records it in the JPEG's own entry of `photos-26`, with the JPEG's `geotag_path`.
 :::
 
 :::{bld} A change of case alone goes by a temporary name

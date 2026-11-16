@@ -67,6 +67,35 @@ the pipeline does not place them, and a tag written into one would be a guess. S
 the user's statement that it is ready.
 :::
 
+:::{rat} A pair keeps one name
+:id: RAT-pair_keeps_one_name
+:status: ruled
+:forced: no
+:follows_from: RAT-redundant_named_like_its_raw, RAT-only_sorted_is_ready
+:justifies: RUL-set_aside_jpeg_renamed_with_raw, RUL-set_aside_jpeg_only_renamed, RUL-set_aside_jpeg_named_as_raw
+
+A JPEG set aside beside its RAW is the same shot, named like it so that the two names show it. Once geotag corrects the
+RAW's name, a JPEG left under the camera's time names another moment — eight hours away, for a camera left on home
+time — and the pair no longer shows. Prep knows the pair when it sets the JPEG aside, so it records it, and the rename
+rests on that record, never on a likeness of names, which a suffix given to one and not the other already breaks. A
+rename is all: the JPEG is a copy nobody uses, no time or position is decided for it, and a tag written into it would be
+a guess. Renamed so, its name is its RAW's and no longer its own recorded time, and prep takes it as given.
+:::
+
+:::{rat} A video has no zone to correct its name by
+:id: RAT-video_name_uncorrected
+:status: ruled
+:forced: no
+:follows_from: RAT-only_sorted_is_ready
+:justifies: RUL-video_name_stays_uncorrected
+
+A name is corrected to its destination's local time, and a video has no destination: videos are not sorted into
+destinations, so there is no zone to read a corrected time in. A zone guessed from the photos of the camera's day goes
+wrong on a day spread over two destinations of different zones — the video would be named in the wrong one, under a
+name that looks corrected. Its camera's time, uncorrected, is at least what it says it is. Placing videos in
+destinations, and then correcting their names, is another piece of work.
+:::
+
 :::{rat} No identity, no change
 :id: RAT-no_identity_no_change
 :status: ruled

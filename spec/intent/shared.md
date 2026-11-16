@@ -1407,6 +1407,18 @@ A JPG prep sets aside as redundant to its RAW SHALL get its timestamp name, or w
 as any file prep files does.
 :::
 
+:::{rul} A set-aside JPEG may carry its RAW's name
+:id: RUL-set_aside_jpeg_named_as_raw
+:status: ruled
+:criticality: med
+:anti: yes
+:verify: required
+:refines: RUL-misnamed_file_stops_prep
+:uses: RUL-set_aside_jpeg_renamed_with_raw
+
+A JPEG set aside beside its RAW that carries that RAW's name, extension aside, SHALL NOT stop prep as misnamed.
+:::
+
 :::{rul} The format is fixed once files are named in it
 :id: RUL-format_fixed_once_named
 :status: ruled

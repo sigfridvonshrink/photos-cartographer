@@ -92,6 +92,32 @@ def test_media_journey_keyed_by_fingerprint(tmp_path, monkeypatch):
     assert all(s.get("run") for s in entry["journey"])     # each step attributed to its run
 
 
+@pytest.mark.spec("BLD-set_aside_pair_recorded", test="TST-prep_log-set_aside_jpeg_names_its_raw")
+def test_set_aside_jpeg_names_its_raw(tmp_path, monkeypatch):
+    """A JPEG set aside beside its RAW names that RAW by fingerprint, in its step of the log and in its record of the
+    handoff — however the two were named. One set aside beside two RAWs of its name names neither."""
+    _install(monkeypatch)
+    ws = _ws(tmp_path)
+    (ws / "0-sources" / "a").mkdir()
+    (ws / "0-sources" / "b").mkdir()
+    (ws / "0-sources" / "a" / "DSC_1.ARW").write_bytes(b"RAW1")
+    (ws / "0-sources" / "a" / "DSC_1.JPG").write_bytes(b"JPG1")
+    (ws / "0-sources" / "b" / "DSC_2.ARW").write_bytes(b"RAW2")
+    (ws / "0-sources" / "b" / "DSC_2.DNG").write_bytes(b"DNG2")
+    (ws / "0-sources" / "b" / "DSC_2.JPG").write_bytes(b"JPG2")
+    _run(ws)
+    fp = {k: "sig-" + v.hex()[:16] for k, v in {"raw1": b"RAW1", "jpg1": b"JPG1", "jpg2": b"JPG2"}.items()}
+    steps = {f: [s for s in e["journey"] if s["action"] == "redundant_jpeg_separated"]
+             for f, e in _log(ws)["photos"].items()}
+    assert steps[fp["jpg1"]][0]["raw_fingerprint"] == fp["raw1"]
+    assert "raw_fingerprint" not in steps[fp["jpg2"]][0]
+    with open(utils.handoff_path(str(ws))) as f:
+        aside = {json.loads(r["content_hash"])["value"]: r for r in json.load(f)["files"]
+                 if r["folder_class"] == "3-redundant-jpgs"}
+    assert aside[fp["jpg1"]]["raw_fingerprint"] == fp["raw1"] and "raw_fingerprint" not in aside[fp["jpg2"]]
+    assert prep.set_aside_partners(_log(ws)["photos"]) == {fp["jpg1"]: fp["raw1"]}
+
+
 @pytest.mark.spec("RUL-prep_log_records_set_aside", "BLD-quarantine_layout", test="TST-prep_log-quarantined_duplicate_recorded")
 def test_quarantined_duplicate_recorded(tmp_path, monkeypatch):
     _install(monkeypatch)

@@ -131,6 +131,7 @@ __all__ = [
     '_dest_label',
     'destination_local_basename',
     'plan_renames',
+    'plan_set_aside_rename',
     '_GPS_OP_ORIGIN',
     '_GPS_OP_MARKER',
     '_TRACK_MARKER',
@@ -1866,6 +1867,24 @@ def plan_renames(files, fmt):
     return out
 
 
+def plan_set_aside_rename(raw_rename, jpeg, taken):
+    """The rename of a JPEG prep set aside beside a RAW, made with that RAW's rename operation `raw_rename`
+    (BLD-set_aside_renamed_with_raw): to the RAW's new name, extension aside, the JPEG's own extension in lowercase — a
+    rename only, which `follows` the RAW's and is applied after it. None where the JPEG holds that name already, or
+    where a file in redundant JPEGs holds it or is given it (`taken`, case folded, the name added once given): the JPEG
+    is then left as it is."""
+    rel = jpeg["relative_path"]
+    name = os.path.basename(rel)
+    to = os.path.splitext(raw_rename["to"])[0] + os.path.splitext(name)[1].lower()
+    if to.lower() == name.lower() or to.lower() in taken:
+        return None
+    taken.add(to.lower())
+    pre = {"content_fingerprint": jpeg.get("content_fingerprint"),
+           "size": jpeg.get("size"), "mtime_ns": jpeg.get("mtime_ns")}
+    return _make_op("rename_no_clobber", rel, "renamed with its RAW",
+                    {"from": name, "to": to, "follows": raw_rename["operation_id"]}, pre)
+
+
 # ============================================================================
 # Stage 9 — executable plan operations (BLD-executable_plan). Pure op builders so
 # the op list is deterministic and exhaustively unit-testable. Automatic GPS is
@@ -2407,6 +2426,29 @@ def build_complete_log(prep_photos, files, resolved_rows, time_artifact, plan, e
         renamed = [s["to"] for s in steps if s.get("phase") == "geotag" and s.get("action") == "final_rename"
                    and s.get("to")]
         entry["geotag_path"] = os.path.join(os.path.dirname(rel), renamed[-1]) if renamed else rel
+
+    # A JPEG set aside beside its RAW and renamed with it: its renames, this pass's and the earlier ones', in its own
+    # record (BLD-set_aside_renamed_with_raw).
+    in_model = {f.get("content_fingerprint") for f in files}
+    aside = {}
+    for p in [p for p, _confirmed in earlier_passes] + [plan]:
+        for dd in (p.get("destinations") or {}).values():
+            for op in dd.get("operations") or []:
+                fp = (op.get("preconditions") or {}).get("content_fingerprint")
+                if op.get("follows") and fp and fp not in in_model:
+                    aside[fp] = op["relative_path"]
+    for fp, rel in sorted(aside.items()):
+        entry = photos.setdefault(fp, {"content_fingerprint": fp, "journey": []})
+        steps = entry.setdefault("journey", [])
+        for past in earlier:
+            steps.extend(past.get(fp) or [])
+        start = len(steps)
+        steps.extend(_gps_and_rename_steps(ops_by_fp.get(fp) or [], native=False))
+        if run:
+            steps[start:] = [dict(s, run=run) for s in steps[start:]]
+        renamed = [s["to"] for s in steps if s.get("phase") == "geotag" and s.get("action") == "final_rename"]
+        if renamed:
+            entry["geotag_path"] = os.path.join(os.path.dirname(rel), renamed[-1])
     return photos
 
 

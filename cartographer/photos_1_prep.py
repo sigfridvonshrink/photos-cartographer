@@ -161,6 +161,27 @@ def read_prior_prep_log(workspace_root):
     return photos
 
 
+def _fingerprint_value(content_hash):
+    """The fingerprint value a database row's `content_hash` holds, or None."""
+    if not content_hash:
+        return None
+    try:
+        return json.loads(content_hash).get("value")
+    except Exception:
+        return None
+
+
+def set_aside_partners(log_photos) -> dict:
+    """{fingerprint of a JPEG set aside beside its RAW: that RAW's fingerprint}, from the prep log's photos
+    (BLD-set_aside_pair_recorded): each JPEG's latest `redundant_jpeg_separated` step that names its RAW."""
+    out = {}
+    for fp, entry in (log_photos or {}).items():
+        for step in (entry or {}).get("journey") or []:
+            if step.get("action") == "redundant_jpeg_separated" and step.get("raw_fingerprint"):
+                out[fp] = step["raw_fingerprint"]
+    return out
+
+
 def read_prior_workspace_changes(workspace_root) -> list:
     """The earlier prep log's `workspace_changes` — the changes by hand earlier runs named or accepted
     (BLD-workspace_changes_logged) — [] where there is no log yet. Read after `read_prior_prep_log` has found the log
@@ -218,7 +239,10 @@ def build_prep_log(prior_photos, operations, cache_files, quarantine_evidence, r
         elif "Initialize: move base dump into sources" in reason:
             j["steps"].append(_step("consolidated_into_sources", **{"from": src, "to": dst}))
         elif "Separate redundant JPG" in reason:
-            j["steps"].append(_step("redundant_jpeg_separated", **{"from": src, "to": dst}))
+            # the RAW it was set aside beside, by fingerprint: the pair, known exactly (BLD-set_aside_pair_recorded)
+            raw = (op.verification or {}).get("raw_fingerprint")
+            j["steps"].append(_step("redundant_jpeg_separated", **{"from": src, "to": dst},
+                                    **({"raw_fingerprint": raw} if raw else {})))
         elif "Chronological Organization" in reason:
             # every move and rename names where the photo came from as well as where it went (BLD-log_format)
             j["steps"].append(_step("organized", **{"from": src, "to": dst.split('/', 1)[0] + "/"}))
@@ -227,13 +251,7 @@ def build_prep_log(prior_photos, operations, cache_files, quarantine_evidence, r
         j["current"] = dst
 
     def _fp(row):
-        ch = row.get("content_hash")
-        if not ch:
-            return None
-        try:
-            return json.loads(ch).get("value")
-        except Exception:
-            return None
+        return _fingerprint_value(row.get("content_hash"))
 
     # 2. Index the final cache rows by fingerprint -> current path (media only).
     fp_to_current = {}
@@ -1001,6 +1019,13 @@ class PlanExecutor:
                     log_photos, log_warnings = build_prep_log(
                         prior_photos, plan.operations, cache.get_all_files(),
                         quarantine_evidence, plan.plan_id, prior_record)
+                    # Each set-aside JPEG's record names the RAW it was set aside beside, by fingerprint, for geotag
+                    # to rename it with that RAW (BLD-set_aside_pair_recorded).
+                    _partners = set_aside_partners(log_photos)
+                    for rec in final_files:
+                        _raw = _partners.get(_fingerprint_value(rec.get("content_hash")))
+                        if rec.get("folder_class") == folder_name('redundant_jpgs') and _raw:
+                            rec["raw_fingerprint"] = _raw
                     # No per-run metadata at the top level: the log must be byte-identical on a
                     # no-op run (RUL-no_op_run). Run attribution lives per-step (the "run" field). The changes by
                     # hand the run's check named or accepted are added after the earlier runs'
@@ -1223,6 +1248,7 @@ class WorkspacePrepWorkflow:
         self.managed_folders = managed_folder_names(CONFIG)
         from .photos_utils import ProgressCoordinator
         self.coordinator = ProgressCoordinator()
+        self._raw_partners = {}             # set-aside JPEG -> its RAW, by fingerprint: read from the log at plan
 
     def _allocate_suffix(self, base: str, ext: str, index: set, start_idx: int = 1,
                          bare_first: bool = False) -> str:
@@ -2072,6 +2098,10 @@ class WorkspacePrepWorkflow:
 
         for (folder, name), group in base_groups.items():
             if any(f['media_class'] == 'raw' for f in group):
+                # The RAW it is set aside beside, recorded by fingerprint where there is one RAW of that name: geotag
+                # renames the JPEG with it (BLD-set_aside_pair_recorded). Beside two, which is its own is not known.
+                raws = [f for f in group if f['media_class'] == 'raw']
+                raw_fp = _fingerprint_value(raws[0].get('content_hash')) if len(raws) == 1 else None
                 for f in group:
                     if is_jpeg(f):
                         rel_path = st.current_paths[f['relative_path']]
@@ -2095,7 +2125,7 @@ class WorkspacePrepWorkflow:
                                 source=rel_path,
                                 destination=dest,
                                 preconditions={"size": f["size"], "mtime_ns": f["mtime_ns"]},
-                                verification={},
+                                verification={"raw_fingerprint": raw_fp} if raw_fp else {},
                                 database_effects_after_verification=[{"action": "remove", "relative_path": rel_path}, {"action": "upsert", "data": dict(f, relative_path=dest)}]
                             ))
                             st.current_paths[f['relative_path']] = dest
@@ -2250,6 +2280,14 @@ class WorkspacePrepWorkflow:
         stem = dt.strftime(CONFIG["filename_timestamp_format"])
         return None if carries_stem(name, stem) else stem + ext
 
+    def _named_as_its_raw(self, f, rel_path, raw_names):
+        """Whether a JPEG in redundant JPEGs carries the name of the RAW it was set aside beside, extension aside: the
+        name geotag gives it with its RAW (BLD-name_check). The pair is the prep log's; the RAW is found by its
+        fingerprint."""
+        partner = self._raw_partners.get(_fingerprint_value(f.get('content_hash')))
+        raw = raw_names.get(partner) if partner else None
+        return raw is not None and os.path.splitext(os.path.basename(rel_path))[0] == os.path.splitext(raw)[0]
+
     @staticmethod
     def _not_media_blocker(rel_path):
         """The blocker for a file of no media class outside the inbox (RUL-other_outside_inbox_blocks)."""
@@ -2285,6 +2323,10 @@ class WorkspacePrepWorkflow:
         recorded_fmt = self._recorded_filename_format()
         fmt_changed = recorded_fmt is not None and recorded_fmt != _fmt
         named_in_format = 0
+        # every file's name outside the inbox by its fingerprint: a set-aside JPEG's RAW is found by it
+        raw_names = {_fingerprint_value(f.get('content_hash')): os.path.basename(st.current_paths.get(
+                         f['relative_path'], f['relative_path']))
+                     for f in list(by_dest_files) + list(db_files) if f.get('media_class') == 'raw'}
 
         # By-dest is never organized by prep, but its names are checked like the rest.
         for f in by_dest_files:
@@ -2322,6 +2364,9 @@ class WorkspacePrepWorkflow:
                 if dt_named is not None:
                     named_in_format += 1
                 expected = None if fmt_changed else self._expected_name(rel_path, top, dt_named)
+                if expected is not None and top == folder_name('redundant_jpgs') and \
+                        self._named_as_its_raw(f, rel_path, raw_names):
+                    expected = None                        # renamed by geotag with its RAW (RUL-set_aside_jpeg_named_as_raw)
                 if expected is not None:
                     blockers.append(self._misnamed_blocker(rel_path, expected))
                 if top in _by_date_bands:
@@ -2583,8 +2628,10 @@ class WorkspacePrepWorkflow:
 
         # An earlier log that cannot be read stops the plan, naming it (RUL-unreadable_prep_log_stops).
         try:
-            read_prior_prep_log(self.workspace_root)
+            # each set-aside JPEG's RAW, by fingerprint: one geotag renamed with its RAW carries its name (BLD-name_check)
+            self._raw_partners = set_aside_partners(read_prior_prep_log(self.workspace_root))
         except ValueError as e:
+            self._raw_partners = {}
             blockers.append(str(e))
 
         self.coordinator.start_phase("planning - scanning inventory")

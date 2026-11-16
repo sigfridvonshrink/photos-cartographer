@@ -114,6 +114,43 @@ Geotag SHALL run prep's execution itself only where prep's plan moves, renames o
 Geotag SHALL never change a video.
 :::
 
+:::{rul} A video keeps the name prep gave it
+:id: RUL-video_name_stays_uncorrected
+:status: ruled
+:criticality: med
+:anti: yes
+:verify: required
+:refines: RUL-video_never_changed
+:uses: RUL-prep_name_provisional, RUL-geotag_name_final
+
+Geotag SHALL NOT correct a video's name: the name prep gives a video from its camera's clock, uncorrected, is final.
+:::
+
+:::{rul} A JPEG set aside beside its RAW is renamed with it
+:id: RUL-set_aside_jpeg_renamed_with_raw
+:status: ruled
+:criticality: med
+:verify: required
+:refines: RUL-geotag_changes_only_by_dest
+:uses: DEF-geotag, DEF-managed_folders, RUL-redundant_jpeg_set_aside
+
+Where geotag renames a RAW in photos by destination, it SHALL rename the JPEG prep set aside beside that RAW to the
+RAW's new name, extension aside — the one change geotag makes outside photos by destination.
+:::
+
+:::{rul} A set-aside JPEG is renamed, never written
+:id: RUL-set_aside_jpeg_only_renamed
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+:refines: RUL-set_aside_jpeg_renamed_with_raw
+:uses: DEF-geotag
+
+Geotag SHALL write nothing into a file outside photos by destination: a JPEG set aside beside its RAW is renamed, and
+no tag is written to it.
+:::
+
 ## 5. JSON artifact rule
 
 :::{rul} A decision stage reached writes its record
