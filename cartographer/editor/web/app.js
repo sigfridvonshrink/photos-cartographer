@@ -406,10 +406,10 @@ function previewEffective(ref) {
       return `${fmtOffset(u.manual_offset_seconds)} (${picked ? "GPS group, picked" : "manual"})`;
     }
     if (keepHolds(c)) return "as the phone records itself (its own GPS set aside)";
-    if (clockChangeHolds(c)) return `split where the clock changed: ${fmtOffset(c.clock_change.runs[0].offset_seconds)} before ` +
-      `${clockChangeAt(c)}, ${fmtOffset(c.clock_change.runs[1].offset_seconds)} from then`;
+    if (clockChangeHolds(c)) return `split where the clock changed: ${fmtOffset(c.clock_change.runs[0].offset_seconds)} before, ` +
+      `${fmtOffset(c.clock_change.runs[1].offset_seconds)} after`;
     if (u.accept_clock_change && c.clock_change && !clockChangeHolds(c))
-      return (c.clock_change.between || []).length && !clockChangeAt(c) ? "— (say which photo was the first after the change)"
+      return !clockChangePartsGiven(c) ? "— (say which part each photo without GPS belongs to)"
         : "— (accepted another change — accept again)";
     if (acceptHolds(c) && p.far_from_evidence) return "— (accepting is not enough here — set the offset)";
     if (acceptHolds(c) && inConflict(c)) return "— (an acceptance is withheld here — take the offset as your own)";
@@ -1549,12 +1549,17 @@ function offsetCellNotes(c) {
   return out;
 }
 // A day with no anchor of its own offered the offset the camera's GPS gave the day before or after it here (photos-21
-// proposal_source "neighbour_day", BLD-neighbour_day_proposal): to accept, then checked in the Drift view. Pure.
-function neighbourDayNote(p) {
+// proposal_source "neighbour_day", BLD-neighbour_day_proposal): asked once, as a timezone's guess is — with tracks by
+// its photos it takes effect unconfirmed and is confirmed in the Drift view, nothing to accept here; else accepted
+// here. Pure.
+function neighbourDayNote(p, eff) {
   const n = (p && p.neighbour_day) || {};
   return `No photo of this day has its own position, but the camera's GPS fixed its clock on ${fmtDate(n.day)} here: ` +
-    `${fmtOffset(p.proposed_offset_seconds)}. A camera's midnight in the middle of an outing splits it in two — accept it if ` +
-    "the clock was not set in between; the Drift view then checks it on the tracks.";
+    `${fmtOffset(p.proposed_offset_seconds)}. A camera's midnight in the middle of an outing splits it in two — ` +
+    ((eff && eff.source) === "neighbour_day_unconfirmed"
+      ? "tracks lie by these photos, so it is checked against them: confirm it in the Drift view if the clock was not " +
+        "set in between; nothing to accept here."
+      : "accept it if the clock was not set in between.");
 }
 // Why the times the photos' own GPS fixes recorded say nothing of the clock here (gps_time_set_aside,
 // BLD-gps_time_proposal): a stale fix repeating its time, or readings that disagree.
@@ -1568,58 +1573,62 @@ function gpsTimeAsideNote(a) {
     "too far apart to be one clock — so the fixes' times are not read as the clock.";
 }
 // A camera's clock changed during the day (photos-21 clock_change, BLD-clock_change_split): its photos with their own
-// position fall into two runs, each agreeing on its own offset. The answer, on the day's cell: accept the split, naming
-// the two offsets accepted (accepted_change_offsets_seconds) — and, where photos with no GPS lie between the runs, which
-// of them was the first after the change (first_after_change, its camera time). Pure — unit-tested.
-const naiveMs = (s) => camNaiveMs(s);
-function clockChangeAt(c) {
-  const ch = (c && c.clock_change) || {}, u = (c && c.user_decision) || {}, runs = ch.runs || [];
-  if (runs.length !== 2) return "";
-  if (!(ch.between || []).length) return runs[1].first.camera_source_naive_time;
-  const at = naiveMs(u.first_after_change), lo = naiveMs(runs[0].last.camera_source_naive_time),
-    hi = naiveMs(runs[1].first.camera_source_naive_time);
-  return at != null && lo != null && hi != null && lo < at && at <= hi ? u.first_after_change : "";
+// position, in the order of the true times their GPS gives them, fall into two runs, each agreeing on its own offset.
+// The answer, on the day's cell: accept the split, naming the two offsets accepted (accepted_change_offsets_seconds) —
+// and, for each photo without GPS that either part could have taken, or neither (clock_change.unsettled), the part it
+// belongs to (photo_parts, by its source file: 1 or 2). Pure — unit-tested.
+function clockChangePartsGiven(c) {
+  const ch = (c && c.clock_change) || {}, parts = ((c && c.user_decision) || {}).photo_parts || {};
+  return (ch.unsettled || []).every((p) => parts[p.source_file] === 1 || parts[p.source_file] === 2);
 }
 function clockChangeHolds(c) {
   const ch = c && c.clock_change, u = (c && c.user_decision) || {};
   if (!ch || u.accept_clock_change !== true || (u.manual_offset_seconds !== "" && u.manual_offset_seconds != null)) return false;
   const offs = u.accepted_change_offsets_seconds, tol = ch.acceptance_tolerance_seconds || 0;
   return Array.isArray(offs) && offs.length === 2
-    && offs.every((o, i) => isNum(o) && Math.abs(o - ch.runs[i].offset_seconds) <= tol) && !!clockChangeAt(c);
+    && offs.every((o, i) => isNum(o) && Math.abs(o - ch.runs[i].offset_seconds) <= tol) && clockChangePartsGiven(c);
 }
-// The decision fields of splitting the day (or not): accepting names the runs' offsets, and the first photo after the
-// change where one is asked; the day's own offset answers are cleared, a split replacing them.
-function clockChangeFields(c, on, first = "") {
+// The decision fields of splitting the day (or not): accepting names the runs' offsets, keeping the parts given so
+// far; the day's own offset answers are cleared, a split replacing them.
+function clockChangeFields(c, on, parts = {}) {
   const runs = ((c && c.clock_change) || {}).runs || [];
   return on ? { accept_clock_change: true, accepted_change_offsets_seconds: runs.map((r) => r.offset_seconds),
-    first_after_change: first, accept_proposal: false, accepted_offset_seconds: "", manual_offset_seconds: "" }
-    : { accept_clock_change: false, accepted_change_offsets_seconds: "", first_after_change: "" };
+    photo_parts: { ...parts }, accept_proposal: false, accepted_offset_seconds: "", manual_offset_seconds: "" }
+    : { accept_clock_change: false, accepted_change_offsets_seconds: "", photo_parts: {} };
+}
+// One photo's part given (1 or 2), the others' kept: the cell's new photo_parts.
+function clockChangePart(c, file, part) {
+  return { ...(((c && c.user_decision) || {}).photo_parts || {}), [file]: part };
 }
 function clockChangeControls(ref) {
   const c = workCell(ref), u = c.user_decision || {}, ch = c.clock_change, wrap = el("div", { class: "pblock" });
   const [a, b] = ch.runs, by = ch.evidence === "gps_time" ? "the times their GPS fixes recorded" : "their positions on the tracks";
   wrap.append(el("h3", {}, "The camera's clock changed this day"));
   wrap.append(el("div", { class: "hint warn" }, `By ${by}, ${a.photos} photo${a.photos === 1 ? "" : "s"} up to ${leaf(a.last.source_file)} ` +
-    `(${a.last.camera_source_naive_time}) give ${fmtOffset(a.offset_seconds)}, and ${b.photos} from ${leaf(b.first.source_file)} ` +
-    `(${b.first.camera_source_naive_time}) give ${fmtOffset(b.offset_seconds)}: the clock was set between them. Split the day there, ` +
-    "each part corrected by its own photos — or, if the clock did not change, answer the day's offset below."));
+    `(camera ${a.last.camera_source_naive_time}, ${a.last.real_utc}) give ${fmtOffset(a.offset_seconds)}, and ${b.photos} from ` +
+    `${leaf(b.first.source_file)} (camera ${b.first.camera_source_naive_time}, ${b.first.real_utc}) give ${fmtOffset(b.offset_seconds)}: ` +
+    "the clock was set between them. Split the day there, each part corrected by its own photos — or, if the clock did not " +
+    "change, answer the day's offset below."));
   const on = u.accept_clock_change === true;
-  wrap.append(checkbox("split the day where the clock changed", on, (v) => { state.offsetEdit = null; editMany(ref, clockChangeFields(c, v, u.first_after_change || "")); }));
-  const between = ch.between || [];
-  if (on && between.length) {
-    wrap.append(el("div", { class: "hint" }, `${between.length} photo${between.length === 1 ? "" : "s"} without GPS lie between the two: ` +
-      "which was the first after the change?"));
-    const opts = [...between, { source_file: b.first.source_file, camera_source_naive_time: b.first.camera_source_naive_time, none: true }];
-    for (const o of opts) {
-      const sel = u.first_after_change === o.camera_source_naive_time;
-      wrap.append(el("div", { class: "off-opt" + (sel ? " on" : ""), onclick: () => edit(ref, "first_after_change", o.camera_source_naive_time) },
-        el("span", { class: "off-dot" }, sel ? "●" : "○"),
-        el("span", {}, o.none ? `none of them — ${leaf(o.source_file)} (${o.camera_source_naive_time}), the second run's first`
-          : `${leaf(o.source_file)} (${o.camera_source_naive_time})`)));
+  wrap.append(checkbox("split the day where the clock changed", on, (v) => { state.offsetEdit = null; editMany(ref, clockChangeFields(c, v, u.photo_parts || {})); }));
+  const unsettled = ch.unsettled || [];
+  if (on && unsettled.length) {
+    // a clock set back shows an hour twice: no one camera time divides these photos, so each is given its part
+    wrap.append(el("div", { class: "hint" }, `${unsettled.length} photo${unsettled.length === 1 ? "" : "s"} without GPS could ` +
+      "belong to either part by their camera time (or fit neither): say for each whether it was taken before the change or after it."));
+    const parts = u.photo_parts || {};
+    for (const p of unsettled) {
+      const row = el("div", { class: "off-opt" }, el("span", {}, `${leaf(p.source_file)} (camera ${p.camera_source_naive_time}): `));
+      for (const [n, label] of [[1, `before (${fmtOffset(a.offset_seconds)})`], [2, `after (${fmtOffset(b.offset_seconds)})`]]) {
+        const sel = parts[p.source_file] === n;
+        row.append(el("span", { class: "off-opt" + (sel ? " on" : ""), onclick: () => edit(ref, "photo_parts", clockChangePart(c, p.source_file, n)) },
+          el("span", { class: "off-dot" }, sel ? "●" : "○"), el("span", {}, ` ${label} `)));
+      }
+      wrap.append(row);
     }
   }
-  if (on && !clockChangeHolds(c)) wrap.append(el("div", { class: "hint warn" }, between.length && !clockChangeAt(c)
-    ? "Say which photo was the first after the change." : "Accepted for other offsets than the photos now give — accept again."));
+  if (on && !clockChangeHolds(c)) wrap.append(el("div", { class: "hint warn" }, !clockChangePartsGiven(c)
+    ? "Say which part each photo above belongs to." : "Accepted for other offsets than the photos now give — accept again."));
   return wrap;
 }
 // A phone's day kept as its photos record themselves (photos-21 user_decision.keep_as_recorded, BLD-phone_offset_cell):
@@ -1847,7 +1856,7 @@ function offsetProposalBlock(ref, p) {
   }
   if (p.proposal_source === "neighbour_day") return el("div", { class: "pblock" },
     el("h3", {}, "Proposal — the day next to it"), el("div", { class: "prop-head" }, fmtOffset(p.proposed_offset_seconds)),
-    el("div", { class: "hint" }, neighbourDayNote(p)));
+    el("div", { class: "hint" }, neighbourDayNote(p, workCell(ref)?.effective_time_anchor)));
   if (p.proposal_source !== "gpx_self_anchor") return jsonBlock("Proposal", p);
   const tz = previewTz(ref.dest)?.tz;
   const wrap = el("div", { class: "pblock" }, el("h3", {}, "Proposal — suggested clock correction"),
@@ -2060,7 +2069,7 @@ export {
   offsetGroups, dateRange, fmtDate, peerKeys, parseLatLon, coordText, contiguousRange,
   groupChoice, chosenOffset, inConflict, proposalTaken, proposalNotes, driftConfirmHolds, driftConfirmFields, driftCorrectionFields, driftTracksHold, driftStaleReason, acceptFields, acceptHolds, tracksNote,
   zoneContradiction, offsetCellNotes, zoneSpokenFor, zoneDespiteFields, effectiveCountry, clearCountriesInside,
-  clockChangeHolds, clockChangeAt, clockChangeFields, contradictedNote, takeTrackPosition, neighbourDayNote,
+  clockChangeHolds, clockChangePartsGiven, clockChangeFields, clockChangePart, contradictedNote, takeTrackPosition, neighbourDayNote,
   scrubOffset, scrubSeedIndex, mapKeyFor, savePayload,
   ambiguousTimeNote, gpsTimeAsideNote, zoneOffer, validReading, keepHolds, keepFields, keepOffered, phoneNote,
   trueInstant, parseUtcOff, mismatchAccepted, recordAbsentText, DEVICE_CLASSES, changedHolds, changedFields, changedKeepLabel, keptTagNote, unidentifiedHolds, unidentifiedFields, loadRefusal, hasUnsavedEdits, utcOff,

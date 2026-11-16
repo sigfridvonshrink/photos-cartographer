@@ -75,7 +75,7 @@ GEOTAG_DB_SNAPSHOT = "photos-26-geotag-ingest.db"
 ARCHIVE_MANIFEST_ARTIFACT = "photos-26-archive-manifest.json"
 ARCHIVE_ARTIFACT = "photos-26-archive.tar.gz"
 # The fields of a day's offset cell that answer a proposed change of the camera's clock (BLD-clock_change_split).
-CLOCK_CHANGE_FIELDS = ("accept_clock_change", "accepted_change_offsets_seconds", "first_after_change")
+CLOCK_CHANGE_FIELDS = ("accept_clock_change", "accepted_change_offsets_seconds", "photo_parts")
 EXECUTED_DIR = "executed"            # executed/<plan id>/: the decision records each executed plan ran against
 GPX_WARNINGS_SHOWN = 10     # geotag plan prints at most this many GPX load warnings, then a count
 UNREADABLE_TAGS_SHOWN = 20  # geotag plan names at most this many photos whose offset tag holds no offset, then a count
@@ -1116,14 +1116,15 @@ class GeotagWorkflow:
     def _clock_change(self, dest, group, g, bucket, cell, prior_cell, frames, sel, gpx, blockers, tz, date, day):
         """A change of the camera's clock during its day here (BLD-clock_change_split), on the day's cell `cell`: the
         proposal `clock_change_proposal` makes from the photos' own GPS, recorded as `clock_change`, and the user's
-        answer — `accept_clock_change`, `accepted_change_offsets_seconds` (the two offsets accepted, in order) and, where
-        photos lie between the runs, `first_after_change` (the camera time of the first after the change). Accepted
-        while the two runs' offsets are those accepted, within `gpx_anchor_decision_tolerance_seconds`, and the change
-        placed, the day is split into its parts, returned as {key: cell} — `<bucket>#1` before the change and
-        `<bucket>#2` from it — each built from its own photos, its offset the one accepted for its run; the day's cell
-        asking nothing, its photos read by the parts (`offset_cell_key`). Else None, the day's cell as built — asking
-        which photo was the first after the change where it is not said, or said outside the runs."""
-        change = clock_change_proposal(frames, sel, gpx, CONFIG)
+        answer — `accept_clock_change`, `accepted_change_offsets_seconds` (the two offsets accepted, in order) and, for
+        each photo the runs leave unsettled, `photo_parts` (by its source file: 1 or 2, the part it belongs to). Accepted
+        while the two runs' offsets are those accepted, within `gpx_anchor_decision_tolerance_seconds`, and every
+        unsettled photo given its part, the day is split into its parts, returned as {key: cell} — `<bucket>#1` before
+        the change and `<bucket>#2` after it — each built from its own photos, its offset the one accepted for its run;
+        the day's cell asking nothing, its photos read by the parts (`offset_cell_key`). Else None, the day's cell as
+        built — asking the part of each unsettled photo not given one."""
+        found = clock_change_proposal(frames, sel, gpx, CONFIG)
+        change, settled = found if found is not None else (None, {})
         ud = prior_cell.get("user_decision") if isinstance(prior_cell.get("user_decision"), dict) else {}
         if change is None and not any(k in ud for k in CLOCK_CHANGE_FIELDS):
             return None
@@ -1131,9 +1132,9 @@ class GeotagWorkflow:
         accept = _decision_flag(ud, "accept_clock_change", where, blockers)
         offs = ud.get("accepted_change_offsets_seconds", "")
         offs = "" if offs is None else offs
-        first = ud.get("first_after_change", "")
-        first = "" if first is None else first
-        now = (" — the ones now proposed are " + " and ".join(str(r["offset_seconds"]) for r in change["runs"]) + "."
+        answers = ud.get("photo_parts", {})
+        answers = {} if answers in (None, "") else answers
+        now =(" — the ones now proposed are " + " and ".join(str(r["offset_seconds"]) for r in change["runs"]) + "."
                if change else "; no change is proposed now, so clear accept_clock_change.")
         if offs != "" and not (isinstance(offs, list) and len(offs) == 2
                                and all(_valid_offset(o) and not isinstance(o, bool) for o in offs)):
@@ -1142,12 +1143,13 @@ class GeotagWorkflow:
             offs = ""
         elif accept and offs == "":
             blockers.append(f"{where}.accepted_change_offsets_seconds must be the two offsets accepted" + now)
-        if first != "" and (not isinstance(first, str) or _parse_camera_naive(first) is None):
-            blockers.append(f"{where}.first_after_change must be the camera time of the first photo after the change, "
-                            "written YYYY:MM:DD HH:MM:SS.")
-            first = ""
+        if not (isinstance(answers, dict) and all(isinstance(k, str) and v in (1, 2) and not isinstance(v, bool)
+                                                  for k, v in answers.items())):
+            blockers.append(f"{where}.photo_parts must give each photo, by its source file, the part it belongs to: "
+                            "1 (before the change) or 2 (after it).")
+            answers = {}
         cell["user_decision"].update(accept_clock_change=accept, accepted_change_offsets_seconds=offs,
-                                     first_after_change=first)
+                                     photo_parts=answers)
         if change is not None:
             cell["clock_change"] = change
         if not accept or offs == "":
@@ -1158,24 +1160,17 @@ class GeotagWorkflow:
             return None
         if ud.get("manual_offset_seconds") not in ("", None):
             return None                             # one offset written for the whole day outranks the change
-        last = _parse_camera_naive(change["runs"][0]["last"]["camera_source_naive_time"])
-        split_at = change["runs"][1]["first"]["camera_source_naive_time"]
-        if change["between"]:
-            # photos with no evidence of their own lie between the runs: which was the first after the change is the
-            # user's to say (RUL-clock_change_first_after_asked)
-            at = _parse_camera_naive(first) if first else None
-            if at is None or not (last < at <= _parse_camera_naive(split_at)):
-                cell["stale_user_decision"] = bool(first)       # said for a time that is not between the runs now
-                cell["effective_time_anchor"], cell["requires_user_input"] = "", True
-                cell.pop("decision_mode", None)
-                return None
-            split_at = first
-        at = _parse_camera_naive(split_at)
+        # a photo with no evidence of its own that either part could have taken — a clock set back repeats camera
+        # times — or neither: its part is the user's to say (RUL-clock_change_unsettled_photo_asked)
+        if any(answers.get(p["source_file"]) not in (1, 2) for p in change["unsettled"]):
+            cell["effective_time_anchor"], cell["requires_user_input"] = "", True
+            cell.pop("decision_mode", None)
+            return None
+        photo_parts = dict(settled, **{p["source_file"]: answers[p["source_file"]] for p in change["unsettled"]})
         keys = [f"{bucket}#1", f"{bucket}#2"]
         parts = {}
         for i, key in enumerate(keys):
-            psel = [f for f in sel if (t := _parse_camera_naive(f.get("source_naive_time"))) is not None
-                    and (t >= at) == bool(i)]
+            psel = [f for f in sel if photo_parts.get(f["relative_path"]) == i + 1]
             rep = min((f.get("source_naive_time") for f in psel), default=None)
             accepted = {"user_decision": {"accept_proposal": True, "accepted_offset_seconds": int(offs[i]),
                                           "manual_offset_seconds": ""}}
@@ -1183,10 +1178,9 @@ class GeotagWorkflow:
                                      blockers, tz=tz, rep_naive=rep, date=date, day=day, photos=psel)
             # a part of the day, its offset its own photos' (RUL-clock_change_parts_own_evidence), answered by the
             # acceptance on the day's cell
-            part["clock_change_part"] = {"of": bucket, "part": i + 1, "from": split_at if i else "",
-                                         "until": "" if i else split_at}
+            part["clock_change_part"] = {"of": bucket, "part": i + 1, "photos": len(psel)}
             parts[key] = part
-        cell["clock_change"]["effective_split"] = {"first_after_change": split_at, "parts": keys}
+        cell["clock_change"]["effective_split"] = {"parts": keys, "photo_parts": dict(sorted(photo_parts.items()))}
         cell["effective_time_anchor"], cell["requires_user_input"], cell["stale_user_decision"] = "", False, False
         cell.pop("decision_mode", None)
         return parts
@@ -1457,8 +1451,9 @@ class GeotagWorkflow:
         `timezone_naive` or `manual_required`, none shared from the same day elsewhere — is proposed the offset of the day
         before, else the day after, of the same camera in the same destination where that day's offset was anchored by
         the camera's own GPS (BLD-neighbour_day_proposal): on its tracks, or by its fixes' times; of a day split at a
-        change of the clock, the part next to it. However far apart in time; to accept, then checked against the
-        tracks by the drift check (RUL-neighbour_day_offset_drift_checked). The day keeps its own cell."""
+        change of the clock, the part next to it. However far apart in time; asked about once, as a timezone's guess
+        is — with tracks by the day's photos at the drift check, else by acceptance here
+        (RUL-neighbour_day_offset_drift_checked). The day keeps its own cell."""
         for (dest, bucket), (group, g, prior_cell, anchor_frames, rep_naive, date, day, sel, tz) in sorted(recall.items()):
             cells = destinations[dest]["camera_group_time_decisions"]
             cell = cells.get(bucket) or {}
@@ -1671,7 +1666,8 @@ class GeotagWorkflow:
                         "confidence": "high" if shared["applied_itself"] else "review_required"}
         if proposal is None and neighbour is not None:
             # no GPS evidence of its own that day, none shared from the same day: the offset the camera's own GPS
-            # gave the day before or after it here, to accept and then check on the tracks (BLD-neighbour_day_proposal)
+            # gave the day before or after it here, asked about once: at the drift check where tracks lie by the
+            # photos, else by acceptance (BLD-neighbour_day_proposal)
             proposal = {"proposal_source": "neighbour_day", "proposed_offset_seconds": neighbour["offset_seconds"],
                         "neighbour_day": {"day": neighbour["day"], "bucket": neighbour["bucket"]},
                         "confidence": "review_required"}
@@ -1798,16 +1794,18 @@ class GeotagWorkflow:
         elif is_shared and shared["applied_itself"]:
             effective = {"offset_seconds": proposal["proposed_offset_seconds"], "source": "same_day_auto"}
             decision_mode = "auto_resolved"
-        elif proposal.get("proposal_source") in self._GUESSED_PROPOSALS and photos:
-            # A guess — the timezone's, or the offset the photos record — is asked about once, where it can be
-            # checked: with tracks by the photos it goes to the drift check as it stands, and the confirmation
-            # there is its acceptance (BLD-timezone_naive_offset, BLD-recorded_offset_proposal) — nothing is planned
-            # until then. With no track to check it against, it is accepted here.
+        elif (proposal.get("proposal_source") in self._GUESSED_PROPOSALS or is_neighbour) and photos:
+            # A guess — the timezone's, the offset the photos record, or the day next to it's — is asked about once,
+            # where it can be checked: with tracks by the photos it goes to the drift check as it stands, and the
+            # confirmation there is its acceptance (BLD-timezone_naive_offset, BLD-recorded_offset_proposal,
+            # BLD-neighbour_day_proposal) — nothing is planned until then. With no track to check it against, it is
+            # accepted here.
             times = [t.replace(tzinfo=timezone.utc) + timedelta(seconds=proposal["proposed_offset_seconds"])
                      for f in photos if (t := _parse_camera_naive(f.get("source_naive_time")))]
             if self._tracks_by(gpx, times, photos):
                 effective = {"offset_seconds": proposal["proposed_offset_seconds"],
-                             "source": "recorded_offset_unconfirmed" if is_recorded else "timezone_unconfirmed"}
+                             "source": "recorded_offset_unconfirmed" if is_recorded
+                             else "neighbour_day_unconfirmed" if is_neighbour else "timezone_unconfirmed"}
                 decision_mode = "to_be_confirmed_against_tracks"
 
         cell = {
@@ -1890,9 +1888,10 @@ class GeotagWorkflow:
 
     _DRIFT_TRIGGER_SOURCES = ("timezone_accepted", "timezone_unconfirmed", "recorded_offset_accepted",
                               "recorded_offset_unconfirmed", "manual", "gpx_anchor_imprecise",
-                              "neighbour_day_accepted")   # another day's clock, checked on this day's tracks
+                              # another day's clock, checked on this day's tracks
+                              "neighbour_day_accepted", "neighbour_day_unconfirmed")
     # A guess nobody has accepted: always given its drift cell, for the confirmation there is its acceptance.
-    _UNCONFIRMED_SOURCES = ("timezone_unconfirmed", "recorded_offset_unconfirmed")
+    _UNCONFIRMED_SOURCES = ("timezone_unconfirmed", "recorded_offset_unconfirmed", "neighbour_day_unconfirmed")
 
     def build_drift_validation(self, files, time_artifact, rows0, gpx, prior):
         """Build/regenerate photos-22 from the COMPLETE photos-21 + the resolved UTC under the

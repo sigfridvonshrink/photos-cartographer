@@ -235,10 +235,13 @@ A day is a camera's day by its own clock, so a camera left on home time abroad, 
 the middle of an outing: the outing becomes two days, and the half with no anchor asks for its offset and then for a
 drift confirmation, though the other half settled the clock. The offset the camera's own GPS gave the day before or
 after, in the same place, is a far better guess than the zone's — but it is another day's, and a clock may have been
-set overnight. So it is offered, never applied: the user accepts it, and the drift check then sets it against the
-tracks by the day's own photos, as any offset the day's GPS does not support. Bounding the time between the two days
-would need a new setting and guess at a night's length; the user's acceptance and the check are the bound. The day
-stays the unit: its decision is its own, and taking the neighbour's offset joins nothing.
+set overnight. So it is offered, never applied. But asking for it twice — an acceptance, then a confirmation on the
+tracks of the same offset — is the very cost the proposal was to spare, and the second answer is the better one: it is
+asked once, as a timezone's guess is. Where tracks lie by the day's photos, it goes to the check against them as it
+stands, and the confirmation there, made with the track before the user's eyes, is its acceptance; where none do,
+there is nothing to check it against, and the user accepts it as proposed. Bounding the time between the two days
+would need a new setting and guess at a night's length; the user's answer and the check are the bound. The day stays
+the unit: its decision is its own, and taking the neighbour's offset joins nothing.
 :::
 
 :::{rat} A choice from the camera's positions is evidence, and the user's word
@@ -366,20 +369,24 @@ the error stays put, so it is the unit decided.
 :status: ruled
 :forced: no
 :follows_from: RAT-offset_per_day_and_place, RAT-anchor_agreement
-:justifies: RUL-day_split_into_parts, RUL-clock_change_split_proposed, RUL-clock_change_needs_gps, RUL-alternating_runs_no_clock_change, RUL-clock_change_needs_acceptance, RUL-clock_change_accepted_once, RUL-clock_change_parts_own_evidence, RUL-clock_change_first_after_asked, RUL-clock_change_first_after_not_asked
+:justifies: RUL-day_split_into_parts, RUL-clock_change_split_proposed, RUL-clock_change_needs_gps, RUL-alternating_runs_no_clock_change, RUL-clock_change_needs_acceptance, RUL-clock_change_accepted_once, RUL-clock_change_parts_own_evidence, RUL-clock_change_unsettled_photo_asked, RUL-clock_change_settled_photo_not_asked
 
 A day is the unit because a clock is set again overnight; but it is also set at lunch, or reset, and then the day has
 two offsets and no one of them fits. Asked to move the photos after the change into a folder of their own, the user
 would change the library's folders to work round the tool. The change cannot be read from the photos themselves —
 the owner's question, answered yes: *"15 can only be detected using GPS, the photos themselves are not enough.
 Correct?"* — their times run on whatever the clock says; only a measurement of the true time, the camera's own
-positions on the tracks or its fixes' times, shows the clock jump. A clock set once runs on: in camera-time order its
-anchored photos fall into two runs, each agreeing on an offset of its own, and a split there is proposed. A clock does
-not go back and forth, so three runs or more are no change — they are positions gone wrong, or two bodies. The split
-is the user's to accept, as any proposal is, and accepting it once settles the day: each part's offset is what its own
-photos say, nothing borrowed across the change. Where photos with no evidence of their own lie between the runs,
-nothing says on which side of the change each was taken, and only the user, who knows when the clock was set, can
-say which was the first after it; where none lie between, there is nothing to ask.
+positions on the tracks or its fixes' times, shows the clock jump. A clock set once runs on: taken in the order of
+the true times that evidence gives them, its anchored photos fall into two runs, each agreeing on an offset of its
+own, and a split there is proposed. The camera's own order would not do: a clock set back shows the hour before the
+change a second time, the two runs interleave in camera time, and the day would look like positions gone wrong. A
+clock does not go back and forth, so three runs or more in true time are no change — they are positions gone wrong,
+or two bodies. The split is the user's to accept, as any proposal is, and accepting it once settles the day: each
+part's offset is what its own photos say, nothing borrowed across the change. A photo with no evidence of its own has
+only its camera time; read by each part's offset, it may fit one side of the change only, and then it is that part's,
+with nothing to ask. But a photo of the hour a clock set back shows twice fits both, and one may fit neither; nothing
+says which part took it, and no one camera time divides such photos from each other, since the parts' camera times
+overlap — so each is asked its part, of the user, who knows when the clock was set.
 :::
 
 :::{rat} One place's clock evidence says nothing of another's

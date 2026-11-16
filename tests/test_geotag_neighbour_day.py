@@ -16,8 +16,8 @@
 
 A camera left on home time abroad, or a night shoot, has its midnight mid-outing: the half after midnight is a day of
 its own, with no anchor, though the half before settled the clock. Such a day is proposed the offset of the day before
-or after of the same camera in the same destination, where that day is anchored — a proposal to accept, then checked
-on the tracks by the drift check. From conftest.py.
+or after of the same camera in the same destination, where that day is anchored — asked about once, as a timezone's
+guess is: at the drift check where tracks lie by the day's photos, by acceptance where none do. From conftest.py.
 """
 import copy
 from datetime import datetime, timedelta, timezone
@@ -83,7 +83,7 @@ def _cells(art):
                   test="TST-geotag_neighbour_day-a_day_with_no_anchor_is_proposed_the_day_before")
 def test_a_day_with_no_anchor_is_proposed_the_day_before(tmp_path):
     """The half after midnight is offered the offset the evening's anchors settled, in place of the zone's guess —
-    its own cell still, asking."""
+    its own cell still, with a decision of its own."""
     pts, files = _night()
     art = _plan(_wf(tmp_path), files, _gpx(pts))
     cells = _cells(art)
@@ -92,31 +92,67 @@ def test_a_day_with_no_anchor_is_proposed_the_day_before(tmp_path):
     assert after["proposal"] == {"proposal_source": "neighbour_day", "proposed_offset_seconds": HOME,
                                  "neighbour_day": {"day": "2024-07-03", "bucket": f"{CAM}@2024-07-03"},
                                  "confidence": "review_required"}
-    assert after["day"] == "2024-07-04" and after["requires_user_input"] is True
+    assert after["day"] == "2024-07-04" and "user_decision" in after and after is not before
 
 
 @pytest.mark.spec("RUL-neighbour_day_offset_needs_acceptance", "RUL-neighbour_day_offset_drift_checked",
                   "BLD-neighbour_day_proposal", "BLD-drift_validation",
-                  test="TST-geotag_neighbour_day-accepted_it_is_checked_on_the_tracks")
-def test_accepted_it_is_checked_on_the_tracks(tmp_path):
-    """Unaccepted, the neighbour's offset takes no effect; accepted, it does, and the drift check asks for it to be
-    confirmed on the tracks that lie by the day's photos."""
+                  test="TST-geotag_neighbour_day-with_tracks_it_is_asked_only_at_the_drift_check")
+def test_with_tracks_it_is_asked_only_at_the_drift_check(tmp_path):
+    """Tracks lie by the day's photos: the neighbour's offset is asked about once, as a timezone's guess is — photos-21
+    asks nothing, the offset going to the drift check unconfirmed, and photos-22 asks it; confirmed there, nothing
+    asks any more, in either record, and the photos resolve by it."""
     wf, (pts, files) = _wf(tmp_path), _night()
     gpx = _gpx(pts)
     art = _plan(wf, files, gpx)
-    assert _cells(art)[f"{CAM}@2024-07-04"]["effective_time_anchor"] == ""
+    cell = _cells(art)[f"{CAM}@2024-07-04"]
+    assert cell["proposal"]["proposal_source"] == "neighbour_day"
+    assert cell["effective_time_anchor"] == {"offset_seconds": HOME, "source": "neighbour_day_unconfirmed"}
+    assert cell["decision_mode"] == "to_be_confirmed_against_tracks" and cell["requires_user_input"] is False
+    assert cell["user_decision"]["accept_proposal"] is False and art["status"] == "complete"
+    rows0 = cal.compute_resolved_utc(files, GROUPS, art)
+    utils.write_json_artifact(cal.time_decisions_path(wf.workspace_root), art)
+    asked, blockers = wf.build_drift_validation(files, art, rows0, gpx, None)
+    assert not blockers and asked["requires_user_input"] is True
+    assert list(asked["destinations"][DEST]["drift_decisions"]) == [f"{CAM}@2024-07-04"]
+    check = asked["destinations"][DEST]["drift_decisions"][f"{CAM}@2024-07-04"]
+    assert check["requires_user_input"] is True and check["proposal"]["current_offset_seconds"] == HOME
+    check["user_decision"] = {"confirmed": True, "corrected_offset_seconds": "", "confirmed_offset_seconds": HOME,
+                              "confirmed_against_tracks": [{"gpx_file": "night.gpx", "sha256": "sha"}]}
+    drift, blockers = wf.build_drift_validation(files, art, rows0, gpx, asked)
+    assert not blockers and drift["status"] == "complete"
+    again = _plan(wf, files, gpx, art)
+    assert again["status"] == "complete" and not _cells(again)[f"{CAM}@2024-07-04"]["requires_user_input"]
+    rows = {r["relative_path"]: r for r in cal.compute_resolved_utc(files, GROUPS, again, cal.drift_offset_overrides(drift))}
+    assert rows[f"{DEST}/c.arw"]["resolved_utc"] == "2024-07-03T23:30:00Z"
+
+
+@pytest.mark.spec("RUL-neighbour_day_offset_needs_acceptance", "RUL-neighbour_day_offset_drift_checked",
+                  "BLD-neighbour_day_proposal",
+                  test="TST-geotag_neighbour_day-without_tracks_it_is_accepted_in_the_time_decisions")
+def test_without_tracks_it_is_accepted_in_the_time_decisions(tmp_path):
+    """No track at all — the evening's clock settled by its fixes' own times: the neighbour's offset is asked in
+    photos-21 instead, taking no effect until accepted there; accepted, it takes effect, and with no track to set it
+    against, the drift check asks nothing of it."""
+    _, files = _night()
+    for f, t in zip(files[:2], ("2024-07-03T21:00:00Z", "2024-07-03T21:30:00Z")):
+        f["gps_utc"] = t                                          # the camera's own fixes: camera time less an hour
+    wf, gpx = _wf(tmp_path), _gpx([])
+    art = _plan(wf, files, gpx)
+    assert _cells(art)[f"{CAM}@2024-07-03"]["effective_time_anchor"]["source"] == "gps_time_auto"
+    cell = _cells(art)[f"{CAM}@2024-07-04"]
+    assert cell["proposal"]["proposal_source"] == "neighbour_day" and cell["proposal"]["proposed_offset_seconds"] == HOME
+    assert cell["effective_time_anchor"] == "" and cell["requires_user_input"] is True
     prior = copy.deepcopy(art)
     _cells(prior)[f"{CAM}@2024-07-04"]["user_decision"].update(accept_proposal=True, accepted_offset_seconds=HOME)
     art = _plan(wf, files, gpx, prior)
-    cell = _cells(art)[f"{CAM}@2024-07-04"]
-    assert cell["effective_time_anchor"] == {"offset_seconds": HOME, "source": "neighbour_day_accepted"}
+    assert _cells(art)[f"{CAM}@2024-07-04"]["effective_time_anchor"] == {"offset_seconds": HOME,
+                                                                         "source": "neighbour_day_accepted"}
     assert art["status"] == "complete"
     rows0 = cal.compute_resolved_utc(files, GROUPS, art)
     utils.write_json_artifact(cal.time_decisions_path(wf.workspace_root), art)
     drift, blockers = wf.build_drift_validation(files, art, rows0, gpx, None)
-    assert not blockers
-    assert list(drift["destinations"][DEST]["drift_decisions"]) == [f"{CAM}@2024-07-04"]
-    assert drift["destinations"][DEST]["drift_decisions"][f"{CAM}@2024-07-04"]["requires_user_input"] is True
+    assert not blockers and drift["status"] == "complete" and not drift["destinations"]
 
 
 @pytest.mark.spec("RUL-neighbour_day_offset_proposed", "RUL-neighbour_day_no_gap_bound", "BLD-neighbour_day_proposal",

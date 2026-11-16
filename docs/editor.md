@@ -221,10 +221,11 @@ What the proposal panel shows depends on where the offset came from:
 - **The camera's clock changed this day** — the camera's GPS (on the tracks, or its fixes' times) shows two runs of
   photos, one after the other, each agreeing on an offset of its own: the clock was set between them (to local time
   at lunch, say). The panel names both runs and offers **split the day where the clock changed** — one tick settles
-  the day, each part corrected by its own photos. Where photos without GPS lie between the two runs, pick which was
-  the first after the change (or "none of them"). If the clock did not change, answer the day's offset as usual
-  instead. By hand: `accept_clock_change`, `accepted_change_offsets_seconds` and `first_after_change` in the day's
-  cell.
+  the day, each part corrected by its own photos. Runs are told apart by when the GPS says the photos were taken, so
+  a clock set back an hour, whose camera times repeat, is found too. For each photo without GPS that either part
+  could have taken (or neither), pick **before** or **after** the change; the others go to their part unasked. If
+  the clock did not change, answer the day's offset as usual instead. By hand: `accept_clock_change`,
+  `accepted_change_offsets_seconds` and `photo_parts` in the day's cell.
 - **From the GPS fixes' own times** — no track passes the photos' places, but their GPS fixes recorded
   the UTC they were taken at: each, less the camera time, is a reading of the offset. The panel lists a few
   ("camera 10:00:00 · fix 00:59:30Z → −9h 00m 30s"). Two or more that agree applied themselves (status
@@ -242,9 +243,9 @@ What the proposal panel shows depends on where the offset came from:
   itself elsewhere that day the same way: if they differ, both are shown and the one fixed by itself
   waits for you, while your pick keeps its effect.
 - **The day next to it** — no photo of this day has its own position here, but the camera's GPS fixed its clock the
-  day before (or after) in this destination: its midnight fell mid-outing, say. **accept proposal** if the clock was
-  not set in between; the Drift view then asks you to confirm it on the tracks, as any offset this day's own GPS does
-  not support.
+  day before (or after) in this destination: its midnight fell mid-outing, say. Asked once, like the timezone's
+  guess: with tracks by the photos there is nothing to accept here — confirm it in the Drift view, on the tracks; with
+  none, **accept proposal** if the clock was not set in between.
 - **The offset the photos record** — no GPS evidence, but the camera wrote, with each photo's time, the
   UTC offset its clock was set to, and they all agree (e.g. "2 photos record +01:00 from UTC"): the clock
   offset is its negative. Accept it only if the camera's time was right in that zone — a clock set to the

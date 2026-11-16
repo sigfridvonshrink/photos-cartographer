@@ -518,21 +518,22 @@ by the camera's own GPS.
 :anti: yes
 :verify: required
 :refines: RUL-neighbour_day_offset_proposed
-:uses: DEF-decision
+:uses: DEF-decision, DEF-tracks
 
-An offset proposed from a neighbouring day SHALL NOT take effect until the user accepts it.
+An offset proposed from a neighbouring day SHALL NOT take effect until the user accepts it — a confirmation of it
+against the tracks counting as its acceptance.
 :::
 
-:::{rul} A neighbouring day's offset is checked against the tracks
+:::{rul} A neighbouring day's offset is asked about once
 :id: RUL-neighbour_day_offset_drift_checked
 :status: ruled
 :criticality: high
 :verify: required
 :refines: RUL-neighbour_day_offset_needs_acceptance
-:uses: RUL-unanchored_offset_confirmed
+:uses: RUL-unanchored_offset_confirmed, RUL-timezone_offset_asked_once
 
-An accepted offset from a neighbouring day SHALL be confirmed against the tracks, as any offset the day's own GPS does
-not support is.
+An offset proposed from a neighbouring day SHALL be asked about once, as a guessed offset is: at the check against the
+tracks where tracks lie by the day's photos, and by acceptance where none do.
 :::
 
 :::{rul} No bound is set on the time between the two days
@@ -649,7 +650,7 @@ A container destination's decisions SHALL never wait for the user.
 An answer given for a camera's day in a destination SHALL stay that day's answer when photos of another day arrive there or leave.
 :::
 
-:::{rul} A day split at a time is decided in parts
+:::{rul} A day split at a change of the clock is decided in parts
 :id: RUL-day_split_into_parts
 :status: ruled
 :criticality: high
@@ -657,8 +658,8 @@ An answer given for a camera's day in a destination SHALL stay that day's answer
 :refines: RUL-offset_per_camera_destination_day
 :uses: DEF-clock_offset
 
-A camera's day in a destination, once split at a time, SHALL be decided as consecutive parts, each of its photos taking
-the offset of the part its camera time falls in.
+A camera's day in a destination, once split at a change of its clock, SHALL be decided as consecutive parts, each of
+its photos taking the offset of the part it was taken in.
 :::
 
 :::{rul} A clock changed during the day is proposed as a split
@@ -669,9 +670,9 @@ the offset of the part its camera time falls in.
 :refines: RUL-day_split_into_parts
 :uses: DEF-camera_group, DEF-tracks
 
-Where the photos of a camera's day in a destination that its own GPS anchors form, in camera-time order, two
-consecutive runs, each agreeing within itself on an offset of its own, geotag SHALL propose splitting the day at the
-change between them.
+Where the photos of a camera's day in a destination that its own GPS anchors form, in the order of the true times
+their GPS gives them, two consecutive runs, each agreeing within itself on an offset of its own, geotag SHALL propose
+splitting the day at the change between them.
 :::
 
 :::{rul} A change of the clock is seen only from the camera's GPS
@@ -694,7 +695,8 @@ true time — their positions on the tracks, or the times their fixes recorded �
 :verify: required
 :refines: RUL-clock_change_split_proposed
 
-A day whose anchored photos, in camera-time order, form three runs or more SHALL NOT be proposed a split.
+A day whose anchored photos, in the order of the true times their GPS gives them, form three runs or more SHALL NOT
+be proposed a split.
 :::
 
 :::{rul} A split waits for the user's acceptance
@@ -729,28 +731,29 @@ An accepted split of a camera's day SHALL put the offset of each of its parts in
 Each part of a day split at a change of the clock SHALL take its offset from its own anchored photos.
 :::
 
-:::{rul} The photos between the runs are asked where the change fell
-:id: RUL-clock_change_first_after_asked
+:::{rul} A photo either part could have taken is asked its part
+:id: RUL-clock_change_unsettled_photo_asked
 :status: ruled
 :criticality: high
 :verify: required
 :refines: RUL-clock_change_accepted_once
-:uses: DEF-decision
+:uses: DEF-decision, DEF-clock_offset
 
-Where photos with no evidence of their own lie between the last photo of one run and the first of the other, a split
-SHALL NOT take effect until the user says which of them was the first after the change.
+Where a photo with no evidence of its own could, by its camera time, have been taken in both parts — the first part's
+offset putting it before the first photo of the second run, and the second part's after the last photo of the first —
+or in neither, a split SHALL NOT take effect until the user says to which part the photo belongs.
 :::
 
-:::{rul} With no photo between the runs, nothing is asked of the change
-:id: RUL-clock_change_first_after_not_asked
+:::{rul} A photo only one part could have taken is not asked
+:id: RUL-clock_change_settled_photo_not_asked
 :status: ruled
 :criticality: med
 :anti: yes
 :verify: required
-:refines: RUL-clock_change_first_after_asked
+:refines: RUL-clock_change_unsettled_photo_asked
 
-Where no photo lies between the runs, an accepted split SHALL NOT ask where the change fell: the second part begins at
-the first photo of the second run.
+A photo with no evidence of its own that only one part could have taken SHALL be given that part without the user
+being asked.
 :::
 
 

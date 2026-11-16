@@ -279,8 +279,9 @@ Each day's offset is proposed, in this order:
 4. **From the camera's own GPS, the day before or after** — where the day has no position of its own here and none
    was shared, the offset the camera's GPS fixed the day before (else after) in this destination. A camera left on
    home time abroad, or a night shoot, has its midnight mid-outing: the half after it is a day of its own, and the
-   half before settled the clock. Only offered — the clock may have been set overnight: you accept it, and the drift
-   check then confirms it on the tracks. The day keeps its own decision.
+   half before settled the clock. Only offered — the clock may have been set overnight — and asked once, as the
+   timezone's guess is: with tracks by the photos it goes straight to the drift check, where you confirm it on them;
+   with none, you accept it here. The day keeps its own decision.
 5. **From the offset the photos record** — a recent camera writes, with each time, the UTC offset its
    clock was set to (`OffsetTimeOriginal`). Where the day's photos here that record one all record the
    same, the clock offset is its negative: a camera left on home time (+01:00) in Japan is proposed
@@ -309,12 +310,15 @@ guess for one day applies only to that day, never to a sibling day or a neighbou
 
 **A clock changed during the day.** Set to local time at lunch, or reset, a camera has two offsets that day, and
 no single one fits. Only the camera's own GPS can show it — its positions on the tracks, or its fixes' times; the
-photos' own times run on whatever the clock said. Where the day's photos with a position, in camera-time order,
-fall into two runs each agreeing on an offset of its own, geotag proposes **splitting the day at the change**.
-Accept it once and the day is decided as two parts, each corrected by its own photos. Where photos without GPS lie
-between the two runs, nothing says on which side of the change they were taken: you say which was the first after
-the change. Offsets that go back and forth — three runs or more — are no clock change: they are positions gone
-wrong, or two bodies in one group.
+photos' own times run on whatever the clock said. Where the day's photos with a position, taken in the order of
+their true times (when the tracks or the fixes say they were taken), fall into two runs each agreeing on an offset of
+its own, geotag proposes **splitting the day at the change**. A clock set back shows an hour twice, so in camera time
+the two runs interleave; in true time they still follow one another, and the split is found all the same. Accept it
+once and the day is decided as two parts, each corrected by its own photos. A photo without GPS that only one part
+could have taken — read by that part's offset, it falls on that part's side of the change — goes to it unasked. One
+that either part could have taken (a photo of the hour a clock set back shows twice), or neither, is asked: you say
+for each whether it was taken before the change or after it. Offsets that go back and forth — three runs or more —
+are no clock change: they are positions gone wrong, or two bodies in one group.
 
 ---
 

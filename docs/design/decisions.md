@@ -50,10 +50,11 @@ affordance.
   being left without one. Code site `contradictedNote` / `takeTrackPosition` in `web/app.js`, tested in
   `app_clock_change.test.mjs` (BACKLOG 16).
 - **A clock changed during the day is one tick on the day's row**: the offset panel names both runs and offers
-  "split the day where the clock changed"; where photos without GPS lie between the runs, a choice of which was the
-  first after the change (or none of them). The parts the split makes are never rows of their own — they are
+  "split the day where the clock changed"; for each photo without GPS whose part the runs leave unsettled, a choice
+  of before or after the change, one row per photo — not one "first after the change" pick, which a clock set back
+  (its camera times overlapping) cannot express. The parts the split makes are never rows of their own — they are
   geotag's, answered by the day's tick — and a day with a proposed change is never collapsed with other days. Code
-  site `clockChangeControls` / `clockChangeHolds` / `offsetGroups` in `web/app.js`, tested in
+  site `clockChangeControls` / `clockChangeHolds` / `clockChangePart` / `offsetGroups` in `web/app.js`, tested in
   `app_clock_change.test.mjs` (BACKLOG 15).
 - **One camera or several bodies, in the Cameras view**: under the new groups, every fixed-clock camera group of the
   photos is listed with two choices — one camera (the default), several bodies — saved into

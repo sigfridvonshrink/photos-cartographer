@@ -113,33 +113,38 @@ Each destination's `camera_group_time_decisions` SHALL hold one cell per camera 
 :::{bld} A day split where the camera's clock changed
 :id: BLD-clock_change_split
 :status: ruled
-:realises: RUL-day_split_into_parts, RUL-clock_change_split_proposed, RUL-clock_change_needs_gps, RUL-alternating_runs_no_clock_change, RUL-clock_change_needs_acceptance, RUL-clock_change_accepted_once, RUL-clock_change_parts_own_evidence, RUL-clock_change_first_after_asked, RUL-clock_change_first_after_not_asked, RUL-several_bodies_no_clock_change_split
+:realises: RUL-day_split_into_parts, RUL-clock_change_split_proposed, RUL-clock_change_needs_gps, RUL-alternating_runs_no_clock_change, RUL-clock_change_needs_acceptance, RUL-clock_change_accepted_once, RUL-clock_change_parts_own_evidence, RUL-clock_change_unsettled_photo_asked, RUL-clock_change_settled_photo_not_asked, RUL-several_bodies_no_clock_change_split
 :uses: BLD-offset_buckets, BLD-anchor_matching, BLD-gps_time_proposal
 
 For each `camera` day cell of photos not yet corrected, of a group not named in `several_bodies_groups`,
 `clock_change_proposal` SHALL take the photos its GPX self-anchor anchors — else, with none, the readings of their
-fixes' times — in camera-time order, where those photos do not already agree (the anchors conflict or tie; the
-readings' offsets lie farther apart than `gpx_anchor_offset_spread_max_seconds`, their fix times all different), and
-try each place to cut them in two: a cut whose earlier and later photos each agree — a GPX consensus over them with no
-conflicting photo, no tie and no stay; readings within the spread of their first, whose offset it is — on offsets
-farther apart than the spread. Exactly one such cut, its two sides a second or more apart, is recorded on the day's
-cell as `clock_change`: `evidence` (`gpx_self_anchor` or `gps_time`), `runs` — each `offset_seconds`, `photos`, and
-`first` and `last` (`source_file`, `camera_source_naive_time`) — `between`, each photo of the day that is no run's,
-taken after the first run's last and before the second's first (`source_file`, `camera_source_naive_time`), and
-`acceptance_tolerance_seconds`. The answer is the day cell's `user_decision.accept_clock_change`,
-`accepted_change_offsets_seconds` (the runs' two offsets, in order) and `first_after_change` (a camera time,
-`YYYY:MM:DD HH:MM:SS`), written on the cell only where a change is proposed or answered; not a boolean, not two whole
-numbers, or not such a time, a blocker, as is an acceptance naming no offsets. Accepted while each offset is within
-`gpx_anchor_decision_tolerance_seconds` of its run's, a `manual_offset_seconds` on the cell coming first, and — where
-`between` holds a photo — `first_after_change` lies after the first run's last photo and no later than the second's
-first (else the cell asks, `stale_user_decision` where it was written), the day is split at `first_after_change`, or at
-the second run's first photo with none between: the cell holds `clock_change.effective_split` (`first_after_change`,
-`parts`), its `effective_time_anchor` empty and asking nothing, and beside it the parts `<key>#1`, the photos before
-that time, and `<key>#2`, those from it, each an offset cell built from its own photos as an acceptance of its run's
-offset builds one — `gpx_anchor_accepted`, or `gps_time_accepted` — holding `clock_change_part` (`of`, `part`, `from`,
-`until`). An acceptance whose offsets are no longer the runs', or with no change proposed, is `stale_user_decision`
+fixes' times — in the order of their true times: each anchor's camera time plus the offset of its match in the day's
+consensus, the track time it matched; each reading's fix time. Where those photos do not already agree (the anchors
+conflict or tie; the readings' offsets lie farther apart than `gpx_anchor_offset_spread_max_seconds`, their fix times
+all different), it tries each place to cut them in two: a cut whose earlier and later photos each agree — a GPX
+consensus over them with no conflicting photo, no tie and no stay; readings within the spread of their first, whose
+offset it is — on offsets farther apart than the spread. Exactly one such cut, the first run's last true time — each
+photo placed by its own run's consensus — a second or more before the second's first, is recorded on the day's cell
+as `clock_change`: `evidence` (`gpx_self_anchor` or `gps_time`), `runs` — each `offset_seconds`, `photos`, and `first`
+and `last` in true time (`source_file`, `camera_source_naive_time`, `real_utc`) — `unsettled`, and
+`acceptance_tolerance_seconds`. A photo of the day that is a run's — anchored in it, or giving one of its readings — is
+that run's part; another, at camera time t, could be the first part's where t plus the first run's offset is before
+the second run's first true time, and the second's where t plus the second run's offset is after the first run's last:
+one of the two, that part's; both or neither, it is listed in `unsettled` (`source_file`, `camera_source_naive_time`,
+in camera-time order). The answer is the day cell's `user_decision.accept_clock_change`,
+`accepted_change_offsets_seconds` (the runs' two offsets, in order) and `photo_parts` (an object giving a photo's
+`source_file` its part, `1` or `2`), written on the cell only where a change is proposed or answered; not a boolean,
+not two whole numbers, or not such an object, a blocker, as is an acceptance naming no offsets. Accepted while each
+offset is within `gpx_anchor_decision_tolerance_seconds` of its run's, a `manual_offset_seconds` on the cell coming
+first, and every `unsettled` photo given its part in `photo_parts` (else the cell asks), the day is split: the cell
+holds `clock_change.effective_split` (`parts`, and `photo_parts`, the part of every photo of the day — its run's, the
+one part that could take it, or the one it was given), its `effective_time_anchor` empty and asking nothing, and
+beside it the parts `<key>#1` and `<key>#2`, each an offset cell built from its own photos as an acceptance of its
+run's offset builds one — `gpx_anchor_accepted`, or `gps_time_accepted` — holding `clock_change_part` (`of`, `part`,
+`photos`). An acceptance whose offsets are no longer the runs', or with no change proposed, is `stale_user_decision`
 and splits nothing. A split day and its parts take no part in the offsets shared within a day
-({need}`BLD-offset_shared_within_day`); `offset_cell_key` gives each photo of a split day its part.
+({need}`BLD-offset_shared_within_day`); `offset_cell_key` gives each photo of a split day the part its
+`effective_split.photo_parts` names — one it names none, the day's cell, which offsets nothing.
 :::
 
 :::{bld} Geotag's records are grouped by destination
@@ -397,8 +402,12 @@ the clock, its part next to this day — where that offset's source is `gpx_anch
 `gpx_anchor_chosen`, `gps_time_auto` or `gps_time_accepted`: as `proposal_source: "neighbour_day"` with
 `proposed_offset_seconds`, `neighbour_day` (`day`, `bucket`) and `confidence: "review_required"`, ahead of
 `recorded_offset` and `timezone_naive`, whatever time lies between the two days' photos and with no setting of its
-own. It never applies itself: accepted, naming the offset, it takes effect as `neighbour_day_accepted`, which the drift
-check follows ({need}`BLD-drift_validation`). The cell keeps its own key and decision.
+own. It never applies itself: where track points lie within `drift_check_track_window_seconds` of the cell's photos
+— by the times the offset gives, else by the times the camera recorded — and no decision is given, it takes effect as
+`neighbour_day_unconfirmed`, `decision_mode: "to_be_confirmed_against_tracks"`, asking nothing in photos-21 and always
+asked in photos-22 ({need}`BLD-drift_validation`), as a `timezone_naive` proposal does; elsewhere only once accepted,
+naming the offset, as `neighbour_day_accepted`, which the drift check follows as it does `timezone_accepted`. The
+cell keeps its own key and decision.
 :::
 
 :::{bld} A day's offset shared between destinations
@@ -437,7 +446,7 @@ and `handoff`, the handoff's content fingerprint ({need}`BLD-handoff_content_fin
 
 `compute_resolved_utc` SHALL resolve each photo of photos by destination to UTC: a camera's photo by the offset of its
 cell — `<group>@<date>` where the destination has one for its date, else `<group>`, and of that day split at a change
-of the clock the part its camera time falls in ({need}`BLD-clock_change_split`) — a corrected offset from
+of the clock the part the split gives the photo ({need}`BLD-clock_change_split`) — a corrected offset from
 `photos-22-gps-drift-validation.json` taking its place (`camera_group_offset`); a phone's, where its day there has a
 cell whose `phone.applies_to` is `every_photo` and whose effective source is not `as_recorded`, likewise by that cell's
 offset ({need}`BLD-phone_offset_cell`); else a phone's by the offset recorded with
@@ -506,7 +515,7 @@ track decided anything.
 :status: ruled
 :realises: RUL-unanchored_offset_confirmed, RUL-confirmation_holds_for_its_offset, RUL-stay_fixes_no_clock, RUL-checked_clock_offsets
 
-Once photos-21 is complete, `geotag plan` SHALL write `photos-22-gps-drift-validation.json` with a cell for each offset cell whose effective source is `timezone_accepted`, `timezone_unconfirmed`, `recorded_offset_accepted`, `recorded_offset_unconfirmed`, `manual`, `gpx_anchor_imprecise` or `neighbour_day_accepted` and whose photos' resolved times lie within `drift_check_track_window_seconds` of track points, or, none lying there, whose photos' recorded times read as UTC do — whether or not a photo of the cell anchors on the tracks: its `proposal` holding `current_offset_seconds`, its source, the photos and that track segment; its `user_decision` `confirmed`, `corrected_offset_seconds` and `confirmed_offset_seconds`. A cell confirmed with `confirmed_offset_seconds` equal to its current offset takes effect as `gps_drift_validated` — the current offset when no correction is given, else the correction; confirmed against another offset it is `stale_user_decision` and takes no effect; confirmed naming none, a blocker. A `corrected_offset_seconds` or `confirmed_offset_seconds` that is written, the cell confirmed or not, is a whole number of seconds, else a blocker. Until every cell has taken effect, photos-23 and photos-24 are not written; then resolved UTC is computed again with the validated offsets, photos-21 left as it is. photos-22's `depends_on` holds photos-21's SHA-256, `gpx_fingerprint`, `camera_time_policy_fingerprint` and `camera_group_key_version`. A `timezone_unconfirmed` or `recorded_offset_unconfirmed` cell is always given its drift cell, whatever track lies by it. A phone's cell for its photos recording no offset is checked on those photos alone.
+Once photos-21 is complete, `geotag plan` SHALL write `photos-22-gps-drift-validation.json` with a cell for each offset cell whose effective source is `timezone_accepted`, `timezone_unconfirmed`, `recorded_offset_accepted`, `recorded_offset_unconfirmed`, `manual`, `gpx_anchor_imprecise`, `neighbour_day_accepted` or `neighbour_day_unconfirmed` and whose photos' resolved times lie within `drift_check_track_window_seconds` of track points, or, none lying there, whose photos' recorded times read as UTC do — whether or not a photo of the cell anchors on the tracks: its `proposal` holding `current_offset_seconds`, its source, the photos and that track segment; its `user_decision` `confirmed`, `corrected_offset_seconds` and `confirmed_offset_seconds`. A cell confirmed with `confirmed_offset_seconds` equal to its current offset takes effect as `gps_drift_validated` — the current offset when no correction is given, else the correction; confirmed against another offset it is `stale_user_decision` and takes no effect; confirmed naming none, a blocker. A `corrected_offset_seconds` or `confirmed_offset_seconds` that is written, the cell confirmed or not, is a whole number of seconds, else a blocker. Until every cell has taken effect, photos-23 and photos-24 are not written; then resolved UTC is computed again with the validated offsets, photos-21 left as it is. photos-22's `depends_on` holds photos-21's SHA-256, `gpx_fingerprint`, `camera_time_policy_fingerprint` and `camera_group_key_version`. A `timezone_unconfirmed`, `recorded_offset_unconfirmed` or `neighbour_day_unconfirmed` cell is always given its drift cell, whatever track lies by it. A phone's cell for its photos recording no offset is checked on those photos alone.
 :::
 
 :::{bld} A drift confirmation names its tracks
