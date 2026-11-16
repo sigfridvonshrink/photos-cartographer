@@ -551,15 +551,15 @@ status 2.
 :::{bld} The placement order
 :id: BLD-placement_order
 :status: ruled
-:realises: RUL-own_position_kept, RUL-placement_order, RUL-own_position_replaced_on_answer
+:realises: RUL-own_position_kept, RUL-placement_order, RUL-own_position_replaced_on_answer, RUL-unplaced_photo_waits
 
 `classify_gps` SHALL return, for each photo, the first of: `preserve_native` for a photo with its own position — but
 `manual_locked` where its review item is `own_position_contradicted` ({need}`BLD-contradicted_position`) and holds
 `manual_lat`/`manual_lon`; its
 review item's `manual_lat`/`manual_lon` as `manual_locked`; the tracks at its resolved time as `gpx_interpolation` or
-`gpx_extrapolation`; its destination's effective fallback as `manual_fallback`; `no_change` for a photo marked
-`accept_unlocated`; else `blocked`. A position from `manual_locked` or `manual_fallback` is written with that marker,
-and undone like any manual position.
+`gpx_extrapolation`; its destination's effective fallback as `manual_fallback`; else `blocked`, its review item
+requiring input. A position from `manual_locked` or `manual_fallback` is written with that marker, and undone like any
+manual position.
 :::
 
 :::{bld} One test of a photo's own position
@@ -574,19 +574,6 @@ pinned ones — take it from that test alone, so a photo at latitude 0 and longi
 `preserve_native`, never an anchor frame and never counted in `preserve_native_gps`.
 :::
 
-:::{bld} A no-fix position cleared from a photo left unlocated
-:id: BLD-unlocated_null_island_cleared
-:status: ruled
-:realises: RUL-unlocated_null_island_cleared, RUL-log_records_null_island_cleared
-:uses: BLD-own_position_test, BLD-placement_order, BLD-executable_plan
-
-For a photo `classify_gps` gives `no_change` that holds latitude 0 and longitude 0 by that test, `plan_file_ops` SHALL
-plan a `gps_marker_write` clearing `GPSLatitude`, `GPSLatitudeRef`, `GPSLongitude` and `GPSLongitudeRef`, as it clears
-a position geotag wrote — with the time-fixed `GPSProcessingMethod` where geotag writes or wrote the photo's time, else
-those four alone — carrying in `pre_state` the position it removes; finalize logs it as `gps_cleared` with that
-`pre_state` ({need}`BLD-geotag_log_steps`). A photo holding no position is planned no such write.
-:::
-
 :::{bld} The GPS decisions record
 :id: BLD-gps_decisions_record
 :status: ruled
@@ -594,12 +581,28 @@ those four alone — carrying in `pre_state` the position it removes; finalize l
 
 Each destination's entry in `photos-23-gps-decisions.json` SHALL hold its `folder_fallback` cell and `gps_decisions`:
 a `summary` counting `files_total`, `preserve_native_gps`, `automatic_gpx_interpolation`,
-`automatic_gpx_extrapolation`, `automatic_folder_fallback`, `manual_locked`, `no_gps_change_needed`, `blocked` and
-`manual_review_required`; an `automatic_decision_summary` naming the track files used; and `review_items` — one per
-photo `blocked` (`no_reliable_gps_source`, requiring input), `manual_locked` or `no_change` (`accepted_unlocated`),
-each with `manual_lat`, `manual_lon` and `accept_unlocated` — and one per photo whose own position its camera's agreed
-offset contradicts ({need}`BLD-contradicted_position`). No other photo is named: the executable plan derives every
-automatic position again from its own inputs.
+`automatic_gpx_extrapolation`, `automatic_folder_fallback`, `manual_locked`, `blocked` and `manual_review_required`; an
+`automatic_decision_summary` naming the track files used; `review_items` — one per photo `blocked`
+(`no_reliable_gps_source`, requiring input) or `manual_locked`, each with `manual_lat` and `manual_lon` — and one per
+photo whose own position its camera's agreed offset contradicts ({need}`BLD-contradicted_position`); and, where there
+are any, `placed_photos` ({need}`BLD-chosen_position`). No other photo is named, and the executable plan reads no
+automatic position from the record: it derives each again from its own inputs.
+:::
+
+:::{bld} A position chosen for a photo the tracks or the fallback place
+:id: BLD-chosen_position
+:status: ruled
+:realises: RUL-chosen_position_honoured, RUL-chosen_position_names_a_photo, RUL-chosen_position_kept
+:uses: BLD-gps_decisions_record, BLD-placement_order, BLD-review_item_identity
+
+A destination's `gps_decisions.placed_photos` SHALL list each photo the tracks place (`placed_by: "tracks"`) or its
+effective fallback places (`placed_by: "folder_fallback"`), with its `relative_path` and `content_fingerprint`. An entry
+of its `review_items` with `reason: "chosen_by_user"`, the `relative_path` of one of them and `manual_lat`/`manual_lon`
+— written by hand, or by the decision editor — is that photo's decision: `classify_gps` gives it `manual_locked`, and
+photos-23 writes it back as a `manual_locked` review item, which stays while its decision holds a position, found
+again by the photo's fingerprint whatever tracks or fallback come to cover it; emptied, the photo is placed as before.
+An entry `chosen_by_user` whose path — or fingerprint — names no photo of that destination, or one holding a position
+of its own, is a blocker naming it.
 :::
 
 :::{bld} An own position the agreed offset contradicts
@@ -618,7 +621,7 @@ them from the cells whose effective source is still one of those three; each is 
 time (`place_gps`), and where that place lies more than `gpx_anchor_max_point_distance_meters` from its own position,
 photos-23 gives it a review item, `reason: "own_position_contradicted"`, `requires_user_input: false`, with
 `own_position`, `proposed_position` (`lat`, `lon`, `method`, `gpx_file`) and `apart_meters`, its `user_decision`
-`manual_lat` and `manual_lon` alone — `accept_unlocated` true there a blocker; where the tracks place it nowhere, its
+`manual_lat` and `manual_lon`; where the tracks place it nowhere, its
 destination's `gps_decisions.contradicted_without_track` lists it (`relative_path`, `content_fingerprint`). An item
 whose earlier decision holds a position stays while it does, contradicted or not. A position set there replaces the
 photo's own as `manual_locked`, its `metadata_gps_write` (`apply_manual`) carrying in `pre_state` the position it
@@ -750,7 +753,7 @@ photo interrupted between the two, completed once it is seen to be the photo as 
 :status: ruled
 :realises: RUL-time_before_gps, RUL-execution_only_the_plan, RUL-mutate_on_difference, RUL-no_plan_while_a_decision_waits, RUL-plan_counts_placement, RUL-placement_recorded_with_its_track, RUL-corrected_time_written_local
 
-`photos-24-executable-plan.json` SHALL hold `status` — `ready`, or `blocked` with the plan's `blockers`, which `geotag plan` prints, exiting 2 — `executable`, `depends_on`, `plan_id` (the first 16 hex digits of the SHA-256 of `depends_on`), `placement` — its photos counted as `native`, `matched`, `interpolated`, `extrapolated`, `manual_locked`, `manual_fallback` or `unlocated` — and per destination its `operations`, `no_ops` (the photos it holds already as planned), `left_unlocated` (each photo marked `accept_unlocated`, with the decision) and a `summary`. An operation is `metadata_time_write`, carrying the resolved time, its rule, offset and timezone, and the decision it followed; `metadata_gps_write`, its origin `apply_manual` — with the decision and the position it replaces — or `recompute_automated`, with the track file that placed it and the resolved time it was placed at; `gps_marker_write`, one that clears geotag's position, or a no-fix one ({need}`BLD-unlocated_null_island_cleared`), carrying the position it removes; or `rename_no_clobber`. A write the photo already holds is not planned. A time is written as `DateTimeOriginal` with `OffsetTimeOriginal` as a sign, hours and minutes — an offset with seconds, as a zone's before it kept standard time, to the nearest minute — and its operation carries in `pre_state` the value each field it writes held and in `provenance` the field its time was read from.
+`photos-24-executable-plan.json` SHALL hold `status` — `ready`, or `blocked` with the plan's `blockers`, which `geotag plan` prints, exiting 2 — `executable`, `depends_on`, `plan_id` (the first 16 hex digits of the SHA-256 of `depends_on`), `placement` — its photos counted as `native`, `matched`, `interpolated`, `extrapolated`, `manual_locked` or `manual_fallback` — and per destination its `operations`, `no_ops` (the photos it holds already as planned) and a `summary`. An operation is `metadata_time_write`, carrying the resolved time, its rule, offset and timezone, and the decision it followed; `metadata_gps_write`, its origin `apply_manual` — with the decision and the position it replaces — or `recompute_automated`, with the track file that placed it and the resolved time it was placed at; `gps_marker_write`, one that clears geotag's position carrying the position it removes; or `rename_no_clobber`. A write the photo already holds is not planned. A time is written as `DateTimeOriginal` with `OffsetTimeOriginal` as a sign, hours and minutes — an offset with seconds, as a zone's before it kept standard time, to the nearest minute — and its operation carries in `pre_state` the value each field it writes held and in `provenance` the field its time was read from.
 :::
 
 :::{bld} The other time fields are written with the time
@@ -899,7 +902,22 @@ photo, to proceed without it.
 :::{bld} What finalize checks first
 :id: BLD-finalize_preconditions
 :status: ruled
-:realises: RUL-finalize_requires_success, RUL-finalize_checks_photos, RUL-finalize_reports_placement, RUL-unlocated_logged, RUL-placement_recorded_with_its_track
+:realises: RUL-finalize_requires_success, RUL-finalize_checks_photos, RUL-finalize_reports_placement, RUL-placement_recorded_with_its_track, RUL-finalize_refuses_unplaced
 
-`geotag finalize` SHALL refuse, writing nothing, unless `photos-24-executable-plan.json` is `ready`, `photos-25-execution-summary.json` is `success` for the same `plan_id`, every dependency of the plan but the handoff still holds — the handoff left out because prep, run after execute, records geotag's own writes and renames in it, and the tracks taken as the catalogue keeps them ({need}`BLD-track_window`) — and every photo under `6-photos-by-dest` is one of the plan's, at its final path, with the size and modification time the journal's `media_after` records for it, or the plan's `media_preconditions` for a photo the plan had nothing to do to. It prints the plan's `placement` and writes it into the archive manifest; the log gives each photo in `left_unlocated` a `left_unlocated` step citing its decision, and each position from the tracks its `gpx_file` and `at_utc`.
+`geotag finalize` SHALL refuse, writing nothing, unless `photos-24-executable-plan.json` is `ready`, `photos-25-execution-summary.json` is `success` for the same `plan_id`, every dependency of the plan but the handoff still holds — the handoff left out because prep, run after execute, records geotag's own writes and renames in it, and the tracks taken as the catalogue keeps them ({need}`BLD-track_window`) — and every photo under `6-photos-by-dest` is one of the plan's, at its final path, with the size and modification time the journal's `media_after` records for it, or the plan's `media_preconditions` for a photo the plan had nothing to do to — none of them holding no position ({need}`BLD-no_photo_unplaced`). It prints the plan's `placement` and writes it into the archive manifest; the log gives each position from the tracks its `gpx_file` and `at_utc`.
+:::
+
+:::{bld} No photo leaves geotag without a position
+:id: BLD-no_photo_unplaced
+:status: ruled
+:realises: RUL-finalize_refuses_unplaced, RUL-merge_refuses_unplaced
+:uses: BLD-own_position_test, BLD-executable_plan
+
+`photos_utils.photos_without_position` SHALL name each photo under `6-photos-by-dest` that holds no position once the
+plan is executed, by `has_own_position` ({need}`BLD-own_position_test`) of the position it holds: the one its
+`metadata_gps_write` wrote, none where a `gps_marker_write` emptied `GPSLatitude`, else the `GPSLatitude` and
+`GPSLongitude` its handoff record holds — a record joined to the plan's operations by its content fingerprint, by its
+path only where it holds none — so read without running a tool on a photo. `geotag finalize` refuses, writing nothing,
+while it names any; merge's preflight, from the current handoff and `photos-24-executable-plan.json`, gathers a blocker
+for them.
 :::

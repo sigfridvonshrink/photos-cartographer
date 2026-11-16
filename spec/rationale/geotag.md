@@ -713,11 +713,11 @@ its time and its name, now hidden under the right folder.
 :follows_from: RAT-destination_is_an_input, RAT-decisions_cascade
 :justifies: RUL-moved_photo_position_decided_anew
 
-A position typed for a photo, or the answer to leave it unlocated, is given looking at the photo where it lies: the
-place its folder names, the fallback that folder has or lacks, the tracks that covered it there. Any of these may have
-been part of the answer — the owner: *"it may have been decided partially because of the destination"*. Moved, the photo stands among another folder's answers — a fallback that would place it now,
-a place it was not — and the old one, carried, could keep it unlocated beside a fallback or pinned where the folder
-says it was not. Asked again, it costs one answer.
+A position typed for a photo is given looking at the photo where it lies: the place its folder names, the fallback
+that folder has or lacks, the tracks that covered it there. Any of these may have been part of the answer — the owner:
+*"it may have been decided partially because of the destination"*. Moved, the photo stands among another folder's
+answers — a fallback that would place it now, a place it was not — and the old one, carried, could keep it pinned
+where the folder says it was not. Asked again, it costs one answer.
 :::
 
 
@@ -1033,22 +1033,6 @@ point counts — a position merely near it, or far from the others, may be real.
 so the log keeps it, and the photo's history still shows what it carried.
 :::
 
-:::{rat} A photo left unlocated is not shown in the sea
-:id: RAT-unlocated_null_island_cleared
-:status: ruled
-:forced: no
-:follows_from: RAT-null_island_no_fix
-:justifies: RUL-unlocated_null_island_cleared, RUL-log_records_null_island_cleared
-
-A photo the user leaves unlocated is one whose place nothing knows. Kept, the device's latitude 0 and longitude 0 still
-reads as a position to every program that shows the library: the owner's reason — a kept (0, 0) shows the photo off
-the coast of Africa in digiKam. Leaving it unlocated means no position, so the no-fix value goes, whole — coordinates
-and hemispheres together, as geotag takes away a position of its own, since a half-cleared fix is a torn one. It was
-measured nowhere, so nothing true is lost; and as with a position written over it, the log keeps what the device
-wrote, so the photo's history still shows what it carried. A photo with a real position is never left unlocated — it
-keeps its own — and a (0, 0) photo that something places is written over as before.
-:::
-
 :::{rat} Most specific first
 :id: RAT-placement_most_specific_first
 :status: ruled
@@ -1058,8 +1042,39 @@ keeps its own — and a (0, 0) photo that something places is written over as be
 
 Each source speaks for fewer photos than the one after it: a position the user set speaks for that photo alone, a track
 for the instant it was taken, a fallback for a whole folder. The first that applies is the most specific word on where
-the photo was; a photo none of them places is one only the user can answer for — with a place, or by leaving it
-unlocated.
+the photo was; a photo none of them places is one only the user can answer for — with a place for it, or one for its
+folder.
+:::
+
+:::{rat} No photo leaves geotag without a position
+:id: RAT-no_photo_unlocated
+:status: ruled
+:forced: no
+:follows_from: CHC-total_placement, RAT-folder_gps_fallback, RAT-remainder_worklist
+:justifies: RUL-unplaced_photo_waits, RUL-finalize_refuses_unplaced, RUL-merge_refuses_unplaced
+
+The tool is for a map-complete library, and every photo has some place a person can name: where it was taken, or at
+least the place its folder stands for. The owner: *"I explicitly want* no *unlocated photos. this is the role of the
+folder fallback."* — and: *"This means that geolocation phase should not be able to close while photos that cannot be
+geoplaced are in by-dest."* So a photo nothing places waits for that answer, and the folder's fallback is the one
+answer that serves a whole folder of such photos at once. Waiting is not enough on its own: what reaches the library
+is the photos as they are, and a photo can hold no position however its plan was decided — a write that never landed,
+a device's latitude 0 and longitude 0 read again. So finalize, which signs for the photos, and merge, which takes them
+into the library, look at what each photo holds, not at what was decided for it.
+:::
+
+:::{rat} An answer given for one photo outranks the tracks and the fallback, and stays
+:id: RAT-photo_answer_most_specific
+:status: ruled
+:forced: no
+:follows_from: RAT-placement_most_specific_first, RAT-decisions_are_the_users
+:justifies: RUL-chosen_position_honoured, RUL-chosen_position_names_a_photo, RUL-chosen_position_kept
+
+A position the user gives one photo is the most specific word there is on where it was, so it outranks a track and a
+fallback — also for a photo they already place, where the user knows better: a track recorded on the way back, a
+fallback that stands for the folder and not for this frame. Given, it is their decision, and a track or a fallback
+coming later does not take it back; only the user does, by emptying it. An answer that names no photo it could place —
+one not in that folder, or one keeping a position of its own — would be passed over in silence, so it stops the run.
 :::
 
 :::{rat} A place inside a place is near it
@@ -1344,9 +1359,9 @@ library.
 :status: ruled
 :forced: yes
 :follows_from: RAT-safety_not_on_the_plan, CHC-photos_matter
-:justifies: RUL-finalize_checks_photos, RUL-finalize_reports_placement, RUL-unlocated_logged
+:justifies: RUL-finalize_checks_photos, RUL-finalize_reports_placement
 
-Merge refuses a photo changed since finalize, on the strength of what finalize recorded. If finalize records whatever it finds, an edit made between execute and finalize becomes the baseline, and the library receives a photo the log describes as something else. Finalize is given once the user judges the work done, so it is also where they are told how done: how many photos have a position and by what means, how many were left without one — each of those by their own recorded answer.
+Merge refuses a photo changed since finalize, on the strength of what finalize recorded. If finalize records whatever it finds, an edit made between execute and finalize becomes the baseline, and the library receives a photo the log describes as something else. Finalize is given once the user judges the work done, so it is also where they are told how done: how every photo came by its position, and by what means.
 :::
 
 :::{rat} What a run reported stays on the record

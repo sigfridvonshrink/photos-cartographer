@@ -44,6 +44,19 @@ A photo whose fingerprint, taken again by merge, has changed SHALL be left in ph
 Merge SHALL proceed only while the workspace, checked again at merge's own start, satisfies geotag's gates.
 :::
 
+:::{rul} Merge takes no photo without a position
+:id: RUL-merge_refuses_unplaced
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+:refines: RUL-merge_rechecks_gates
+:uses: DEF-merge, RUL-finalize_refuses_unplaced
+
+Merge SHALL refuse while a photo in photos by destination holds no position, checked again at merge's own start as
+finalize checks it.
+:::
+
 :::{rul} What geotag's gates leave out does not block merge
 :id: RUL-merge_gates_leave_out_residue
 :status: ruled

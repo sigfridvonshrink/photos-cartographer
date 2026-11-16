@@ -48,6 +48,7 @@ from .photos_utils import (links_under, fingerprint_method_blocker,
     journal_path, take_zfs_snapshot, zfs_dataset, _move_no_clobber, get_imagemagick_version, write_db_snapshot, reseal_archival_package,
     write_sealed_marker, likely_new_dump, entries_not_carried, prep_log_path, prep_log_blocker, WorkspaceLock, LibraryLock, XDEV_TMP_PREFIX, XDEV_TMP_SUFFIX,
     workspace_volume_error, add_accept_changes_argument, check_workspace, write_workspace_record, note_execution_begun,
+    photos_without_position,
 )
 from .reporting import get_reporter, emit_next_step
 
@@ -310,6 +311,13 @@ class MergeWorkflow:
         if calib_plan is not None:
             self._check_prep_consistency(handoff, calib_plan, info["library_root"], blockers)
             self._check_unchanged_since_finalize(ws, calib_plan, info["library_root"], blockers)
+            # No photo reaches the library without a position (RUL-merge_refuses_unplaced): finalize's refusal,
+            # checked again at merge's own start from what each photo holds.
+            unplaced = photos_without_position(handoff, calib_plan)
+            if unplaced:
+                blockers.append(f"{len(unplaced)} photo(s) in {folder_name('photos_by_dest')} hold no position "
+                                f"(e.g. {unplaced[0]}) — give each a position, or its folder a fallback, then run "
+                                "geotag plan, execute and finalize again before merging.")
 
         return blockers, warnings, info
 

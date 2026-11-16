@@ -92,7 +92,33 @@ function cellAt(arts, ref) {
     return (arts.execution?.fingerprint_mismatches || []).find((m) => m && m.relative_path === ref.path) || null;
   const d = arts.gps?.destinations?.[ref.dest]; if (!d) return null;
   if (ref.kind === "fallback") return d.folder_fallback;
+  if (ref.kind === "chosen")                   // a photo the tracks or the fallback place, given a position of its own
+    return (d.gps_decisions?.placed_photos || []).find((r) => r.relative_path === ref.path);
   return (d.gps_decisions?.review_items || []).find((r) => r.relative_path === ref.path);
+}
+// photos-23 lists the photos the tracks or the fallback place (`placed_photos`) without a decision: each is given an
+// empty `user_decision` here, the position the user may set for that photo alone. Saved, it becomes a review item
+// `chosen_by_user` (BLD-chosen_position). Applied to the record as loaded, so base and work start equal. Pure.
+function withChosenCells(art) {
+  for (const d of Object.values(art?.gps?.destinations || {}))
+    for (const p of d?.gps_decisions?.placed_photos || [])
+      if (p && !p.user_decision) p.user_decision = { manual_lat: "", manual_lon: "" };
+  return art;
+}
+// What a review item offers, in order (BLD-chosen_position, docs/design/decisions.md): a photo nothing places is
+// offered its folder's fallback FIRST — set once, it places every unplaced photo of the folder, and below it once
+// accepted there — and a position for this photo alone second. Any other item offers the photo's own position. Pure.
+function reviewOffers(c) {
+  if (c && c.reason === "no_reliable_gps_source") return ["folder_fallback", "position"];
+  return ["position"];
+}
+// How a photo of photos-23's `placed_photos` is placed, as its row says it. Pure.
+const placedByLabel = (pp) => (pp && pp.placed_by === "folder_fallback" ? "fallback" : "tracks");
+// The folded list's heading: how many photos the tracks and the fallback place. Pure.
+function placedSummary(placed) {
+  const n = (placed || []).length, fb = (placed || []).filter((p) => p && p.placed_by === "folder_fallback").length;
+  const parts = [n - fb ? `${n - fb} by the tracks` : null, fb ? `${fb} by the fallback` : null].filter(Boolean);
+  return `${n} placed — ${parts.join(", ")}: set a position for one`;
 }
 const workCell = (ref) => cellAt(state.work, ref);
 const baseCell = (ref) => cellAt(state.base, ref);
@@ -114,6 +140,7 @@ function allRefs() {
   for (const [dest, d] of Object.entries(state.work.gps?.destinations || {})) {
     out.push({ file: "gps", dest, kind: "fallback" });
     for (const ri of d.gps_decisions?.review_items || []) out.push({ file: "gps", dest, kind: "review", path: ri.relative_path });
+    for (const pp of d.gps_decisions?.placed_photos || []) out.push({ file: "gps", dest, kind: "chosen", path: pp.relative_path });
   }
   for (const m of state.work.execution?.fingerprint_mismatches || [])
     if (m && m.relative_path) out.push({ file: "execution", kind: "fingerprint", path: m.relative_path });
@@ -216,7 +243,7 @@ const touchChange = (ref) => {
 // are bucket keys) or a multi-selected run of GPS review photos (peers are relative paths). An edit fans
 // out identically to all of them so one action resolves the whole set. The identifying field differs by
 // kind: review cells are addressed by `path`, everything else by `key`. A ref with no peers edits itself.
-const peerField = (ref) => (ref.kind === "review" ? "path" : "key");
+const peerField = (ref) => (ref.kind === "review" || ref.kind === "chosen" ? "path" : "key");
 const peerKeys = (ref) => (ref.peers && ref.peers.length ? ref.peers : [ref[peerField(ref)]]);
 const peerRefs = (ref) => peerKeys(ref).map((id) => ({ ...ref, [peerField(ref)]: id, peers: undefined }));
 const eachPeer = (ref, fn) => { for (const r of peerRefs(ref)) { const c = cellAt(state.work, r); if (c) fn(c, r); } };
@@ -269,7 +296,9 @@ function wouldResolve(ref) {
     return (u.fallback_lat !== "" && u.fallback_lat != null && u.fallback_lon !== "" && u.fallback_lon != null)
       || (!!u.accept_proposal && !!p.proposed_fallback);
   if (c.reason === "own_position_contradicted") return true;      // its own position kept, or the one set for it
-  return (u.manual_lat !== "" && u.manual_lat != null && u.manual_lon !== "" && u.manual_lon != null) || !!u.accept_unlocated;
+  if (ref.kind === "chosen") return true;                         // the tracks or the fallback place it already
+  return (u.manual_lat !== "" && u.manual_lat != null && u.manual_lon !== "" && u.manual_lon != null)
+    || (c.reason === "no_reliable_gps_source" && !!fbOwnDecision(ref.dest));   // its folder's fallback places it
 }
 function statusChip(ref) {
   if (isDirty(ref)) {                          // a pending edit supersedes the last run's status
@@ -456,10 +485,13 @@ function previewEffective(ref) {
     if (pv && pv.source === "inherited") return `${pv.lat}, ${pv.lon} (inherited ⟵ ${leaf(pv.from)}, preview)`;
     return "— (optional)";
   }
-  if (u.manual_lat !== "" && u.manual_lon !== "") return `${u.manual_lat}, ${u.manual_lon} (manual)`;
+  if (u.manual_lat !== "" && u.manual_lat != null && u.manual_lon !== "" && u.manual_lon != null)
+    return `${u.manual_lat}, ${u.manual_lon} (manual)`;
   if (c.reason === "own_position_contradicted") return "its own position kept";
-  if (u.accept_unlocated) return "left unlocated";
-  return "— (needs a coordinate or accept-unlocated)";
+  if (ref.kind === "chosen") return c.placed_by === "folder_fallback" ? "placed by its folder's fallback" : "placed by the tracks";
+  const fb = fbOwnDecision(ref.dest);
+  if (fb) return `${fb.lat}, ${fb.lon} (its folder's fallback)`;
+  return "— (needs its folder's fallback, or a position for this photo)";
 }
 
 // --- advisory timezone inheritance preview -----------------------------------
@@ -725,6 +757,23 @@ function renderGps(list) {
       list.append(el("div", { class: "row" + (isSel(ref) ? " sel" : ""), onclick: (ev) => selectReview(ev, dest, ri.relative_path, order),
           onmouseenter: (ev) => showHoverPreview(ri.relative_path, ev), onmousemove: moveHoverPreview, onmouseleave: hideHoverPreview },
         el("span", { class: "label" }, ri.relative_path.split("/").pop()), chip("reason", ri.reason), ...tags(ref), statusChip(ref)));
+    }
+    // The photos the tracks or the fallback place, folded: each can be given a position of its own (`set position`),
+    // which outranks both (BLD-chosen_position). Folded, since nothing about them waits (docs/design/decisions.md).
+    const placed = d.gps_decisions?.placed_photos || [];
+    if (placed.length) {
+      const fold = el("details", { class: "placed", open: (state.openPlaced || []).includes(dest) ? "" : null,
+        ontoggle: (ev) => { const o = new Set(state.openPlaced || []); ev.target.open ? o.add(dest) : o.delete(dest); state.openPlaced = [...o]; } },
+        el("summary", {}, placedSummary(placed)));
+      for (const pp of placed) {
+        const ref = { file: "gps", dest, kind: "chosen", path: pp.relative_path };
+        fold.append(el("div", { class: "row" + (isSel(ref) ? " sel" : ""),
+            onmouseenter: (ev) => showHoverPreview(pp.relative_path, ev), onmousemove: moveHoverPreview, onmouseleave: hideHoverPreview },
+          el("span", { class: "label" }, pp.relative_path.split("/").pop()), chip("reason", placedByLabel(pp)), ...tags(ref),
+          isDirty(ref) ? statusChip(ref) : null,
+          el("button", { class: "mini", onclick: () => { state.selected = ref; render(); } }, "set position")));
+      }
+      list.append(fold);
     }
     list.append(el("div", { class: "summary" }, `${s.files_total ?? 0} files — preserve ${s.preserve_native_gps ?? 0}, interp ${s.automatic_gpx_interpolation ?? 0}, extrap ${s.automatic_gpx_extrapolation ?? 0}, fallback ${s.automatic_folder_fallback ?? 0}, blocked ${s.blocked ?? 0}`));
   }
@@ -1122,11 +1171,30 @@ function controls(ref) {
     wrap.append(coordField(ref));
     if (u.manual_lat !== "" && u.manual_lat != null)
       wrap.append(el("button", { class: "mini", onclick: () => editMany(ref, { manual_lat: "", manual_lon: "" }) }, "keep its own position"));
+  } else if (ref.kind === "chosen") {
+    // a photo the tracks or the fallback place, given a position of its own: written as a `chosen_by_user` review
+    // item, which outranks both and is kept while it holds a position (BLD-chosen_position)
+    wrap.append(el("div", { class: "hint" }, `${c.placed_by === "folder_fallback" ? "Its folder's fallback" : "The tracks"} ` +
+      "place this photo. A position set here is this photo's alone, and stays while it is set."));
+    wrap.append(coordField(ref));
+    if (u.manual_lat !== "" && u.manual_lat != null)
+      wrap.append(el("button", { class: "mini", onclick: () => editMany(ref, { manual_lat: "", manual_lon: "" }) },
+        c.placed_by === "folder_fallback" ? "back to the fallback" : "back to the tracks"));
   } else {
     const note = tracksNote(c.tracks);
     if (note) wrap.append(el("div", { class: "hint" }, note));
-    wrap.append(coordField(ref));
-    wrap.append(checkbox("leave unlocated (accept no GPS)", u.accept_unlocated, (v) => edit(ref, "accept_unlocated", v)));
+    for (const offer of reviewOffers(c)) {
+      if (offer === "folder_fallback") {
+        // the folder's fallback first: one answer places every photo of the folder nothing else places
+        // (docs/design/decisions.md)
+        const fbRef = { file: "gps", dest: ref.dest, kind: "fallback" }, fb = fbOwnDecision(ref.dest);
+        wrap.append(el("div", { class: "ctl-row" },
+          el("button", { class: "btn", onclick: () => { state.selected = fbRef; render(); } }, "set the folder's fallback"),
+          el("span", { class: "hint" }, fb ? `set: ${fb.lat}, ${fb.lon} — it places this photo`
+            : "places every photo of this folder the tracks do not")));
+        wrap.append(el("div", { class: "hint" }, "or a position for this photo alone:"));
+      } else wrap.append(coordField(ref));
+    }
   }
   return wrap;
 }
@@ -1399,7 +1467,7 @@ function driftMap(ref, frame, fi) {
 // for non-photo cells; for a multi-photo run, `ref.path` is the first photo.
 function decisionThumb(ref) {
   const photo = ref.kind === "reading" || ref.kind === "changed" ? ref.key : ["camera", "bodies"].includes(ref.kind) ? (workCell(ref)?.examples || [])[0] : ref.path;
-  if (state.base.demo || !["review", "reading", "fingerprint", "camera", "bodies", "changed"].includes(ref.kind) || !photo) return null;
+  if (state.base.demo || !["review", "chosen", "reading", "fingerprint", "camera", "bodies", "changed"].includes(ref.kind) || !photo) return null;
   const img = el("img", { class: "decision-thumb", alt: photo, title: photo.split("/").pop(),
     src: "/api/photo?path=" + encodeURIComponent(photo) });
   img.addEventListener("error", () => img.remove());
@@ -1897,7 +1965,7 @@ function renderPanel() {
   const p = $("#panel"); p.replaceChildren();
   _coordInp = null;                                   // re-set by coordField() when this panel has one
   const ref = state.selected, c = workCell(ref);
-  const isGpsCoord = ref && ref.file === "gps" && (ref.kind === "fallback" || ref.kind === "review");
+  const isGpsCoord = ref && ref.file === "gps" && ["fallback", "review", "chosen"].includes(ref.kind);
   const isScrub = ref && ref.kind === "drift";
   if (!isGpsCoord && !isScrub) teardownMap();
   const cellKey = mapKeyFor(ref);
@@ -1913,6 +1981,7 @@ function renderPanel() {
     : ref.kind === "camera" ? "A new camera group"
     : ref.kind === "bodies" ? "One camera, or several bodies"
     : ref.kind === "review" ? (multi ? `GPS review · ${ref.peers.length} photos` : "GPS review item")
+    : ref.kind === "chosen" ? "A position for one placed photo"
       : ref.kind === "fallback" ? "Folder fallback" : "Timezone";
   p.append(el("h2", {}, title), el("div", { class: "path" }, ref.path || (["reading", "camera", "bodies", "changed"].includes(ref.kind) ? ref.key : ref.dest)));
   const head = el("div", { class: "pblock" }, ...(statusChip(ref) ? [statusChip(ref)] : []), ...tags(ref));
@@ -2054,7 +2123,7 @@ async function main() {
   const refusal = loadRefusal(res.status, body);
   if (refusal) return showRefusal(refusal);
   setHostZones(body.zones);
-  state.base = body; state.work = clone(state.base);
+  state.base = withChosenCells(body); state.work = clone(state.base);
   if (Object.keys(body.cameras?.groups || {}).length) state.view = "cameras";   // geotag waits on these first
   render();
 }
@@ -2070,7 +2139,7 @@ export {
   groupChoice, chosenOffset, inConflict, proposalTaken, proposalNotes, driftConfirmHolds, driftConfirmFields, driftCorrectionFields, driftTracksHold, driftStaleReason, acceptFields, acceptHolds, tracksNote,
   zoneContradiction, offsetCellNotes, zoneSpokenFor, zoneDespiteFields, effectiveCountry, clearCountriesInside,
   clockChangeHolds, clockChangePartsGiven, clockChangeFields, clockChangePart, contradictedNote, takeTrackPosition, neighbourDayNote,
-  scrubOffset, scrubSeedIndex, mapKeyFor, savePayload,
+  scrubOffset, scrubSeedIndex, mapKeyFor, savePayload, withChosenCells, reviewOffers, placedByLabel, placedSummary,
   ambiguousTimeNote, gpsTimeAsideNote, zoneOffer, validReading, keepHolds, keepFields, keepOffered, phoneNote,
   trueInstant, parseUtcOff, mismatchAccepted, recordAbsentText, DEVICE_CLASSES, changedHolds, changedFields, changedKeepLabel, keptTagNote, unidentifiedHolds, unidentifiedFields, loadRefusal, hasUnsavedEdits, utcOff,
   fmtSpan, utcToZonedWallMs, zonedWallToUtcMs, offsetFromTrueTime, trueTimeOf,

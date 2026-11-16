@@ -48,7 +48,6 @@
           "files_total": 1,
           "manual_locked": 0,
           "manual_review_required": 0,
-          "no_gps_change_needed": 0,
           "preserve_native_gps": 1
         }
       }
@@ -81,6 +80,13 @@
             "Automatic decisions are summarized here; exact file-level write operations are listed only in photos-24-executable-plan.json."
           ]
         },
+        "placed_photos": [
+          {
+            "content_fingerprint": "fp-6-photos-by-dest/Belgium/bel-cam.arw",
+            "placed_by": "folder_fallback",
+            "relative_path": "6-photos-by-dest/Belgium/bel-cam.arw"
+          }
+        ],
         "review_items": [],
         "summary": {
           "automatic_folder_fallback": 1,
@@ -90,7 +96,6 @@
           "files_total": 2,
           "manual_locked": 0,
           "manual_review_required": 0,
-          "no_gps_change_needed": 0,
           "preserve_native_gps": 1
         }
       }
@@ -137,7 +142,6 @@
           "files_total": 1,
           "manual_locked": 0,
           "manual_review_required": 0,
-          "no_gps_change_needed": 0,
           "preserve_native_gps": 1
         }
       }
@@ -181,7 +185,6 @@
           "files_total": 3,
           "manual_locked": 0,
           "manual_review_required": 0,
-          "no_gps_change_needed": 0,
           "preserve_native_gps": 3
         }
       }
@@ -189,7 +192,10 @@
     "6-photos-by-dest/Japan": {
       "destination_path": "6-photos-by-dest/Japan",
       "folder_fallback": {
-        "effective_fallback": null,
+        "effective_fallback": {
+          "lat": 35.6762,
+          "lon": 139.6503
+        },
         "proposal": {
           "proposal_source": "manual_required"
         },
@@ -197,8 +203,8 @@
         "stale_user_decision": false,
         "user_decision": {
           "accept_proposal": false,
-          "fallback_lat": "",
-          "fallback_lon": ""
+          "fallback_lat": 35.6762,
+          "fallback_lon": 139.6503
         }
       },
       "gps_decisions": {
@@ -213,6 +219,23 @@
             "Automatic decisions are summarized here; exact file-level write operations are listed only in photos-24-executable-plan.json."
           ]
         },
+        "placed_photos": [
+          {
+            "content_fingerprint": "fp-6-photos-by-dest/Japan/blocked-b.arw",
+            "placed_by": "folder_fallback",
+            "relative_path": "6-photos-by-dest/Japan/blocked-b.arw"
+          },
+          {
+            "content_fingerprint": "fp-6-photos-by-dest/Japan/extrap.arw",
+            "placed_by": "tracks",
+            "relative_path": "6-photos-by-dest/Japan/extrap.arw"
+          },
+          {
+            "content_fingerprint": "fp-6-photos-by-dest/Japan/interp.arw",
+            "placed_by": "tracks",
+            "relative_path": "6-photos-by-dest/Japan/interp.arw"
+          }
+        ],
         "review_items": [
           {
             "content_fingerprint": "fp-6-photos-by-dest/Japan/blocked-a.arw",
@@ -221,37 +244,30 @@
             "requires_user_input": false,
             "stale_user_decision": false,
             "user_decision": {
-              "accept_unlocated": false,
               "manual_lat": 35.0116,
               "manual_lon": 135.7681
             }
           },
           {
-            "content_fingerprint": "fp-6-photos-by-dest/Japan/blocked-b.arw",
-            "reason": "accepted_unlocated",
-            "relative_path": "6-photos-by-dest/Japan/blocked-b.arw",
+            "content_fingerprint": "fp-6-photos-by-dest/Japan/interp-chosen.arw",
+            "reason": "manual_locked",
+            "relative_path": "6-photos-by-dest/Japan/interp-chosen.arw",
             "requires_user_input": false,
             "stale_user_decision": false,
-            "tracks": {
-              "reason": "outside_track",
-              "seconds_from_track": 31800
-            },
             "user_decision": {
-              "accept_unlocated": true,
-              "manual_lat": "",
-              "manual_lon": ""
+              "manual_lat": 35.0,
+              "manual_lon": 135.75
             }
           }
         ],
         "summary": {
-          "automatic_folder_fallback": 0,
+          "automatic_folder_fallback": 1,
           "automatic_gpx_extrapolation": 1,
           "automatic_gpx_interpolation": 1,
           "blocked": 0,
-          "files_total": 6,
-          "manual_locked": 1,
+          "files_total": 7,
+          "manual_locked": 2,
           "manual_review_required": 0,
-          "no_gps_change_needed": 1,
           "preserve_native_gps": 2
         }
       }
@@ -290,7 +306,6 @@
           "files_total": 1,
           "manual_locked": 0,
           "manual_review_required": 0,
-          "no_gps_change_needed": 0,
           "preserve_native_gps": 1
         }
       }

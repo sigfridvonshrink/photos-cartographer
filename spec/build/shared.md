@@ -79,7 +79,9 @@ editor loads and saves each by its kind: in photos-21, `timezone` (`destination_
 `camera_group_time_decisions`, a phone's among them, by its key — a day's split where its clock changed answered on the
 day's cell, its parts never), `reading` (an entry of `local_time_readings`, by
 its photo's path), `changed` (an entry of `changed_times`, by its photo's path) and `unidentified`
-(`unidentified_files`); in photos-22, `drift`; in photos-23, `fallback` and `review`;
+(`unidentified_files`); in photos-22, `drift`; in photos-23, `fallback`, `review` and `chosen` (a photo of a
+destination's `placed_photos`, by its path: written as its `chosen_by_user` review item, added where it has none —
+{need}`BLD-chosen_position`);
 in `photos-25-execution-summary.json`, which `geotag execute` reads, `fingerprint` (an entry of `fingerprint_mismatches`,
 by its photo's path); and in the configuration a camera group's class, `camera` ({need}`BLD-editor_lists_new_camera_groups`),
 and whether a camera group is several bodies, `bodies` ({need}`BLD-editor_marks_several_bodies`).
@@ -1084,7 +1086,7 @@ the destination's folder fallback, with the destination it was accepted from.
 :::{bld} Geotag's steps in the log
 :id: BLD-geotag_log_steps
 :status: ruled
-:realises: RUL-log_entry_grows, RUL-log_records_gps_reverts, RUL-log_records_time_replaced, RUL-log_records_other_times_replaced, RUL-log_records_null_island_replaced, RUL-log_records_null_island_cleared
+:realises: RUL-log_entry_grows, RUL-log_records_gps_reverts, RUL-log_records_time_replaced, RUL-log_records_other_times_replaced, RUL-log_records_null_island_replaced
 
 Geotag's steps SHALL be `clock_offset_applied` (its `offset_seconds` with an `offset_description` in words, such as
 "camera clock 1 h 55 min ahead of UTC"), `resolved_utc`, `timezone_resolved`, `time_written` (with its `writes`, the
@@ -1092,8 +1094,7 @@ Geotag's steps SHALL be `clock_offset_applied` (its `offset_seconds` with an `of
 `true_time_kept` (the time the user kept as the photo's true time, its `value`, from the plan's `true_times_kept`), `gps_written` (with its
 origin, method and, for a manual position or one written over a position the device wrote that is none of the photo's
 own, the `pre_state` it replaced, from the plan), `gps_cleared` (a position geotag
-wrote and no longer places, or the latitude 0 and longitude 0 of a photo left unlocated, with that position, from the
-plan, and the method left), `gps_preserved` and `final_rename`,
+wrote and no longer places, with that position, from the plan, and the method left), `gps_preserved` and `final_rename`,
 each naming its `run`; finalize takes them from every executed pass — each superseded `photos-24` whose journal shows it
 ran, oldest first, matched by fingerprint — before the current plan's, from the provenance each time write carries.
 :::
@@ -1371,12 +1372,14 @@ existing folder neither inside the workspace nor holding it.
 :::{bld} Where geotag checks the decisions
 :id: BLD-geotag_checks_decisions
 :status: ruled
-:realises: RUL-checked_shapes, RUL-checked_positions_and_times, RUL-checked_timezones, RUL-invalid_value_stops, RUL-invalid_value_located, RUL-invalid_decision_kept, RUL-invalid_value_never_repaired, RUL-checked_every_run
+:realises: RUL-checked_shapes, RUL-checked_positions_and_times, RUL-checked_timezones, RUL-invalid_value_stops, RUL-invalid_value_located, RUL-invalid_decision_kept, RUL-invalid_value_never_repaired, RUL-checked_every_run, RUL-unknown_decision_field_refused
 
 Geotag SHALL check the decisions in `photos-21`, `photos-22` and `photos-23` as it reads them: each blocker names the
 artifact, the destination, the cell or the file, and the field, and an artifact holding one is left as
 it is, its plan not written. A decision artifact that cannot be read, does not parse as JSON or is not a JSON object is
-such a blocker, located to where parsing failed — never taken as absent.
+such a blocker, located to where parsing failed — never taken as absent. So is a `photos-23` review item's
+`user_decision` holding a field other than `manual_lat` and `manual_lon` (`unknown_review_fields`), one blocker per
+field, naming it; the decision editor shows such a `photos-23` as a record it cannot read, with those blockers.
 :::
 
 ## 15. Nothing overwritten, nothing left half-done

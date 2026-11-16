@@ -14,7 +14,7 @@
 
 """Geotag (RUL-withdrawal_undoes) — reversible manual GPS overrides. Every plan decides about a pinned photo from its
 own values (the original-values ledger, BLD-decided_from_own_values), so a withdrawn pin is planned like any changed
-decision: the photo is placed again from the tracks, or geotag's position is cleared. There is no revert operation
+decision: the photo is placed again from the tracks, or by its folder's fallback. There is no revert operation
 and no store of its own. exiftool-write + fingerprint are mocked. From conftest.py.
 """
 import json
@@ -47,7 +47,7 @@ def _row(rel):
     return {"relative_path": rel, "resolved_utc": "2024-07-03T12:00:00Z", "resolved_utc_status": "valid"}
 
 
-def _plan_wf(tmp_path, files, *, manual=None, unlocated=()):
+def _plan_wf(tmp_path, files, *, manual=None, fallback=None):
     ws = tmp_path / "ws"; (ws / ".photos-ingest").mkdir(parents=True); ctl = ws / ".photos-ingest"
     (ctl / "photos-00-config.json").write_text(json.dumps({k: v for k, v in utils.CONFIG.items() if k != "jobs"}))
     (ctl / "photos-11-handoff.json").write_text(json.dumps(vouched(ctl.parent, {"filename_timestamp_format": utils.CONFIG["filename_timestamp_format"], "cache_fingerprint": "pcf"})))
@@ -56,13 +56,10 @@ def _plan_wf(tmp_path, files, *, manual=None, unlocated=()):
     for rel, (lat, lon) in (manual or {}).items():
         d = next(f["destination"] for f in files if f["relative_path"] == rel)
         reviews[d].append({"relative_path": rel, "user_decision": {"manual_lat": lat, "manual_lon": lon}})
-    for rel in unlocated:
-        d = next(f["destination"] for f in files if f["relative_path"] == rel)
-        reviews[d].append({"relative_path": rel, "user_decision": {"accept_unlocated": True}})
     time_art = {"status": "complete", "destinations": {
         d: {"destination_timezone": {"effective_iana_timezone": "Europe/Brussels"}} for d in dests}}
     gps_art = {"status": "complete", "destinations": {
-        d: {"folder_fallback": {"effective_fallback": None},
+        d: {"folder_fallback": {"effective_fallback": fallback},
             "gps_decisions": {"review_items": reviews[d]}} for d in dests}}
     (ctl / "photos-21-time-decisions.json").write_text(json.dumps(time_art))
     (ctl / "photos-22-gps-drift-validation.json").write_text(
@@ -103,21 +100,20 @@ def test_a_cleared_position_takes_its_hemisphere_refs_with_it():
                             "GPSProcessingMethod": "+carto-time"}
 
 
-@pytest.mark.spec("RUL-withdrawal_undoes", test="TST-geotag_gps_ledger-a_withdrawn_pin_is_cleared")
-def test_a_withdrawn_pin_is_cleared(tmp_path):
-    """A pin withdrawn from a photo that had no GPS, the photo accepted as unlocated: the plan, deciding
-    from its own values, clears geotag's position, and records the position it clears."""
+@pytest.mark.spec("RUL-withdrawal_undoes", test="TST-geotag_gps_ledger-a_withdrawn_pin_gives_way_to_the_fallback")
+def test_a_withdrawn_pin_gives_way_to_the_fallback(tmp_path):
+    """A pin withdrawn from a photo that had no GPS, off every track: the plan, deciding from its own values, gives it
+    its folder's fallback over geotag's old position, and records the position it replaces."""
     rel = f"{BYDEST}/T/a.jpg"
     f = _pinned(rel, f"{BYDEST}/T", (48.85, 2.35), "manual_locked")
-    wf, t, g, gpx = _plan_wf(tmp_path, [f], unlocated=[rel])
+    wf, t, g, gpx = _plan_wf(tmp_path, [f], fallback={"lat": 50.5, "lon": 4.5})
     plan, blockers = wf.build_executable_plan([f], [_row(rel)], t, g, gpx, "rfp")
     assert blockers == []
-    clear = next(o for o in _ops(plan, rel) if o["type"] == "gps_marker_write")
-    assert clear["writes"]["GPSLatitude"] == "" and clear["writes"]["GPSLongitude"] == ""
-    assert clear["writes"]["GPSProcessingMethod"] == "+carto-time"
-    assert clear["pre_state"] == {"present": True, "GPSLatitude": 48.85, "GPSLongitude": 2.35,
-                                  "GPSProcessingMethod": "manual_locked"}
-    assert not any(o["type"] == "metadata_gps_write" for o in _ops(plan, rel))
+    w = next(o for o in _ops(plan, rel) if o["type"] == "metadata_gps_write")
+    assert (w["writes"]["GPSLatitude"], w["writes"]["GPSLongitude"], w["gps_origin"]) == (50.5, 4.5, "apply_manual")
+    assert w["pre_state"] == {"present": True, "GPSLatitude": 48.85, "GPSLongitude": 2.35,
+                              "GPSProcessingMethod": "manual_locked"}
+    assert plan["placement"] == {"manual_fallback": 1}
 
 
 @pytest.mark.spec("BLD-decided_from_own_values", "RUL-withdrawal_undoes",
@@ -145,7 +141,7 @@ def test_a_withdrawal_never_reverts_time_name_or_destination(tmp_path):
     (time writes and renames are forward-idempotent), and it never moves a photo across destinations."""
     rel = f"{BYDEST}/T/a.jpg"
     f = _pinned(rel, f"{BYDEST}/T", (48.85, 2.35), "manual_locked")
-    wf, t, g, gpx = _plan_wf(tmp_path, [f], unlocated=[rel])
+    wf, t, g, gpx = _plan_wf(tmp_path, [f], fallback={"lat": 50.5, "lon": 4.5})
     plan, _ = wf.build_executable_plan([f], [_row(rel)], t, g, gpx, "rfp")
     ops = _ops(plan)
     assert ops and {o["type"] for o in ops} <= _FORWARD
@@ -299,7 +295,7 @@ def test_a_pin_executed_then_withdrawn_plans_and_executes_again(tmp_path, monkey
     q = ctl / "photos-23-gps-decisions.json"; b = json.load(open(q))
     b["destinations"][f"{BYDEST}/T"]["folder_fallback"]["user_decision"].update({"fallback_lat": "", "fallback_lon": ""})
     b["destinations"][f"{BYDEST}/T"]["gps_decisions"]["review_items"] = [
-        {"relative_path": f"{BYDEST}/T/2024-07-03--14-30-00.arw", "user_decision": {"accept_unlocated": True}}]
+        {"relative_path": f"{BYDEST}/T/2024-07-03--14-30-00.arw", "user_decision": {"manual_lat": 47.0, "manual_lon": 3.0}}]
     q.write_text(json.dumps(b))
     _run(monkeypatch, ws, "plan")
     plan = json.load(open(ctl / "photos-24-executable-plan.json"))

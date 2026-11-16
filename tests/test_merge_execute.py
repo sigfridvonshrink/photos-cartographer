@@ -29,8 +29,9 @@ import pytest
 
 import photos_3_merge as merge
 import photos_utils as utils
+from test_merge_preflight import PLACED
 
-MANAGED = ["0-sources", "1-strays", "2-missing-metadata", "3-redundant-jpgs",
+MANAGED =["0-sources", "1-strays", "2-missing-metadata", "3-redundant-jpgs",
            "4-videos-by-date", "5-photos-by-date", "6-photos-by-dest"]
 
 
@@ -87,7 +88,8 @@ def _ws(tmp_path, photos, library_files=(), name="ws", folders=None):
         rel_pre = os.path.join(bd, dest, pre) if dest else os.path.join(bd, pre)
         ho_files.append({"relative_path": rel_pre, "folder_class": bd,
                          "media_class": "image",
-                         "content_hash": p.get("content_hash", json.dumps({"status": "valid", "value": p["fp"]}))})
+                         "content_hash": p.get("content_hash", json.dumps({"status": "valid", "value": p["fp"]})),
+                         "metadata_status": PLACED})
         if pre != final:
             ops.append({"type": "rename_no_clobber", "to": final,
                         "preconditions": {"content_fingerprint": p["fp"]}})

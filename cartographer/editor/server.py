@@ -232,9 +232,16 @@ def _parse_record(raw, name):
     if raw is None:
         return None
     try:
-        return json.loads(raw)
+        art = json.loads(raw)
     except ValueError as e:
         return {"_error": f"could not read {name}: {e}"}
+    if name == GPS_NAME:
+        # A photo's position decision holding a field it does not have — `accept_unlocated` among them — is refused
+        # as geotag refuses it (RUL-unknown_decision_field_refused): shown as a record that cannot be read, named.
+        unknown = photos_2_geotag.unknown_review_fields(art)
+        if unknown:
+            return {"_error": f"could not read {name}: {' '.join(unknown)}"}
+    return art
 
 
 _HOST_ZONES = None
@@ -357,6 +364,9 @@ def _edit_cell(art, e):
     elif kind == "review":
         cell = next((r for r in (d.get("gps_decisions") or {}).get("review_items") or []
                      if r.get("relative_path") == e.get("path")), None)
+    elif kind == "chosen":                      # a photo the tracks or the fallback place, by its path (placed_photos)
+        cell = next((r for r in (d.get("gps_decisions") or {}).get("placed_photos") or []
+                     if isinstance(r, dict) and r.get("relative_path") == e.get("path")), None)
     else:
         cell = None
     return cell if isinstance(cell, dict) else None
@@ -384,9 +394,25 @@ def _apply_edits(art, edits):
     for e in edits:
         cell = _edit_cell(art, e)
         if cell is not None and isinstance(e.get("user_decision"), dict):
+            if e.get("kind") == "chosen":
+                cell = _chosen_item(art, e, cell)
             cell["user_decision"] = e["user_decision"]
             applied += 1
     return applied
+
+
+def _chosen_item(art, e, placed):
+    """The review item a position chosen for a photo the tracks or the fallback place is written into
+    (BLD-chosen_position): the destination's `chosen_by_user` entry for that photo, added when it has none — the entry
+    the user would write by hand. The listed photo itself is left as geotag wrote it."""
+    items = art["destinations"][e["dest"]].setdefault("gps_decisions", {}).setdefault("review_items", [])
+    item = next((r for r in items if isinstance(r, dict) and r.get("relative_path") == e["path"]), None)
+    if item is None:
+        item = {"relative_path": e["path"], "content_fingerprint": placed.get("content_fingerprint"),
+                "reason": photos_2_geotag.GeotagWorkflow._CHOSEN, "user_decision": {},
+                "requires_user_input": False, "stale_user_decision": False}
+        items.append(item)
+    return item
 
 
 def _classed_config(workspace, raw, edits):

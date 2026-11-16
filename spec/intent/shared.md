@@ -2215,7 +2215,8 @@ mutated files repaired by hand.
 :refines: RUL-decision_revisable
 
 Withdrawing a decision SHALL undo its effect, not merely stop asserting it: a manual position withdrawn gives the file
-the position it would have had without it — from the tracks, or none; a position derived by the tool is derived again.
+the position it would have had without it — from the tracks or its folder's fallback; a position derived by the tool is
+derived again.
 :::
 
 :::{rul} After a withdrawal the time and the name are recomputed in place
@@ -2436,18 +2437,6 @@ that there was none.
 
 A position geotag writes over a photo's position of latitude 0 and longitude 0 SHALL appear in the log with the
 position it replaced.
-:::
-
-:::{rul} A position at latitude 0 and longitude 0 removed is logged with it
-:id: RUL-log_records_null_island_cleared
-:status: ruled
-:criticality: med
-:verify: required
-:refines: RUL-unlocated_null_island_cleared
-:uses: DEF-transformation_log
-
-A position of latitude 0 and longitude 0 that geotag removes from a photo left unlocated SHALL appear in the log with
-the position it removed.
 :::
 
 :::{rul} A time written is logged with what it replaced and how it was found
@@ -3449,6 +3438,18 @@ A value from a fixed set — a device group's class among them — SHALL be one 
 :uses: DEF-decision, RUL-user_writes_decisions
 
 A decision's structure SHALL be whole: a decision whose structure is broken is an error, never ignored.
+:::
+
+:::{rul} A photo's position decision holds only its own fields
+:id: RUL-unknown_decision_field_refused
+:status: ruled
+:criticality: med
+:anti: yes
+:verify: required
+:refines: RUL-checked_decision_structure
+:uses: DEF-decision
+
+A field written into a photo's position decision that the decision does not have SHALL be an error, naming the field.
 :::
 
 :::{rul} An invalid value stops the phase before it changes anything

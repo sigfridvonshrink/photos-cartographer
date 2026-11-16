@@ -53,7 +53,7 @@ from .photos_utils import (fingerprint_method_blocker, links_under, replace_dura
     CONFIG, CONTROL_DIR, control_dir, FINALIZED_MEDIA_ARTIFACT, finalized_media_path, workspace_volume_error, config_path, handoff_path, guard_path, is_sealed, likely_new_dump,
     validate_config, load_config, sha256_file, sha256_text, media_class_for_ext, folder_name,
     folders_fingerprint, media_extensions_fingerprint,
-    selected_gpx_root, NO_IDENTITY_KEY, has_own_position, FIELD_SET_VERSION, CAMERA_GROUP_KEY_VERSION, FOLDER_ROLES,
+    selected_gpx_root, NO_IDENTITY_KEY, has_own_position, photos_without_position,FIELD_SET_VERSION, CAMERA_GROUP_KEY_VERSION, FOLDER_ROLES,
     missing_managed_folders, top_level_links, misplaced_top_level_entries, by_dest_reprep_pending,
     json_dependency, verify_json_dependency, handoff_content_fingerprint, handoff_filename_format_blocker, write_json_artifact, write_versioned_json, backup_existing_artifact,
     db_path, ensure_control_dir,
@@ -277,6 +277,33 @@ def _decision_shape_blockers(prior, kind):
                     out.append(f"{dest}: gps_decisions.review_items[{i}] must be an object with its relative_path.")
                 else:
                     obj(ri, "user_decision", f"{dest}/{os.path.basename(ri['relative_path'])}: user_decision")
+    if kind == "gps":
+        out += unknown_review_fields(prior)
+    return out
+
+
+# The fields of a photo's position decision in photos-23 (BLD-geotag_checks_decisions): a position the user sets for it.
+REVIEW_DECISION_FIELDS = ("manual_lat", "manual_lon")
+
+
+def unknown_review_fields(gps_record):
+    """Where a photos-23 review item's `user_decision` holds a field it does not have, one located blocker per field,
+    naming it (RUL-unknown_decision_field_refused): a field geotag does not read, left in, would say what geotag does
+    not do — `accept_unlocated`, from when a photo could be left without a position, among them. The decision editor
+    shows such a record as one it cannot read."""
+    out = []
+    dests = (gps_record or {}).get("destinations") if isinstance(gps_record, dict) else None
+    for dest, d in (dests.items() if isinstance(dests, dict) else ()):
+        items = ((d.get("gps_decisions") if isinstance(d, dict) else None) or {})
+        items = items.get("review_items") if isinstance(items, dict) else None
+        for ri in items if isinstance(items, list) else ():
+            ud = ri.get("user_decision") if isinstance(ri, dict) else None
+            if not isinstance(ud, dict):
+                continue
+            for k in sorted(k for k in ud if k not in REVIEW_DECISION_FIELDS):
+                out.append(f"{dest}/{os.path.basename(str(ri.get('relative_path')))}: user_decision.{k} is not a "
+                           f"field of a photo's position decision (only {' and '.join(REVIEW_DECISION_FIELDS)}) "
+                           "— remove it.")
     return out
 
 
@@ -2079,7 +2106,11 @@ class GeotagWorkflow:
 
     _SUMMARY_KEYS = ("files_total", "preserve_native_gps", "automatic_gpx_interpolation",
                      "automatic_gpx_extrapolation", "automatic_folder_fallback", "manual_locked",
-                     "manual_review_required", "blocked", "no_gps_change_needed")
+                     "manual_review_required", "blocked")
+
+    # The reason of a review item the user adds for a photo the tracks or a fallback place, to give it a position of
+    # its own choosing (BLD-chosen_position); geotag keeps it as a `manual_locked` item.
+    _CHOSEN = "chosen_by_user"
 
     def build_gps_decisions(self, files, resolved_rows, gpx, prior, resolved_fp, contradicted=()):
         """Build/regenerate photos-23 (BLD-gps_decisions_record): the BLD-placement_order decision per by-dest file,
@@ -2117,8 +2148,9 @@ class GeotagWorkflow:
             items = (prior_d.get("gps_decisions") or {}).get("review_items") or []
             prior_reviews = ({ri["content_fingerprint"]: ri for ri in items if ri.get("content_fingerprint")},
                              {ri["relative_path"]: ri for ri in items if not ri.get("content_fingerprint")})
+            self._check_chosen_items(dest, items, by_dest.get(dest, []), blockers)
             counts = {k: 0 for k in self._SUMMARY_KEYS}
-            review_items, gpx_files, untracked = [], set(), []
+            review_items, gpx_files, untracked, placed = [], set(), [], []
             for f in sorted(by_dest.get(dest, []), key=lambda x: x["relative_path"]):
                 rel = f["relative_path"]
                 ru = _parse_utc(utc_by_path.get(rel)) if utc_by_path.get(rel) else None
@@ -2135,10 +2167,6 @@ class GeotagWorkflow:
                         own = self._contradicted_position(f, ru, gpx, reach, answered)
                         if own is None:
                             untracked.append({"relative_path": rel, "content_fingerprint": f.get("content_fingerprint")})
-                        elif fd.get("accept_unlocated"):
-                            blockers.append(f"{dest}/{os.path.basename(rel)}: user_decision.accept_unlocated: a photo "
-                                            "holding its own position is not left unlocated — set manual_lat/lon to "
-                                            "replace it, or leave both empty to keep it.")
                 why = {}
                 cat, coord = classify_gps(f, ru, gpx, CONFIG, eff_fb, fd, why, replace_own=own is not None)
                 if why.get("reason") == "tracks_disagree":
@@ -2154,23 +2182,20 @@ class GeotagWorkflow:
                     # the photo's own position kept, or replaced by the position the user set — the item asks nothing
                     # (RUL-contradicted_position_kept_unless_taken)
                     counts["preserve_native_gps" if cat == "preserve_native" else "manual_locked"] += 1
-                    item = dict(self._review_item(f, self._OWN_CONTRADICTED, fd, False), **own)
-                    item["user_decision"].pop("accept_unlocated")   # a position set for it, or its own kept
-                    review_items.append(item)
+                    review_items.append(dict(self._review_item(f, self._OWN_CONTRADICTED, fd, False), **own))
                 elif cat == "preserve_native":
                     counts["preserve_native_gps"] += 1
-                elif cat == "gpx_interpolation":
-                    counts["automatic_gpx_interpolation"] += 1; gpx_files.add(coord.get("gpx_file"))
-                elif cat == "gpx_extrapolation":
-                    counts["automatic_gpx_extrapolation"] += 1; gpx_files.add(coord.get("gpx_file"))
+                elif cat in ("gpx_interpolation", "gpx_extrapolation"):
+                    counts[f"automatic_{cat}"] += 1; gpx_files.add(coord.get("gpx_file"))
+                    placed.append(self._placed_photo(f, "tracks"))
                 elif cat == "manual_fallback":
                     counts["automatic_folder_fallback"] += 1
+                    placed.append(self._placed_photo(f, "folder_fallback"))
                 elif cat == "manual_locked":
+                    # a position the user set for it — on a photo nothing else placed, or one they chose over the
+                    # tracks or the fallback (`chosen_by_user`): kept while it holds one (RUL-chosen_position_kept)
                     counts["manual_locked"] += 1
                     review_items.append(self._review_item(f, "manual_locked", fd, False))
-                elif cat == "no_change":
-                    counts["no_gps_change_needed"] += 1
-                    review_items.append(self._review_item(f, "accepted_unlocated", fd, False, why))
                 else:                                          # blocked
                     counts["blocked"] += 1
                     review_items.append(self._review_item(f, "no_reliable_gps_source", fd, True, why))
@@ -2196,6 +2221,10 @@ class GeotagWorkflow:
                 # contradicted, with no track to propose a position from: kept, and noted
                 # (RUL-contradicted_position_without_track_noted)
                 destinations[dest]["gps_decisions"]["contradicted_without_track"] = untracked
+            if placed:
+                # the photos the tracks or the fallback place, by path: what a position chosen for one of them names
+                # (BLD-chosen_position) — never read by the plan, which places them again from its own inputs
+                destinations[dest]["gps_decisions"]["placed_photos"] = placed
             if is_container:
                 destinations[dest]["file_less"] = True
         self.coordinator.finish_phase()
@@ -2284,14 +2313,36 @@ class GeotagWorkflow:
             blockers.append(f"{where}: review manual_lat/lon must both be set, or neither.")
         elif mlat not in (None, "") and not _valid_coord(mlat, mlon):
             blockers.append(f"{where}: review manual_lat/lon out of range.")
-        _decision_flag(ud, "accept_unlocated", f"{where}: user_decision", blockers)
+
+    def _check_chosen_items(self, dest, items, files, blockers):
+        """A review item the user added for a photo the tracks or the fallback place (`reason: "chosen_by_user"`,
+        BLD-chosen_position) names a photo of this destination holding no position of its own — by its path, or its
+        fingerprint — or is a blocker naming it (RUL-chosen_position_names_a_photo): an answer that would place nothing
+        is never passed over."""
+        by_path = {f["relative_path"]: f for f in files}
+        by_fp = {f.get("content_fingerprint"): f for f in files if f.get("content_fingerprint")}
+        for ri in items:
+            if ri.get("reason") != self._CHOSEN:
+                continue
+            f = by_path.get(ri["relative_path"]) or by_fp.get(ri.get("content_fingerprint"))
+            where = f"{dest}: gps_decisions.review_items[{ri['relative_path']}]"
+            if f is None:
+                blockers.append(f"{where}: a {self._CHOSEN} position names no photo of this destination — give the "
+                                "path of one of its photos, or remove the entry.")
+            elif f.get("has_native_gps"):
+                blockers.append(f"{where}: this photo holds a position of its own, which geotag keeps — remove the "
+                                f"{self._CHOSEN} entry.")
+
+    def _placed_photo(self, f, placed_by):
+        """A photo the tracks or the folder fallback place, as photos-23's `placed_photos` lists it (BLD-chosen_position)."""
+        return {"relative_path": f["relative_path"], "content_fingerprint": f.get("content_fingerprint"),
+                "placed_by": placed_by}
 
     def _review_item(self, f, reason, ud, requires, why=None):
         item = {
             "relative_path": f["relative_path"], "content_fingerprint": f.get("content_fingerprint"),
             "reason": reason,
-            "user_decision": {"manual_lat": ud.get("manual_lat", ""), "manual_lon": ud.get("manual_lon", ""),
-                              "accept_unlocated": bool(ud.get("accept_unlocated", False))},
+            "user_decision": {"manual_lat": ud.get("manual_lat", ""), "manual_lon": ud.get("manual_lon", "")},
             "requires_user_input": requires,
             "stale_user_decision": False,
         }
@@ -2351,7 +2402,6 @@ class GeotagWorkflow:
             eff_fb = (g_d.get("folder_fallback") or {}).get("effective_fallback")
             reviews = {ri["relative_path"]: ri for ri in ((g_d.get("gps_decisions") or {}).get("review_items") or [])}
             track_of, lower_of = {}, {}
-            unlocated = []
             tz = ((t_dests.get(dest, {}).get("destination_timezone")) or {}).get("effective_iana_timezone") or ""
             rename_inputs = [{"relative_path": f["relative_path"],
                               "resolved_utc": (utc_by_path.get(f["relative_path"]) or {}).get("resolved_utc"),
@@ -2369,14 +2419,8 @@ class GeotagWorkflow:
                 if coord and coord.get("gpx_file"):
                     track_of[rel] = coord["gpx_file"]
                     lower_of[rel] = coord.get("lower_tracks")
-                how = ("native" if cat == "preserve_native" else "unlocated" if coord is None
-                       else _TRACK_MARKER.get(coord.get("method")) or cat)
+                how = "native" if cat == "preserve_native" else _TRACK_MARKER.get((coord or {}).get("method")) or cat
                 placement[how] = placement.get(how, 0) + 1
-                if cat == "no_change":
-                    # left without a position by the user's own answer: recorded with the plan, so the
-                    # log can say so and cite the decision (RUL-log_cites_decisions)
-                    unlocated.append({"relative_path": rel, "content_fingerprint": f.get("content_fingerprint"),
-                                      "because": manual_gps_pointer("manual_locked", dest, rel, None)})
                 fops = plan_file_ops(f, ru, tz, cat, coord, renames.get(rel))
                 row = utc_by_path.get(rel) or {}
                 cells = (t_dests.get(dest) or {}).get("camera_group_time_decisions") or {}
@@ -2428,8 +2472,6 @@ class GeotagWorkflow:
                 media_pre.append({"relative_path": rel, "content_fingerprint": f.get("content_fingerprint"),
                                   "size": f.get("size"), "mtime_ns": f.get("mtime_ns")})
             destinations[dest] = {"destination_path": dest, "operations": ops, "no_ops": no_ops}
-            if unlocated:
-                destinations[dest]["left_unlocated"] = unlocated
 
         for dest, dd in destinations.items():
             ops = dd["operations"]
@@ -3095,6 +3137,13 @@ class GeotagWorkflow:
             return [f"{len(changed)} photo(s) in {folder_name('photos_by_dest')} are not as the execution left "
                     f"them ({_named(changed)}) — re-run `geotag plan` and `geotag execute` first (after "
                     "`prep plan` and `prep execute`, if geotag asks)."]
+        # No photo leaves geotag without a position (RUL-finalize_refuses_unplaced): checked from what each photo
+        # holds, as prep read it and the executed plan wrote it — not from the plan's decisions alone.
+        unplaced = photos_without_position(self.handoff, plan)
+        if unplaced:
+            return [f"{len(unplaced)} photo(s) in {folder_name('photos_by_dest')} hold no position "
+                    f"({_named(unplaced)}) — give each a position, or its folder a fallback, in "
+                    f"{GPS_DECISIONS_ARTIFACT}, then re-run `geotag plan` and `geotag execute`."]
 
         files = self.build_file_model()
         cache = GeotagCache(ws)

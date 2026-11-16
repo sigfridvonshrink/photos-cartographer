@@ -21,7 +21,7 @@ The generator self-verifies that **every distinct decision-cell state** appears 
 | `photos-22-gps-drift-validation.requires-input.json` | `requires_user_input` | Per-camera **drift** validation awaiting review — a proposed clock-drift offset to confirm against the track segment. |
 | `photos-22-gps-drift-validation.complete.json` | `complete` | The drift cell resolved: an `effective_drift_offset` (`gps_drift_validated`) over the matched frames + track segment. |
 | `photos-23-gps-decisions.requires-input.json` | `requires_user_input` | Per-destination summaries; **blocked** files surfaced as `review_items` (`no_reliable_gps_source`). |
-| `photos-23-gps-decisions.complete.json` | `complete` | Every GPS category — preserve-native, interpolation, **extrapolation**, **manual** & **inherited** folder fallback — and the two review resolutions (`manual_locked`, `accepted_unlocated`). |
+| `photos-23-gps-decisions.complete.json` | `complete` | Every GPS category — preserve-native, interpolation, **extrapolation**, **manual** & **inherited** folder fallback — a blocked photo placed by its folder's fallback, one given a position of its own (`manual_locked`), a photo the tracks placed given one chosen for it (`chosen_by_user` → `manual_locked`), and the `placed_photos` lists. |
 | `photos-21-time-decisions.offset-variants.json` | `complete` | The GPX-offset proposal/resolution variants: `confidence` **high** (point) / **medium** (segment) / **review_required** (conflicting anchors); effective sources **gpx_anchor_accepted** (single anchor) and **manual**. |
 | `photos-21-time-decisions.no-default-timezone.json` | `requires_user_input` | A timezone cell with `proposal_source: "none"` (no config default, no resolved ancestor). |
 | `photos-21-time-decisions.stale-decision.json` | `requires_user_input` | `stale_user_decision: true` — an accepted proposal that no longer exists (the inputs changed since the human decided); re-decide. |
@@ -39,8 +39,8 @@ by the real edit→re-run round-trip, so they also illustrate the loop the edito
 - **Effective offset source:** `gpx_anchor_auto`, `gpx_anchor_accepted`, `timezone_accepted`,
   `manual`.
 - **GPS categories:** preserve-native, GPX interpolation, GPX extrapolation, folder fallback
-  (manual + inherited+accepted); review reasons `no_reliable_gps_source`, `manual_locked`,
-  `accepted_unlocated`.
+  (manual + inherited+accepted); review reasons `no_reliable_gps_source`, `manual_locked`; `placed_photos`
+  by the tracks and by the fallback.
 - **GPS-drift validation (`photos-22`):** a per-camera drift cell `requires_user_input` (proposed
   offset awaiting review) and resolved (`effective_drift_offset`, source `gps_drift_validated`).
 - **Cell flags:** `requires_user_input` true/false; `stale_user_decision` true.

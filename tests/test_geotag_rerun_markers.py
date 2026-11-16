@@ -375,7 +375,7 @@ def test_a_phone_holding_its_true_time_is_not_touched(tmp_path, monkeypatch):
                   test="TST-geotag_rerun_markers-only_a_written_time_carries_the_mark")
 def test_only_a_written_time_carries_the_mark(tmp_path):
     """The suffix goes on a photo whose time this plan writes, or whose field already carries geotag's mark; a photo
-    whose time is resolved to what it holds gets none, and a no-fix position on such a photo is cleared alone."""
+    whose time is resolved to what it holds gets none."""
     def model(rel, dto, off, method, lat=48.0, lon=2.0):
         return {"relative_path": rel, "content_fingerprint": "fp-" + rel, "size": 1, "mtime_ns": 1,
                 "raw_times": {"DateTimeOriginal": dto, "OffsetTimeOriginal": off},
@@ -389,15 +389,14 @@ def test_only_a_written_time_carries_the_mark(tmp_path):
     assert written[1]["writes"] == {"GPSProcessingMethod": "fused+carto-time"}  # written: marked
     assert cal.plan_file_ops(model("c.jpg", "2024:07:03 14:30:00", "+02:00", "fused+carto-time"),
                              utc, tz, "preserve_native", None, None) == []        # written before: mark kept
-    [clear] = cal.plan_file_ops(model("d.jpg", "2024:07:03 14:30:00", "+02:00", "", 0, 0),
-                                utc, tz, "no_change", None, None)
-    assert "GPSProcessingMethod" not in clear["writes"] and clear["writes"]["GPSLatitude"] == ""
 
 
-@pytest.mark.spec("BLD-marked_file_rerun", test="TST-geotag_rerun_markers-unlocated_geotag_position_is_cleared")
-def test_unlocated_geotag_position_is_cleared(tmp_path, monkeypatch):
-    """A file geotag once placed, now off the track and accepted as unlocated, loses geotag's old
-    fix: kept, it would read as the file's own next time."""
+@pytest.mark.spec("BLD-marked_file_rerun", "RUL-unplaced_photo_waits",
+                  test="TST-geotag_rerun_markers-geotag_position_off_the_track_waits_then_gives_way")
+def test_geotag_position_off_the_track_waits_then_gives_way(tmp_path, monkeypatch):
+    """A file geotag once placed, now off the track: geotag's old fix is not taken as its own — it waits for the
+    user, no plan made, and once its folder has a fallback it is placed there, the old fix written over and kept for
+    the log."""
     ws = _ws(tmp_path, [lambda ws: _rec(ws, f"{T}/2024-07-03--18-00-00.arw", "2024:07:03 18:00:00",
                                         gps=(40.0, 3.0), method="interpolated")])
     p = ws / ".photos-ingest" / "photos-11-handoff.json"
@@ -409,16 +408,18 @@ def test_unlocated_geotag_position_is_cleared(tmp_path, monkeypatch):
     _plan(monkeypatch, ws)
     g = ws / ".photos-ingest" / "photos-23-gps-decisions.json"
     a = json.loads(g.read_text())
-    for ri in a["destinations"][T]["gps_decisions"]["review_items"]:
-        ri["user_decision"]["accept_unlocated"] = True
+    (item,) = a["destinations"][T]["gps_decisions"]["review_items"]
+    assert item["reason"] == "no_reliable_gps_source" and item["requires_user_input"]
+    assert not (ws / ".photos-ingest" / "photos-24-executable-plan.json").exists()
+    a["destinations"][T]["folder_fallback"]["user_decision"].update(fallback_lat=41.0, fallback_lon=2.0)
     g.write_text(json.dumps(a))
     _plan(monkeypatch, ws)
     e = _ops(ws)[f"{T}/2024-07-03--18-00-00.arw"]
-    assert e["writes"]["GPSLatitude"] == "" and e["writes"]["GPSProcessingMethod"] == "+carto-time"
+    assert e["writes"]["GPSLatitude"] == 41.0 and e["writes"]["GPSProcessingMethod"] == "manual_fallback"
     plan = json.loads((ws / ".photos-ingest" / "photos-24-executable-plan.json").read_text())
-    clear = next(o for d in plan["destinations"].values() for o in d["operations"] if o["type"] == "gps_marker_write")
-    assert clear["pre_state"] == {"present": True, "GPSLatitude": 40.0, "GPSLongitude": 3.0,
-                                  "GPSProcessingMethod": "interpolated"}   # what it clears, for the log
+    w = next(o for d in plan["destinations"].values() for o in d["operations"] if o["type"] == "metadata_gps_write")
+    assert w["pre_state"] == {"present": True, "GPSLatitude": 40.0, "GPSLongitude": 3.0,
+                              "GPSProcessingMethod": "interpolated"}   # what it replaces, for the log
 
 
 @pytest.mark.spec("RUL-decision_revisable", "BLD-original_values_pinned", test="TST-geotag_rerun_markers-changed_offset_after_execute_reaches_the_photo")

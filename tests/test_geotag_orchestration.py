@@ -235,8 +235,8 @@ def test_complete_run_writes_photos22_then_bad_coord_aborts(tmp_path, monkeypatc
 @pytest.mark.spec("RUL-no_plan_while_a_decision_waits", "BLD-geotag_stage_order",
                   test="TST-geotag_orchestration-no_plan_while_a_decision_waits")
 def test_no_executable_plan_while_a_decision_waits(tmp_path, monkeypatch, capsys):
-    """A photo neither placed nor left unlocated by the user waits in photos-23; a destination with no
-    timezone waits in photos-21. Either way the run makes no executable plan."""
+    """A photo nothing places waits in photos-23; a destination with no timezone waits in photos-21. Either way the
+    run makes no executable plan."""
     ws, ctl = _completable_ws(tmp_path)
     assert _run(monkeypatch, ws) == 0, capsys.readouterr().err
     assert json.load(open(ctl / "photos-23-gps-decisions.json"))["status"] == "requires_user_input"
@@ -404,13 +404,14 @@ _T = ["destinations", "6-photos-by-dest/T"]
     ("photos-23-gps-decisions.json", _set(_T + ["gps_decisions", "review_items", 0, "user_decision", "manual_lat"], 50.0),
      "6-photos-by-dest/T/c.arw: review manual_lat/lon must both be set, or neither."),
     ("photos-23-gps-decisions.json",
-     _set(_T + ["gps_decisions", "review_items", 0, "user_decision", "accept_unlocated"], 1),
-     "6-photos-by-dest/T/c.arw: user_decision.accept_unlocated must be true or false, not 1."),
+     _set(_T + ["gps_decisions", "review_items", 0, "user_decision", "accept_unlocated"], True),
+     "6-photos-by-dest/T/c.arw: user_decision.accept_unlocated is not a field of a photo's position decision "
+     "(only manual_lat and manual_lon) — remove it."),
     ("photos-23-gps-decisions.json", _set(_T + ["folder_fallback", "user_decision", "fallback_lon"], 4.0),
      "6-photos-by-dest/T: folder_fallback.user_decision fallback_lat/lon must both be set, or neither."),
     ("photos-23-gps-decisions.json", _set(_T + ["gps_decisions", "review_items"], {}),
      "6-photos-by-dest/T: gps_decisions.review_items must be a list."),
-], ids=["21-flag", "21-user_decision", "21-destinations", "21-cell", "23-half-review", "23-flag",
+], ids=["21-flag", "21-user_decision", "21-destinations", "21-cell", "23-half-review", "23-unknown-field",
         "23-half-fallback", "23-review_items"])
 def test_broken_decision_is_a_located_blocker(tmp_path, monkeypatch, capsys, artifact, edit, message):
     ws, ctl = _completable_ws(tmp_path)

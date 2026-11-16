@@ -1518,12 +1518,14 @@ both checks are needed, every time.
 :status: ruled
 :forced: yes
 :follows_from: RAT-plain_json_record, RAT-why_did_this_change
-:justifies: INV-authored_values_checked, RUL-checked_paths, RUL-checked_timezones, RUL-checked_positions_and_times, RUL-checked_filename_format, RUL-checked_numbers, RUL-checked_shapes, RUL-invalid_value_stops, RUL-invalid_value_located, RUL-invalid_value_never_repaired
+:justifies: INV-authored_values_checked, RUL-checked_paths, RUL-checked_timezones, RUL-checked_positions_and_times, RUL-checked_filename_format, RUL-checked_numbers, RUL-checked_shapes, RUL-invalid_value_stops, RUL-invalid_value_located, RUL-invalid_value_never_repaired, RUL-unknown_decision_field_refused
 
 The user writes the configuration and the decisions by hand, so the tool cannot assume they are well formed. A
 mistyped timezone or an unsafe path, reported early as a specific problem in a named place, is fixed at its source;
 coerced, half applied or let through, it spoils a later operation, and the change it causes can no longer be
-explained. Checking keeps every change explainable and the user its author.
+explained. Checking keeps every change explainable and the user its author. A field the tool does not read is
+let through the same way: a name mistyped, or one from an answer the tool no longer takes, left in the record says
+what the tool does not do — so a photo's position decision holding one is refused, the field named.
 :::
 
 :::{rat} One moment, one name, in both phases

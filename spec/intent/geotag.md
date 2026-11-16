@@ -1278,8 +1278,7 @@ its old destination carried with it.
 :refines: RUL-moved_photo_decided_anew
 
 A photo moved to another destination — its folder renamed among the ways — SHALL be placed with no position decision
-made for it in its old destination carried with it: neither a position written for it nor the answer to leave it
-unlocated.
+made for it in its old destination carried with it.
 :::
 
 
@@ -1897,18 +1896,6 @@ A photo whose position is latitude 0 and longitude 0 SHALL count, wherever geota
 having none.
 :::
 
-:::{rul} A photo left unlocated keeps no position at latitude 0 and longitude 0
-:id: RUL-unlocated_null_island_cleared
-:status: ruled
-:criticality: med
-:anti: yes
-:verify: required
-:refines: RUL-null_island_is_no_position
-
-A photo the user leaves unlocated SHALL NOT keep a position of latitude 0 and longitude 0: geotag removes it whole, as
-it removes a position of its own it no longer places.
-:::
-
 :::{rul} A photo is placed by the most specific source it has
 :id: RUL-placement_order
 :status: ruled
@@ -1927,7 +1914,43 @@ tracks at its resolved time, its destination's folder fallback.
 :verify: required
 :refines: RUL-placement_order
 
-A photo none of these places SHALL wait for the user to set a position or to leave it unlocated.
+A photo none of these places SHALL wait for the user to set a position for it or a fallback for its folder.
+:::
+
+:::{rul} A position the user gives one placed photo places it
+:id: RUL-chosen_position_honoured
+:status: ruled
+:criticality: med
+:verify: required
+:refines: RUL-placement_order
+
+A position the user adds to the GPS decisions for one photo of a destination that the tracks or its folder fallback
+place SHALL place that photo.
+:::
+
+:::{rul} A position added for a photo names one geotag places
+:id: RUL-chosen_position_names_a_photo
+:status: ruled
+:criticality: med
+:anti: yes
+:verify: required
+:refines: RUL-chosen_position_honoured
+:uses: RUL-invalid_value_stops
+
+A position the user adds for one photo SHALL be refused unless it names a photo of that destination with no position
+of its own.
+:::
+
+:::{rul} An answer given for one photo is kept while it holds a position
+:id: RUL-chosen_position_kept
+:status: ruled
+:criticality: med
+:anti: yes
+:verify: required
+:refines: RUL-placement_order
+
+A position the user gave for one photo SHALL be kept, while it holds one, whatever tracks or fallback come to place the
+photo since.
 :::
 
 :::{rul} A destination's fallback is the nearest one it lies in
@@ -2066,8 +2089,8 @@ The track that gave a photo its position SHALL NOT be written in the photo.
 :verify: required
 :refines: RUL-placement_order
 
-Every photo no source places SHALL be listed for the user by itself, until a position is set for it or it is left
-unlocated.
+Every photo no source places SHALL be listed for the user by itself, until a position is set for it or a fallback for
+its folder.
 :::
 
 :::{rul} An unplaced photo is listed with why
@@ -2288,7 +2311,7 @@ otherwise.
 :refines: RUL-time_before_gps
 :uses: DEF-decision
 
-Geotag SHALL make no executable plan while a decision waits for the user or a photo is neither placed nor left unlocated by the user.
+Geotag SHALL make no executable plan while a decision waits for the user or a photo is not placed.
 :::
 
 :::{rul} The plan counts how every photo is placed
@@ -2298,7 +2321,7 @@ Geotag SHALL make no executable plan while a decision waits for the user or a ph
 :verify: required
 :uses: DEF-geotag
 
-The executable plan SHALL count its photos by how each comes by its position — its own, each way the tracks or the user give one — those left without one among them.
+The executable plan SHALL count its photos by how each comes by its position — its own, each way the tracks or the user give one.
 :::
 
 
@@ -2540,14 +2563,17 @@ Finalize SHALL report the plan's count of how every photo came by its position.
 Finalize SHALL keep the plan's count of how every photo came by its position in the package.
 :::
 
-:::{rul} A photo left unlocated is logged as such
-:id: RUL-unlocated_logged
+:::{rul} Finalize packages no photo without a position
+:id: RUL-finalize_refuses_unplaced
 :status: ruled
-:criticality: med
+:criticality: high
+:anti: yes
 :verify: required
-:refines: RUL-log_cites_decisions
+:refines: RUL-finalize_checks_photos
+:uses: DEF-finalize, RUL-null_island_is_no_position
 
-A photo the user left unlocated SHALL have that in its log, with the decision that left it so.
+Finalize SHALL refuse while a photo in photos by destination holds no position — judged by what the photo holds, not
+by what the plan decided for it.
 :::
 
 :::{rul} Geotag's records of a run are set aside, never overwritten

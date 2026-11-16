@@ -1691,9 +1691,10 @@ _GPS_PLACE_CATEGORY = {"direct_match": "gpx_interpolation", "interpolated": "gpx
 
 
 def classify_gps(file, resolved_utc, gpx, cfg, effective_fallback, file_decision, why=None, replace_own=False):
-    """The seven-option GPS decision for one file (BLD-placement_order), as (category, coord|None). Resolves in
+    """The GPS decision for one file (BLD-placement_order), as (category, coord|None). Resolves in
     priority order: preserve native -> per-file manual lock -> GPX interpolation/extrapolation at the
-    resolved UTC -> the destination's effective folder fallback -> accept-unlocated -> blocked. A photo's own
+    resolved UTC -> the destination's effective folder fallback -> blocked: a photo none of these places waits for
+    the user (RUL-unplaced_photo_waits), never left without a position. A photo's own
     position gives way only to a position the user set for it, where `replace_own` says its review item is of an own
     position its clock offset contradicts (RUL-own_position_replaced_on_answer).
     Authored coordinates are assumed already range-validated by the caller (RUL-checked_positions_and_times)."""
@@ -1712,8 +1713,6 @@ def classify_gps(file, resolved_utc, gpx, cfg, effective_fallback, file_decision
             return _GPS_PLACE_CATEGORY[p["method"]], p
     if effective_fallback is not None:
         return "manual_fallback", effective_fallback
-    if fd.get("accept_unlocated"):
-        return "no_change", None
     return "blocked", None
 
 
@@ -2233,19 +2232,12 @@ def plan_file_ops(file, resolved_utc, tz, gps_category, gps_coord, rename):
                                  "gps_origin": _GPS_OP_ORIGIN[gps_category]}, pre))
             ops.append(_make_op("gps_marker_write", rel, "gps provenance",
                                 {"writes": {"GPSProcessingMethod": new_marker}}, pre))
-    else:
-        # A photo the user left unlocated loses the device's no-fix position, whole: a kept latitude 0,
-        # longitude 0 shows it off the coast of Africa (RUL-unlocated_null_island_cleared)
-        no_fix = gps_category == "no_change" and holds_no_fix(file)
-        if time_corrected:
-            target = with_time_fixed(device_method(file.get("processing_method")))
-            if no_fix or geotag_marker(held.get("method")) in POSITION_MARKERS:
-                ops.append(time_fixed_marker_op(file, target, clear_position=True))   # geotag's old fix: not kept
-            elif (held.get("method") or "").strip() != target:
-                ops.append(time_fixed_marker_op(file, target))
-        elif no_fix:                              # no time written: the position cleared alone, no mark added
-            ops.append(_make_op("gps_marker_write", rel, "no-fix position cleared",
-                                {"writes": dict(_CLEARED_POSITION)}, pre))
+    elif time_corrected:
+        target = with_time_fixed(device_method(file.get("processing_method")))
+        if geotag_marker(held.get("method")) in POSITION_MARKERS:
+            ops.append(time_fixed_marker_op(file, target, clear_position=True))   # geotag's old fix: not kept
+        elif (held.get("method") or "").strip() != target:
+            ops.append(time_fixed_marker_op(file, target))
 
     if rename and rename.get("rename"):
         semantic = {"from": rename["current_name"], "to": rename["planned_name"]}
@@ -2417,7 +2409,6 @@ def build_complete_log(prep_photos, files, resolved_rows, time_artifact, plan, e
     The prep file itself is never edited."""
     photos = json.loads(json.dumps(prep_photos or {}))            # deep copy; never touch the prep file
     row_by_rel = {r["relative_path"]: r for r in resolved_rows}
-    unlocated = {}
     for dd in (plan.get("destinations") or {}).values():
         for op in dd.get("operations") or []:
             # The rows are keyed by each photo's path when the plan was made; a prep run since records the
@@ -2425,8 +2416,6 @@ def build_complete_log(prep_photos, files, resolved_rows, time_artifact, plan, e
             if op.get("type") == "rename_no_clobber" and op["relative_path"] in row_by_rel:
                 row_by_rel.setdefault(os.path.join(os.path.dirname(op["relative_path"]), op["to"]),
                                       row_by_rel[op["relative_path"]])
-        for u in dd.get("left_unlocated") or []:
-            unlocated[u.get("content_fingerprint")] = u
     t_dests = (time_artifact or {}).get("destinations") or {}
     ops_by_fp = {}
     fp_by_rel = {f["relative_path"]: f.get("content_fingerprint") for f in files}
@@ -2470,8 +2459,6 @@ def build_complete_log(prep_photos, files, resolved_rows, time_artifact, plan, e
         time_op = next((o for o in ops if o["type"] == "metadata_time_write"), None)
         if time_op is not None:
             steps.append(_time_written_step(time_op))
-        if fp in unlocated:                    # the user's own answer: no position, and where that was decided
-            steps.append({"phase": "geotag", "action": "left_unlocated", "because": unlocated[fp]["because"]})
         steps.extend(_gps_and_rename_steps(ops, native=f.get("has_native_gps")))
         if not f.get("from_originals") and geotag_marker(held_values(f).get("method")):
             # geotag's mark is on the photo, but this workspace never held its own values: its time was
