@@ -2,6 +2,19 @@
 
 *What was decided and why, newest first. A record: never corrected forward. Per-commit detail is `git log`.*
 
+## 2026-11-16 — an untimed photo, a photo that cannot be written, what "corrected" means (BACKLOG 22, 25, 46)
+
+- **A photo with no recorded time** still stops geotag. Letting it through untimed, or giving it a time by a
+  per-photo decision, were set aside; BACKLOG 22 now holds the idea the owner is considering for scans: a date
+  given per destination, as a position is by the folder's fallback.
+- **A photo the metadata tool will not write** keeps the tool's own reason beside its failure in the execution
+  summary; failing again the same way under the same plan, it is named with the way out — moved back into photos by
+  date, a move the workspace check lets pass, then prep and the plan again. Accepting it as it is, and writing a
+  sidecar, were ruled out: a photo must not reach the library holding values other than the plan decided.
+- **"Corrected" means geotag wrote the time.** A photo already holding its true time is not touched: no mark is
+  written to it, since the mark would tell the library of a correction never made, and a re-run decides it from its
+  own values the same way.
+
 ## 2026-11-16 — a clock changed mid-day, a wrong own position, a midnight mid-shoot, two bodies (BACKLOG 15, 16, 23, 39)
 
 One offset per camera, destination and day fails four ways. Ruled *"rest is ok"*, with the owner on 15 (*"15 can only

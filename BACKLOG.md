@@ -4,7 +4,7 @@
 
 - **What this is:** [`README.md`](README.md). **The record:** [`HISTORY.md`](HISTORY.md).
 
-*Open items: **19** — 7, 11, 14, 18, 21, 22, 25, 27, 28, 30 to 32, 40, 43, 45 to 49.* 🛑 Numbers are never reused; the next is **53**.
+*Open items: **17** — 7, 11, 14, 18, 21, 22, 27, 28, 30 to 32, 40, 43, 45, 47 to 49.* 🛑 Numbers are never reused; the next is **53**.
 
 ---
 
@@ -122,15 +122,6 @@ photos above all, whose folder says when they were made better than any one phot
 no way to say a time is approximate; whether it passes down to subfolders as the position fallback does; whether it
 is written into the photo or recorded only; the name such a photo is given; and what it does to a photo that has a
 time of its own. Not to be built until ruled.
-
-### 25. A photo that cannot be written holds the whole workspace
-
-**Why:** a photo exiftool will not write (a damaged file, a format it reads and cannot write) fails every run; the
-execution stays `partial`, and finalize is refused for every other photo. Nothing names the way out — moving the
-photo out of photos by destination and running prep and the plan again.
-
-**What to do:** have execute's output and the summary say so for a photo that fails twice the same way; decide
-whether the user can instead accept it as it is, which would be a new decision to record.
 
 ### 27. A torn plan, and the editor's save of three records
 
@@ -251,15 +242,6 @@ format holding `%z` reads differently in prep and geotag, and names in the hour 
 
 **Open:** order by sub-second then the suffix already held, one suffix across the extensions of a stem; refuse a
 format whose fields read differently with and without a zone.
-
-### 46. Corrected means resolved, so every original is written
-
-**Why:** a phone photo already holding the right local time and its own position gets no time written — and still
-gets geotag's mark in `GPSProcessingMethod`, because a time counts as corrected once resolved. Every original is
-touched; "corrected" is defined nowhere.
-
-**Open:** define it as resolved (state it), or mark only a photo whose time geotag changed and recognise the others
-on a re-run by their unchanged values.
 
 ### 47. What the country choice leaves open
 
