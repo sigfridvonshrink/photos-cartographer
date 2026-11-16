@@ -2,6 +2,27 @@
 
 *What was decided and why, newest first. A record: never corrected forward. Per-commit detail is `git log`.*
 
+## 2026-11-17 — the contradictions settled with the spec as the authority
+
+The corpus's contradictions were sorted again: each as its two sides, the side the owner ruled taken, the code
+counted only as the cost of a choice. Most were a rule worded wider than the exceptions its own children state, or a
+list missing what another ruled node adds; those were reworded. The owner's questions:
+
+- **A day with no GPS of its own is offered the neighbouring day's offset** before the one its photos record.
+- **Geotag's execute and finalize stop on the loop's gates** as its plan does — the inbox, photos by date, a
+  non-photo or an unrecorded photo in photos by destination; a name the plan gives counts as recorded.
+- **"No workspace inside the library"** looks for this workspace at any depth, for others among the library's
+  folders only; **the workspace check leaves hidden files aside**.
+- **Geotag removes an interrupted write's leftover only where its own journal shows that write begun** and never
+  confirmed; any other leftover stops the plan, named, and holds its photo back — the same name is what the user's own
+  exiftool leaves, and it may be the only whole copy.
+- **The question of the table of countries is answered in the editor too, and by hand** — the owner having said
+  *"the user should be able to answer all questions in the editor"*.
+- **Tracks kept in the control directory stay out of the archival package.**
+- **The owner's preferences.** Choices that change nothing that counts left the rules for a section of their own in
+  docs/design/decisions.md: the console's summary before an execution, whether the filesystem checks come before the
+  lock, what a report counts as reused, where merge reads in the library.
+
 ## 2026-11-16 — the corpus audited against itself
 
 Every node of the corpus was checked, reading the corpus alone, against the nodes it links to and is linked from and
