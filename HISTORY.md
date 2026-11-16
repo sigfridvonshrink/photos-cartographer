@@ -2,6 +2,30 @@
 
 *What was decided and why, newest first. A record: never corrected forward. Per-commit detail is `git log`.*
 
+## 2026-11-16 — dates for scans, zones asked once per place, fingerprints across ImageMagick (BACKLOG 7, 11, 14, 22, 28, 40, 47, 55)
+
+- **A date fallback per destination** for photos with no recorded time — scans above all. The owner: *"date could be
+  any of Y, YM, YMD, with missing parts filled as 1; same cascade; what gets written is (a); scanner order ok"*. Set on
+  a folder in the time decisions, passed down, used only for a photo with no time of its own; written as 00:00:00
+  local on the filled day, no XMP; never placed from the tracks and never clock evidence; named in file-name order. A
+  photo no date reaches still stops geotag, now once its question is written, so it can be answered.
+- **A timezone is asked at every level** where an answer would reach a destination still waiting, containers and the
+  root included; an answer passes down and ends the asking below it — the owner: *"This should not multiply
+  choices - once a time zone is set, children destinations should not ask any longer"*.
+- **Within a country of several zones, the photos propose the zone**: the one zone whose offset fits every offset the
+  destination's phone photos record. BACKLOG 14 — a zone from the positions — is declined: it needs a boundary
+  database the tool does not take. The rationales speak of places and countries, not trips.
+- **The country table** is the host's; where the host has none, a copy downloaded from IANA once, only on the user's
+  word at the first prep plan — refusing keeps a carried copy that may be stale — else that carried copy. The plan
+  records which and its hash.
+- **A photo whose fingerprint a newer ImageMagick changed is merged** when finalize's record proves it the same file
+  and old and new values pair one to one; the pair goes into merge's package, and geotag's sealed records are never
+  rewritten.
+- **Anchor candidates are found by place** through a grid over the track points: same results, about a hundred times
+  faster on years of tracks. **Sub-second times** are read beside CreateDate and ModifyDate too.
+- **Rationales split** where they justified forced rules and judgements alike; a duplicate rationale folded into the
+  philosophy's; the job-count rule hung on the right parent.
+
 ## 2026-11-16 — the filesystems, the library's room, a torn plan, a culled RAW (BACKLOG 18, 27, 48, 54)
 
 - **The workspace must be on a local filesystem** — known by its type against a list of kinds known to be local,

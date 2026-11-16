@@ -4,95 +4,13 @@
 
 - **What this is:** [`README.md`](README.md). **The record:** [`HISTORY.md`](HISTORY.md).
 
-*Open items: **12** — 7, 11, 22, 28, 30 to 32, 40, 47, 49, 53, 55.* 🛑 Numbers are never reused; the next is **56**.
+*Open items: **5** — 30 to 32, 49, 53.* 🛑 Numbers are never reused; the next is **56**.
 
 ---
 
 ## Open
 
-### 7. One obligation per item, checked by reading
-
-**Why:** every corpus item states one obligation, and `tools/spec-build` refuses an item with more than one SHALL. But
-the count cannot see a second obligation folded into one sentence: in the pass that made every item one SHALL, about 90
-items had a restating second SHALL reworded into the first, and some of them still carry two obligations under one
-SHALL — `RUL-lock_fail_fast`, for one, stops at once, says the workspace is locked and produces nothing;
-`RUL-replanning_keeps_the_prior` sets the saved plan aside and tells the user where; `RUL-no_plan_no_run` stops and
-tells the user to plan first. From §4's structure: `RUL-structure_built_once`, `RUL-top_level_only_managed`,
-`RUL-first_dump_at_top_level`, `RUL-link_named`, `RUL-geotag_merge_check_links`, `RUL-missing_folder_blocks`,
-`RUL-missing_folder_named`, and `RUL-no_links` with its four cases. From §5's camera groups:
-`RUL-prep_derives_camera_group` (derive the group, record it in two places) and `RUL-camera_group_derivation_versioned`
-(carry a version, have it checked). From §6's filename format: `RUL-one_filename_format` (one format, set by the
-configuration, hard-coded by neither phase), `RUL-suffix_no_clobber` (zero-padded, deterministic, compared without
-regard to case, checked against the names on disk and those planned), `RUL-prep_name_provisional` (the raw timestamp,
-for ordering only, never corrected) and `RUL-geotag_name_final` (work out the final name, rename to it). From §7's tracks: `RUL-tracks_geotag_only` (what
-geotag alone does with the tracks, and what prep never does). From §9's loop: `RUL-sort_photos_only` (only photos, and
-geotag refuses otherwise), `RUL-rerun_does_what_changed` (exactly what changed requires, and asks only about what is
-affected), `RUL-merge_is_terminal` (merge comes last, new media goes to a fresh workspace) and
-`RUL-more_dumps_until_merge` (a dump is accepted, the loop resumes from prep). The owner caught
-the pattern in a proposed `RUL-failed_operation_clean` and wants the rest found.
-
-**What to do:** read every item against a stricter test — one property per item, which a single test could find broken
-in only one way — and split each real second obligation into an item refining the first, the tests' marks following, as
-`RUL-failed_operation_clean` was split into it, `RUL-failure_recorded` and `RUL-failure_never_done`.
-
-The same reading should settle what the rationale-link pass (2026-11-14) noticed:
-- rationales that justify rules of different kinds, some forced and some a judgement, so one `forced` verdict fits them
-  badly — candidates for splitting: `RAT-library_is_ground_truth`, `RAT-library_reads_cost`, `RAT-move_not_copy`,
-  `RAT-sealed_is_final`, `RAT-superseded_plans_recoverable`;
-- `RAT-offset_per_day_and_place` largely repeats the philosophy's `RAT-offset_per_camera_destination_day`;
-- `RUL-merge_run_reported` (and `RAT-merge_report_at_the_end`) may be output — an affordance — rather than behaviour;
-- `RUL-jobs_change_nothing` refines `RUL-no_op_run`, a loose parent for "the job count changes nothing".
-
-**Where it stands (2026-11-14): done for rules and invariants.** All 377 were read against that test; 124 carried
-more than one obligation. Split: 110 of them, into 115 new items, each refining (or, for an invariant's mechanism,
-upholding) its parent, the tests' marks moved to the part each asserts. Where a second clause only repeated another
-item it was dropped and nothing made. Left whole, by ruling: "stops, having changed nothing" (one obligation; saying
-why is a second); a second clause that is the scope or manner of the first; an enumeration of one record's contents.
-Parents and new items were ruled 2026-11-14, three reworded and twenty given the test they lacked. Build items are not read this way (ruled). The proposals, as data, and
-the script that applied them are kept outside the repository. The rationale questions below are untouched.
-
-**When:** the conversion is done (2026-11-14); this is the once-over-the-whole-corpus pass the owner asked for — *"maybe
-we can do this at the very end after the full conversion to sphinx-needs?"* (the sections were renumbered after it, 2026-11-14).
-
-### 11. Records keyed by a fingerprint that changed with ImageMagick
-
-**Why:** a new ImageMagick may decode a photo to a new fingerprint value (`RUL-engine_change_is_checked`). Prep
-follows the value in its own records — the database and prep's log move to it, across a user's move too — and geotag's
-pinned own values follow it through prep's log (`RUL-own_values_follow_new_fingerprint`, `BLD-original_values_pinned`). Geotag's other
-records keyed by the old value do not: its complete log and the finalized-media record. So merge, finding a photo whose
-fingerprint changed, can only leave it unmerged (`RUL-merge_rechecks_under_new_engine`), and the only remedy today is
-the ImageMagick version that prepped the workspace. Found while converting merge's scope section.
-
-**What to do:** list every record keyed by a fingerprint's value, and decide how it follows a value that changed — a step
-that re-keys them, planned and journaled like any change, its records rewritten whole and what depends on them restaled
-— or leave the block as the answer. Stop where the old-to-new mapping is not one to one, which would change prep's
-duplicate decisions.
-
-**When:** any time — the conversion is done; geotag's pinned values are done (`BLD-original_values_pinned`).
-
 ---
-
-### 22. A date fallback per destination, for photos with no recorded time
-
-**Why:** one untimed photo in photos by destination stops geotag for the whole workspace, and the only cure is to
-edit its metadata outside the tool. Ruled 2026-11-16: the stop is kept for now (`RUL-untimed_photo_stops_geotag`);
-letting such a photo through untimed, or giving it a time by a per-photo decision, were set aside. The way the owner
-is considering instead: a date given per destination, as a position is by the folder's fallback — for scanned
-photos above all, whose folder says when they were made better than any one photo can.
-
-**Open:** what the date is (a day, a month, a year?) and how a photo carries a date that is a range, since EXIF has
-no way to say a time is approximate; whether it passes down to subfolders as the position fallback does; whether it
-is written into the photo or recorded only; the name such a photo is given; and what it does to a photo that has a
-time of its own. Not to be built until ruled.
-
-### 28. Finding anchors and placing photos against years of tracks
-
-**Why:** every anchor candidate search walks every track point inside the two-day clock-error window, and the
-skipped-photo reason walks them all. Measured in the review: about half a second per GPS photo at 500 000 points.
-Placement was made a bisection per track; anchoring was not. Not a correctness matter. Item 13 (the track points
-kept in the workspace, limited to the photos' dates) would cut it at the source.
-
-**What to do:** index points by a coarse grid or by time window per track, behind the same functions and tests.
 
 ### 30. Measuring the human input a trip costs
 
@@ -163,20 +81,6 @@ are kept, so a change to a threshold or to the inference is read as a difference
 *Items 35 to 46 come from the adversarial review of time handling, 2026-11-14 (33, 34 and 41, from the same review, are ruled and built). Each is a choice between behaviours:
 none is coded until ruled. What the review found that was plainly wrong was fixed with it.*
 
-### 40. A destination has one timezone — and where a trip's is asked
-
-**Why:** the corrected time is written, and the file named, in the destination's local time (`RUL-corrected_time_written_local`),
-for the reason that a morning market should read as morning. A phone photo taken at the home airport and filed
-under Japan has a correct local time replaced by Japan's: the rule defeats its own reason. No item says a
-destination has exactly one zone, or what a folder for a drive across a zone line does. Separately: a container
-never waits, so `Japan/{Kyoto, Tokyo, Nara}` asks three times unless the user knows to answer on the folder that asks
-nothing — against *"one answer per trip, at the trip's folder"* (`RAT-home_zone_offered`).
-
-**Ruled 2026-11-14:** one zone per destination, whatever a photo records (`RUL-destination_has_one_timezone`); a photo
-recording another offset stops the zone until the user moves it, picks its zone or confirms the destination's.
-
-**Open:** ask a missing zone once, at the topmost destination that neither has nor inherits one.
-
 ### 53. Videos sorted into destinations, and geotagged
 
 **Why:** videos stay in videos by date, never sorted, so geotag gives them no place and no corrected time: their
@@ -197,40 +101,6 @@ geotagged as photos are (2026-11-16).
 
 **Open:** split into buildable items once the London trip's videos are in hand — what each step changes in prep's
 sorting check, geotag's write path and merge.
-
-### 55. Sub-second times for photos timed by CreateDate or ModifyDate
-
-**Why:** a burst's order within one second follows the sub-second time (BACKLOG 45). Prep reads
-`SubSecTimeOriginal`; `SubSecCreateDate` and `SubSecModifyDate` are in its field list, but exiftool gives them only as
-Composite tags, which prep never reads — so a photo timed by `CreateDate` or `ModifyDate` gets a fraction only where
-the time value itself holds one. Reading `SubSecTimeDigitized` and `SubSecTime` needs a field-set version bump, which
-makes prep read every file again once.
-
-**When:** any time; low priority.
-
-### 47. What the country choice leaves open
-
-**Built 2026-11-14:** a destination holding photos has one timezone (`RUL-destination_has_one_timezone`); a folder
-is said to be in a country by the user, by code, from the zone database's own list (`RUL-country_gives_its_timezone`):
-one timezone — given to everything inside; several — none given, none let through from above, every zone written
-inside held to the country's. A country is chosen once, at the top of its tree; one chosen inside another is taken
-out with a warning (`RUL-country_chosen_once`). Recognising a country by its folder's name was rejected: names are
-spelt as their owner spells them, in any language.
-
-**Open:**
-- A destination under a country of several timezones could be *proposed* its zone where its photos say: the one
-  zone of that country that fits the offsets its phone photos record. Today it only asks.
-- A tree with no country chosen anywhere behaves as before: a zone answered on a container passes down unchecked to
-  destinations of camera photos alone. Whether a zone answered on a container should itself ask "is this a country"
-  where the zone belongs to a country of several.
-- The wording of ruled items that speak of a trip's folder — `RAT-home_zone_offered` ("one answer per trip, at the
-  trip's folder"), `RAT-decisions_cascade` ("set once at a trip's root") — and the docs' `year/country/city/location`,
-  to be put in terms of places and countries.
-- Regions that are not countries and span zones (an island group, a cross-border park): nothing to pick them from.
-- A host whose zone database ships without `zone.tab` (some minimal images): the choice is refused there; whether
-  the table should travel inside the executable.
-
----
 
 ---
 
