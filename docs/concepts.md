@@ -656,7 +656,9 @@ at once (at worst a photo fails, or lands twice under two names — never one ov
 
 **Merge execute** — a library on another filesystem than the workspace with less free space than the photos still to
 move and a margin on top of them (`merge.library_space_margin_percent`, 5% by default): the stop names both, and
-nothing moves (merge plan warns of it already). On one filesystem a move is a rename and needs no room.
+nothing moves (merge plan warns of it already). The merge summary (`photos-31-merge-summary.json`) records the run as
+`rejected`, the shortfall its reason — as it does for a required snapshot that could not be taken. On one filesystem a
+move is a rename and needs no room.
 
 ---
 
