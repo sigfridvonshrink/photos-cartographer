@@ -47,7 +47,7 @@ from .photos_utils import (links_under, fingerprint_method_blocker,
     library_marker_path, allocate_suffix, suffix_root, max_suffix, ContentHasher, WorkspaceCache,
     journal_path, take_zfs_snapshot, zfs_dataset, _move_no_clobber, get_imagemagick_version, write_db_snapshot, reseal_archival_package,
     write_sealed_marker, likely_new_dump, entries_not_carried, prep_log_path, prep_log_blocker, WorkspaceLock, LibraryLock, XDEV_TMP_PREFIX, XDEV_TMP_SUFFIX,
-    workspace_volume_error, add_accept_changes_argument, check_workspace, write_workspace_record, note_execution_begun,
+    workspace_volume_error, workspace_filesystem_error, library_filesystem_error, add_accept_changes_argument, check_workspace, write_workspace_record, note_execution_begun,
     photos_without_position,
 )
 from .reporting import get_reporter, emit_next_step
@@ -1461,6 +1461,16 @@ def _in_workspace(ws):
     return os.path.exists(guard_path(ws))
 
 
+def _filesystem_refusal(ws, reporter):
+    """True, having said why, when the workspace's filesystem cannot hold one — not local, or failing at what
+    cartographer needs of it (RUL-local_filesystem_checked_first, RUL-filesystem_requirements_tried): checked before
+    anything else is done, the lock included."""
+    err = workspace_filesystem_error(ws)
+    if err:
+        reporter.error(err)
+    return bool(err)
+
+
 def _acquire_workspace_lock(ws, reporter):
     """Take the workspace lock for init-library, or say who holds it and return None. Called only in a
     workspace (its guard present), so the control directory exists and is never created here."""
@@ -1547,6 +1557,8 @@ def do_init_library(path_arg, ws):
                   "(there is no workspace config to read). Pass the library directory, e.g. "
                   "`photos-cartographer merge init-library /srv/library`.")
             return 2
+        if _filesystem_refusal(ws, reporter):
+            return 2
         # Reading the workspace's config is reading the workspace: under its lock, like every command.
         lock = _acquire_workspace_lock(ws, reporter)
         if lock is None:
@@ -1587,6 +1599,8 @@ def do_init_library(path_arg, ws):
     place_err = library_place_error(resolved, ws)
     if place_err:
         reporter.log(f"init-library: {place_err}")
+        return 2
+    if _filesystem_refusal(ws, reporter):
         return 2
     lock = _acquire_workspace_lock(ws, reporter)
     if lock is None:
@@ -1640,6 +1654,8 @@ def _run_locked_workflow(command, ws, jobs=None, accept_changes=None):
         reporter.error(f"Not an initialized workspace (no {CONTROL_DIR}/) — run prep first: "
                        "`photos-cartographer prep plan` then `photos-cartographer prep execute`. Nothing was created.")
         return 2
+    if _filesystem_refusal(ws, reporter):
+        return 2
     run_lock = WorkspaceLock(ws, create=False)
     if not run_lock.acquire():
         owner = run_lock.read_owner() or {}
@@ -1674,6 +1690,13 @@ def _run_locked_workflow(command, ws, jobs=None, accept_changes=None):
         # Preflight confirmed the .photos-library marker — safe to take the library-side lock now
         # (RUL-library_confirmed_before_lock: workspace lock, then config+marker, then library lock).
         library_root = info["library_root"]
+        # The library's filesystem tried — its lock, the move that refuses a taken name, the syncs — once its mark
+        # has confirmed it and before its lock is taken, which on a filesystem without locks would read as another
+        # merge (RUL-library_requirements_tried). Its type is not checked: it may lie across a network.
+        lib_err = library_filesystem_error(library_root)
+        if lib_err:
+            reporter.error(lib_err)
+            return 2
         lib_lock = LibraryLock(library_root)
         if not lib_lock.acquire():
             owner = lib_lock.read_owner() or {}

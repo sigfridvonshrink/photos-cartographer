@@ -184,8 +184,8 @@ workspace locked for good.
 :refines: RUL-stale_lock_recovered
 
 A lock SHALL be taken over only once the machine's own system reports that no running process holds it — never on what
-the lock's record says of its owner. This guards the runs of one machine; where two machines reach one workspace or
-library over a network, whether the lock holds between them is that filesystem's doing.
+the lock's record says of its owner. This guards the runs of one machine; where two machines reach one library over a
+network, whether the lock holds between them is that filesystem's doing.
 :::
 
 Merge also takes a lock on the library it writes into, so that two merges into one library — even from two workspaces
@@ -224,6 +224,98 @@ Nothing in cartographer but the snapshot SHALL use a feature particular to one f
 workspace or a library lies on, cartographer requires what POSIX filesystems share: file locks, a rename that is
 atomic, a move that fails where its target exists (by a rename that refuses, or by hard links), and syncing a file
 and a folder to disk.
+:::
+
+:::{rul} A workspace lies on a local filesystem
+:id: RUL-workspace_local_filesystem
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+:uses: DEF-workspace
+
+A workspace SHALL lie on a local filesystem — on the machine's own disks or in its memory, never on one reached over a
+network — whatever its configuration says.
+:::
+
+:::{rul} The workspace's filesystem is checked to be local first
+:id: RUL-local_filesystem_checked_first
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+:refines: RUL-workspace_local_filesystem
+
+Every run of every phase on a workspace, and every save of the decision editor, SHALL check that the workspace lies on
+a local filesystem before it does anything else, its lock included.
+:::
+
+:::{rul} A filesystem not known to be local stops the run
+:id: RUL-not_local_stops
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+:refines: RUL-workspace_local_filesystem
+
+A workspace whose filesystem is not known to be local — one of another kind, or on a system whose filesystems cannot
+be told — SHALL stop the run with nothing changed.
+:::
+
+:::{rul} The stop names the filesystem's type
+:id: RUL-not_local_named
+:status: ruled
+:criticality: med
+:verify: required
+:refines: RUL-not_local_stops
+
+The report of a workspace not on a local filesystem SHALL name the filesystem's type, where it can be told.
+:::
+
+:::{rul} What a filesystem must do is tried at every run's start
+:id: RUL-filesystem_requirements_tried
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+:refines: RUL-filesystem_agnostic
+
+Every run of every phase on a workspace, and every save of the decision editor, SHALL try on the workspace's
+filesystem each thing {need}`RUL-filesystem_agnostic` requires of it, before it does anything else but check that the
+filesystem is local — never taking it as done because an earlier run found it so.
+:::
+
+:::{rul} A filesystem lacking one stops the run
+:id: RUL-filesystem_lacking_stops
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+:refines: RUL-filesystem_requirements_tried
+
+A filesystem found failing at one of them SHALL stop the run with nothing changed.
+:::
+
+:::{rul} The stop names what the filesystem lacks
+:id: RUL-filesystem_lacking_named
+:status: ruled
+:criticality: med
+:verify: required
+:refines: RUL-filesystem_lacking_stops
+
+The report of a filesystem failing at a requirement SHALL name the requirement.
+:::
+
+:::{rul} Trying the filesystem leaves nothing behind
+:id: RUL-filesystem_trial_leaves_nothing
+:status: ruled
+:criticality: med
+:anti: yes
+:verify: required
+:refines: RUL-filesystem_requirements_tried
+
+Trying a filesystem's requirements SHALL leave nothing behind of what it made to try them, in the workspace or the
+library.
 :::
 
 :::{rul} A snapshot names its plan
@@ -2925,7 +3017,8 @@ Merge's plan, dry run and execution SHALL stop at once if the library's mark is 
 :refines: RUL-library_known_by_mark
 
 Beyond its mark and its lock, merge SHALL create in the library only the photos it places, the folders they go into,
-and, while a photo crosses filesystems, its temporary copy.
+while a photo crosses filesystems its temporary copy, and, while it tries the library's filesystem, the files it tries
+it with.
 :::
 
 :::{rul} One merge at a time in a library

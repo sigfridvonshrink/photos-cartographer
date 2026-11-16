@@ -3401,6 +3401,198 @@ def workspace_volume_error(workspace_root: str):
             f"workspace root. A workspace must lie on one filesystem; move it onto one and re-run. "
             f"Nothing was touched.")
 
+
+# The filesystem types known to be local (BLD-local_filesystem_types): the machine's own disks, or its memory.
+# `overlay` is a local union of local filesystems — what a container's root, and many CI runners', is made of.
+# Anything else — nfs, cifs/smb3, 9p, virtiofs, every fuse.* (sshfs among them), vfat/exfat/ntfs — is refused.
+LOCAL_FILESYSTEM_TYPES = frozenset({
+    "ext2", "ext3", "ext4", "xfs", "btrfs", "zfs", "f2fs", "bcachefs", "jfs", "reiserfs", "nilfs2",
+    "tmpfs", "ramfs", "overlay",
+})
+MOUNT_TABLES = ("/proc/self/mountinfo", "/proc/mounts")
+
+
+def _unescape_mount_field(s: str) -> str:
+    """A mount table's field with its octal escapes (`\\040` for a space) decoded."""
+    return re.sub(r"\\([0-7]{3})", lambda m: chr(int(m.group(1), 8)), s)
+
+
+def _mount_table():
+    """[(mount point, filesystem type)] in the order the system lists them, from /proc/self/mountinfo or else
+    /proc/mounts; None where neither can be read — a system that is not Linux."""
+    for path in MOUNT_TABLES:
+        try:
+            with open(path, encoding="utf-8", errors="surrogateescape") as f:
+                lines = f.read().splitlines()
+        except OSError:
+            continue
+        table = []
+        for line in lines:
+            if path.endswith("mountinfo"):
+                head, sep, tail = line.partition(" - ")
+                fields, rest = head.split(), tail.split()
+                if sep and len(fields) >= 5 and rest:
+                    table.append((_unescape_mount_field(fields[4]), rest[0]))
+            else:
+                fields = line.split()
+                if len(fields) >= 3:
+                    table.append((_unescape_mount_field(fields[1]), fields[2]))
+        return table
+    return None
+
+
+def filesystem_type(path: str):
+    """The type of the filesystem `path` lies on: of the mount whose point is the longest prefix of the path's real
+    location, the later listed of two at one point (it covers the earlier). None where it cannot be told."""
+    table = _mount_table()
+    if not table:
+        return None
+    real = os.path.realpath(path)
+    best, best_len = None, -1
+    for point, fstype in table:
+        p = point.rstrip("/") or "/"
+        if p == "/" or real == p or real.startswith(p + "/"):
+            if len(p) >= best_len:
+                best, best_len = fstype, len(p)
+    return best
+
+
+def local_filesystem_error(ws: str):
+    """The message stopping a run on a workspace not on a local filesystem (RUL-workspace_local_filesystem), naming
+    its type; None when it is local. A system whose mount table cannot be read cannot tell, and is refused."""
+    fstype = filesystem_type(ws)
+    if fstype is None:
+        return ("Cannot tell what filesystem the workspace lies on — there is no mount table to read "
+                f"({' or '.join(MOUNT_TABLES)}); cartographer runs on Linux. Nothing was touched.")
+    if fstype in LOCAL_FILESYSTEM_TYPES:
+        return None
+    return (f"The workspace lies on a {fstype} filesystem, which is not known to be local. A workspace must lie on "
+            f"a local filesystem ({', '.join(sorted(LOCAL_FILESYSTEM_TYPES))}); move it onto one and re-run. "
+            "Nothing was touched.")
+
+
+# What a filesystem must do (RUL-filesystem_agnostic), each tried on a scratch file (BLD-filesystem_trial).
+FS_LOCKS = "file locks"
+FS_ATOMIC_RENAME = "a rename that is atomic"
+FS_NO_CLOBBER_MOVE = "a move that fails where its target exists"
+FS_FILE_SYNC = "syncing a file to disk"
+FS_FOLDER_SYNC = "syncing a folder to disk"
+WORKSPACE_FS_REQUIREMENTS = (FS_LOCKS, FS_ATOMIC_RENAME, FS_NO_CLOBBER_MOVE, FS_FILE_SYNC, FS_FOLDER_SYNC)
+LIBRARY_FS_REQUIREMENTS = (FS_LOCKS, FS_NO_CLOBBER_MOVE, FS_FILE_SYNC, FS_FOLDER_SYNC)
+FS_TRIAL_PREFIX = ".photos-fs-trial-"
+
+
+def _scratch(d: str, name: str, data: bytes) -> str:
+    p = os.path.join(d, name)
+    with open(p, "wb") as f:
+        f.write(data)
+    return p
+
+
+def _try_locks(d: str) -> bool:
+    """An exclusive lock, as the workspace's and the library's are taken, can be taken and let go."""
+    fd = os.open(os.path.join(d, "lock"), os.O_RDWR | os.O_CREAT, 0o644)
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        fcntl.flock(fd, fcntl.LOCK_UN)
+    finally:
+        os.close(fd)
+    return True
+
+
+def _try_atomic_rename(d: str) -> bool:
+    """A rename onto a taken name replaces it whole."""
+    a, b = _scratch(d, "rename-a", b"new"), _scratch(d, "rename-b", b"old")
+    os.replace(a, b)
+    with open(b, "rb") as f:
+        return f.read() == b"new" and not os.path.exists(a)
+
+
+def _try_no_clobber_move(d: str) -> bool:
+    """The move every placement makes refuses a taken name, leaving both files as they were, and moves to a free
+    one."""
+    src, taken = _scratch(d, "move-src", b"src"), _scratch(d, "move-taken", b"taken")
+    try:
+        _rename_no_clobber_same_fs(src, taken)
+    except FileExistsError:
+        pass
+    else:
+        return False
+    with open(taken, "rb") as f:
+        if f.read() != b"taken" or not os.path.exists(src):
+            return False
+    free = os.path.join(d, "move-free")
+    _rename_no_clobber_same_fs(src, free)
+    return os.path.exists(free) and not os.path.exists(src)
+
+
+def _try_file_sync(d: str) -> bool:
+    fd = os.open(_scratch(d, "sync", b"sync"), os.O_RDONLY)
+    try:
+        os.fsync(fd)
+    finally:
+        os.close(fd)
+    return True
+
+
+def _try_folder_sync(d: str) -> bool:
+    _fsync_dir(d)
+    return True
+
+
+_FS_TRIALS = {FS_LOCKS: _try_locks, FS_ATOMIC_RENAME: _try_atomic_rename, FS_NO_CLOBBER_MOVE: _try_no_clobber_move,
+              FS_FILE_SYNC: _try_file_sync, FS_FOLDER_SYNC: _try_folder_sync}
+
+
+def filesystem_lacks(folder: str, requirements):
+    """The first of `requirements` the filesystem `folder` lies on fails at, tried in order on scratch files in a
+    folder of their own made in `folder` and removed after, `folder`'s modification time put back as it was, so the
+    trial leaves nothing behind (RUL-filesystem_trial_leaves_nothing); None when it does every one."""
+    try:
+        st = os.stat(folder)
+        d = tempfile.mkdtemp(prefix=FS_TRIAL_PREFIX, dir=folder)
+    except OSError:
+        return "creating a file"
+    try:
+        for req in requirements:
+            try:
+                if not _FS_TRIALS[req](d):
+                    return req
+            except OSError:
+                return req
+        return None
+    finally:
+        shutil.rmtree(d, ignore_errors=True)
+        try:
+            os.utime(folder, ns=(st.st_atime_ns, st.st_mtime_ns))
+        except OSError:
+            pass
+
+
+def workspace_filesystem_error(ws: str):
+    """The message stopping a run whose workspace's filesystem cannot hold one, or None: the filesystem local
+    (RUL-local_filesystem_checked_first), then each requirement tried in the control directory — in the workspace
+    itself on a first prep run, before the control directory is made (RUL-filesystem_requirements_tried)."""
+    err = local_filesystem_error(ws)
+    if err:
+        return err
+    cd = control_dir(ws)
+    lacks = filesystem_lacks(cd if os.path.isdir(cd) else ws, WORKSPACE_FS_REQUIREMENTS)
+    if lacks:
+        return (f"The workspace's filesystem fails at {lacks}, which cartographer needs of it. Move the workspace "
+                "onto a filesystem that does it and re-run. Nothing was touched.")
+    return None
+
+
+def library_filesystem_error(library_root: str):
+    """The message stopping merge on a library whose filesystem fails at a requirement, tried in the library
+    (RUL-library_requirements_tried), or None. Its type is not checked: a library may lie on a network filesystem."""
+    lacks = filesystem_lacks(library_root, LIBRARY_FS_REQUIREMENTS)
+    if lacks:
+        return (f"The library's filesystem ({library_root}) fails at {lacks}, which merge needs of it. Nothing was "
+                "merged.")
+    return None
+
 class PlanFingerprintMemo:
     """Plan-time decode memo (BLD-plan_memo): the fingerprint + metadata prep observed for a file at a
     given path, remembered across planning runs so a re-plan does not decode the same unchanged bytes

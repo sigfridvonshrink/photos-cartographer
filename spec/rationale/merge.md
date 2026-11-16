@@ -62,6 +62,23 @@ would block, no photo already moved could be confirmed, and a merge left half do
 would turn a merge that could be whole into a partial one; stopped, it changes nothing until the tool is back.
 :::
 
+:::{rat} A library may lie across a network, and two machines merging at once is the user's to avoid
+:id: RAT-library_across_network
+:status: ruled
+:forced: no
+:follows_from: RAT-library_shared, RAT-live_lock_never_taken
+:justifies: RUL-library_network_allowed
+
+A library is often kept on a server, shared by the machines that read it; refusing one there would refuse the common
+case. Its lock then may guard the merges of one machine only, on some network filesystems, and which ones cannot be
+told reliably from a run. Running merges from two machines into one library at once is therefore the user's to avoid.
+What it would cost is bounded: every placement is a move that fails where its target exists, so a photo the other
+merge placed first under the same name is found there and settled by its content — the same photo already present,
+another one blocked — and never overwritten. The worst is one photo failing and staying in the workspace — its place
+taken by the other merge's photo, or its temporary copy cleared by the other merge as debris — or, where the two saw
+the library differently, a photo placed under two names.
+:::
+
 ## 4. Destination-to-library mapping
 
 :::{rat} The destination tree is the library's organisation

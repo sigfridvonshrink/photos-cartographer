@@ -466,6 +466,11 @@ def _save(workspace, payload):
     # A save changes the workspace, so it holds the workspace's lock (BLD-editor_save_locks): a geotag plan
     # running now reads these records and rewrites them, and would overwrite a save landing in between.
     # Fail-fast like every run; the editor's display reads stay unlocked (each file is replaced whole).
+    # The workspace's filesystem first, the lock included (RUL-local_filesystem_checked_first,
+    # RUL-filesystem_requirements_tried).
+    fs_err = photos_utils.workspace_filesystem_error(workspace)
+    if fs_err:
+        return {"ok": False, "error": fs_err}
     lock = photos_utils.WorkspaceLock(workspace, create=False)
     if not lock.acquire():
         return {"ok": False, "error": "a run is in progress on this workspace — save again when it finishes"}
@@ -638,6 +643,12 @@ def serve(workspace, port=8765, host="0.0.0.0"):
         print(f"{os.path.abspath(workspace)} is not an initialized workspace "
               f"(no {CONTROL}/{GUARD_NAME}). Run `photos-cartographer prep plan` then `photos-cartographer prep execute` here first, "
               f"or use `photos-cartographer edit --demo` for a read-only fixtures tour.", file=sys.stderr)
+        sys.exit(2)
+    # The workspace's filesystem, before the editor's lock is taken (RUL-local_filesystem_checked_first,
+    # RUL-filesystem_requirements_tried): every save checks it again.
+    fs_err = workspace and photos_utils.workspace_filesystem_error(workspace)
+    if fs_err:
+        print(fs_err, file=sys.stderr)
         sys.exit(2)
     # A sealed (merged) workspace is final (RUL-editor_refuses_sealed): its decisions may no longer change.
     if workspace and photos_utils.is_sealed(workspace):

@@ -95,6 +95,38 @@ what POSIX filesystems share, which is not nothing — locks, atomic renames, re
 safety of every change rests on.
 :::
 
+:::{rat} A workspace is local, by a list of the kinds known to be
+:id: RAT-workspace_is_local
+:status: ruled
+:forced: no
+:follows_from: RAT-live_lock_never_taken, RAT-one_filesystem_specific_part
+:justifies: RUL-workspace_local_filesystem, RUL-local_filesystem_checked_first, RUL-not_local_stops, RUL-not_local_named
+
+The workspace is where the originals move, again and again, under one lock; on some network filesystems that lock
+guards the runs of one machine only, and which ones cannot be told from inside a run. The workspace's database is no
+safer there: its own locking is known to fail across a network. A workspace has no reason to be shared — it is one
+place made for one ingest — so a local one costs nothing, and the question is settled for it rather than left to each
+filesystem. The kinds known to be local are listed, not the network ones: a kind the list does not know is refused,
+so no new network filesystem slips through, and a local one left off costs a refusal that names it. No setting turns
+the check off: it would be the one switch that rests the safety of the originals on a filesystem's goodwill. Asked
+before anything else, the lock included, it is never mistaken for a run in progress.
+:::
+
+:::{rat} A missing requirement is named before it fails a change
+:id: RAT-filesystem_tried_first
+:status: ruled
+:forced: no
+:follows_from: RAT-one_filesystem_specific_part, RAT-safe_at_each_change
+:justifies: RUL-filesystem_requirements_tried, RUL-filesystem_lacking_stops, RUL-filesystem_lacking_named, RUL-filesystem_trial_leaves_nothing, RUL-library_requirements_tried, RUL-library_lacking_stops, RUL-library_lacking_named
+
+A filesystem without one of what every change rests on — a FAT or exFAT card, some network shares — fails at the run's
+first lock or move, with that call's error and no word of why: a lock it cannot take reads as a run in progress, a move
+it cannot refuse is found only once a photo was to be moved. Tried first on files of its own, each costs a few
+milliseconds, and the run stops before it has changed anything, naming what is missing. Tried at every run, since a
+workspace or a library can be moved, or a different filesystem mounted at its place, between two runs; and removed
+after, so that a refused run, a sealed workspace's included, leaves no trace of having asked.
+:::
+
 :::{rat} A rollback point is the state just before the change
 :id: RAT-snapshot_just_before
 :status: ruled

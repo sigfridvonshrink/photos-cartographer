@@ -38,6 +38,17 @@ holding a position ({need}`BLD-no_photo_unplaced`). Any
 blocker ends the run with exit status 2 before the library lock, the plan or the summary. It stops, too, on a photo in `6-photos-by-dest` whose handoff record holds no fingerprint and on any hidden file or folder there, each named.
 :::
 
+:::{bld} The library's filesystem, tried before its lock
+:id: BLD-library_trial
+:status: ruled
+:realises: RUL-library_requirements_tried, RUL-library_lacking_stops, RUL-library_lacking_named, RUL-library_network_allowed
+:uses: BLD-filesystem_trial
+
+Merge's plan, dry run and execute SHALL, after the preflight and the workspace's check and before `LibraryLock`, call
+`library_filesystem_error`, which tries through `filesystem_lacks`, in `library_root`, the lock, the move that refuses a
+taken name and the two syncs, and checks no filesystem type; one failing stops the run with exit status 2, naming it.
+:::
+
 ## 3. Configuration and validation
 
 :::{bld} `init-library`'s four cases
