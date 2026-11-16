@@ -4004,11 +4004,11 @@ def run(args):
             now_iso = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
             fin_blockers = wf.finalize_package(now_iso)
             if fin_blockers:
-                reporter.error("\nCannot finalize — geotag has not ended successfully:")
+                # each blocker names its own fix (an execution not yet successful, a photo with no position, …)
+                reporter.error("\nCannot finalize:")
                 for b in fin_blockers:
                     reporter.log(f"  - {b}")
-                emit_next_step(reporter, "run `geotag execute` to a successful finish first, then "
-                                         "`geotag finalize`.")
+                emit_next_step(reporter, "do what each line above says, then `geotag finalize`.")
                 sys.exit(2)
             for w in getattr(wf, "finalize_warnings", []):
                 reporter.warn(f"  partial record: {w}")

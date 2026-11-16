@@ -761,6 +761,8 @@ def test_finalize_refuses_a_photo_holding_no_position(tmp_path, monkeypatch, cap
     said = capsys.readouterr()
     out = said.out + said.err
     assert "1 photo(s) in 6-photos-by-dest hold no position" in out and "b.arw" in out and "a.arw" not in out
+    # the closing hint defers to the blocker's own fix, never a stale "run geotag execute" for an executed plan
+    assert "do what each line above says" in out and "to a successful finish" not in out
     assert not (ctl / "photos-26-complete-log.json").exists()
 
 
