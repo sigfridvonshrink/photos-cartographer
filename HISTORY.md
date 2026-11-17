@@ -2,6 +2,25 @@
 
 *What was decided and why, newest first. A record: never corrected forward. Per-commit detail is `git log`.*
 
+## 2026-11-17 — a leaner corpus measured, and dropped (BACKLOG 57)
+
+The corpus is about three quarters the size of the code by words, and the owner asked whether that was overdoing it.
+The shape was ruled — keep the rules, the definitions, the reasons that carry a judgement and the tests; keep build
+items for the mechanisms that protect the originals and for every record's format; move what is only display out to
+the preferences; fold forced reasons that only restate their rule — and every build item, rule and forced reason was
+then classified against it before anything was cut.
+
+The corpus proved dense, not padded: nearly every build item states a check that stops a run, a safety mechanism or
+a record's fields, and code detail sits as clauses inside them, not as items of its own. Two rulings in review kept
+more: naming the cause of a stop, and what to do, stays a rule; every rule keeps a build item. What remained — 15
+build items, 189 clauses of function and constant names, 10 report rules, 21 forced reasons — came to about 3% of the
+corpus's words, and the owner judged it not worth the churn. The item is closed; walks stay whole.
+
+Two answers from the review stand for when those rules are next touched: the count of photos each destination's
+fallback placed is a preference, not a rule, photos-23 and the editor showing the same; merge's end report keeps, as a
+rule, each photo left out with why and whether the workspace is sealed, its counts a preference. One slip the review
+found was fixed: a build item named the journals by run, where the rest name them by plan.
+
 ## 2026-11-17 — tried on live data before 3.1
 
 The build was run on a real workspace, prep to merge, before the release. What that showed was fixed.

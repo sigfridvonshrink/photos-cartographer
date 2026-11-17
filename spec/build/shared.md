@@ -410,7 +410,7 @@ The plan and decision artifacts SHALL be prep's `photos-10-prep-plan.json`, geot
 A differing re-plan SHALL first copy the existing artifact to the shared incremental `-NNN` suffix ({need}`BLD-name_suffix`) —
 `photos-10-prep-plan-001.json`, say, the copy landing under that name only whole — then replace the artifact atomically,
 and announce where. Prep's plan carries a fresh plan id each run, so
-re-planning it always sets the prior one aside; geotag's and merge's plan ids derive from their content. The per-run journals keep their `journal-<run_id>.json` naming; this
+re-planning it always sets the prior one aside; geotag's and merge's plan ids derive from their content. The journals keep their `journal-<plan id>.json` naming; this
 convention governs the plan and decision artifacts.
 :::
 

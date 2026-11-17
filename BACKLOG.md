@@ -4,7 +4,7 @@
 
 - **What this is:** [`README.md`](README.md). **The record:** [`HISTORY.md`](HISTORY.md).
 
-*Open items: **6** — 30 to 32, 49, 53, 57.* 🛑 Numbers are never reused; the next is **58**.
+*Open items: **5** — 30 to 32, 49, 53.* 🛑 Numbers are never reused; the next is **58**.
 
 ---
 
@@ -80,43 +80,6 @@ are kept, so a change to a threshold or to the inference is read as a difference
 
 *Items 35 to 46 come from the adversarial review of time handling, 2026-11-14 (33, 34 and 41, from the same review, are ruled and built). Each is a choice between behaviours:
 none is coded until ruled. What the review found that was plainly wrong was fixed with it.*
-
-### 57. A leaner corpus: keep what counts, let the code record the rest
-
-**Why:** the corpus is about three quarters the size of the code by words — 760 rules, 378 reasons, 305 build items
-against some 16,800 lines of logic — and every change now touches a rule, a reason, a build item and a test, then the
-audits that reconcile them. The rules earn their keep: the walks of 2026-11-16 and -17 found real harm to originals
-and the library through them. But most of what the last two walks reconciled was the build layer restating the code
-(field names, file names, step orders), which drifts the moment the code moves, and detail that changes nothing that
-counts. The owner asked whether this was overdoing it given the script's role, and asked for this item (2026-11-17).
-
-**Proposed (not ruled):**
-- **Keep** the rules, the definitions, the reasons that carry an owner ruling or a real judgement, every rule's tests
-  and the mutation checks of the high-criticality rules.
-- **Cut the build layer** to the mechanisms that carry safety — fingerprints, pins, journals, the lock, atomic moves,
-  the no-clobber checks, the records' dependencies — and let the code, its comments and its tests be the record of
-  the rest: perhaps two thirds of the build items go.
-- **Move** what is display or affordance out of the rules into the owner's preferences or docs/design/decisions.md,
-  as the console's summary and the report's counts already went.
-- **Fold** forced reasons that only restate their rule into the rule's parent reason.
-- **Walk less:** later walks take the high-criticality rules and the code that changed, not every item against every
-  line.
-
-**Ruled 2026-11-17 (the shape):**
-- **The build layer keeps the safety mechanisms and the records' formats** — every record a person reads or edits, or
-  another phase reads (photos-21 to -35, the handoff, the journal, the workspace record, the settings) — and lets the
-  code, its comments and its tests record the rest: perhaps half the build items go. A test naming a cut item names
-  the rule it realised instead.
-- **Display moves out**: a rule about what is shown or reported, that changes nothing that counts, becomes one of the
-  owner's preferences.
-- **Forced reasons that only restate their rule are folded** into the reason they follow from.
-- **Walks stay whole**: "walk less" was not taken.
-- **A list first**: the items each step removes, moves or folds are listed for the owner's review before anything is
-  cut, then cut in one batch.
-
-**Open:** the lists; then the cut.
-
----
 
 ### 53. Videos sorted into destinations, and geotagged
 
