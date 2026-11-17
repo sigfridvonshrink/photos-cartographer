@@ -3,6 +3,8 @@
 mutation gate but achieved nothing; `partial` = mixed; `success` = clean. Pre-mutation aborts are
 `rejected`, decided elsewhere."""
 
+import pytest
+
 import photos_2_geotag as geo
 import photos_3_merge as merge
 
@@ -39,11 +41,14 @@ def test_merge_success_when_none_blocked():
     assert merge.merge_execution_status([_r("placed_new"), _r("already_present")]) == "success"
 
 
+@pytest.mark.spec("RUL-resume_block_makes_partial",
+                  test="TST-execution_status-merge_partial_when_some_blocked_some_placed")
 def test_merge_partial_when_some_blocked_some_placed():
     assert merge.merge_execution_status([_r("placed_new"), _r("blocked")]) == "partial"
     assert merge.merge_execution_status([_r("renamed_for_library"), _r("blocked"), _r("blocked")]) == "partial"
 
 
+@pytest.mark.spec("RUL-resume_block_makes_partial", test="TST-execution_status-merge_failed_when_all_blocked")
 def test_merge_failed_when_all_blocked():
     assert merge.merge_execution_status([_r("blocked")]) == "failed"
     assert merge.merge_execution_status([_r("blocked"), _r("blocked")]) == "failed"

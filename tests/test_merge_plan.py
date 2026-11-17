@@ -563,7 +563,8 @@ def test_entries_not_carried():
 
 
 @pytest.mark.parametrize("value_changed", [False, True])
-@pytest.mark.spec("RUL-merge_rechecks_under_new_engine", "RUL-engine_change_is_checked", "BLD-merge_engine_recheck",
+@pytest.mark.spec("RUL-changed_fingerprint_mapping_recorded",
+                  "RUL-merge_rechecks_under_new_engine", "RUL-engine_change_is_checked", "BLD-merge_engine_recheck",
                   "RUL-retaken_fingerprint_same_photo", "RUL-merge_merges_changed_fingerprint", "BLD-changed_fingerprint_mapped",
                   test="TST-merge_plan-another_imagemagick_has_prep_fingerprints_checked")
 def test_another_imagemagick_has_prep_fingerprints_checked(tmp_path, monkeypatch, capsys, value_changed):

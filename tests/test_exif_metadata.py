@@ -153,7 +153,8 @@ def test_metadata_cache_creation_and_staleness(workspace, monkeypatch):
     assert upsert_fx2["data"]["metadata"]["has_native_gps"] is False
     assert upsert_fx2["data"]["metadata"]["field_set_version"] == utils.FIELD_SET_VERSION
 
-@pytest.mark.spec("RUL-grouping_facts_reported", "BLD-handoff_grouping_facts", "RUL-quarantined_leaves_handoff",
+@pytest.mark.spec("RUL-handoff_describes_workspace",
+                  "RUL-grouping_facts_reported", "BLD-handoff_grouping_facts", "RUL-quarantined_leaves_handoff",
                   test="TST-exif_metadata-handoff_manifest_enrichment")
 def test_handoff_manifest_enrichment(workspace, monkeypatch):
     create_mock_metadata_reader(monkeypatch)
@@ -209,28 +210,68 @@ def test_handoff_manifest_enrichment(workspace, monkeypatch):
     assert df["cache_freshness"]["metadata_extracted_ok"] == 1
 
 
+@pytest.mark.spec("RUL-metadata_kept_for_geotag", test="TST-exif_metadata-the_metadata_geotag_works_from_is_kept")
+def test_the_metadata_geotag_works_from_is_kept(workspace, monkeypatch):
+    """Of the record exiftool gives for a file, prep keeps in the database each field of every class geotag works
+    from: the camera's identity, the times and the native position as recorded, the dimensions, orientation and
+    duration."""
+    record = {"SourceFile": "photo.jpg",
+              "EXIF:Make": "Canon", "EXIF:Model": "EOS R5", "EXIF:BodySerialNumber": "B-1",       # camera identity
+              "EXIF:DateTimeOriginal": "2023:01:01 12:00:00", "EXIF:OffsetTimeOriginal": "+02:00",  # times
+              "EXIF:GPSLatitude": 45.5, "EXIF:GPSLongitude": 9.25,                                  # native position
+              "EXIF:ImageWidth": 6000, "EXIF:ImageHeight": 4000,                                    # dimensions
+              "EXIF:Orientation": 6,                                                                # orientation
+              "QuickTime:Duration": 12.5}                                                           # duration
+    kept = {"Make": "Canon", "Model": "EOS R5", "BodySerialNumber": "B-1", "DateTimeOriginal": "2023:01:01 12:00:00",
+            "OffsetTimeOriginal": "+02:00", "GPSLatitude": 45.5, "GPSLongitude": 9.25, "ImageWidth": 6000,
+            "ImageHeight": 4000, "Orientation": 6, "Duration": 12.5}
+
+    def read(folders, max_workers=4, progress_coordinator=None):
+        return {os.path.join(f, n): utils.MetadataReader._parse_exiftool_item(dict(record, SourceFile=n))
+                for f in folders for n in os.listdir(f) if n.endswith(".jpg")}, set()
+    monkeypatch.setattr(utils.MetadataReader, "read_metadata_concurrently", read)
+    monkeypatch.setattr(prep.ContentHasher, "fingerprint_image", lambda *a, **k: {
+        "status": "valid", "strategy": "image-content-hash-v2", "value": "h", "engine_version": "t"})
+    (workspace / "0-sources" / "photo.jpg").write_text("dummy content")
+    cache = prep.WorkspaceCache(str(workspace), in_memory=False)
+    plan = prep.WorkspacePrepWorkflow(str(workspace), cache).plan()
+    cache.close()
+    assert not plan.blockers, plan.blockers
+    prep.PlanExecutor(str(workspace)).execute(plan, str(workspace / ".photos-ingest/journal.json"))
+    conn = sqlite3.connect(utils.db_path(str(workspace)))
+    (parsed,), = conn.execute("SELECT parsed_json FROM metadata_cache").fetchall()
+    conn.close()
+    parsed = json.loads(parsed)
+    assert {k: parsed.get(k) for k in kept} == kept
+
+
+@pytest.mark.parametrize("stamp", ["extractor", "extractor_version", "field_set_version",
+                                   "extraction_options_fingerprint", "metadata_schema_version",
+                                   "camera_group_key_version", "content_hash"])
 @pytest.mark.spec("RUL-metadata_freshness", test="TST-exif_metadata-metadata_extractor_version_refreshes")
-def test_metadata_extractor_version_refreshes(workspace, monkeypatch):
+def test_metadata_extractor_version_refreshes(workspace, monkeypatch, stamp):
+    """A file's metadata is reused only while every stamp it was read under is this build's — the extractor, its
+    version, the field set, the extraction options, the record's schema, the camera-group key's version — and it was
+    read for the file's current fingerprint; any one of them other, it is read again."""
     create_mock_metadata_reader(monkeypatch)
+    monkeypatch.setattr(prep.ContentHasher, "fingerprint_image", lambda *a, **k: {
+        "status": "valid", "strategy": "image-content-hash-v2", "value": "dummycontenthash", "engine_version": "t"})
+    monkeypatch.setattr(utils, "get_imagemagick_version", lambda: "t")
+    monkeypatch.setattr(utils, "get_exiftool_version", lambda: "13.00")
 
-    # Create test file
-    source_file = workspace / "0-sources" / "photo.jpg"
-    source_file.write_text("dummy content")
-
+    (workspace / "0-sources" / "photo.jpg").write_text("dummy content")
     cache = prep.WorkspaceCache(str(workspace), in_memory=False)
     workflow = prep.WorkspacePrepWorkflow(str(workspace), cache)
+    prep.PlanExecutor(str(workspace)).execute(workflow.plan(), str(workspace / ".photos-ingest/journal.json"))
 
-    plan = workflow.plan()
-    executor = prep.PlanExecutor(str(workspace))
-    journal_path = str(workspace / ".photos-ingest/journal.json")
-    executor.execute(plan, journal_path)
-
-    # Change exiftool version
-    import photos_utils as utils
-    monkeypatch.setattr(utils, "get_exiftool_version", lambda: "12.00")
-
-    plan2 = workflow.plan()
-    assert "reused_from_cache" not in plan2.summary.get("metadata_plan_status", {}).values()
+    def statuses():
+        return workflow.plan().summary["metadata_plan_status"]
+    (path, status), = [(p, s) for p, s in statuses().items() if p.endswith(".jpg")]
+    assert status == "reused_from_cache"                       # nothing changed: reused
+    other = {"field_set_version": -1, "metadata_schema_version": -1, "camera_group_key_version": -1}.get(stamp, "x")
+    cache.conn.execute(f"UPDATE metadata_cache SET {stamp} = ? WHERE relative_path = ?", (other, path))
+    cache.conn.commit()
+    assert statuses()[path] != "reused_from_cache"
 
 
 def test_extraction_failure_is_extraction_failed(workspace, monkeypatch):

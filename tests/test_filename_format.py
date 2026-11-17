@@ -117,7 +117,8 @@ def test_misnamed_file_given_the_name_it_should_carry(tmp_path, mocks):
         assert len(mine) == 1 and f"expected {name})" in mine[0], (rel, name, found)
 
 
-@pytest.mark.spec("RUL-suffix_deterministic", test="TST-filename_format-suffix_allocation_is_deterministic")
+@pytest.mark.spec("RUL-jobs_change_nothing", "BLD-planning_order",
+                  "RUL-suffix_deterministic", test="TST-filename_format-suffix_allocation_is_deterministic")
 def test_suffix_allocation_is_deterministic(tmp_path, mocks, monkeypatch):
     """Which file gets which differentiating suffix does not depend on the order the files are met in:
     the same files, listed by the filesystem in the opposite order, are given the same names."""

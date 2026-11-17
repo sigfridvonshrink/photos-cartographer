@@ -238,3 +238,43 @@ def test_execute_rejects_any_operation_in_by_dest(tmp_path, source, destination)
                                             source=source, destination=destination)])
     with pytest.raises(ValueError, match="forbidden on (source|destination) in 6-photos-by-dest"):
         executor.execute(plan, str(tmp_path / "j.json"))
+
+
+@pytest.mark.spec("RUL-prep_leaves_by_dest_as_found",
+                  test="TST-prep_split-by_dest_duplicates_are_left_and_the_inbox_copy_set_aside")
+def test_by_dest_duplicates_are_left_and_the_inbox_copy_set_aside(tmp_path, monkeypatch):
+    """Two copies of one photo in photos by destination and a third in the inbox: the plan sets aside the inbox's
+    copy only — never one in photos by destination, though they duplicate each other — and executes, the copies in
+    photos by destination left as they were."""
+    import photos_utils as utils
+    ws = tmp_path / "ws"
+    ws.mkdir()
+    for d in ("0-sources", "1-strays", "2-missing-metadata", "3-redundant-jpgs", "4-videos-by-date",
+              "5-photos-by-date", "6-photos-by-dest"):
+        (ws / d).mkdir()
+    (ws / ".photos-ingest").mkdir()
+    (ws / ".photos-ingest" / "photos-00-workspace-guard").touch()
+    photos_1_prep.CONFIG["zfs"] = {"enabled": False}
+    photos_1_prep.CONFIG["jobs"] = 1
+    monkeypatch.setattr(photos_1_prep.ContentHasher, "fingerprint_image", lambda p: {
+        "status": "valid", "strategy": "image-content-hash-v2", "value": "sig-" + open(p, "rb").read().hex(),
+        "engine_version": "t"})
+
+    def meta(folders, max_workers=4, progress_coordinator=None):
+        return {os.path.join(fo, fn): {"DateTimeOriginal": "2023:01:02 03:04:05", "extraction_status": "extracted_ok"}
+                for fo in folders for fn in os.listdir(fo)}, set()
+    monkeypatch.setattr(utils.MetadataReader, "read_metadata_concurrently", meta)
+    for dest in ("Rome", "Trip"):
+        (ws / "6-photos-by-dest" / dest).mkdir()
+        (ws / "6-photos-by-dest" / dest / "2023-01-02--03-04-05.jpg").write_bytes(b"same")
+    (ws / "0-sources" / "a.jpg").write_bytes(b"same")
+    by_dest = {p: p.read_bytes() for p in (ws / "6-photos-by-dest").rglob("*") if p.is_file()}
+
+    cache = photos_1_prep.WorkspaceCache(str(ws))
+    plan = photos_1_prep.WorkspacePrepWorkflow(str(ws), cache).plan()
+    cache.close()
+    assert not plan.blockers, plan.blockers
+    assert [op.source for op in plan.operations if op.type == "quarantine_move"] == ["0-sources/a.jpg"]
+    photos_1_prep.PlanExecutor(str(ws)).execute(plan)
+    assert {p: p.read_bytes() for p in (ws / "6-photos-by-dest").rglob("*") if p.is_file()} == by_dest
+    assert not (ws / "0-sources" / "a.jpg").exists()

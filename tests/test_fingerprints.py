@@ -127,7 +127,8 @@ def test_a_file_whose_metadata_is_read_again_is_fingerprinted_again(tmp_path, mo
     assert _plan_counting(ws, monkeypatch) == 1
 
 
-@pytest.mark.spec("RUL-fingerprint_method_matches", "BLD-fingerprint", "BLD-fingerprint_method",
+@pytest.mark.spec("RUL-database_over_memo", "RUL-memo_never_changes_plan", "BLD-plan_memo",
+                  "RUL-fingerprint_method_matches", "BLD-fingerprint", "BLD-fingerprint_method",
                   "RUL-fingerprint_method_unrecorded_retaken",
                   test="TST-fingerprints-a_fingerprint_is_reused_only_from_this_method")
 def test_a_fingerprint_is_reused_only_from_this_method(tmp_path, monkeypatch):
@@ -153,6 +154,28 @@ def test_a_fingerprint_is_reused_only_from_this_method(tmp_path, monkeypatch):
     monkeypatch.setattr(utils, "get_imagemagick_version", lambda: "u")
     _restamp(ws, ".mp4", strategy=utils.VIDEO_FINGERPRINT_STRATEGY)
     assert _plan_counting(ws, monkeypatch) == 1                     # a new ImageMagick restales the photo only
+
+
+@pytest.mark.parametrize("unrecorded", ["engine_version", "strategy"])
+@pytest.mark.spec("RUL-fingerprint_method_unrecorded_retaken", "BLD-fingerprint_method",
+                  test="TST-fingerprints-a_fingerprint_recording_no_method_is_taken_again")
+def test_a_fingerprint_recording_no_method_is_taken_again(tmp_path, monkeypatch, unrecorded):
+    """A photo's cached fingerprint that records no ImageMagick version, or no strategy, is taken again — though
+    its metadata, read for that very fingerprint, is fresh, so nothing else asks for it to be read again."""
+    _mock(monkeypatch)
+    monkeypatch.setattr(utils, "get_imagemagick_version", lambda: "t")
+    ws = _ws(tmp_path)
+    (ws / "0-sources" / "a.jpg").write_bytes(b"AAAA")
+    _run(ws)
+    assert _plan_counting(ws, monkeypatch) == 0
+    conn = sqlite3.connect(utils.db_path(str(ws)))
+    (path, ch), = conn.execute("SELECT relative_path, content_hash FROM file_cache").fetchall()
+    ch = json.dumps({k: v for k, v in json.loads(ch).items() if k != unrecorded})
+    conn.execute("UPDATE file_cache SET content_hash = ? WHERE relative_path = ?", (ch, path))
+    conn.execute("UPDATE metadata_cache SET content_hash = ? WHERE relative_path = ?", (ch, path))   # still fresh
+    conn.commit()
+    conn.close()
+    assert _plan_counting(ws, monkeypatch) == 1
 
 
 @pytest.mark.spec("BLD-prep_dependencies", "BLD-cache_versions",

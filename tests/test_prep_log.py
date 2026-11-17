@@ -560,3 +560,61 @@ def test_a_different_file_at_a_freed_path_is_a_new_photo(tmp_path, monkeypatch):
     assert photos[gone_fp] == entry
     (new_fp,) = set(photos) - {gone_fp}
     assert not any(s["action"] == "fingerprint_retaken" for s in photos[new_fp]["journey"])
+
+
+@pytest.mark.spec("RUL-retake_only_unchanged_file", "BLD-retake_same_file",
+                  test="TST-prep_log-another_file_of_the_same_size_and_time_at_a_freed_path_is_a_new_photo")
+def test_another_file_of_the_same_size_and_time_at_a_freed_path_is_a_new_photo(tmp_path, monkeypatch):
+    """A file put in place of a filed photo with the old one's size and modification time, while ImageMagick
+    changes, is still another file — another inode: its fingerprint is no retake, and the gone photo's entry stays
+    as it was."""
+    _install(monkeypatch)
+    monkeypatch.setattr(utils, "get_imagemagick_version", lambda: "t")
+    ws = _ws(tmp_path)
+    (ws / "0-sources" / "a.jpg").write_bytes(b"AAAA")
+    _run(ws)
+    (gone_fp, entry), = _log(ws)["photos"].items()
+    path = ws / entry["prep_path"]
+    st = os.stat(path)
+    other = path.parent / "other.tmp"
+    other.write_bytes(b"ZZZZ")                                     # the same size, made while the old file exists
+    os.utime(other, ns=(st.st_atime_ns, st.st_mtime_ns))         # and the same modification time
+    os.replace(other, path)
+    assert (os.stat(path).st_size, os.stat(path).st_mtime_ns) == (st.st_size, st.st_mtime_ns)
+    assert os.stat(path).st_ino != st.st_ino
+    monkeypatch.setattr(prep.ContentHasher, "fingerprint_image", lambda p: {
+        "status": "valid", "strategy": "image-content-hash-v2",
+        "value": "sig2-" + open(p, "rb").read().hex()[:16], "engine_version": "u"})
+    monkeypatch.setattr(utils, "get_imagemagick_version", lambda: "u")
+    _run(ws)
+    photos = _log(ws)["photos"]
+    assert photos[gone_fp] == entry
+    (new_fp,) = set(photos) - {gone_fp}
+    assert not any(s["action"] == "fingerprint_retaken" for s in photos[new_fp]["journey"])
+
+
+@pytest.mark.spec("RUL-retake_only_unchanged_file", "BLD-retake_same_file",
+                  test="TST-prep_log-a_fingerprint_taken_again_by_the_same_method_is_no_retake")
+def test_a_fingerprint_taken_again_by_the_same_method_is_no_retake(tmp_path, monkeypatch):
+    """An unchanged file fingerprinted again by the same method — its database row and memo gone — that gets another
+    value is not counted as a fingerprint taken again: no `fingerprint_retaken` step, the earlier entry as it was."""
+    _install(monkeypatch)
+    monkeypatch.setattr(utils, "get_imagemagick_version", lambda: "t")
+    ws = _ws(tmp_path)
+    (ws / "0-sources" / "a.jpg").write_bytes(b"AAAA")
+    _run(ws)
+    (old_fp, entry), = _log(ws)["photos"].items()
+    cache = prep.WorkspaceCache(str(ws))
+    cache.remove_file(entry["prep_path"])                        # nothing kept to reuse: fingerprinted again
+    cache.close()
+    memo = os.path.join(str(ws), ".photos-ingest", "photos-00-plan-memo.db")
+    if os.path.exists(memo):
+        os.remove(memo)
+    monkeypatch.setattr(prep.ContentHasher, "fingerprint_image", lambda p: {
+        "status": "valid", "strategy": "image-content-hash-v2",          # the same method as before
+        "value": "sig3-" + open(p, "rb").read().hex()[:16], "engine_version": "t"})
+    _run(ws)
+    photos = _log(ws)["photos"]
+    assert photos[old_fp] == entry
+    (new_fp,) = set(photos) - {old_fp}
+    assert not any(s["action"] == "fingerprint_retaken" for s in photos[new_fp].get("journey", []))

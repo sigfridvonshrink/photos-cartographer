@@ -80,7 +80,8 @@ def _guard(ws):
 
 # --- initialization ----------------------------------------------------------
 
-@pytest.mark.spec("RUL-structure_built_once", "RUL-init_moves_dump_to_inbox", "RUL-top_level_only_managed",
+@pytest.mark.spec("BLD-prep_execute_replays", "RUL-execution_only_the_plan",
+                  "RUL-structure_built_once", "RUL-init_moves_dump_to_inbox", "RUL-top_level_only_managed",
                   test="TST-lifecycle-init_creates_structure_and_moves_dump_structure_preserved")
 def test_init_creates_structure_and_moves_dump_structure_preserved(tmp_path, monkeypatch):
     _install(monkeypatch)
@@ -222,6 +223,39 @@ def test_guard_written_last_then_reentry_is_clean(tmp_path, monkeypatch):
     prep.PlanExecutor(str(ws)).execute(plan2)
     assert os.path.exists(_guard(ws))                          # re-written
     assert len(glob.glob(str(ws / "5-photos-by-date" / "**" / "*.jpg"), recursive=True)) == 1  # still organized, no dup
+
+
+@pytest.mark.spec("RUL-initialized_marked_last", "BLD-workspace_guard",
+                  test="TST-lifecycle-a_failed_initializing_execute_leaves_the_workspace_unmarked")
+def test_a_failed_initializing_execute_leaves_the_workspace_unmarked(tmp_path, monkeypatch):
+    """An initializing execute whose second move fails (its source gone after the preflight) writes no mark: the
+    workspace is still uninitialized, and the next plan initializes it again, moving what the dump still holds."""
+    _install(monkeypatch)
+    ws = _bare(tmp_path)
+    for name in ("a.jpg", "b.jpg", "c.jpg"):
+        (ws / name).write_bytes(name.encode())
+    plan = _plan(ws)
+    assert not plan.blockers, plan.blockers
+    moves = [op.source for op in plan.operations if op.reason and "Initialize: move" in op.reason]
+    assert len(moves) == 3
+    real_preflight = prep.PlanValidator.validate_plan_preflight
+
+    def preflight_then_lose_a_source(p, root):
+        real_preflight(p, root)
+        os.remove(os.path.join(root, moves[1]))               # the second move's source, gone after the preflight
+    with monkeypatch.context() as m:
+        m.setattr(prep.PlanValidator, "validate_plan_preflight", staticmethod(preflight_then_lose_a_source))
+        with pytest.raises(prep.ExecuteFailed):
+            prep.PlanExecutor(str(ws)).execute(plan)
+
+    assert not os.path.lexists(_guard(ws))                     # the mark is written only by a whole success
+    assert (ws / "0-sources" / moves[0]).exists()              # the first move was carried out
+    plan2 = _plan(ws)                                          # so the next run initializes again
+    assert not plan2.blockers, plan2.blockers
+    assert {(op.source, op.destination) for op in plan2.operations
+            if op.reason and "Initialize: move" in op.reason} == {(moves[2], "0-sources/" + moves[2])}
+    prep.PlanExecutor(str(ws)).execute(plan2)
+    assert os.path.exists(_guard(ws))
 
 
 @pytest.mark.spec("RUL-rewrite_in_place_atomic", test="TST-lifecycle-an_interrupted_guard_write_leaves_no_damaged_guard")

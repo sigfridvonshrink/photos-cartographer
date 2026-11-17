@@ -528,7 +528,8 @@ def test_residual_folders_do_not_block(tmp_path):
     assert blockers == [], blockers
 
 
-@pytest.mark.spec("RUL-development_after_merge", test="TST-merge_preflight-dev_subfolder_blocks")
+@pytest.mark.spec("RUL-merge_rechecks_gates",
+                  "RUL-development_after_merge", test="TST-merge_preflight-dev_subfolder_blocks")
 def test_dev_subfolder_blocks(tmp_path):
     ws, _ = _make(tmp_path)
     p = ws / "6-photos-by-dest" / "Trip" / "jpg" / "a__std.jpg"
@@ -568,6 +569,7 @@ def test_a_link_among_the_photos_is_refused_before_they_are_scanned(tmp_path, mo
     assert "Forbidden symlink under 6-photos-by-dest" in "".join(capsys.readouterr())
 
 
+@pytest.mark.spec("RUL-merge_rechecks_gates", test="TST-merge_preflight-bydate_stray_photo_blocks")
 def test_bydate_stray_photo_blocks(tmp_path):
     ws, _ = _make(tmp_path)
     (ws / "5-photos-by-date" / "x.jpg").write_bytes(b"img")
