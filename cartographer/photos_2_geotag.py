@@ -2648,14 +2648,14 @@ class GeotagWorkflow:
                     review_items.append(dict(self._review_item(f, self._OWN_CONTRADICTED, fd, False), **own))
                 elif cat == "preserve_native":
                     counts["preserve_native_gps"] += 1
-                    placed.append(self._placed_photo(f, "own_position"))
+                    placed.append(self._placed_photo(f, "own_position", f.get("native_gps")))
                 elif cat in ("gpx_interpolation", "gpx_extrapolation"):
                     counts[f"automatic_{cat}"] += 1; gpx_files.add(coord.get("gpx_file"))
-                    placed.append(dict(self._placed_photo(f, "tracks"), method=coord["method"]))
+                    placed.append(dict(self._placed_photo(f, "tracks", coord), method=coord["method"]))
                 elif cat == "manual_fallback":
                     # placed by the fallback: recorded with why the tracks did not (RUL-fallback_photo_says_why)
                     counts["automatic_folder_fallback"] += 1
-                    placed.append(dict(self._placed_photo(f, "folder_fallback"), **({"tracks": why} if why else {})))
+                    placed.append(dict(self._placed_photo(f, "folder_fallback", coord), **({"tracks": why} if why else {})))
                 elif cat == "manual_locked":
                     # a position the user set for it — on a photo nothing else placed, or one they chose over the
                     # tracks or the fallback (`chosen_by_user`): kept while it holds one (RUL-chosen_position_kept)
@@ -2848,11 +2848,15 @@ class GeotagWorkflow:
                 blockers.append(f"{where}: this photo holds a position of its own, which geotag keeps — remove the "
                                 f"{self._CHOSEN} entry.")
 
-    def _placed_photo(self, f, placed_by):
+    def _placed_photo(self, f, placed_by, where=None):
         """A photo its own position, the tracks or the folder fallback place, as photos-23's `placed_photos` lists it
-        (BLD-placed_photos)."""
-        return {"relative_path": f["relative_path"], "content_fingerprint": f.get("content_fingerprint"),
-                "placed_by": placed_by}
+        (BLD-placed_photos): with the position it is placed at, for the user to see — the plan never reads it."""
+        entry = {"relative_path": f["relative_path"], "content_fingerprint": f.get("content_fingerprint"),
+                 "placed_by": placed_by}
+        lat, lon = (where or {}).get("lat"), (where or {}).get("lon")
+        if all(isinstance(v, (int, float)) and not isinstance(v, bool) for v in (lat, lon)):
+            entry["position"] = {"lat": lat, "lon": lon}
+        return entry
 
     def _review_item(self, f, reason, ud, requires, why=None):
         item = {

@@ -452,16 +452,21 @@ def test_photos_23_lists_the_photos_tracks_and_fallback_place(tmp_path):
     cam = "SONY|A7|1"
     files = [dict(_fp_file(f"{d}/t.arw", d, "fp-t"), camera_group_key=cam, source_naive_time="2024:07:03 14:00:30"),
              dict(_fp_file(f"{d}/f.arw", d, "fp-f"), camera_group_key=cam, source_naive_time="2024:07:03 22:00:00"),
-             dict(_file(f"{d}/n.arw", d, native=True), content_fingerprint="fp-n", camera_group_key="PHONE")]
+             dict(_file(f"{d}/n.arw", d, native=True), content_fingerprint="fp-n", camera_group_key="PHONE",
+                  native_gps={"lat": -33.8688, "lon": 151.2093, "processing_method": None})]
     rows = [_row(f"{d}/t.arw", "2024-07-03T12:00:30Z"), _row(f"{d}/f.arw", "2024-07-03T20:00:00Z")]
     time = {"destinations": {d: {"camera_group_time_decisions": {cam: {}}}}}
     art = wf.build_gps_decisions(files, rows, _gpx(), _with_fallback(d, 50.5, 4.5), "rfp", time_decisions=time)[0]
+    tp = cal.classify_gps(files[0], datetime(2024, 7, 3, 12, 0, 30, tzinfo=timezone.utc), _gpx(), utils.CONFIG, None, {})[1]
+    # each with where it is placed, for the user to see: the fallback's position, its own, the track's
     assert _dd(art, d)["gps_decisions"]["placed_photos"] == [
         {"relative_path": f"{d}/f.arw", "content_fingerprint": "fp-f", "placed_by": "folder_fallback",
+         "position": {"lat": 50.5, "lon": 4.5},
          "tracks": {"reason": "outside_track", "seconds_from_track": 28740}, "camera_bucket": cam},
-        {"relative_path": f"{d}/n.arw", "content_fingerprint": "fp-n", "placed_by": "own_position"},
+        {"relative_path": f"{d}/n.arw", "content_fingerprint": "fp-n", "placed_by": "own_position",
+         "position": {"lat": -33.8688, "lon": 151.2093}},
         {"relative_path": f"{d}/t.arw", "content_fingerprint": "fp-t", "placed_by": "tracks", "method": "direct_match",
-         "camera_bucket": cam}]
+         "position": {"lat": tp["lat"], "lon": tp["lon"]}, "camera_bucket": cam}]
     time["destinations"][d]["camera_group_time_decisions"] = {f"{cam}@2024-07-03": {}, f"{cam}@2024-07-04": {}}
     art = wf.build_gps_decisions(files[1:2], rows[1:], _gpx(), None, "rfp", time_decisions=time)[0]
     assert _dd(art, d)["gps_decisions"]["review_items"][0]["camera_bucket"] == f"{cam}@2024-07-03"   # by its day

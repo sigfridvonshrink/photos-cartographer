@@ -723,8 +723,9 @@ from the record: it derives each again from its own inputs.
 :realises: RUL-fallback_photo_says_why
 :uses: BLD-gps_decisions_record, BLD-placement_order, BLD-review_item_identity, BLD-offset_buckets
 
-A destination's `gps_decisions.placed_photos` SHALL list, with its `relative_path` and `content_fingerprint`, each
-photo no review item names, by what places it: its own position (`placed_by: "own_position"`), the tracks (`"tracks"`,
+A destination's `gps_decisions.placed_photos` SHALL list, with its `relative_path`, `content_fingerprint` and
+`position` (`lat`, `lon`: where it is placed, for the user to see; the plan never reads it), each photo no review item
+names, by what places it: its own position (`placed_by: "own_position"`), the tracks (`"tracks"`,
 with the `method` of the placing track: `direct_match`, `interpolated` or `extrapolated`) or its destination's effective
 fallback (`"folder_fallback"`, with `tracks`, why the tracks did not place it, as a review item carries it). Each of
 them, and each review item, carries `camera_bucket` where its camera has an offset cell in the destination's photos-21

@@ -98,3 +98,32 @@ test("a position chosen and saved, read back before a plan, is the placed photo'
   assert.match(app.previewEffective(ref), /^50, 4 \(manual\)/);
   assert.equal(app.isDirty(ref), false);
 });
+
+test("placedPosition: a placed photo's row copies where it is placed, in the form the coordinate field takes", () => {
+  const rel = (n) => `${D}/${n}.arw`;
+  const placed = [{ relative_path: rel("t"), content_fingerprint: "fp-t", placed_by: "tracks", method: "interpolated",
+                    position: { lat: 50.525434, lon: 4.269781 } },
+                  { relative_path: rel("o"), content_fingerprint: "fp-o", placed_by: "own_position",
+                    position: { lat: -33.8688, lon: 151.2093 } },
+                  { relative_path: rel("f"), content_fingerprint: "fp-f", placed_by: "folder_fallback",
+                    position: { lat: 1, lon: 2 } },
+                  { relative_path: rel("n"), content_fingerprint: "fp-n", placed_by: "tracks", method: "interpolated" }];
+  const loaded = app.withChosenCells({ gps: { destinations: { [D]: {
+    folder_fallback: fallback({ fallback_lat: 35.6, fallback_lon: 139.6 }),
+    gps_decisions: { review_items: [], placed_photos: placed } } } } });
+  app.state.base = loaded; app.state.work = JSON.parse(JSON.stringify(loaded));
+  const rows = app.gpsBuckets(D, app.state.work.gps.destinations[D]).flatMap((b) => [...b.photos, ...b.groups.flatMap((g) => g.photos)]);
+  const at = (n) => app.placedPosition(D, rows.find((x) => x.entry.relative_path === rel(n)));
+  assert.deepEqual(at("t"), { lat: 50.525434, lon: 4.269781 });                 // where the tracks placed it
+  assert.deepEqual(at("o"), { lat: -33.8688, lon: 151.2093 });                  // its own position
+  assert.deepEqual(at("f"), { lat: 35.6, lon: 139.6 });                         // the fallback in effect now
+  assert.equal(at("n"), null);                                                  // no position recorded: nothing to copy
+  app.state.work.gps.destinations[D].gps_decisions.placed_photos[0].user_decision = { manual_lat: 48.1, manual_lon: 11.5 };
+  assert.deepEqual(at("t"), { lat: 48.1, lon: 11.5 });                          // a position chosen for it here
+  for (const c of [at("t"), at("o"), { lat: 0.0000004, lon: -179.9999996 }]) {
+    const text = app.fmtCoord(c);
+    assert.match(text, /^-?\d+\.\d{6}, -?\d+\.\d{6}$/);
+    const back = app.parseLatLon(text);                                         // pasted into the coordinate field
+    assert.ok(Math.abs(back.lat - c.lat) < 1e-6 && Math.abs(back.lon - c.lon) < 1e-6, text);
+  }
+});

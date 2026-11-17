@@ -1099,13 +1099,18 @@ function gpsPhotoRow(dest, x, order) {
   const r = el("div", { class: "row" + (ref && isSel(ref) ? " sel" : ""),
       onmouseenter: (ev) => showHoverPreview(path, ev), onmousemove: moveHoverPreview, onmouseleave: hideHoverPreview },
     el("span", { class: "label" }, leaf(path)), x.label ? chip("reason", x.label) : null);
+  // a placed photo's row copies where it is placed, to paste into another photo or a map (output affordance;
+  // app_placement.test.mjs "placedPosition")
+  const at = !ref || ref.kind !== "review" ? placedPosition(dest, x) : null;
+  if (at) { r.classList.add("copyable"); r.title = `click to copy ${fmtCoord(at)}`; r.onclick = () => copyCoord(at); }
   if (!ref) return r;
   if (ref.kind === "review") {
     r.onclick = (ev) => (x.bucket === "unplaced" ? selectReview(ev, dest, path, order) : (state.selected = ref, render()));
     r.append(...[...tags(ref), statusChip(ref)].filter(Boolean));
   } else {
     r.append(...[...tags(ref), isDirty(ref) ? statusChip(ref) : null,
-      el("button", { class: "mini", onclick: () => { state.selected = ref; render(); } }, "set position")].filter(Boolean));
+      el("button", { class: "mini", onclick: (ev) => { ev.stopPropagation(); state.selected = ref; render(); } },
+        "set position")].filter(Boolean));
   }
   return r;
 }
@@ -1661,6 +1666,33 @@ function driftTyped(ref) {
   return box;
 }
 
+
+// Where a placed photo is placed, as the view shows it: a position chosen for it here, else — placed by the fallback —
+// the fallback in effect now, else where geotag placed it (photos-23's `position`); null where none is known. Pure
+// but for the edits it reads.
+function placedPosition(dest, x) {
+  if (x.ref && x.ref.kind === "chosen") { const c = currentCoord(x.ref); if (c) return c; }
+  if (x.bucket === "fallback") { const f = destFallbackCoord(dest); if (f) return f; }
+  const p = x.entry && x.entry.position;
+  return p && isNum(p.lat) && isNum(p.lon) ? { lat: p.lat, lon: p.lon } : null;
+}
+const fmtCoord = (c) => `${c.lat.toFixed(6)}, ${c.lon.toFixed(6)}`;
+// Copy a position: kept for "paste" here, and put on the system clipboard as "lat, lon".
+function copyCoord(c) {
+  const text = fmtCoord(c);
+  state.coordClipboard = { lat: c.lat, lon: c.lon };
+  try { navigator.clipboard.writeText(text).catch(() => copyByHand(text)); } catch { copyByHand(text); }
+  state.message = `copied ${text}`;
+  render();
+}
+// A page served from an origin the browser does not hold secure has no clipboard API: the older way, best effort.
+function copyByHand(text) {
+  try {
+    const t = document.createElement("textarea");
+    t.value = text; document.body.append(t); t.select(); document.execCommand("copy"); t.remove();
+  } catch { /* nothing more to try */ }
+}
+
 // The "lat, lon" input lives in the pinned top box; as the map pans below, the live map center is
 // mirrored into it (display only — committing stays on Enter/blur or "use map center"). Tracked here so
 // the map's onMove can reach the current input across re-renders.
@@ -1722,9 +1754,9 @@ const seedCenter = (ref) => currentCoord(ref) || state.coordClipboard || gpsRefM
 // "copy" stashes this cell's decision (or its best reference) on the clipboard; "paste" applies it here.
 function copyPasteBar(ref) {
   const [la, lo] = coordFields(ref), have = currentCoord(ref) || gpsRefMarkers(ref)[0] || null, clip = state.coordClipboard;
-  const fmtC = (c) => `${c.lat.toFixed(6)}, ${c.lon.toFixed(6)}`;
+  const fmtC = fmtCoord;
   const copy = el("button", { class: "btn", disabled: have ? null : "", title: have ? "remember this location for other photos" : "no location here to copy",
-    onclick: () => { state.coordClipboard = { lat: have.lat, lon: have.lon }; try { navigator.clipboard?.writeText(fmtC(have)); } catch { /* best effort */ } state.message = `copied ${fmtC(have)}`; render(); } }, "copy location");
+    onclick: () => copyCoord(have) }, "copy location");
   const paste = el("button", { class: "btn", disabled: clip ? null : "", title: clip ? `paste ${fmtC(clip)}` : "copy a location first",
     onclick: () => { editMany(ref, { [la]: clip.lat, [lo]: clip.lon }); if (_map) _map.recenter(clip); } },
     clip ? `paste ${fmtC(clip)}` : "paste");
@@ -2527,6 +2559,6 @@ export {
   cameraDayLabel, tracksNearThatDay, offsetSections, offsetAnswered, offsetSettledByPhotos, fallbackNote, inheritedFallback,
   ambiguousTimeNote, gpsTimeAsideNote, zoneOffer, validReading, keepHolds, keepFields, keepOffered, phoneNote,
   trueInstant, parseUtcOff, mismatchAccepted, ZONE_TABLE_ANSWERS, recordAbsentText, DEVICE_CLASSES, changedHolds, changedFields, changedKeepLabel, keptTagNote, unidentifiedHolds, unidentifiedFields, loadRefusal, hasUnsavedEdits, utcOff,
-  dateFallbackDay, validDateFallback, previewDate, showsDate,
+  dateFallbackDay, validDateFallback, previewDate, showsDate, placedPosition, fmtCoord,
   fmtSpan, utcToZonedWallMs, zonedWallToUtcMs, offsetFromTrueTime, trueTimeOf,
 };

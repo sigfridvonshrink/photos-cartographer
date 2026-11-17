@@ -488,6 +488,8 @@ name in the worklist for a larger preview):
 - **Copy / paste a location** between photos — "copy location" stashes the coordinate (and writes
   `lat, lon` to your system clipboard); "paste" applies it to the current photo. The next photo opens
   centred where you last placed one.
+- **Click a placed photo's row** (in **Fallback** or **Placed**) to copy where it is placed, the same way: then
+  "paste", or paste it into the coordinate field of another photo.
 
 **A photo the tracks or the fallback already place** can be given a position of its own: in the
 **Fallback** and **Placed** buckets each such photo has **set position**. A coordinate set there is that
