@@ -88,6 +88,9 @@ tests. So test files keep `import photos_1_prep` and `@patch("photos_1_prep...."
 alias is the *same module object* as the package module, so every import and patch resolves
 identically. (This replaced the old `SourceFileLoader` hack once the scripts became package modules.)
 
+A root `conftest.py` gives every test a time limit (120 s; 600 s for a `slow` test) through `signal.alarm`, so a
+broken lock or seal check fails instead of hanging the suite.
+
 Every phase command first checks the workspace against the state the last execute left (`BLD-workspace_check`). So a
 test that builds a workspace by hand is recorded as that state by conftest's autouse fixture
 `_hand_built_workspace_recorded` (opt out with the `no_hand_built_record` marker); `tests/_handoff.recorded` does the

@@ -2,6 +2,35 @@
 
 *What was decided and why, newest first. A record: never corrected forward. Per-commit detail is `git log`.*
 
+## 2026-11-17 — a third walk: the code held to the corpus as it now stands
+
+The whole code was walked against the corpus as settled, in both directions — every rule and build item against the
+code, every function against the items — and every high-criticality rule broken on purpose to see its tests fail. The
+walk was completed where it had stopped short: build items only spot-checked were traced clause by clause, code left
+unswept was swept, and every mutation was run again with clean bytecode, stale compiled files having misled a few.
+About 1,050 items were checked and some 610 mutations run.
+
+- **One finding was unsafe:** withdrawing an answer to a contradicted position cleared the photo's own GPS instead of
+  giving it back. It now writes the photo's own position back from its pin, and marks a time corrected only where
+  geotag wrote it.
+- **The code was brought to the rules it broke** — some sixty places. Among them: the console executed a plan made
+  again in a terminal without showing it; merge did not check that geotag's records belong to the plan it reads;
+  prep's check of the workspace could be skipped, and a deleted configuration was quietly made again; prep recorded
+  the ImageMagick of its execution, not its plan's; a hidden track file in the dump was set aside instead of refused; a
+  linked track file was read; a decision did not follow a photo through every fingerprint; a set-aside JPEG never
+  caught up with a RAW geotag had written; an unforeseen error in prep's execution ended as if the workspace were
+  locked.
+- **Tests now catch what they claimed to**: some ninety gaps closed with a test or a mark, and every test runs under a
+  time limit.
+- **The owner's questions:** an offset borrowed from another destination or day holds within the tolerance; a day
+  split at a change of the clock passes no offset on, and is held against the same day elsewhere; an answer to a
+  contradicted position holds until withdrawn; the distance that calls an own position contradicted is a setting of
+  its own; the database image counts as made once captured; geotag checks all three decision records before writing
+  any; the case-only rename through the tool's own temporary name, and the quarantine compared whole, are stated as
+  they are; the editor settles a date or a folder's fallback below it live; withdrawing a time kept asks again; fields
+  nothing reads are dropped; merge keeps each run's summary beside the next.
+- **Twenty more preferences** joined the owner's, choices that change nothing that counts.
+
 ## 2026-11-17 — the contradictions settled with the spec as the authority
 
 The corpus's contradictions were sorted again: each as its two sides, the side the owner ruled taken, the code
