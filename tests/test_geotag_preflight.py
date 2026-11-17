@@ -634,7 +634,9 @@ def test_auto_reprep_never_executes_a_plan_that_touches_media(tmp_path, monkeypa
     calls, rep = _autoreprep.last
     assert calls == ["plan"], calls                                   # prep's execute never ran
     said = "\n".join(rep.errors + rep.logs)
-    assert op["type"] in said and op["source"] in said, said
+    verb = {"move_no_clobber": "move", "rename_no_clobber": "rename", "quarantine_move": "quarantine"}[op["type"]]
+    assert f"would also {verb} 1 media file." in said and f"{verb} {op['source']} -> " in said, said
+    assert op["type"] not in said, said                                # the plan's own names stay in the plan
     assert "prep dry-run" in said and "prep execute" in said, said
     assert json.loads(open(utils.prep_plan_path(str(ws))).read())["operations"][-1] == op   # left for the user
 
@@ -715,7 +717,7 @@ def test_auto_reprep_with_real_prep_executes_only_a_recorded_sort(tmp_path, monk
     assert ei.value.code == 2
     assert copy.exists() and (day / names[2]).exists()                          # nothing quarantined
     assert ho_p.read_bytes() == before                                            # prep's execute never ran
-    assert any("quarantine_move" in m for m in rep.errors + rep.logs), (rep.errors, rep.logs)
+    assert any("would also quarantine 1 media file." in m for m in rep.errors + rep.logs), (rep.errors, rep.logs)
     plan = json.loads(open(utils.prep_plan_path(str(ws))).read())
     assert any(o["type"] == "quarantine_move" for o in plan["operations"])        # saved, for the user to review
 

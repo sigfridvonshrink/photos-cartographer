@@ -4274,6 +4274,7 @@ def _auto_reprep_for_clean_move(args, workspace_root, reporter):
 # The operations of prep's plan that touch no media file: its database records, and the removal of a folder
 # the plan leaves empty — the whole of a plan that records a move the user made (RUL-auto_reprep_moves_no_media).
 _PREP_FILE_OPS = ("move_no_clobber", "rename_no_clobber", "quarantine_move")
+_PREP_FILE_VERBS = {"move_no_clobber": "move", "rename_no_clobber": "rename", "quarantine_move": "quarantine"}
 
 
 def _stop_unless_prep_plan_records_only(workspace_root, reporter):
@@ -4302,10 +4303,14 @@ def _stop_unless_prep_plan_records_only(workspace_root, reporter):
     counts = {}
     for op in media_ops:
         counts[op["type"]] = counts.get(op["type"], 0) + 1
-    reporter.error("\nGeotag cannot proceed: prep's plan does more than record the move — it would "
-                   + ", ".join(f"{n} {t}" for t, n in sorted(counts.items())) + " of media file(s), e.g.:")
+    said = [f"{_PREP_FILE_VERBS[t]} {n} media file{'' if n == 1 else 's'}"
+            for t, n in sorted(counts.items(), key=lambda tn: _PREP_FILE_OPS.index(tn[0]))]
+    reporter.error("\nGeotag cannot proceed: prep's plan does more than record your move into "
+                   f"{folder_name('photos_by_dest')}/ — it would also "
+                   + (", ".join(said[:-1]) + " and " + said[-1] if len(said) > 1 else said[0]) + ". For example:")
     for op in media_ops[:5]:
-        reporter.log(f"  - {op['type']}: {op.get('source')} -> {op.get('destination')} ({op.get('reason')})")
+        reporter.log(f"  - {_PREP_FILE_VERBS[op['type']]} {op.get('source')} -> {op.get('destination')} "
+                     f"({op.get('reason')})")
     if len(media_ops) > 5:
         reporter.log(f"  ... and {len(media_ops) - 5} more.")
     reporter.log(f"\nGeotag runs prep's execute itself only when it moves, renames or quarantines no media file; "
