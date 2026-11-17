@@ -112,7 +112,7 @@ def test_a_scattered_position_is_offered_the_tracks(tmp_path):
     assert item["reason"] == "own_position_contradicted" and item["requires_user_input"] is False
     assert item["own_position"] == {"lat": 51.025, "lon": 3.7}
     assert item["proposed_position"]["lat"] == pytest.approx(51.0125) and item["proposed_position"]["gpx_file"] == "walk.gpx"
-    assert item["apart_meters"] > utils.CONFIG["gpx_anchor_max_point_distance_meters"]
+    assert item["apart_meters"] > utils.CONFIG["gpx_own_position_contradicted_distance_meters"]
     assert item["user_decision"] == {"manual_lat": "", "manual_lon": ""}
     summary = gps["destinations"][DEST]["gps_decisions"]["summary"]
     assert summary["preserve_native_gps"] == 6 and summary["manual_review_required"] == 0
@@ -184,6 +184,39 @@ def test_with_no_track_the_photo_keeps_its_own_noted(tmp_path):
     assert _item(gps) is None
     assert gps["destinations"][DEST]["gps_decisions"]["contradicted_without_track"] == [
         {"relative_path": f"{DEST}/stray.arw", "content_fingerprint": "fp-stray.arw"}]
+
+
+@pytest.mark.spec("RUL-contradicted_position_without_track_noted", "RUL-contradicted_position_reviewed",
+                  "BLD-contradicted_position",
+                  test="TST-geotag_contradicted_position-placed_within_reach_is_neither_an_item_nor_without_track")
+def test_a_photo_the_tracks_place_within_reach_is_neither_an_item_nor_without_track(tmp_path, monkeypatch):
+    """The tracks place the contradicted photo within reach of its own position: nothing contradicts that position,
+    so no item is made — and the photo is not listed as one no track places, for a track does."""
+    wf, files = _wf(tmp_path), _files()
+    art = _time(wf, files)
+    monkeypatch.setitem(utils.CONFIG, "gpx_own_position_contradicted_distance_meters", 5000.0)
+    gps, _, _ = _gps(wf, files, art)
+    assert _item(gps) is None
+    assert "contradicted_without_track" not in gps["destinations"][DEST]["gps_decisions"]
+
+
+@pytest.mark.spec("RUL-setting_bounds_one_thing", "BLD-contradicted_position",
+                  test="TST-geotag_contradicted_position-the_contradiction_distance_is_a_setting_of_its_own")
+def test_the_contradiction_distance_is_a_setting_of_its_own(tmp_path, monkeypatch):
+    """How far the tracks may place a photo from its own position before that position is contradicted is a setting
+    of its own: the distance a frame anchors the clock within does not move it, and it is among what photos-23
+    depends on."""
+    wf, files = _wf(tmp_path), _files()
+    art = _time(wf, files)
+    monkeypatch.setitem(utils.CONFIG, "gpx_anchor_max_point_distance_meters", 5000.0)
+    gps, _, _ = _gps(wf, files, art)
+    assert _item(gps) is not None and _item(gps)["reason"] == "own_position_contradicted"
+    before = gps["depends_on"]["gps_policy_fingerprint"]
+    monkeypatch.setitem(utils.CONFIG, "gpx_own_position_contradicted_distance_meters", 5000.0)
+    gps, _, _ = _gps(wf, files, art)
+    assert _item(gps) is None and gps["depends_on"]["gps_policy_fingerprint"] != before
+    with pytest.raises(ValueError, match="gpx_own_position_contradicted_distance_meters"):
+        utils.validate_config({"gpx_own_position_contradicted_distance_meters": -1})
 
 
 @pytest.mark.spec("RUL-several_bodies_positions_not_doubted", "BLD-contradicted_position",

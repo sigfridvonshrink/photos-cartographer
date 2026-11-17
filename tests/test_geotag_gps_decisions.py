@@ -83,6 +83,28 @@ def test_classify_all_branches():
     assert cal.classify_gps(_file("a", "d"), None, g, cfg, None, {})[0] == "blocked"   # waits: never left unplaced
 
 
+@pytest.mark.spec("RUL-own_position_kept", test="TST-geotag_gps_decisions-a_position_written_does_not_replace_an_own_one")
+def test_a_position_written_does_not_replace_a_photo_s_own():
+    """A photo holding its own position keeps it though a position is written for it, unless that position answers
+    the question its contradicted own position raised."""
+    g, cfg = _gpx(), utils.CONFIG
+    written = {"manual_lat": 5, "manual_lon": 6}
+    assert cal.classify_gps(_file("a", "d", native=True), None, g, cfg, None, written) == ("preserve_native", None)
+    assert cal.classify_gps(_file("a", "d", native=True), None, g, cfg, None, written, replace_own=True) == \
+        ("manual_locked", {"lat": 5, "lon": 6})
+
+
+@pytest.mark.spec("RUL-placement_order", test="TST-geotag_gps_decisions-the_tracks_come_before_the_fallback")
+def test_the_tracks_come_before_the_folder_fallback():
+    """A photo the tracks place, in a destination with a folder fallback, takes the tracks' position."""
+    g, cfg = _gpx(), utils.CONFIG
+    fallback = {"lat": 1, "lon": 2}
+    ru = datetime(2024, 7, 3, 12, 0, 30, tzinfo=timezone.utc)
+    near_end = datetime(2024, 7, 3, 12, 2, 30, tzinfo=timezone.utc)
+    assert cal.classify_gps(_file("a", "d"), ru, g, cfg, fallback, {})[0] == "gpx_interpolation"
+    assert cal.classify_gps(_file("a", "d"), near_end, g, cfg, fallback, {})[0] == "gpx_extrapolation"
+
+
 @pytest.mark.parametrize("lat, lon, ok", [(50, 4, True), (-90, 180, True), (91, 0, False),
                                           (0, 181, False), ("x", 0, False), (0, True, False)])
 @pytest.mark.spec("RUL-checked_positions_and_times", test="TST-geotag_gps_decisions-valid_coord")
@@ -115,8 +137,8 @@ def test_summary_counts_and_review_items(tmp_path):
 
 @pytest.mark.spec("BLD-decision_record_envelope", test="TST-geotag_gps_decisions-what_photos_23_depends_on")
 def test_what_photos_23_depends_on(tmp_path):
-    """photos-23's `depends_on`: the resolved-UTC fingerprint, the tracks', the nine placement settings' and the
-    handoff's content fingerprint — and nothing else."""
+    """photos-23's `depends_on`: the resolved-UTC fingerprint, the tracks', the nine placement settings' with the
+    distance that contradicts a photo's own position, and the handoff's content fingerprint — and nothing else."""
     wf = _wf(tmp_path)
     art, _ = _build(wf, [_file(f"{BYDEST}/T/n.jpg", f"{BYDEST}/T", native=True)], [], _gpx())
     dep = art["depends_on"]
@@ -125,7 +147,7 @@ def test_what_photos_23_depends_on(tmp_path):
             "gpx_interpolation_max_distance_meters", "gpx_interpolation_max_speed_kmh",
             "gpx_extrapolation_max_seconds", "gpx_extrapolation_heading_seconds",
             "gpx_extrapolation_max_distance_meters", "gpx_extrapolation_max_speed_kmh",
-            "gpx_tracks_agree_max_distance_meters")
+            "gpx_tracks_agree_max_distance_meters", "gpx_own_position_contradicted_distance_meters")
     assert dep["gps_policy_fingerprint"] == utils.sha256_text(
         json.dumps({k: utils.CONFIG[k] for k in nine}, sort_keys=True))
     assert dep["handoff"]["content_fingerprint"] == utils.handoff_content_fingerprint({})
@@ -508,3 +530,18 @@ def test_a_chosen_position_naming_no_photo_to_place_is_refused(tmp_path, rel, wh
              _fp_file(f"{BYDEST}/U/q.arw", f"{BYDEST}/U", "fp-q")]
     _, blk = _build(wf, files, [_row(f"{d}/p.arw", "2024-07-03T12:00:30Z")], _gpx(), _chosen(d, rel, 48.0, 2.0))
     assert len(blk) == 1 and f"review_items[{rel}]" in blk[0] and why in blk[0], blk
+
+
+@pytest.mark.parametrize("fp, why", [("fp-stale", "names no photo of this destination"),
+                                     ("fp-o", "names another photo than its path")])
+@pytest.mark.spec("RUL-chosen_position_names_a_photo", "BLD-chosen_position",
+                  test="TST-geotag_gps_decisions-a_chosen_position_s_fingerprint_names_its_photo")
+def test_a_chosen_position_whose_fingerprint_names_no_photo_or_another_is_refused(tmp_path, fp, why):
+    """An entry whose path names a photo but whose fingerprint names none of the destination's — or another one — would
+    be found by neither and the user's position dropped unseen: it stops the run, naming it."""
+    wf, d = _wf(tmp_path), f"{BYDEST}/T"
+    files = [_fp_file(f"{d}/p.arw", d, "fp-p"), _fp_file(f"{d}/o.arw", d, "fp-o")]
+    prior = _chosen(d, f"{d}/p.arw", 48.0, 2.0)
+    prior["destinations"][d]["gps_decisions"]["review_items"][0]["content_fingerprint"] = fp
+    _, blk = _build(wf, files, [_row(f"{d}/p.arw", "2024-07-03T12:00:30Z")], _gpx(), prior)
+    assert len(blk) == 1 and f"review_items[{d}/p.arw]" in blk[0] and why in blk[0], blk

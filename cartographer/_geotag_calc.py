@@ -390,6 +390,8 @@ class GPXIndex:
         self.unreadable = []               # [(file, why)] of the track files that could not be read or parsed
         self.unlisted = []                 # [(folder, why)] of the folders under gpx_root that could not be listed
         self.gone = []                     # the track files the catalogue had and gpx_root no longer holds
+        self.told = []                     # the warnings named each one, never under a cap: a link not followed,
+        #                                    a ranked folder not there, a track file gone (RUL-gone_track_told)
 
     def tracks(self):
         """The points as separate tracks — `[(file, points in time order, their times)]`, by file name, then by
@@ -446,6 +448,7 @@ class GPXIndex:
         under gpx_root — the points are those the record keeps (finalize, RUL-sealing_needs_no_tracks)."""
         self.window = window_union(window) if window is not None else list(ALL_TIME)
         self.points, self.warnings, self.file_sha, self.unreadable, self.unlisted = [], [], {}, [], []
+        self.told = []
         self.read, self._any_points, self.catalogued = 0, False, False
         if not self.gpx_root:
             self.status = "disabled"
@@ -468,22 +471,22 @@ class GPXIndex:
             return self
 
         # a ranked folder that is not there ranks nothing, and is said (RUL-ranked_folder_missing_told)
-        self.warnings.extend(f"gpx_track_precedence names {name!r}, which is not a folder directly under gpx_root: "
-                             f"no track ranks by it" for name in self.precedence
-                             if not os.path.isdir(os.path.join(self.gpx_root, name))
-                             or os.path.islink(os.path.join(self.gpx_root, name)))
+        self._tell(f"gpx_track_precedence names {name!r}, which is not a folder directly under gpx_root: "
+                   f"no track ranks by it" for name in self.precedence
+                   if not os.path.isdir(os.path.join(self.gpx_root, name))
+                   or os.path.islink(os.path.join(self.gpx_root, name)))
         gpx_files, linked = [], []
 
         def unlisted(e):
             where = os.path.relpath(e.filename, self.gpx_root) if getattr(e, "filename", None) else "."
             self.unlisted.append((where, e.strerror or str(e)))
         for r, dirs, files in os.walk(self.gpx_root, onerror=unlisted):
+            # a link — to a folder or to a track file — is never followed: what it leads to is not read, and that
+            # is said (RUL-track_link_never_followed, RUL-track_link_named)
             gpx_files.extend((os.path.relpath(os.path.join(r, f), self.gpx_root), os.path.join(r, f))
-                             for f in files if is_gpx_file(f))
-            # the walk never follows a linked folder: the tracks in it are not read, and that is said
-            # (RUL-track_link_never_followed, RUL-track_link_named)
-            linked.extend(os.path.relpath(os.path.join(r, d), self.gpx_root) for d in dirs
-                          if os.path.islink(os.path.join(r, d)))
+                             for f in files if is_gpx_file(f) and not os.path.islink(os.path.join(r, f)))
+            linked.extend(os.path.relpath(os.path.join(r, n), self.gpx_root) for n in dirs + files
+                          if os.path.islink(os.path.join(r, n)) and (n in dirs or is_gpx_file(n)))
         if self.unlisted:
             # a folder of the tracks that cannot be listed: what is in it cannot be checked, and counts as changed
             # (RUL-unlisted_tracks_stop_geotag) — nothing in the record is withdrawn for not being seen
@@ -492,8 +495,7 @@ class GPXIndex:
             self.fingerprint = hashlib.sha256(("gpx-unlisted|" + self.gpx_root).encode()).hexdigest()
             return self
         gpx_files.sort()
-        self.warnings.extend(f"Linked folder under gpx_root not followed — any tracks in it were not read: {rel}"
-                             for rel in sorted(linked))
+        self._tell(f"Link under gpx_root not followed — no track behind it was read: {rel}" for rel in sorted(linked))
 
         conn = open_track_record(self.record)
         try:
@@ -634,9 +636,16 @@ class GPXIndex:
             conn.execute("DELETE FROM gpx_track_files WHERE track_id = ?", (row["track_id"],))
         if gone:
             self.gone.append(row["path"])
-            self.warnings.append(f"Track file gone from gpx_root, no longer used: {row['path']}"
-                                 + (" — its points stay in the record, withdrawn: an executed plan placed or "
-                                    "timed photos by it" if used else ""))
+            self._tell([f"Track file gone from gpx_root, no longer used: {row['path']}"
+                        + (" — its points stay in the record, withdrawn: an executed plan placed or "
+                           "timed photos by it" if used else "")])
+
+    def _tell(self, warnings):
+        """Warnings each named to the user, whatever the cap on the others (RUL-gone_track_told,
+        RUL-track_link_named, RUL-ranked_folder_missing_told)."""
+        for w in warnings:
+            self.warnings.append(w)
+            self.told.append(w)
 
     def prune(self):
         """Take out of the record the kept points outside this build's window, the planning's last: the record holds
@@ -1080,13 +1089,12 @@ def _anchor_consensus(by_frame, skipped, cfg):
     tied = len(order) > 1 and len(clusters[order[1]]["frames"]) == len(g["frames"])
     best = g["rep"]
     support = g["frames"]
-    supporting_count = len(support) - 1
     conflicting = sorted({cs[0]["source_file"] or "" for n, cs in enumerate(by_frame) if n not in support})
     conflicting_count = len(by_frame) - len(support)        # frames no pass of which agrees
     imprecise = best["time_span_seconds"] if vague(best) else 0     # no photo fixes the offset within the stay
     if conflicting_count or tied or imprecise:
         confidence = "review_required"
-    elif supporting_count or best["match_type"] == "gpx_point_match":
+    elif len(support) > 1 or best["match_type"] == "gpx_point_match":
         confidence = "high"
     else:
         confidence = "medium"
@@ -1115,10 +1123,7 @@ def _anchor_consensus(by_frame, skipped, cfg):
         "proposed_offset_seconds": best["offset_seconds"],
         "proposed_real_utc": best["gpx_time"].strftime("%Y-%m-%dT%H:%M:%SZ"),
         "confidence": confidence,
-        "recommended_gpx_match": {"match_type": best["match_type"], "gpx_file": best["gpx_file"],
-                                  "distance_m": best["distance_m"],
-                                  "segment_duration_seconds": best["segment_duration_seconds"]},
-        "anchor_count": len(by_frame), "supporting_count": supporting_count,
+        "anchor_count": len(by_frame),
         "conflicting_count": conflicting_count, "conflicting_files": conflicting, "tied": tied,
         "imprecise_seconds": imprecise,
         "acceptance_tolerance_seconds": cfg["gpx_anchor_decision_tolerance_seconds"], "anchors": anchors,
@@ -1847,16 +1852,18 @@ def place_gps(target_utc, gpx, cfg, why=None):
     ranked = sorted((p for p in pool if p["rank"] == top),
                     key=lambda p: (_METHOD_RANK[p["method"]], p["seconds_from_track"], p["gpx_file"], p["gpx_track"]))
     best = ranked[0]
-    for p in ranked[1:]:
-        apart = haversine(best["lat"], best["lon"], p["lat"], p["lon"])
-        if apart > cfg["gpx_tracks_agree_max_distance_meters"]:
-            if why is not None:
-                # two tracks of one file are named by their place in it (RUL-track_is_one_trk)
-                same = best["gpx_file"] == p["gpx_file"]
-                name = lambda q: f"{q['gpx_file']} (track {q['gpx_track'] + 1})" if same else q["gpx_file"]
-                why.update({"reason": "tracks_disagree", "gpx_files": sorted((name(best), name(p))),
-                            "apart_meters": round(apart)})
-            return None
+    # every two of them, not each against the best only: two that agree with a third may lie apart from each other
+    for i, a in enumerate(ranked):
+        for p in ranked[i + 1:]:
+            apart = haversine(a["lat"], a["lon"], p["lat"], p["lon"])
+            if apart > cfg["gpx_tracks_agree_max_distance_meters"]:
+                if why is not None:
+                    # two tracks of one file are named by their place in it (RUL-track_is_one_trk)
+                    same = a["gpx_file"] == p["gpx_file"]
+                    name = lambda q: f"{q['gpx_file']} (track {q['gpx_track'] + 1})" if same else q["gpx_file"]
+                    why.update({"reason": "tracks_disagree", "gpx_files": sorted((name(a), name(p))),
+                                "apart_meters": round(apart)})
+                return None
     out = {k: v for k, v in best.items() if k not in ("seconds_from_track", "gpx_track", "rank")}
     lower = sorted((p for p in pool if p["rank"] > top), key=lambda p: (p["gpx_file"], p["gpx_track"]))
     if lower:

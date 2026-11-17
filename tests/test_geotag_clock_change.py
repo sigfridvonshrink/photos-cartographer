@@ -177,6 +177,47 @@ def test_an_accepted_split_decides_the_day_in_two_parts(tmp_path):
     assert any("photo_parts" in b for b in blockers) and f"{CAM}#1" not in _cells(bad)
 
 
+@pytest.mark.spec("RUL-split_day_held_against_same_day", "RUL-split_day_passes_no_offset", "BLD-clock_change_split",
+                  test="TST-geotag_clock_change-a_split_day_is_held_against_the_same_day_elsewhere")
+@pytest.mark.parametrize("there", [-18000, LOCAL], ids=["far_from_both", "one_part_s"])
+def test_a_split_day_is_held_against_the_same_day_elsewhere(tmp_path, monkeypatch, there):
+    """The day in Kyoto split at the change, its parts on home time and on local time. The same camera's photos that
+    day in Osaka anchor on the tracks by themselves. An offset there far from both parts' is one of them resting on a
+    wrong match: it is withheld and asks, naming the parts, which keep theirs. One that is a part's stands. Nara, with
+    no position that day, is offered neither part's offset."""
+    monkeypatch.setitem(utils.CONFIG["camera_time_and_timezone_policy"], "multi_anchor_auto_apply", True)
+    wf = _wf(tmp_path)
+    pts, files = _day([HOME, HOME, HOME, None, LOCAL, LOCAL, LOCAL])
+    osaka = f"{BYDEST}/Osaka"
+    for n, t in enumerate((datetime(2024, 7, 3, 13, 0, tzinfo=timezone.utc), datetime(2024, 7, 3, 13, 30, tzinfo=timezone.utc))):
+        pts.append(cal.GPXPoint(34.7 + n * 0.01, 135.5, t, "osaka.gpx", n))
+        files.append({"relative_path": f"{osaka}/o{n}.arw", "destination": osaka, "camera_group_key": CAM,
+                      "native_gps": {"lat": 34.7 + n * 0.01, "lon": 135.5}, "has_native_gps": True, "has_timestamp": True,
+                      "source_naive_time": _cam(t, there), "content_fingerprint": f"fo{n}"})
+    nara = f"{BYDEST}/Nara"
+    files.append({"relative_path": f"{nara}/n.arw", "destination": nara, "camera_group_key": CAM, "native_gps": None,
+                  "has_native_gps": False, "has_timestamp": True, "source_naive_time": "2024:07:03 18:00:00",
+                  "content_fingerprint": "fn"})
+    gpx = _gpx(pts)
+    art, _ = _plan(wf, files, gpx)
+    split, blockers = _plan(wf, files, gpx, _accept(art))
+    assert blockers == []
+    cells = _cells(split)
+    assert cells[f"{CAM}#1"]["effective_time_anchor"]["offset_seconds"] == HOME
+    assert cells[f"{CAM}#2"]["effective_time_anchor"]["offset_seconds"] == LOCAL
+    o = split["destinations"][osaka]["camera_group_time_decisions"][CAM]
+    assert o["proposal"]["proposed_offset_seconds"] == there
+    n = split["destinations"][nara]["camera_group_time_decisions"][CAM]["proposal"]
+    assert (n.get("shared_from") or {}).get("destination") != DEST, n
+    if there == LOCAL:
+        assert o["effective_time_anchor"] == {"offset_seconds": LOCAL, "source": "gpx_anchor_auto"}
+        assert "conflicts_with" not in o
+    else:
+        assert o["effective_time_anchor"] == "" and o["requires_user_input"]
+        assert o["conflicts_with"] == [{"destination": DEST, "bucket": f"{CAM}#1", "offset_seconds": HOME, "chosen": False},
+                                       {"destination": DEST, "bucket": f"{CAM}#2", "offset_seconds": LOCAL, "chosen": False}]
+
+
 @pytest.mark.spec("RUL-clock_change_settled_photo_not_asked", "BLD-clock_change_split",
                   test="TST-geotag_clock_change-photos_one_part_alone_could_have_taken_are_not_asked")
 def test_photos_one_part_alone_could_have_taken_are_not_asked(tmp_path):
@@ -254,6 +295,48 @@ def test_an_acceptance_holds_for_the_offsets_it_accepted(tmp_path):
     _cells(prior)[CAM]["user_decision"]["accepted_change_offsets_seconds"] = ""
     _, blockers = _plan(wf, files, gpx, prior)
     assert blockers and "accepted_change_offsets_seconds" in blockers[0]
+
+
+@pytest.mark.spec("RUL-clock_change_needs_acceptance", "BLD-clock_change_split",
+                  test="TST-geotag_clock_change-a_change_nobody_accepted_splits_nothing")
+def test_a_change_nobody_accepted_splits_nothing(tmp_path):
+    """Two runs, and no photo whose part they leave unsettled: there is nothing to ask of any photo, and still the day
+    is not split until the user accepts the change — no part, no split in effect, and the day's cell asks."""
+    wf = _wf(tmp_path)
+    pts, files = _day([HOME, HOME, HOME, None, LOCAL, LOCAL, LOCAL], between=[SETTLED_FIRST, SETTLED_SECOND])
+    art, blockers = _plan(wf, files, _gpx(pts))
+    assert blockers == []
+    cells = _cells(art)
+    assert set(cells) == {CAM} and cells[CAM]["clock_change"]["unsettled"] == []
+    assert "effective_split" not in cells[CAM]["clock_change"]
+    assert cells[CAM]["requires_user_input"] is True and art["status"] != "complete"
+
+
+@pytest.mark.spec("BLD-clock_change_split", test="TST-geotag_clock_change-runs_whose_true_times_overlap_are_no_change")
+def test_runs_whose_true_times_overlap_are_no_change():
+    """Two runs that each agree within themselves, but whose true times, each photo at its own run's offset, do not
+    follow one another: the second run's first photo falls before the first run's last. That is no change of the clock
+    between them, and none is proposed. The photo is taken where the walk passes twice — at 09:00 and again at 12:00,
+    nearer — so by the day's photos together it seems the last; by its own run's offset it is at 09:00."""
+    t = lambda h, m=0: datetime(2024, 7, 3, h, m, tzinfo=timezone.utc)
+    lat = lambda k: 35.0 + k * 0.01
+    walk = [(t(8), lat(0), 135.0), (t(8, 30), lat(1), 135.0), (t(9), lat(2) + 0.0001, 135.0), (t(9, 30), lat(3), 135.0),
+            (t(10), lat(4), 135.0), (t(10, 30), lat(5), 135.0), (t(11), lat(6), 135.0), (t(11, 30), lat(7), 135.0),
+            (t(11, 45), lat(7), 135.05), (t(12), lat(2), 135.0)]
+    pts = [cal.GPXPoint(la, lo, when, "trip.gpx", i) for i, (when, la, lo) in enumerate(walk)]
+
+    def photo(name, la, lo, utc, off):
+        return {"relative_path": f"{DEST}/{name}.arw", "destination": DEST, "camera_group_key": CAM,
+                "native_gps": {"lat": la, "lon": lo}, "has_native_gps": True, "has_timestamp": True,
+                "source_naive_time": _cam(utc, off), "content_fingerprint": "fp-" + name}
+    first = [photo(f"a{i}", la, lo, when, LOCAL) for i, (when, la, lo) in enumerate(walk[:5])]      # 08:00–10:00
+    second = [photo(f"b{i}", la, lo, when, BACK) for i, (when, la, lo) in enumerate(walk[5:8])]     # 10:30–11:30
+    back_then = photo("y", lat(2), 135.0, t(9), BACK)          # by the second run's offset, 09:00: inside the first run
+    overlap = first + second + [back_then]
+    assert cal.clock_change_proposal(overlap, overlap, _gpx(pts), utils.CONFIG) is None
+    # the same photo taken at 12:00 by that offset follows the first run: the change is proposed
+    later = first + second + [photo("y", lat(2), 135.0, t(12), BACK)]
+    assert cal.clock_change_proposal(later, later, _gpx(pts), utils.CONFIG) is not None
 
 
 @pytest.mark.spec("RUL-alternating_runs_no_clock_change", "RUL-clock_change_split_proposed", "BLD-clock_change_split",

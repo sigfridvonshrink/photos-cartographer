@@ -53,9 +53,10 @@ with none recorded warns how to give one and records nothing, the carried copy i
 records `{"download": "declined"}` and `yes` fetches ({need}`BLD-zone_table_download`) and records
 `{"download": "accepted", "copy": …}`, both in `photos-02-zone-table.json` through `write_versioned_json`. A recorded
 answer is not asked again; an answer given on a later `prep plan` is acted on as the first was. Where the host has no table of its own and
-`photos-02-zone-table.json` exists and is not a JSON object whose `download` is `accepted` or `declined`
-(`zone_table_record_error`), `prep plan` stops with status 2 before its question and scan, and each geotag command
-after its workspace check, naming the file; the console's state then asks nothing.
+`photos-02-zone-table.json` exists and is not a JSON object whose `download` is `accepted` or `declined`, or holds a
+`copy` that `check_zone_table_text` does not find well formed (`zone_table_record_error`), `prep plan` stops with status
+2 before its question and scan, and each geotag command after its workspace check, naming the file; the console's state
+then asks nothing.
 :::
 
 :::{bld} The download of the table of countries

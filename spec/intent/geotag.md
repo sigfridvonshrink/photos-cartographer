@@ -607,7 +607,8 @@ answer — a permission written there downloading the table at prep's next plan.
 :uses: DEF-control_records
 
 A run that reads a workspace's record of the answer to whether to download the table of countries SHALL stop, before
-any change and naming the record, where it exists and cannot be read — never taking it for no answer.
+any change but the workspace check's record of the changes the user accepted ({need}`RUL-workspace_checked_first`),
+naming the record, where it exists and cannot be read — never taking it for no answer.
 :::
 
 :::{rul} A permission downloads the table once
@@ -758,8 +759,8 @@ about once: at the check against the tracks where tracks lie by its photos, and 
 :refines: RUL-proposals_need_acceptance
 
 An acceptance of a proposed clock offset SHALL hold only while the offset proposed is the one accepted, or, proposed
-from the camera's own GPS, lies within the tolerance the configuration allows an accepted offset — the offset accepted
-being the one that takes effect.
+from the camera's own GPS — that day there, the same day elsewhere or the day next to it — lies within the tolerance the
+configuration allows an accepted offset — the offset accepted being the one that takes effect.
 :::
 
 :::{rul} A proposal that has become another is asked about again
@@ -973,8 +974,8 @@ An offset proposed from another destination of the same day SHALL take effect by
 :refines: RUL-offset_per_camera_destination_day
 :uses: DEF-clock_offset
 
-A camera's clock offset derived from its destination's timezone SHALL be the zone's at the earliest camera time of its
-day there, for every photo of that day.
+A camera's clock offset derived from its destination's timezone SHALL be the zone's at the earliest camera time its
+photos of that day there still hold, for every photo of that day.
 :::
 
 :::{rul} One clock is not read two ways in one day
@@ -987,6 +988,34 @@ day there, for every photo of that day.
 
 Two offsets a camera's own positions gave on one day in different destinations, farther apart than the configuration
 allows, SHALL NOT take effect until the user writes which is right.
+:::
+
+:::{rul} A day split at a change of its clock passes no offset on
+:id: RUL-split_day_passes_no_offset
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+:refines: RUL-offset_per_camera_destination_day
+:excepts: RUL-offset_shared_within_day
+:uses: DEF-clock_offset, DEF-destination
+
+The offsets of a camera's day split at a change of its clock SHALL NOT be proposed to the camera's photos of that day
+in another destination.
+:::
+
+:::{rul} A day split at a change of its clock is held against the same day elsewhere
+:id: RUL-split_day_held_against_same_day
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+:refines: RUL-same_day_offsets_agree
+:uses: DEF-clock_offset, DEF-destination
+
+An offset a camera's own positions gave on a day in one destination, farther than the configuration allows from each
+offset of that day split at a change of its clock in another destination, SHALL NOT take effect until the user writes
+which is right.
 :::
 
 :::{rul} An offset chosen from the camera's positions is held against what they gave by themselves
@@ -1576,7 +1605,8 @@ offsets, nor be counted in one.
 :verify: required
 :refines: RUL-unknown_group_stops_geotag
 
-Geotag SHALL NOT plan while the configuration classes a camera group as both a phone and a camera with a fixed clock.
+Geotag SHALL NOT plan while the configuration classes a camera group in photos by destination as both a phone and a
+camera with a fixed clock.
 :::
 
 :::{rul} The configuration says which camera groups are several bodies
@@ -1981,6 +2011,7 @@ does records the zone's.
 :criticality: high
 :verify: required
 :refines: RUL-untagged_phone_photo_read_as_siblings
+:excepts: RUL-anchor_offset_auto_as_configured
 :uses: RUL-phone_anchored_like_camera
 
 Where its tagged photos do not, a phone's photos of a day in a destination recording no offset SHALL be read, without
@@ -2186,6 +2217,7 @@ An offset changed since it was confirmed SHALL be asked about again.
 :anti: yes
 :verify: required
 :refines: RUL-unanchored_offset_confirmed
+:excepts: RUL-tracks_elsewhere_restale_nothing
 :uses: DEF-tracks
 
 A confirmation SHALL hold only while every track file it was made against is there unchanged.
@@ -2301,8 +2333,9 @@ offset contradicts it ({need}`RUL-own_position_replaced_on_answer`).
 :refines: RUL-own_position_kept
 :uses: DEF-clock_offset, DEF-decision
 
-A photo's own GPS position SHALL be replaced only by a position the user sets for it, and only where its camera's
-clock offset, agreed from its own GPS, contradicts that position.
+A photo's own GPS position SHALL be replaced only by a position the user sets for it, answering the question its
+camera's clock offset, agreed from its own GPS, raised by contradicting that position — the answer holding until the
+user withdraws it.
 :::
 
 :::{rul} An own position the agreed offset contradicts is offered the track's
@@ -2790,6 +2823,7 @@ A position geotag clears SHALL be cleared whole.
 :criticality: high
 :verify: required
 :refines: RUL-offset_per_camera_destination_day
+:excepts: RUL-gps_time_far_from_evidence_withheld
 
 A camera's clock offset for a day, once resolved, SHALL stay that day's offset for photos of that camera arriving
 later — one found from its own GPS included, though the later photos bring no anchor.
@@ -2802,6 +2836,7 @@ later — one found from its own GPS included, though the later photos bring no 
 :anti: yes
 :verify: required
 :refines: RUL-day_offset_kept_for_later_photos
+:excepts: RUL-tracks_elsewhere_restale_nothing
 
 An offset found from a camera's own positions on the tracks SHALL be kept for later photos only while every track file
 it was found from is there unchanged.

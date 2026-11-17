@@ -166,6 +166,33 @@ def test_the_fixes_times_check_a_phone_where_no_track_does(tmp_path):
     assert cell["effective_time_anchor"] == {"offset_seconds": -3600, "source": "gps_time_auto"}
 
 
+@pytest.mark.spec("RUL-gps_time_checks_phone", "BLD-phone_offset_cell",
+                  test="TST-geotag_phone_clock-every_fix_reading_checks_the_phone")
+def test_every_fix_reading_is_set_against_the_phone_past_those_the_record_lists(tmp_path):
+    """Twenty-one fixes agree on the phone's clock; the photos' tags agree with it but the last one's, which reads its
+    photo an hour off. Every reading is set against the offsets the photos are read by, not only the twenty the
+    record lists: the phone's day disagrees, and its cell is made."""
+    files = [_photo(f"p{i:02}.heic", f"2024:07:03 {8 + i // 4:02}:{(i % 4) * 15:02}:00",
+                    "+03:00" if i == 20 else "+02:00", pos=(51.0 + i / 100, 3.2),
+                    gps_utc=f"2024-07-03T{6 + i // 4:02}:{(i % 4) * 15:02}:00Z") for i in range(21)]
+    cell = _cells(_build(_wf(tmp_path), files, _gpx()))[PHONE]
+    assert cell["proposal"]["proposal_source"] == "gps_time" and len(cell["proposal"]["gps_times"]) == 20
+    assert cell["phone"]["applies_to"] == "every_photo" and -10800 in cell["phone"]["read_by_offsets"]
+
+
+@pytest.mark.spec("RUL-phone_agreeing_anchor_changes_nothing", "BLD-phone_offset_cell",
+                  test="TST-geotag_phone_clock-a_photo_read_by_no_offset_does_not_disagree")
+def test_a_photo_the_zone_cannot_read_does_not_make_the_phone_disagree(tmp_path):
+    """The night the clocks go back: two tagged photos agree with their fixes, and one recording no offset falls in
+    the hour the zone repeats, so it is read by no offset. It says nothing either way: the phone agrees, and no cell
+    reads its whole day by the fixes."""
+    files = [_photo("a.heic", "2024:10:27 10:00:00", "+01:00", pos=(51.0, 3.2), gps_utc="2024-10-27T09:00:00Z"),
+             _photo("b.heic", "2024:10:27 11:00:00", "+01:00", pos=(51.1, 3.2), gps_utc="2024-10-27T10:00:00Z"),
+             _photo("c.heic", "2024:10:27 02:30:00", None, pos=(51.2, 3.2), gps_utc="2024-10-27T01:30:00Z")]
+    cells = _cells(_build(_wf(tmp_path), files, _gpx()))
+    assert not [c for c in cells.values() if (c.get("phone") or {}).get("applies_to") == "every_photo"], cells
+
+
 @pytest.mark.spec("BLD-phone_offset_cell", "BLD-offset_shared_within_day", test="TST-geotag_phone_clock-not_shared")
 def test_a_phones_day_offset_is_not_passed_to_another_destination(tmp_path):
     """The phone's anchored offset in Bruges says nothing of its photos in Ghent, where they hold no position: Ghent

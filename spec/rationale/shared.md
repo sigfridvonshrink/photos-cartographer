@@ -933,7 +933,7 @@ recognised as corrected whichever workspace it is in.
 :status: ruled
 :forced: no
 :follows_from: RAT-rerun_is_safe, CHC-ask_only_what_data_cannot_settle, RAT-every_question_answerable
-:justifies: RUL-changed_time_stops_plan, RUL-changed_time_asked, RUL-changed_time_kept_is_true, RUL-changed_time_restored, RUL-kept_time_not_clock_evidence, RUL-kept_time_tag_disagreement_told, RUL-kept_time_tag_disagreement_recorded
+:justifies: RUL-changed_time_stops_plan, RUL-changed_time_asked, RUL-changed_time_kept_is_true, RUL-kept_time_holds_while_answer_stands, RUL-changed_time_restored, RUL-kept_time_not_clock_evidence, RUL-kept_time_tag_disagreement_told, RUL-kept_time_tag_disagreement_recorded
 :uses: DEF-own_values
 
 Geotag decides from what a photo held before it first wrote to it. A time the photo holds that is neither that nor
@@ -949,7 +949,9 @@ taken, there: so it is read by its destination's timezone, the one that reads ev
 no camera's clock offset — applied to it, a time already put right would be corrected twice, a wrong value written
 into an original. Being no reading of the camera's clock, it says nothing of that clock's offset, and is kept out of
 the evidence for it. Kept once, it is recorded beside the photo's own values, so every later run reads it the same way
-and does not ask again. An offset tag beside it that the zone does not give at that time is not followed — the ruling
+and does not ask again — while the answer stands. The answer is the user's, and so is taking it back: withdrawn, the
+kept time is no longer the photo's true time by their word, and which time is right is again theirs to say, so the
+question is asked again rather than either time written back unasked. An offset tag beside it that the zone does not give at that time is not followed — the ruling
 makes the time local, and the zone says which offset local time there has — but it does not pass in silence: it may be
 the mark of a time set in another zone, which the user, told, can still answer otherwise.
 :::

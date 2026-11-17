@@ -1877,6 +1877,19 @@ A time the user keeps SHALL be taken as the photo's true time, local to its dest
 timezone, corrected by no camera's clock offset, and decided from as such on every later run.
 :::
 
+:::{rul} A kept time holds while its answer stands
+:id: RUL-kept_time_holds_while_answer_stands
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+:refines: RUL-changed_time_kept_is_true
+:uses: DEF-decision, DEF-recorded_time
+
+A time the user kept SHALL be decided from as the photo's true time only while their answer to keep it stands:
+withdrawn, the photo's time is asked about again, and nothing is written back to it until that is answered.
+:::
+
 :::{rul} A kept time is no reading of the camera's clock
 :id: RUL-kept_time_not_clock_evidence
 :status: ruled

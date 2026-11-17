@@ -164,6 +164,33 @@ def test_with_no_other_device_s_photo_nothing_can_tell(tmp_path):
     assert cell["effective_time_anchor"] == "" and cell["proposal"]["far_from_evidence"]["nearest_other_photo"] == f"{DEST}/o.arw"
 
 
+@pytest.mark.spec("RUL-track_window_reaches_every_reader", "BLD-track_window", "BLD-offset_far_from_evidence",
+                  test="TST-geotag_far_offset-the_tracks_reach_the_times_a_guess_gives")
+def test_the_tracks_are_read_where_a_guess_of_hours_puts_the_photos(tmp_path, monkeypatch):
+    """A camera left on Tokyo time in Bruges records +09:00: its offset carries its photos nine hours from the times it
+    recorded, past the window the tracks were first read over. A track point lies at the time it gives. The tracks are
+    read there too: the guess is near that evidence — not withheld as far — and goes to the check against the tracks."""
+    gpx_dir = tmp_path / "gpx"; gpx_dir.mkdir()
+    (gpx_dir / "walk.gpx").write_text(
+        '<gpx xmlns="http://www.topografix.com/GPX/1/1"><trk><trkseg>'
+        '<trkpt lat="51.2" lon="3.2"><time>2026-05-01T11:00:00Z</time></trkpt>'
+        '<trkpt lat="51.21" lon="3.2"><time>2026-05-01T11:10:00Z</time></trkpt></trkseg></trk></gpx>')
+    monkeypatch.setitem(utils.CONFIG, "gpx_root", str(gpx_dir))
+    monkeypatch.setitem(utils.CONFIG, "gpx_anchor_max_clock_error_seconds", 3600.0)
+    monkeypatch.setitem(utils.CONFIG, "drift_check_track_window_seconds", 600.0)
+    wf = _wf(tmp_path)
+    tokyo = [_photo("a.arw", "2026:05:01 20:00:00", offset="+09:00"), _photo("b.arw", "2026:05:01 20:05:00", offset="+09:00")]
+    later = [_photo("p.heic", "2026:05:04 13:00:00", PHONE, "+02:00")]             # days later: no evidence of the 1st
+    files = tokyo + later
+    gpx = wf.load_gpx(files)
+    assert gpx.points == []                                                        # not in the first window
+    cell, art = _cell(wf, files, _prior(), gpx)
+    assert cell["proposal"]["proposal_source"] == "recorded_offset" and cell["proposal"]["proposed_offset_seconds"] == -32400
+    assert "far_from_evidence" not in cell["proposal"], cell["proposal"]
+    assert cell["effective_time_anchor"] == {"offset_seconds": -32400, "source": "recorded_offset_unconfirmed"}
+    assert len(gpx.points) == 2 and art["depends_on"]["gpx_fingerprint"] == gpx.fingerprint
+
+
 @pytest.mark.spec("BLD-offset_far_from_evidence", test="TST-geotag_far_offset-measures_the_nearest_of_each")
 def test_far_from_evidence_measures_the_nearest_of_each():
     """The pure check: nothing to tell by → None; anything within the bound → None; else how far the nearest lies."""

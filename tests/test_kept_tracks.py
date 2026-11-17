@@ -216,8 +216,12 @@ def test_the_window_grows_with_the_photos_and_the_settings(monkeypatch):
 @pytest.mark.spec("BLD-track_window", test="TST-kept_tracks-the_drift_check_s_reach_is_its_buckets")
 def test_the_drift_check_s_reach_is_its_buckets(monkeypatch):
     """The drift check sets a bucket's photos, at their corrected times from the first to the last, against the tracks
-    the drift window either side: the window holds all of it, the hours between two photos of the day included."""
+    the drift window either side — or placement's reach, where that is farther: the window holds all of it, the hours
+    between two photos of the day included."""
     monkeypatch.setitem(utils.CONFIG, "drift_check_track_window_seconds", 600)
+    monkeypatch.setitem(utils.CONFIG, "gpx_interpolation_max_gap_seconds", 300)
+    monkeypatch.setitem(utils.CONFIG, "gpx_extrapolation_max_seconds", 200)
+    monkeypatch.setitem(utils.CONFIG, "gpx_extrapolation_heading_seconds", 60)
     files = _files("2024:07:03 08:00:00", "2024:07:03 20:00:00")
     art = {"destinations": {"T": {"camera_group_time_decisions": {"CAM": {
         "camera_group": "CAM", "effective_time_anchor": {"offset_seconds": 0, "source": "timezone_accepted"}}}}}}
@@ -266,6 +270,30 @@ def test_the_points_an_executed_plan_used_stay_withdrawn(tracks, tmp_path):
     back = _build(tracks, record)
     assert "b.gpx" in {p.source_file for p in back.points}
     assert _rows(record, "SELECT COUNT(*) FROM gpx_track_files WHERE path = 'b.gpx'") == [(1,)]
+
+
+@pytest.mark.spec("BLD-withdrawn_track_points",
+                  test="TST-kept_tracks-the_tracks_a_drift_confirmation_was_made_against_stay_withdrawn")
+def test_the_tracks_a_drift_confirmation_was_made_against_stay_withdrawn(tracks, tmp_path):
+    """An executed plan whose offset was confirmed against a track at the check against the tracks rests on that
+    track, though it places no photo by it: taken out afterwards, its entry is kept, withdrawn, with its points."""
+    ws = tmp_path / "ws"
+    (ws / ".photos-ingest").mkdir(parents=True)
+    drift = {"destinations": {"6-photos-by-dest/D": {"drift_decisions": {"K": {
+        "effective_drift_offset": {"offset_seconds": -7200, "source": "gps_drift_validated"},
+        "proposal": {"tracks": [{"gpx_file": "b.gpx", "sha256": "x"}]}}}}}}
+    (ws / ".photos-ingest" / cal.DRIFT_VALIDATION_ARTIFACT).write_text(json.dumps(drift))
+    plan = {"plan_id": "plan-1", "destinations": {"6-photos-by-dest/D": {"operations": []}}}
+    used = cal.GeotagWorkflow(str(ws))._tracks_used(plan)
+    assert used == ["b.gpx"]
+    record = tmp_path / "record.db"
+    _build(tracks, record)
+    cal.GPXIndex.mark_used(str(record), "plan-1", used, JULY)
+    (tracks / "b.gpx").unlink()
+    _build(tracks, record)
+    withdrawn = _rows(record, "SELECT f.path, COUNT(p.point_index) FROM gpx_track_files f LEFT JOIN gpx_track_points p "
+                              "USING (track_id) WHERE f.withdrawn = 1 GROUP BY f.path")
+    assert withdrawn == [("b.gpx", 1)]
 
 
 # --- what cannot be checked ------------------------------------------------------------------------------

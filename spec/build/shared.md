@@ -823,13 +823,17 @@ each after writing photos-21. Kept, the time is read by the zone still.
 :::{bld} A time kept is recorded beside the pin at execution
 :id: BLD-changed_time_kept_pinned
 :status: ruled
-:realises: RUL-changed_time_kept_is_true
+:realises: RUL-changed_time_kept_is_true, RUL-kept_time_holds_while_answer_stands
 :uses: BLD-changed_time_kept, BLD-original_values_pinned
 
 The executable plan SHALL carry each kept pair, with its file's `content_fingerprint`, under `true_times_kept` by the
 file's path, which execution writes into the file's pin in the original-values ledger as its `true_time` before any
 write, while the file still holds that pair, the pinned own values staying — so every later plan resolves the file
-from it, and asks nothing of the file holding it or a pair geotag wrote.
+from it, and asks nothing of the file holding it or a pair geotag wrote — while the answer stands: photos-21 keeps the
+file's `changed_times` cell, `keep` `new` for the kept pair, asking nothing. Its answer withdrawn there — `keep` no
+longer `new`, `answered_for` empty or the kept pair — the plan decides from the pinned own values without it, so the
+file's time is asked about again and nothing is planned until answered; answered otherwise, the plan lists the file
+under `true_times_dropped`, and execution takes the `true_time` out of its pin before any write.
 :::
 
 :::{bld} A time taken back is planned like any other
@@ -1404,9 +1408,12 @@ existing folder neither inside the workspace nor holding it.
 :realises: RUL-checked_shapes, RUL-checked_positions_and_times, RUL-checked_timezones, RUL-invalid_value_stops, RUL-invalid_value_located, RUL-invalid_decision_kept, RUL-invalid_value_never_repaired, RUL-checked_every_run, RUL-unknown_decision_field_refused, RUL-checked_decision_structure, RUL-checked_clock_offsets, RUL-invalid_decision_reported
 
 Geotag SHALL check the decisions in `photos-21`, `photos-22` and `photos-23`, and the content acceptances of
-`photos-25` (`fingerprint_mismatches[*].user_decision`), as it reads them: each blocker names the
-artifact, the destination, the cell or the file, and the field, and an artifact holding one is left as
-it is, its plan not written. A decision artifact that cannot be read, does not parse as JSON or is not a JSON object is
+`photos-25` (`fingerprint_mismatches[*].user_decision`), as it reads them — those of `photos-22` and `photos-23` that a
+value can be checked by alone (`authored_value_blockers`: their structure and fields, a drift answer's flags and
+offsets, a fallback's or a review item's position, the photo a chosen position names) before it writes `photos-21`, so
+that an invalid value in any of the three stops the plan before any of them is written, and `photos-25`'s before
+execute does anything: each blocker names the artifact, the destination, the cell or the file, and the field, and an
+artifact holding one is left as it is, its plan not written. A decision artifact that cannot be read, does not parse as JSON or is not a JSON object is
 such a blocker, located to where parsing failed — never taken as absent. So is a `user_decision` of
 `photos-21`, `photos-22`, `photos-23` or `photos-25` holding a field its decision does not have — those `DECISION_FIELDS` lists
 for its block or cell, a review item's `manual_lat` and `manual_lon` among them (`unknown_decision_fields`) — one

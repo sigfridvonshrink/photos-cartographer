@@ -166,6 +166,26 @@ def test_moved_photo_takes_its_new_destinations_offset(tmp_path):
     assert f"{BYDEST}/A" not in art["destinations"]                        # nothing of A remains
 
 
+@pytest.mark.spec("RUL-moved_photo_decided_anew", test="TST-geotag_containers-moved_into_a_new_destination_takes_nothing_of_the_old")
+def test_a_photo_moved_into_a_new_destination_takes_nothing_of_the_old(tmp_path):
+    """A photo moved from A, where its camera's offset was written, into C, a destination no record knows: C is decided
+    anew — it asks — and does not take A's offset."""
+    wf = _wf(tmp_path)
+    prior = {"destinations": {
+        f"{BYDEST}/A": {"camera_group_time_decisions": {CAM: {"user_decision": {"manual_offset_seconds": -3600}}}}}}
+    art, _ = wf.build_time_decisions([_tfile(f"{BYDEST}/A/x.arw", f"{BYDEST}/A")], GROUPS, prior, _gpx())
+    assert art["destinations"][f"{BYDEST}/A"]["camera_group_time_decisions"][CAM]["effective_time_anchor"] == \
+        {"offset_seconds": -3600, "source": "manual"}
+    prior = {"destinations": {f"{BYDEST}/A": art["destinations"][f"{BYDEST}/A"]}}      # A's record, alone
+    art, _ = wf.build_time_decisions([_tfile(f"{BYDEST}/C/x.arw", f"{BYDEST}/C")], GROUPS, prior, _gpx())
+    cell = art["destinations"][f"{BYDEST}/C"]["camera_group_time_decisions"][CAM]
+    assert cell["effective_time_anchor"] == "" and cell["requires_user_input"]
+    assert cell["user_decision"].get("manual_offset_seconds") in ("", None)
+    rows = {r["relative_path"]: r for r in cal.compute_resolved_utc([_tfile(f"{BYDEST}/C/x.arw", f"{BYDEST}/C")],
+                                                                    GROUPS, art)}
+    assert rows[f"{BYDEST}/C/x.arw"].get("utc_offset_used") != -3600
+
+
 @pytest.mark.spec("RUL-offset_per_camera_destination_day", "RUL-offset_from_own_evidence", test="TST-geotag_containers-child_offset_decision_is_not_pooled_upward")
 def test_child_offset_decision_is_not_pooled_upward(tmp_path):
     wf = _wf(tmp_path)

@@ -630,7 +630,10 @@ over yours nor takes yours instead unasked. It asks, in photos-21 (`changed_time
 the photo keeps: the time it holds — the true local time, read by the destination's timezone with no camera
 clock offset applied, now or later, and no evidence of the camera's clock — or geotag's, written again.
 The question names the time the photo holds, the one geotag wrote and the photo's own, and says so when
-the photo's offset tag disagrees with the timezone.
+the photo's offset tag disagrees with the timezone. A kept time holds while your answer does: withdrawn, the
+question is asked again, nothing written back until it is answered. An invalid value in any of photos-21, -22
+or -23 stops the plan before any of them is written; a hidden file or folder in `6-photos-by-dest/` stops
+geotag as it would stop merge.
 
 **Geotag execute and finalize** — the same gates as the plan: `0-sources/` not empty, photos still in
 `5-photos-by-date/`, anything but photos in `6-photos-by-dest/`, or a photo there that neither prep recorded nor

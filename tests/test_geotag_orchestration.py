@@ -163,13 +163,13 @@ def test_scans_handle_missing_folder_and_dotfiles(tmp_path):
     assert [r for r, _ in scanned] == ["5-photos-by-date/real.jpg"]
     assert list(wf._scan_media("0-sources")) == []                 # empty dir
     assert list(wf._scan_media("no-such-folder")) == []            # missing dir -> early return
-    assert wf._scan_by_dest("no-such-folder") == ([], [])          # missing dir -> early return
-    # _scan_by_dest: a dotfile is skipped, a non-photo is reported
+    assert wf._scan_by_dest("no-such-folder") == ([], [], [])      # missing dir -> early return
+    # _scan_by_dest: a dotfile is hidden, not a non-photo; a non-photo is reported
     (ws / "6-photos-by-dest" / ".hidden").write_text("x")
     (ws / "6-photos-by-dest" / "note.txt").write_text("x")
-    dev, nonphoto = wf._scan_by_dest("6-photos-by-dest")
+    dev, nonphoto, hidden = wf._scan_by_dest("6-photos-by-dest")
     assert any(p.endswith("note.txt") for p, _ in nonphoto)
-    assert all(not p.endswith(".hidden") for p, _ in nonphoto)
+    assert all(not p.endswith(".hidden") for p, _ in nonphoto) and hidden == ["6-photos-by-dest/.hidden"]
 
 
 def _completable_ws(tmp_path):
@@ -312,6 +312,34 @@ def test_unparseable_decision_artifact_blocks_and_is_kept(tmp_path, monkeypatch,
     assert sorted(x.name for x in ctl.iterdir()) == before                    # no backup, no new version
 
 
+@pytest.mark.spec("RUL-invalid_value_stops", "RUL-invalid_value_located", "BLD-geotag_checks_decisions",
+                  test="TST-geotag_orchestration-an_invalid_value_in_a_later_record_changes_nothing")
+@pytest.mark.parametrize("artifact", ["photos-22-gps-drift-validation.json", "photos-23-gps-decisions.json"],
+                         ids=["22", "23"])
+def test_an_invalid_value_in_a_later_record_changes_nothing(tmp_path, monkeypatch, capsys, artifact):
+    """A value in photos-22 or photos-23 that cannot be taken stops the plan before any decision record is written:
+    photos-21 and photos-22 as they were, no copy set aside, the resolved times not replaced."""
+    ws, ctl = _completable_ws(tmp_path)
+    assert _run(monkeypatch, ws) == 0                                         # writes photos-21, -22, -23
+    rec = json.loads((ctl / artifact).read_text())
+    dest = sorted(json.loads((ctl / "photos-21-time-decisions.json").read_text())["destinations"])[-1]
+    rec.setdefault("destinations", {}).setdefault(dest, {})
+    if artifact.startswith("photos-22"):
+        rec["destinations"][dest]["drift_decisions"] = {"X": {"user_decision": {"corrected_offset_seconds": "soon"}}}
+    else:
+        rec["destinations"][dest]["folder_fallback"] = {"user_decision": {"fallback_lat": 95.0, "fallback_lon": 4.0}}
+    (ctl / artifact).write_text(json.dumps(rec))
+    before = {p.name: p.read_bytes() for p in ctl.iterdir() if p.is_file() and p.name.startswith("photos-2")}
+    db = (ctl / "photos-00-ingest.db").read_bytes() if (ctl / "photos-00-ingest.db").exists() else None
+    capsys.readouterr()
+    assert _run(monkeypatch, ws) == 2
+    err = capsys.readouterr().err
+    assert f"invalid value(s) in {artifact}" in err and dest in err, err
+    assert {p.name: p.read_bytes() for p in ctl.iterdir() if p.is_file() and p.name.startswith("photos-2")} == before
+    rows = cal.GeotagCache(str(ws)).get_rows()
+    assert rows                                                               # the resolved times as they were
+
+
 @pytest.mark.spec("RUL-sealed_new_dump_warned", "RUL-sealed_new_dump_left", test="TST-geotag_orchestration-sealed_workspace_with_dump_warns_and_blocks")
 def test_sealed_workspace_with_dump_warns_and_blocks(tmp_path, monkeypatch, capsys):
     ws, ctl = _init_ws(tmp_path)
@@ -327,6 +355,25 @@ def test_sealed_workspace_with_dump_warns_and_blocks(tmp_path, monkeypatch, caps
     wf = cal.GeotagWorkflow(str(ws))
     blk, warn, _ = wf.preflight()
     assert any("SEALED" in b for b in blk) and not warn
+
+
+@pytest.mark.spec("BLD-phases_check_seal", "RUL-sealed_new_dump_warned",
+                  test="TST-geotag_orchestration-a_sealed_workspace_is_refused_before_its_zone_record_is_read")
+def test_a_sealed_workspace_is_refused_before_its_zone_record_is_read(tmp_path, monkeypatch, capsys):
+    """A sealed workspace on a host with no table of countries, holding a record of it that cannot be read, is
+    refused on its seal — with the new dump pointed out — not on the record, which is never read."""
+    real = utils._zone_database_file
+    monkeypatch.setattr(utils, "_zone_database_file",
+                        lambda name: None if name in ("zone.tab", "iso3166.tab") else real(name))
+    ws, ctl = _init_ws(tmp_path)
+    (ctl / "photos-00-config.json").write_text(json.dumps({k: v for k, v in utils.CONFIG.items() if k != "jobs"}))
+    (ctl / "photos-11-handoff.json").write_text(json.dumps(vouched(ctl.parent, {"filename_timestamp_format": utils.CONFIG["filename_timestamp_format"], "files": [], "depends_on": {"cache": {"fingerprint_algorithm_version": utils.FINGERPRINT_ALGORITHM_VERSION}}})))
+    (ctl / utils.ZONE_TABLE_ARTIFACT).write_text("{torn")
+    open(utils.sealed_marker_path(str(ws)), "w").close()
+    (ws / "loose.jpg").write_bytes(b"x")
+    assert _run(monkeypatch, ws) == 2
+    err = capsys.readouterr().err
+    assert "SEALED" in err and "likely new dump" in err and utils.ZONE_TABLE_ARTIFACT not in err, err
 
 
 @pytest.mark.spec("BLD-geotag_stage_order", test="TST-geotag_orchestration-unknown_group_aborts_before_gpx_ingest")

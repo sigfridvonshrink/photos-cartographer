@@ -192,3 +192,13 @@ def test_the_answer_holds_for_later_files_while_the_zone_is_the_one_answered(tmp
     bad = _with(ZONE, unidentified_files={"user_decision": {"accept_proposal": True, "accepted_timezone": ""}})
     _art, blockers = wf.build_time_decisions(NAMELESS, GROUPS, bad, _gpx())
     assert any("accepted_timezone must be the timezone accepted" in b for b in blockers)
+
+
+@pytest.mark.spec("RUL-checked_timezones", "BLD-unidentified_files_question",
+                  test="TST-geotag_untagged_photos-the_timezone_accepted_is_checked")
+def test_the_timezone_accepted_for_files_naming_no_camera_is_checked(tmp_path):
+    """The timezone written as the one accepted is checked like every timezone the user writes: one that is none of
+    the zone database's is a blocker naming where it is, not an answer for another zone."""
+    bad = _with(ZONE, unidentified_files={"user_decision": {"accept_proposal": True, "accepted_timezone": "Mars/Olympus"}})
+    _art, blockers = _wf(tmp_path).build_time_decisions(NAMELESS, GROUPS, bad, _gpx())
+    assert any(f"{DEST}: unidentified_files.user_decision.accepted_timezone 'Mars/Olympus'" in b for b in blockers), blockers

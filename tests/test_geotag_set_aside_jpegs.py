@@ -224,17 +224,31 @@ def test_a_renamed_jpeg_changed_since_execution_stops_finalize(tmp_path, monkeyp
 
 @pytest.mark.spec("RUL-set_aside_jpeg_catches_up", "BLD-set_aside_jpeg_catches_up", "RUL-set_aside_jpeg_only_renamed",
                   test="TST-geotag_set_aside_jpegs-a_jpeg_left_behind_takes_its_raws_name")
-def test_a_jpeg_left_behind_takes_the_name_its_corrected_raw_holds(tmp_path, monkeypatch):
+@pytest.mark.parametrize("pinned", [False, True], ids=["unpinned", "pinned"])
+def test_a_jpeg_left_behind_takes_the_name_its_corrected_raw_holds(tmp_path, monkeypatch, pinned):
     """An earlier run renamed the RAW without its JPEG: the RAW holds its corrected time and name and geotag's mark,
     the JPEG is still under the camera's time. The plan renames nothing in photos by destination, and the JPEG to the
-    name its RAW holds — a rename only, after no other — and the pair keeps one name."""
+    name its RAW holds — a rename only, after no other — and the pair keeps one name. So too where geotag pinned the
+    RAW's own values before it wrote them, which hold no mark: the mark is the one the RAW holds."""
     def corrected(ws):
         rec = _record(ws, f"6-photos-by-dest/T/{HOME}.arw", "raw", "6-photos-by-dest", {
             "DateTimeOriginal": "2024:07:03 14:00:00", "OffsetTimeOriginal": "+02:00",
             "selected_source_naive_timestamp": "2024:07:03 14:00:00",
             "selected_source_timestamp_tag": "DateTimeOriginal", "camera_group_key": CAM, "has_timestamp": True,
             "has_native_gps": True, "GPSLatitude": 50.0, "GPSLongitude": 4.0, "GPSProcessingMethod": "+carto-time"})
+        if pinned:
+            cache = cal.GeotagCache(str(ws))
+            fp = "fp-" + rec["relative_path"]
+            cache.originals_pin(fp, f"6-photos-by-dest/T/{AWAY}.arw", {
+                "DateTimeOriginal": "2024:07:03 15:00:00", "OffsetTimeOriginal": None,
+                "selected_source_naive_timestamp": "2024:07:03 15:00:00",
+                "selected_source_timestamp_tag": "DateTimeOriginal", "GPSLatitude": 50.0, "GPSLongitude": 4.0,
+                "GPSProcessingMethod": None}, "2024-07-04T00:00:00Z")
+            cache.time_written_record(fp, {"DateTimeOriginal": "2024:07:03 14:00:00", "OffsetTimeOriginal": "+02:00"})
+            cache.close()
         return [rec]
+    if pinned:              # its own values decided from again: its one anchor sets the clock unasked
+        monkeypatch.setitem(utils.CONFIG["camera_time_and_timezone_policy"], "single_anchor_auto_apply", True)
     ws, ctl = _workspace(tmp_path, monkeypatch, raws=corrected)
     ops = _ops(ctl)
     assert not [o for o in ops if o["type"] == "rename_no_clobber" and o["relative_path"].startswith("6-")]

@@ -286,9 +286,7 @@ timezone-derived offset; else manual required.
     "proposed_offset_seconds": -3600,
     "proposed_real_utc": "2024-07-03T14:12:21Z",
     "confidence": "high",                 // "high" | "medium" | "review_required"
-    "recommended_gpx_match": { "match_type": "gpx_point_match", "gpx_file": "…", "distance_m": 4.2,
-                               "segment_duration_seconds": 0 },
-    "anchor_count": 3, "supporting_count": 2, "conflicting_count": 0,
+    "anchor_count": 3, "conflicting_count": 0,
     "conflicting_files": [], "tied": false,
     "imprecise_seconds": 0,               // > 0: the tracks STAYED at these photos' place this long — the GPS
                                           // says where, not when; never auto-applied, and once accepted
@@ -506,6 +504,11 @@ photo that now holds a `DateTimeOriginal` / `OffsetTimeOriginal` pair that is ne
 time changed since — in another tool, or by a slip. Geotag neither writes its time back over it nor takes it as the
 photo's unasked: it asks here, alone, which the photo keeps. Until answered, photos-21 is not complete.
 
+A time kept and executed stays here as an answered entry (`keep: "new"`, asking nothing) for as long as the answer
+stands. Clear it (`keep: ""`) to withdraw it: the kept time is no longer the photo's true time, the question is asked
+again, and nothing is written back to the photo until you answer it — `"geotag"` then writes geotag's time again, and
+the next `geotag execute` takes the kept time out of the photo's pinned values.
+
 | Field | Type | Editable | Meaning |
 |-------|------|----------|---------|
 | `content_fingerprint` | string | no | The photo's fingerprint: its answer is found again by it. |
@@ -579,8 +582,7 @@ Same wrapper as §4.1 with `artifact_type: "gps_decisions"` / `artifact_name:
   "gps_decisions": {
     "summary": { /* §5.5 counts — SYSTEM */ },
     "automatic_decision_summary": {        // SYSTEM, informational
-      "gpx_files_used": ["…"], "max_interpolation_gap_seconds": 120,
-      "max_distance_to_track_m": 50, "confidence": "automatic", "notes": ["…"]   // confidence: "automatic", or "mixed" if the destination has blocked files
+      "gpx_files_used": ["…"]
     },
     "review_items": [ /* §5.4 — the per-file editable list */ ],
     "placed_photos": [ /* SYSTEM, optional — every photo no review item names, by path and how it is placed (below) */ ]
@@ -663,7 +665,7 @@ the record as one it cannot read until the field is removed.
   position of its own (see below). Geotag takes it and writes it back as `manual_locked`.
 - **`own_position_contradicted`** — a photo **with its own GPS position** that the camera's offset, agreed from its
   other photos on the tracks, contradicts (listed in its photos-21 cell's `positions_contradicted`), and that lies more
-  than `gpx_anchor_max_point_distance_meters` from where the tracks place it at its corrected time — most likely a
+  than `gpx_own_position_contradicted_distance_meters` from where the tracks place it at its corrected time — most likely a
   wrong fix (jitter, a fix from minutes before). `requires_user_input: false`: the photo keeps its own position. To
   replace it, set `manual_lat`/`manual_lon` — the editor's **take the track's position** writes `proposed_position`
   — and it is written as `manual_locked`, the log keeping the position it replaced. Its `user_decision` holds only
@@ -847,7 +849,7 @@ writes are not confirmed, its rename is held back, and the execution ends `parti
 |-------|------|----------|---------|
 | `relative_path` | string | no | The photo, at the path it was planned under (its rename held back). |
 | `expected_fingerprint` / `actual_fingerprint` | string / string \| `null` | no | The fingerprint the plan pinned, and the one the photo has now. |
-| **`user_decision.accept_fingerprint_change`** | bool | **yes** | `true`: the content as it is now is the photo's — the next `geotag execute` of the **same plan** (`plan_id`) takes `actual_fingerprint` as the expected one and goes on with the photo (its rename and journal). The acceptance holds for that `actual_fingerprint` only: content that changed again asks again. A mismatch with no `actual_fingerprint` cannot be accepted. |
+| **`user_decision.accept_fingerprint_change`** | bool (`true` or `false`, never text; no other field beside it) | **yes** | `true`: the content as it is now is the photo's — the next `geotag execute` of the **same plan** (`plan_id`) takes `actual_fingerprint` as the expected one and goes on with the photo (its rename and journal). The acceptance holds for that `actual_fingerprint` only: content that changed again asks again. A mismatch with no `actual_fingerprint` cannot be accepted. |
 
 The summary is otherwise geotag's own record; nothing else in it is yours to write, and a later execution reads only
 these answers, only from the summary of the plan it executes. A mismatch whose photo is still held is carried into the

@@ -362,7 +362,9 @@ before geotag. Choose:
 - **take back geotag's time** — geotag writes its time again, as it decided it before the change.
 
 The answer is for the time the photo holds now: change the photo's time again and it asks again. Until
-answered, the time decisions are not complete. By hand: `keep` (`"new"` or `"geotag"`) and `answered_for`
+answered, the time decisions are not complete. A kept time stays answered in the panel after `geotag execute`;
+clear the answer to withdraw it, and the question is asked again — nothing is written back to the photo until you
+answer it. By hand: `keep` (`"new"` or `"geotag"`) and `answered_for`
 (a copy of `held_time`) in the photo's entry of `changed_times` (see the
 [decision-JSON reference](../cartographer/editor/decision-json-reference.md)).
 

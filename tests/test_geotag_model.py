@@ -194,10 +194,12 @@ def test_a_track_of_untimed_points_is_reported_not_empty(tmp_path):
                             "GPX point without a position in untimed.gpx at trkpt 2"]
 
 
+@pytest.mark.skipif(hasattr(os, "geteuid") and os.geteuid() == 0, reason="root reads a file of mode 000")
 def test_gpx_unreadable_file_warns_and_skips(tmp_path):
-    # a .gpx that os.walk lists but open() fails on (broken symlink) -> the OSError branch warns.
+    # a .gpx that os.walk lists but open() fails on (no permission to read it) -> the OSError branch warns.
     root = tmp_path / "gpx"; root.mkdir()
-    os.symlink(str(tmp_path / "does-not-exist"), str(root / "broken.gpx"))
+    (root / "locked.gpx").write_text(GPX)
+    (root / "locked.gpx").chmod(0)
     idx = cal.GPXIndex(str(root)).build()
     assert any("Could not read GPX file" in w for w in idx.warnings) and idx.points == []
 
@@ -360,6 +362,7 @@ def test_a_tracks_folder_that_is_not_there_stops_geotag(tmp_path, monkeypatch, c
 
 @pytest.mark.spec("RUL-unreadable_tracks_stop_geotag", "RUL-no_tracks_no_stop", "BLD-track_points",
                   test="TST-geotag_model-a_tracks_folder_none_of_whose_files_is_read_stops_geotag")
+@pytest.mark.skipif(hasattr(os, "geteuid") and os.geteuid() == 0, reason="root reads a file of mode 000")
 def test_a_tracks_folder_none_of_whose_files_is_read_stops_geotag(tmp_path, monkeypatch, capsys):
     """A tracks folder that is there, holding track files not one of which can be read — one malformed, one that
     cannot be opened — is not "no tracks": `geotag plan` stops before any record, naming the folder and each file
@@ -371,7 +374,8 @@ def test_a_tracks_folder_none_of_whose_files_is_read_stops_geotag(tmp_path, monk
     tracks = tmp_path / "tracks"
     (tracks / "2024").mkdir(parents=True)
     (tracks / "2024" / "cut.gpx").write_text("<gpx><trk><trkseg><trkpt lat='1'")
-    (tracks / "locked.gpx").symlink_to(tracks / "gone.gpx")                     # there, and cannot be opened
+    (tracks / "locked.gpx").write_text(GPX)                                     # there, and cannot be opened
+    (tracks / "locked.gpx").chmod(0)
     cfg_path.write_text(json.dumps(dict(cfg, gpx_root=str(tracks))))
     assert _main(monkeypatch, ws) == 2
     err = capsys.readouterr()
@@ -403,4 +407,50 @@ def test_a_linked_folder_of_tracks_is_named_not_followed(tmp_path):
     (root / "2023").symlink_to(elsewhere, target_is_directory=True)
     idx = cal.GPXIndex(str(root)).build()
     assert idx.status == "usable" and {p.source_file for p in idx.points} == {"trip.gpx"}
-    assert [w for w in idx.warnings if "Linked folder" in w and w.endswith(": 2023")], idx.warnings
+    assert [w for w in idx.warnings if "not followed" in w and w.endswith(": 2023")], idx.warnings
+
+
+@pytest.mark.spec("RUL-track_link_never_followed", "RUL-track_link_named", "BLD-track_points",
+                  test="TST-geotag_model-a_linked_track_file_is_named_not_read")
+def test_a_linked_track_file_is_named_not_read(tmp_path):
+    """A track file under gpx_root that is a link to one elsewhere is a link like a linked folder: what it leads to
+    is not read, its points are not used, and it is said by name."""
+    elsewhere = tmp_path / "elsewhere"; elsewhere.mkdir()
+    (elsewhere / "far.gpx").write_text(GPX)
+    root = tmp_path / "gpx"; root.mkdir()
+    (root / "trip.gpx").write_text(GPX)
+    (root / "day2.gpx").symlink_to(elsewhere / "far.gpx")
+    idx = cal.GPXIndex(str(root)).build()
+    assert idx.status == "usable" and {p.source_file for p in idx.points} == {"trip.gpx"}
+    assert idx.read == 1 and "day2.gpx" not in idx.file_sha and idx.unreadable == []
+    assert [w for w in idx.told if "not followed" in w and w.endswith(": day2.gpx")], idx.warnings
+
+
+@pytest.mark.spec("RUL-gone_track_told", test="TST-geotag_model-a_gone_track_file_is_named_past_the_cap")
+def test_a_gone_track_file_is_named_past_the_cap(tmp_path, monkeypatch, capsys):
+    """A track file gone from gpx_root is named by the plan that finds it gone — past the cap on the warnings of
+    skipped points, and on the stop for tracks none of which can be read — since the catalogue forgets it then."""
+    ws = _full_ws(tmp_path, device_groups={"fixed_clock_cameras": ["SONY|ILCE-6400|123"], "phones": []})
+    cfg_path = ws / ".photos-ingest" / "photos-00-config.json"
+    tracks = tmp_path / "tracks"; tracks.mkdir()
+    cfg_path.write_text(json.dumps(dict(json.loads(cfg_path.read_text()), gpx_root=str(tracks))))
+    (tracks / "first.gpx").write_text(GPX)
+    assert _main(monkeypatch, ws) == 0
+    capsys.readouterr()
+    (tracks / "first.gpx").unlink()                       # gone, among a dozen skipped points
+    (tracks / "untimed.gpx").write_text(
+        '<gpx xmlns="http://www.topografix.com/GPX/1/1"><trk><trkseg>'
+        + "".join(f'<trkpt lat="50.{i}" lon="4.0"></trkpt>' for i in range(12))
+        + '<trkpt lat="50.5" lon="4.5"><time>2024-07-03T12:00:00Z</time></trkpt></trkseg></trk></gpx>')
+    assert _main(monkeypatch, ws) == 0
+    said = "".join(capsys.readouterr())
+    assert "Track file gone from gpx_root, no longer used: first.gpx" in said, said
+    assert "and 2 more" in said
+    (tracks / "second.gpx").write_text(GPX)
+    assert _main(monkeypatch, ws) == 0
+    capsys.readouterr()
+    (tracks / "second.gpx").unlink()                      # gone, and nothing left that can be read
+    (tracks / "untimed.gpx").write_text("<gpx><trk><trkseg><trkpt lat='1'")
+    assert _main(monkeypatch, ws) == 2
+    said = "".join(capsys.readouterr())
+    assert "can be read" in said and "Track file gone from gpx_root, no longer used: second.gpx" in said, said

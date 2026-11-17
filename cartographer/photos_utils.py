@@ -102,6 +102,9 @@ CONFIG = {
     # canyons, forested parks, castle courtyards — so clock-offset inference still finds enough anchors.
     "gpx_anchor_max_point_distance_meters": 50.0,
     "gpx_anchor_max_segment_distance_meters": 50.0,
+    # How far from a photo's own position the tracks may place it, at the time its camera's agreed offset gives it,
+    # before that position counts as contradicted and is offered for review (BLD-contradicted_position).
+    "gpx_own_position_contradicted_distance_meters": 50.0,
     "gpx_anchor_offset_spread_max_seconds": 120.0,
     # The longest gap between two track points whose segment may anchor a frame lying beside it.
     "gpx_anchor_max_segment_gap_seconds": 1800.0,
@@ -371,6 +374,11 @@ def read_zone_table_record(ws) -> dict:
             rec = json.load(f)
         if not isinstance(rec, dict) or rec.get("download") not in ("accepted", "declined"):
             raise ValueError("it holds no answer, accepted or declined")
+        if "copy" in rec:
+            # a copy downloaded and no longer a well-formed table is not passed over for the carried one in silence
+            if not isinstance(rec["copy"], dict):
+                raise ValueError("the copy it holds is no table")
+            check_zone_table_text(rec["copy"].get("zone_tab"), rec["copy"].get("iso3166_tab"))
     except (OSError, ValueError) as e:
         raise ValueError(f"{ZONE_TABLE_ARTIFACT} cannot be read ({e}); the answer to whether to download the table "
                          "of countries, and the copy downloaded, would be taken for none. Restore it, or move it out "
@@ -392,15 +400,9 @@ def zone_table_record_error(ws):
 
 
 def _workspace_zone_copy(ws):
-    """The copy downloaded for the workspace, still well-formed, or None."""
-    copy = (read_zone_table_record(ws) or {}).get("copy")
-    if not isinstance(copy, dict):
-        return None
-    try:
-        check_zone_table_text(copy.get("zone_tab"), copy.get("iso3166_tab"))
-    except ValueError:
-        return None
-    return copy
+    """The copy downloaded for the workspace, or None — well-formed, or its record cannot be read
+    (read_zone_table_record)."""
+    return (read_zone_table_record(ws) or {}).get("copy")
 
 
 def _parse_country_table(zone_tab, iso3166_tab) -> dict:
@@ -2192,7 +2194,7 @@ _GPX_NUMERIC_KEYS = (
     "gpx_tracks_agree_max_distance_meters", "gpx_anchor_max_segment_gap_seconds",
     "gpx_anchor_same_pass_max_seconds", "gpx_anchor_stay_max_seconds", "gpx_anchor_stay_distance_meters",
     "gpx_anchor_decision_tolerance_seconds", "drift_check_track_window_seconds",
-    "clock_offset_same_day_max_difference_seconds",
+    "clock_offset_same_day_max_difference_seconds", "gpx_own_position_contradicted_distance_meters",
 )
 
 def validate_config(cfg: dict, workspace_root: str = None):

@@ -922,6 +922,35 @@ def test_a_photo_whose_fingerprint_changed_keeps_its_own_values(tmp_path, monkey
     assert _originals(ws) == {"fp-new": pinned}                               # the pin followed the value
 
 
+@pytest.mark.spec("RUL-photo_decision_follows_the_photo", "BLD-review_item_identity",
+                  test="TST-geotag_rerun_markers-a_decision_follows_a_photo_geotag_never_wrote_through_a_retake")
+def test_a_decision_follows_a_photo_geotag_never_wrote_through_a_retake(tmp_path, monkeypatch):
+    """A position the user chose for a photo geotag has not written — so holds no pin — is kept under the photo's
+    fingerprint; prep then takes the fingerprint again with a new ImageMagick. The decision is still the photo's: the
+    next plan finds it by the value before, never dropping it."""
+    ws = _ws(tmp_path, [lambda ws: _rec(ws, f"{T}/a.arw", "2024:07:03 14:20:00")])
+    _plan(monkeypatch, ws)
+    _set_offset(ws, SLOW)
+    _plan(monkeypatch, ws)
+    _confirm_drift(ws, SLOW)
+    _plan(monkeypatch, ws)
+    ctl = ws / ".photos-ingest"
+    gp = ctl / "photos-23-gps-decisions.json"
+    gps = json.loads(gp.read_text())
+    gps["destinations"][T]["gps_decisions"]["review_items"].append(
+        {"relative_path": f"{T}/a.arw", "content_fingerprint": "fp-a.arw", "reason": "chosen_by_user",
+         "user_decision": {"manual_lat": 45.5, "manual_lon": 6.5}})
+    gp.write_text(json.dumps(gps))
+    _plan(monkeypatch, ws)
+    assert _originals(ws) == {}                                              # never written: no pin
+    _retake_fingerprint(ws, "fp-a.arw", "fp-new")
+    _plan(monkeypatch, ws)
+    items = json.loads(gp.read_text())["destinations"][T]["gps_decisions"]["review_items"]
+    assert [(i["reason"], i["user_decision"]) for i in items if i["relative_path"] == f"{T}/a.arw"] == [
+        ("manual_locked", {"manual_lat": 45.5, "manual_lon": 6.5})], items
+    assert _ops(ws)[f"{T}/a.arw"]["writes"]["GPSLatitude"] == pytest.approx(45.5)
+
+
 @pytest.mark.spec("RUL-fingerprint_mapping_one_to_one", "BLD-original_values_follow_fingerprint",
                   test="TST-geotag_rerun_markers-a_fingerprint_mapping_not_one_to_one_stops_geotag")
 def test_a_fingerprint_mapping_not_one_to_one_stops_geotag(tmp_path, monkeypatch):
@@ -929,6 +958,10 @@ def test_a_fingerprint_mapping_not_one_to_one_stops_geotag(tmp_path, monkeypatch
     _retake_fingerprint(ws, "fp-a.arw", "fp-new", also="fp-other")
     blockers, _, _ = cal.GeotagWorkflow(str(ws)).preflight()
     assert any("more than one value" in b and "re-run prep" in b for b in blockers), blockers
+    # neither plan nor execute: execution and finalize stop on it too
+    for needs_exiftool in (True, False):
+        blockers, _, _ = cal.GeotagWorkflow(str(ws)).preflight(for_execute=True, needs_exiftool=needs_exiftool)
+        assert any("more than one value" in b and "re-run prep" in b for b in blockers), blockers
     earlier, problem = utils.retaken_fingerprints({"photos": {"x": {"journey": [
         {"action": "fingerprint_retaken", "from": "a", "to": "b"}, {"action": "fingerprint_retaken", "from": "b", "to": "c"}]}}})
     assert earlier == {"b": "a", "c": "b"} and problem is None                # a chain is one to one
@@ -1192,7 +1225,9 @@ def test_a_changed_time_kept_is_the_photo_s_true_local_time(tmp_path, monkeypatc
         ("2024:07:03 14:20:00", "2024:07:03 14:20:00")                  # its own values stay
     _plan(monkeypatch, ws)
     art, cell = _changed_cell(ws)
-    assert cell is None and not art["requires_user_input"] and _ops(ws) == {}   # decided: nothing asked or written
+    assert not art["requires_user_input"] and _ops(ws) == {}                     # decided: nothing asked or written
+    # the answer stays in the record while it stands, there to be withdrawn
+    assert cell["user_decision"]["keep"] == "new" and cell["effective_answer"] == "new" and not cell["requires_user_input"]
     row = _rows(ws)[f"{T}/{KEPT}"]
     assert (row["time_rule_used"], row["resolved_utc"]) == ("kept_true_time", "2024-07-03T12:45:00Z")
 
@@ -1219,6 +1254,48 @@ def test_a_time_changed_after_one_was_kept_restores_the_kept_one(tmp_path, monke
     _plan(monkeypatch, ws)
     w = _ops(ws)[f"{T}/{KEPT}"]["writes"]
     assert (w["DateTimeOriginal"], w["OffsetTimeOriginal"]) == ("2024:07:03 14:45:00", "+02:00")
+
+
+@pytest.mark.spec("RUL-kept_time_holds_while_answer_stands", "BLD-changed_time_kept_pinned",
+                  test="TST-geotag_rerun_markers-a_withdrawn_keep_asks_again")
+def test_a_withdrawn_keep_answer_asks_the_question_again(tmp_path, monkeypatch):
+    """A time kept and executed: the answer stays in photos-21. Withdrawn there, the kept time is decided from no
+    longer — the question is asked again, and nothing is written back unasked. Answered then to take back geotag's
+    time, the plan writes it, and execution takes the kept time out of the pin: the next plan asks nothing."""
+    ws = _executed_round(tmp_path, monkeypatch)
+    _hand_set_time(ws, "2024:07:03 14:45:00", "+02:00")
+    _plan(monkeypatch, ws)
+    _answer_changed(ws, "new")
+    _plan(monkeypatch, ws)
+    _execute(monkeypatch, ws)
+    _plan(monkeypatch, ws)
+    _, cell = _changed_cell(ws)
+    assert cell["user_decision"]["keep"] == "new" and not cell["requires_user_input"]
+    p = ws / ".photos-ingest" / cal.TIME_DECISIONS_ARTIFACT
+    a = json.loads(p.read_text())
+    (cell,) = a["destinations"][T]["changed_times"].values()
+    cell["user_decision"] = {"keep": "", "answered_for": ""}                 # withdrawn, as the editor clears it
+    p.write_text(json.dumps(a))
+    plan_before = _plan_record(ws)
+    _plan(monkeypatch, ws)
+    art, cell = _changed_cell(ws)
+    assert cell["requires_user_input"] and art["requires_user_input"]        # asked again
+    assert cell["held_time"] == {"DateTimeOriginal": "2024:07:03 14:45:00", "OffsetTimeOriginal": "+02:00"}
+    assert _plan_record(ws) == plan_before                                   # nothing planned, nothing written back
+    (pin,) = _originals(ws).values()
+    assert "true_time" in pin                                                # nothing reverted unasked
+    _answer_changed(ws, "geotag")
+    _plan(monkeypatch, ws)
+    plan = _plan_record(ws)
+    assert plan["status"] == "ready" and plan["true_times_dropped"] == [f"{T}/{KEPT}"], plan
+    w = _ops(ws)[f"{T}/{KEPT}"]["writes"]
+    assert (w["DateTimeOriginal"], w["OffsetTimeOriginal"]) == ("2024:07:03 14:30:00", "+02:00")
+    _execute(monkeypatch, ws)
+    (pin,) = _originals(ws).values()
+    assert "true_time" not in pin
+    _plan(monkeypatch, ws)
+    art, cell = _changed_cell(ws)
+    assert cell is None and not art["requires_user_input"] and _ops(ws) == {}
 
 
 @pytest.mark.spec("RUL-kept_time_not_clock_evidence", "BLD-changed_time_kept_not_anchor",

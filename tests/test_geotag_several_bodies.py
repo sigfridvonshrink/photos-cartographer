@@ -151,3 +151,15 @@ def test_its_days_in_two_destinations_are_decided_apart(tmp_path):
     assert cells["A"]["proposal"]["proposed_offset_seconds"] == -7200
     assert cells["B"]["proposal"]["proposed_offset_seconds"] == -18000
     assert cells["C"]["proposal"]["proposal_source"] != "same_day_elsewhere"
+    # each accepted, as several bodies' offsets are taken: both stand, neither held against the other, and C is still
+    # offered neither
+    prior = copy.deepcopy(art)
+    for d, off in (("A", -7200), ("B", -18000)):
+        prior["destinations"][f"{BYDEST}/{d}"]["camera_group_time_decisions"][CAM]["user_decision"].update(
+            accept_proposal=True, accepted_offset_seconds=off)
+    art, _ = wf.build_time_decisions(files, groups, prior, gpx)
+    cells = {d: art["destinations"][f"{BYDEST}/{d}"]["camera_group_time_decisions"][CAM] for d in "ABC"}
+    assert cells["A"]["effective_time_anchor"] == {"offset_seconds": -7200, "source": "gpx_anchor_accepted"}
+    assert cells["B"]["effective_time_anchor"] == {"offset_seconds": -18000, "source": "gpx_anchor_accepted"}
+    assert "conflicts_with" not in cells["A"] and "conflicts_with" not in cells["B"]
+    assert cells["C"]["proposal"]["proposal_source"] != "same_day_elsewhere"
