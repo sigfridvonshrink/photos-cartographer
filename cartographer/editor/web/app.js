@@ -964,8 +964,17 @@ function renderOffsetGroup(dest, destCell, g, oneCamera, n) {
 function recordAbsentText(art, name) {
   if (art && art._error) return `${art._error} — repair it by hand (or restore it from a -NNN backup), then reload; ` +
     "geotag stops on it too, and leaves it as it is.";
-  return `No ${name}.`;
+  const by = RECORD_WRITTEN_BY.find(([prefix]) => name.startsWith(prefix));
+  return by ? `No ${name} yet — ${by[1]}, then reload.` : `No ${name}.`;
 }
+// What writes each record a view reads, so an absent one says what to run (output affordance;
+// app_save.test.mjs "recordAbsentText: an absent record says what writes it").
+const GEOTAG_PLAN_WRITES = "geotag plan writes it, and writes none of the decisions when it stops before planning: " +
+  "run `geotag plan` (or Plan on the console's Geotag tab) until it completes";
+const RECORD_WRITTEN_BY = [
+  ["photos-00-config", "prep plan writes it the first time it runs here: run `prep plan`"],
+  ["photos-21-", GEOTAG_PLAN_WRITES], ["photos-22-", GEOTAG_PLAN_WRITES], ["photos-23-", GEOTAG_PLAN_WRITES],
+];
 function recordAbsent(art, name) {
   return art && art._error ? el("div", { class: "gate warn" }, el("div", { class: "gate-title" }, `${name} cannot be read`),
     recordAbsentText(art, name)) : el("div", { class: "empty" }, recordAbsentText(art, name));

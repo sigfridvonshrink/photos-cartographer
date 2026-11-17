@@ -127,8 +127,8 @@ test("recordAbsentText: a record that does not parse is shown as that error, nev
   const said = app.recordAbsentText(err, "photos-21-time-decisions.json");
   assert.match(said, /Expecting value: line 3 column 1/);
   assert.doesNotMatch(said, /^No /);
-  assert.equal(app.recordAbsentText(null, "photos-21-time-decisions.json"), "No photos-21-time-decisions.json.");
-  assert.equal(app.recordAbsentText({}, "photos-22-gps-drift-validation.json"), "No photos-22-gps-drift-validation.json.");
+  assert.match(app.recordAbsentText(null, "photos-21-time-decisions.json"), /^No photos-21-time-decisions\.json yet/);
+  assert.match(app.recordAbsentText({}, "photos-22-gps-drift-validation.json"), /^No photos-22-gps-drift-validation\.json yet/);
 });
 
 test("savePayload with no hashes loaded sends none, which the server refuses", () => {
@@ -166,4 +166,14 @@ test("a changed time: keep is no answer where the photo holds no time geotag rea
   assert.equal(app.heldTimeKeepable(cell(read)), true);
   assert.equal(app.changedHolds(cell(read)), true);
   assert.equal(app.changedHolds({ ...cell(garbled), user_decision: { keep: "geotag", answered_for: { ...garbled } } }), true);
+});
+
+test("recordAbsentText: an absent record says what writes it", () => {
+  for (const name of ["photos-21-time-decisions.json", "photos-22-gps-drift-validation.json", "photos-23-gps-decisions.json"]) {
+    const said = app.recordAbsentText(null, name);
+    assert.match(said, /geotag plan/, said);
+    assert.match(said, /reload\.$/, said);
+  }
+  assert.match(app.recordAbsentText(null, "photos-00-config.json"), /prep plan/);
+  assert.equal(app.recordAbsentText(null, "photos-99-other.json"), "No photos-99-other.json.");
 });
