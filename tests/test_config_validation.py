@@ -199,7 +199,7 @@ def test_a_format_reading_a_zone_refused(tmp_path):
             read(str(ws))
 
 
-@pytest.mark.spec("RUL-invalid_value_stops")
+@pytest.mark.spec("RUL-invalid_value_stops", test="TST-config_validation-load_or_seed_config_rejects_bad_value")
 def test_load_or_seed_config_rejects_bad_value(tmp_path):
     ws = tmp_path / "ws"
     (ws / ".photos-ingest").mkdir(parents=True)

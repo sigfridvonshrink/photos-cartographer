@@ -1467,7 +1467,7 @@ def test_an_acceptance_of_changed_content_is_of_the_content_shown(tmp_path, monk
     assert not r["applied"] and (r["mismatch"] or r["blocker"])
 
 
-@pytest.mark.spec("RUL-engine_checked_before_writes", "BLD-geotag_dependencies",
+@pytest.mark.spec("RUL-engine_checked_before_writes", "BLD-geotag_dependencies", "RUL-engine_change_is_checked",
                   test="TST-geotag_execution-another_image_engine_stops_execute_before_any_write")
 def test_another_image_engine_stops_execute_before_any_write(tmp_path, monkeypatch):
     """Every write is checked by taking the photo's fingerprint again. With another image engine than the one

@@ -1057,7 +1057,8 @@ def test_full_success_writes_terminal_artifacts_and_seals(tmp_path):
 
 
 @pytest.mark.spec("BLD-log_format", "RUL-record_whole_each_phase", "BLD-phase_logs", "RUL-phase_writes_own_records",
-                  "RUL-log_step_names_run", test="TST-merge_execute-merge_log_copies_the_complete_log_forward_and_appends")
+                  "RUL-log_step_names_run", "RUL-carry_forward_by_copy",
+                  test="TST-merge_execute-merge_log_copies_the_complete_log_forward_and_appends")
 def test_merge_log_copies_photos25_forward_and_appends(tmp_path):
     ws, lib = _ws(tmp_path, [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"}])
     # Seed photos-25 with a prior geotag journey for fingerprint A.

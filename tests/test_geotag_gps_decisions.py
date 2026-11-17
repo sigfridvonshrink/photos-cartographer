@@ -342,7 +342,7 @@ def _fp_file(rel, dest, fp):
 
 
 @pytest.mark.spec("RUL-photo_decision_follows_the_photo", "BLD-review_item_identity",
-                  "RUL-photo_decision_never_passes_by_name",
+                  "RUL-photo_decision_never_passes_by_name", "RUL-decision_kept",
                   test="TST-geotag_gps_decisions-a_photo_s_decision_follows_it_through_its_rename")
 def test_a_photo_s_decision_follows_it_through_its_rename(tmp_path):
     """A position the user set for one photo is that photo's — found again by its fingerprint once geotag has renamed
