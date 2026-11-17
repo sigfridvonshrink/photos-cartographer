@@ -534,6 +534,127 @@ def test_withdrawn_offset_after_execute_recomputes_time_and_name_in_place(tmp_pa
     assert all(os.path.exists(ws / rel) for rel in ops)      # every operation is on a file as it stands
 
 
+def _contradicted_ws(tmp_path, monkeypatch):
+    """Five camera photos on the track's points, agreeing on the camera's offset, and `s.arw`, taken at 12:25Z, holding
+    the position the track reaches at 13:00Z: its own position, 390 m from where the track was at its true time, is
+    contradicted by the accepted offset and offered the track's (BLD-contradicted_position)."""
+    recs = [(lambda i: lambda ws: _rec(ws, f"{T}/p{i}.arw", f"2024:07:03 {13 + (50 + 10 * i) // 60}:"
+                                       f"{(50 + 10 * i) % 60:02d}:00", gps=(50 + i / 1000, 4.0)))(i) for i in range(5)]
+    ws = _ws(tmp_path, recs + [lambda ws: _rec(ws, f"{T}/s.arw", "2024:07:03 14:15:00", gps=(50.006, 4.0))])
+    _plan(monkeypatch, ws)
+    p = ws / ".photos-ingest" / cal.TIME_DECISIONS_ARTIFACT
+    a = json.loads(p.read_text())
+    cell = a["destinations"][T]["camera_group_time_decisions"][CAM]
+    cell["user_decision"].update(accept_proposal=True, accepted_offset_seconds=cell["proposal"]["proposed_offset_seconds"])
+    p.write_text(json.dumps(a))
+    _plan(monkeypatch, ws)
+    return ws
+
+
+def _answer_contradicted(ws, lat, lon):
+    """Set (or, with "", withdraw) the user's answer to the contradicted own position."""
+    p = ws / ".photos-ingest" / "photos-23-gps-decisions.json"
+    g = json.loads(p.read_text())
+    item = next(ri for ri in g["destinations"][T]["gps_decisions"]["review_items"]
+                if ri["reason"] == "own_position_contradicted")
+    item["user_decision"].update(manual_lat=lat, manual_lon=lon)
+    p.write_text(json.dumps(g))
+
+
+def _held(ws, rel):
+    ho = json.loads((ws / ".photos-ingest" / "photos-11-handoff.json").read_text())
+    return json.loads(next(f for f in ho["files"] if f["relative_path"] == rel)["metadata_status"]["parsed_json"])
+
+
+@pytest.mark.spec("RUL-withdrawal_undoes", "RUL-own_position_kept", "RUL-log_records_gps_reverts",
+                  "RUL-finalize_refuses_unplaced", "BLD-decided_from_own_values", "BLD-placement_order",
+                  "BLD-executable_plan", "BLD-geotag_log_steps",
+                  test="TST-geotag_rerun_markers-a_withdrawn_answer_gives_the_photo_back_its_own_position")
+def test_a_withdrawn_answer_gives_the_photo_back_its_own_position(tmp_path, monkeypatch):
+    """The user takes the track's position for a photo whose own position the camera's offset contradicts; withdrawn
+    before execution, nothing of it is planned. Executed, then withdrawn, the next plan writes the photo's own position
+    back, with the device's GPSProcessingMethod and the mark of the time geotag corrected, the log keeping the position
+    it replaces: the photo ends as if the answer had never been given, finalize takes it, and a plan after that has
+    nothing left to do."""
+    ws = _contradicted_ws(tmp_path, monkeypatch)
+    _answer_contradicted(ws, 50.0025, 4.0)
+    _plan(monkeypatch, ws)
+    assert _ops(ws)[f"{T}/s.arw"]["writes"]["GPSProcessingMethod"] == "manual_locked"
+    _answer_contradicted(ws, "", "")                         # withdrawn before it was executed: nothing to restore
+    _plan(monkeypatch, ws)
+    e = _ops(ws)[f"{T}/s.arw"]
+    assert "metadata_gps_write" not in e["types"] and "GPSLatitude" not in e["writes"]
+    assert e["writes"]["GPSProcessingMethod"] == "+carto-time"
+
+    _answer_contradicted(ws, 50.0025, 4.0)
+    _plan(monkeypatch, ws)
+    _execute(monkeypatch, ws)
+    stray = f"{T}/2024-07-03--14-25-00.arw"
+    assert _held(ws, stray)["GPSLatitude"] == pytest.approx(50.0025)
+    assert _held(ws, stray)["GPSProcessingMethod"] == "manual_locked"
+    _plan(monkeypatch, ws)
+    assert _ops(ws) == {}                                    # the answer holds: nothing to write again
+    _answer_contradicted(ws, "", "")                         # the answer withdrawn
+    _plan(monkeypatch, ws)
+    plan = json.loads((ws / ".photos-ingest" / "photos-24-executable-plan.json").read_text())
+    ops = [o for d in plan["destinations"].values() for o in d["operations"] if o["relative_path"] == stray]
+    assert [o["type"] for o in ops] == ["metadata_gps_write", "gps_marker_write"]
+    assert ops[0]["writes"] == {"GPSLatitude": 50.006, "GPSLatitudeRef": "N", "GPSLongitude": 4.0, "GPSLongitudeRef": "E"}
+    assert ops[0]["gps_origin"] == "restore_own"
+    assert ops[0]["pre_state"] == {"present": True, "GPSLatitude": 50.0025, "GPSLongitude": 4.0,
+                                   "GPSProcessingMethod": "manual_locked"}
+    assert ops[1]["writes"] == {"GPSProcessingMethod": "+carto-time"}      # its time stays corrected
+    assert utils.photos_without_position(json.loads((ws / ".photos-ingest" / "photos-11-handoff.json").read_text()),
+                                         plan) == []
+    _execute(monkeypatch, ws)
+    held = _held(ws, stray)
+    assert (held["GPSLatitude"], held["GPSLongitude"], held["GPSProcessingMethod"]) == (50.006, 4.0, "+carto-time")
+    _plan(monkeypatch, ws)
+    assert _ops(ws) == {}                                    # its own position, kept: nothing more
+    _execute(monkeypatch, ws)
+    steps = _finalize(monkeypatch, ws)["fp-s.arw"]["journey"]
+    gps = [s for s in steps if s["action"] == "gps_written"]
+    assert [(s["lat"], s["origin"], s["gps_processing_method"]) for s in gps] == [
+        (pytest.approx(50.0025), "apply_manual", "manual_locked"), (50.006, "restore_own", "+carto-time")]
+    assert gps[1]["pre_state"]["GPSLatitude"] == pytest.approx(50.0025)
+
+
+@pytest.mark.spec("RUL-withdrawal_undoes", "RUL-own_position_kept", "RUL-only_corrected_time_marked",
+                  "BLD-rerun_recognition",
+                  test="TST-geotag_rerun_markers-a_withdrawn_answer_marks_no_time_geotag_never_wrote")
+def test_a_withdrawn_answer_marks_no_time_geotag_never_wrote(tmp_path):
+    """A camera photo whose time geotag never wrote — it held its true time — and whose own position an answer replaced:
+    withdrawn, its own position comes back with the device's own GPSProcessingMethod, no mark of a corrected time; one
+    holding its own coordinates already gets only the method back. A photo with no position of its own that nothing
+    places now has geotag's position cleared, likewise with no time mark."""
+    own_time = {"DateTimeOriginal": "2024:07:03 14:25:00", "OffsetTimeOriginal": "+02:00"}
+    original = {"selected_source_naive_timestamp": "2024:07:03 14:25:00",
+                "selected_source_timestamp_tag": "EXIF:DateTimeOriginal", **own_time,
+                "GPSLatitude": 50.006, "GPSLongitude": 4.0, "GPSProcessingMethod": "GPS", "has_native_gps": True}
+
+    def held(lat, method):
+        f = {"relative_path": f"{T}/s.arw", "destination": T, "raw_times": dict(own_time),
+             "native_gps": {"lat": lat, "lon": 4.0}, "processing_method": method,
+             "content_fingerprint": "fp", "size": 1, "mtime_ns": 1}
+        return dict(cal.from_originals(f, original), times_written=[])
+
+    f = held(50.0025, "manual_locked")
+    cat, coord = cal.classify_gps(f, None, None, {}, None, {}, replace_own=True)
+    assert cat == "preserve_native"
+    ops = cal.plan_file_ops(f, "2024-07-03T12:25:00Z", "Europe/Brussels", cat, coord, None)
+    assert [(o["type"], o["writes"]) for o in ops] == [
+        ("metadata_gps_write", {"GPSLatitude": 50.006, "GPSLatitudeRef": "N", "GPSLongitude": 4.0,
+                                "GPSLongitudeRef": "E"}),
+        ("gps_marker_write", {"GPSProcessingMethod": "GPS"})]
+    ops = cal.plan_file_ops(held(50.006, "manual_locked"), "2024-07-03T12:25:00Z", "Europe/Brussels", cat, coord, None)
+    assert [(o["type"], o["writes"]) for o in ops] == [("gps_marker_write", {"GPSProcessingMethod": "GPS"})]
+
+    f = dict(held(50.0025, "manual_locked"), has_native_gps=False, native_gps=None, processing_method=None)
+    ops = cal.plan_file_ops(f, "2024-07-03T12:25:00Z", "Europe/Brussels", "blocked", None, None)
+    assert [o["writes"] for o in ops] == [{"GPSLatitude": "", "GPSLatitudeRef": "", "GPSLongitude": "",
+                                           "GPSLongitudeRef": "", "GPSProcessingMethod": ""}]
+
+
 @pytest.mark.spec("BLD-original_values_pinned", test="TST-geotag_rerun_markers-originals_are_pinned_once_and_complete")
 def test_originals_are_pinned_once_and_complete(tmp_path, monkeypatch):
     ws = _executed_round(tmp_path, monkeypatch)

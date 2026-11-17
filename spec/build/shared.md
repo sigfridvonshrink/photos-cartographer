@@ -716,11 +716,13 @@ case folded, is one of `destination_distribution_subfolders`, case folded.
 Geotag SHALL record what it wrote in the file's `GPSProcessingMethod`: the bare value beside each position it writes —
 `matched`, `interpolated` or `extrapolated` for one from the tracks, within the direct-match window of a track point,
 between two or past a track's end, `manual_locked` or `manual_fallback` for one the user set — and, on a photo whose
-time it writes — a `metadata_time_write` in the plan — or whose field already carries its mark from an earlier run, and
-to which it writes no position, the suffix `+carto-time` appended once to whatever the field held, keeping the device's
-own value. A photo whose time is resolved to what it holds, with no mark, gets no suffix; with no position written
-either, no `gps_marker_write` is planned for it. Any other value is the device's own,
-and the GPS beside it native.
+time it writes — a `metadata_time_write` in the plan — or wrote on an earlier run — its field carrying the suffix, a
+position marker beside a time recorded as geotag's ({need}`BLD-time_written_recorded`), or, on a photo with no own
+values pinned, any mark of geotag's — and to which it writes no position but the photo's own, the suffix `+carto-time`
+appended once to the device's own value. A photo whose time is resolved to what it holds, with no mark, gets no suffix;
+with no position written either, no `gps_marker_write` is planned for it. A position marker beside which the plan
+places no position gives way to the device's own value, suffixed only so. Any other value is the device's own, and the
+GPS beside it native.
 :::
 
 :::{bld} A file's own values are pinned before geotag first writes it
@@ -936,8 +938,8 @@ same way ({need}`BLD-merge_journal_resume`, {need}`BLD-merge_records`).
 
 Every plan SHALL decide about a photo from its own values, pinned before geotag first wrote to it
 ({need}`BLD-original_values_pinned`), so a withdrawn manual position is undone like any decision: the photo is placed
-again, or geotag's position cleared; an
-automatic position is recomputed, never rolled back.
+again, its own pinned position written back where it has one (a `metadata_gps_write` of origin `restore_own`), or
+geotag's position cleared; an automatic position is recomputed, never rolled back.
 :::
 
 ## 12. The record of what was done, kept beyond the workspace
@@ -1078,8 +1080,8 @@ Geotag's steps SHALL be `clock_offset_applied` (its `offset_seconds` with an `of
 `date_fallback_applied` (the date fallback that gave a photo with no recorded time its time: its `value` as the user
 wrote it, the day it was `filled` to and the cell it was written in as `because`, from the time write's provenance),
 `gps_written` (with its
-origin, method and, for a manual position or one written over a position the device wrote that is none of the photo's
-own, the `pre_state` it replaced, from the plan), `gps_cleared` (a position geotag
+origin, method and, for a manual position, the photo's own position given back or one written over a position the
+device wrote that is none of the photo's own, the `pre_state` it replaced, from the plan), `gps_cleared` (a position geotag
 wrote and no longer places, with that position, from the plan, and the method left), `gps_preserved` and `final_rename`,
 each naming its `run`; finalize takes them from every executed pass — each superseded `photos-24` whose journal shows it
 ran, oldest first, matched by fingerprint — before the current plan's, from the provenance each time write carries.

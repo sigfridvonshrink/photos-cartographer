@@ -469,7 +469,8 @@ your lead to the fix before you reach for the map:
 its camera's other photos, once their agreed offset is in effect, is set against the track at its corrected time:
 farther apart than an anchor may be, it is listed (`own_position_contradicted`), with both positions and how far
 apart. It **asks nothing** — the photo keeps its own position — but most likely its GPS was wrong (a stale fix,
-jitter): **take the track's position**, or set another; **keep its own position** takes it back. By hand: write
+jitter): **take the track's position**, or set another; **keep its own position** takes it back — where your answer
+was already written, the next run writes the photo's own position back into it. By hand: write
 `manual_lat`/`manual_lon`. Where no track covers its corrected time, nothing is proposed: it keeps its own, and
 photos-23 notes it (`contradicted_without_track`).
 
