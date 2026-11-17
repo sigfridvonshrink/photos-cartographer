@@ -273,7 +273,9 @@ def _plan_summary(workspace, phase="prep", cur=None):
 def _execute_guard(workspace, phase, payload):
     """Server-side enforcement of the 2-step gate for any phase's execute. Returns an error string to
     refuse, or None to allow. Refused unless the client explicitly confirmed, a saved plan exists with
-    no blockers, is not stale (cheap dep check), and (if supplied) the reviewed plan_id still matches.
+    no blockers, is not stale (cheap dep check), and the plan_id the gate showed — sent with the
+    confirmation, and required — is still the saved plan's: a confirmation naming no plan is one for
+    a summary nobody can say was seen, so it is refused rather than taken for the current plan.
     The phase's own execute still re-validates everything besides (full fingerprint incl. GPX,
     no-clobber, the whole-run lock) — this is the deliberate gate on top, not a replacement."""
     if not payload.get("confirm"):
@@ -288,7 +290,9 @@ def _execute_guard(workspace, phase, payload):
     if s.get("stale"):
         return f"plan is stale ({s['stale'][0]}) — re-plan"
     pid = payload.get("plan_id")
-    if pid and pid != s.get("plan_id"):
+    if not pid:
+        return "no reviewed plan named — open the execute gate and confirm there"
+    if pid != s.get("plan_id"):
         return "the plan changed since you reviewed it — re-open the gate"
     return None
 
@@ -382,6 +386,22 @@ def _library_blessed(workspace):
     return bool(lib) and U.is_library(lib)
 
 
+def _finalized_execution(workspace):
+    """True when the archival package (photos-26-archive-manifest.json) names the execution the last execution summary
+    (photos-25) records: the package was made after that execution. A record missing or unreadable: False."""
+    from ..photos_2_geotag import archive_manifest_path, execution_summary_path
+    ids = []
+    for path, get in ((execution_summary_path(workspace), lambda o: (o.get("run_metadata") or {}).get("execution_id")),
+                      (archive_manifest_path(workspace), lambda o: o.get("execution_id"))):
+        try:
+            with open(path) as f:
+                obj = json.load(f)
+            ids.append(get(obj) if isinstance(obj, dict) else None)
+        except (OSError, ValueError, AttributeError):
+            return False
+    return bool(ids[0]) and ids[0] == ids[1]
+
+
 def _runnable_actions(workspace, phases, sealed, busy, initialized=True):
     """Per-command affordance from VISIBLE artifacts (not a deep validation): {cmd: {ok, reason}}.
     Encodes the sequential pipeline (prep → geotag → merge) + plan-exists/executable/staleness, plus
@@ -419,6 +439,10 @@ def _runnable_actions(workspace, phases, sealed, busy, initialized=True):
     prep_done = os.path.exists(U.handoff_path(workspace))         # prep executed → handoff written
     geotag_done = os.path.exists(complete_log_path(workspace))    # geotag finalized → complete log
     geotag_executed = _json_status(execution_summary_path(workspace)) == "success"  # ready to finalize
+    # Finalize "may be run again" (BLD-geotag_records_versioned), and must be after a geotag execution the package
+    # does not cover — merge refuses until it is. So it is offered after every successful execution its package does
+    # not name, not only the first: offered once only, it would leave the console's user stuck where the CLI's goes on.
+    finalized_current = geotag_executed and _finalized_execution(workspace)
 
     g("prep/plan", True)
     g("prep/dry-run", pe["plan_exists"], "run prep plan first")
@@ -426,8 +450,8 @@ def _runnable_actions(workspace, phases, sealed, busy, initialized=True):
     g("prep/prune-quarantine", True)     # maintenance, runnable anytime (the destructive delete is gated)
     g("geotag/plan", prep_done, "run prep execute first")
     g("geotag/execute", ge["executable"], "needs a clean, fresh geotag plan")
-    g("geotag/finalize", geotag_executed and not geotag_done,
-      "finalized already" if geotag_done else "geotag execute must succeed first")
+    g("geotag/finalize", geotag_executed and not finalized_current,
+      "finalized already" if finalized_current else "geotag execute must succeed first")
     g("merge/init-library", True)        # one-time setup, runnable anytime (unless sealed/busy)
     # merge plan needs BOTH geotag finalized AND a blessed library (the phase hard-blocks without the
     # library — RUL-library_mark_required), so gate on both and name whichever is missing. This makes init-library a
@@ -455,10 +479,20 @@ def _editor_refusal(workspace):
     if not os.path.exists(U.guard_path(workspace)):
         return "not an initialized workspace — run prep first"
     if U.is_sealed(workspace):
-        return "workspace is sealed (already merged): the decision editor will not open it"
+        why = "workspace is sealed (already merged): the decision editor will not open it"
+        if U.likely_new_dump(workspace):                       # as serve() warns (RUL-sealed_new_dump_warned)
+            why += (f". A likely new dump is present (at the workspace root or in "
+                    f"{U.workspace_folders(workspace)['sources']}/) — move it into a fresh workspace by hand; "
+                    "the editor left it exactly where it is")
+        return why
     key = os.path.abspath(workspace)
     with _EDITOR_LOCKS_GUARD:
         if key not in _EDITOR_LOCKS:
+            # The workspace's filesystem, before the editor's lock is taken, as serve() checks it
+            # (RUL-local_filesystem_checked_first, BLD-local_filesystem_types); once held, every save checks it again.
+            fs_err = U.workspace_filesystem_error(workspace)
+            if fs_err:
+                return fs_err
             lock, owner = _editor._acquire_editor_lock(workspace)
             if lock is None:
                 d = owner or {}

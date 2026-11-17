@@ -24,7 +24,7 @@ const GATE_WARN = {
   merge: "Moves files into the permanent library and seals the workspace. No-clobber enforced.",
 };
 let currentPhase = "prep";
-let planId = null;         // plan_id being reviewed in the gate
+let gatePlanId = null;     // plan_id of the plan the open gate shows — set only by openGate, never by a state poll
 let gatePhase = "prep";    // the phase the open gate is for (tab could change underneath)
 let currentJobLabel = null;// label of the running job (e.g. "prep execute"), for the Stop confirm
 let prevRunning = false;   // last poll's running flag — to detect a job just finishing
@@ -230,7 +230,6 @@ async function refreshState() {
   else if (ph.blockers) { ps.textContent = `plan · ${ph.blockers} blocker(s)`; ps.className = "chip"; }
   else if (ph.stale) { ps.textContent = "plan stale — re-plan"; ps.className = "chip"; }
   else { ps.textContent = "plan ✓ ready"; ps.className = "chip ok"; }
-  planId = ph.plan_id || null;
 
   // button enablement from the server's per-command affordance (precondition + staleness + sealed/lock)
   const acts = s.actions || {};
@@ -257,31 +256,45 @@ async function stopRun() {
   if (isExec && !confirm(
         "Interrupt this execute? It mutates originals, but the run is journalled and resumable — "
         + "nothing is left partially applied, and you can rerun to finish.")) return;
+  let res = null;
   try {
-    await fetch("/api/cancel", {
+    res = await fetch("/api/cancel", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ confirm: isExec }),
     });
   } catch { /* state poll will reflect reality */ }
+  await logRefusal(res, "stop");
   await refreshState();
   pollWhileRunning();
 }
 $("#stop-btn").onclick = stopRun;
 
-// Start a checking command's run. The body is remembered per command, so that "Accept these" (below) sends the
-// same run again — an execute's confirmation and reviewed plan id included — with the code its stop printed.
+// A request the server refused (409/400/403 with its error: a gate's stale or changed plan, a blocker, the prune
+// guard, a bad accept code, a run already in progress) is said in the log pane, as the CLI says why it stops — never
+// dropped, the buttons' state after the next poll left as the only trace. Nothing is decided here: the refusal holds.
+async function logRefusal(res, what) {
+  if (!res || res.ok) return;
+  let why = `HTTP ${res.status}`;
+  try { why = (await res.json()).error || why; } catch { /* no JSON body: the status says it */ }
+  addLog({ level: "error", msg: `${what} refused: ${why}` });
+}
+
+// Start a run. The body is remembered per command, so that "Accept these" (below) sends a checking command's run
+// again — an execute's confirmation and reviewed plan id included — with the code its stop printed.
 const lastRun = {};        // "phase/command" -> the body of its last run
 async function postRun(body) {
   lastRun[`${body.phase}/${body.command}`] = body;
   hideChanges();
+  let res = null;
   try {
-    await fetch("/api/run", {
+    res = await fetch("/api/run", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     });
   } catch { /* state poll will reflect reality */ }
+  await logRefusal(res, `${body.phase} ${body.command}`);
   await refreshState();
   pollWhileRunning();
 }
@@ -352,10 +365,23 @@ async function openGate(phase = currentPhase, accept = null) {
   if (typeof phase !== "string") phase = currentPhase;    // opened by the Execute button: its click event
   let s;
   try { s = await (await fetch(`/api/plan-summary?phase=${encodeURIComponent(phase)}`)).json(); } catch { return; }
-  if (!s.exists || (s.blockers && s.blockers.length)) { await refreshState(); return; }
+  // A plan the server would refuse to execute opens no gate, and the log says why (as logRefusal does for a refused
+  // request): none saved, a blocker, or stale against what it was made from.
+  const why = !s.exists ? "no saved plan — run plan first"
+    : (s.blockers && s.blockers.length) ? `the plan has ${s.blockers.length} blocker(s): ${s.blockers[0]}`
+    : (s.stale && s.stale.length) ? `the plan is stale (${s.stale[0]}) — plan again`
+    : null;
+  if (why) {
+    addLog({ level: "error", msg: `${phase} execute: ${why}` });
+    await refreshState();
+    return;
+  }
   gatePhase = phase;
   gateAccept = accept;
-  planId = s.plan_id;
+  // The id of the plan this gate shows, sent with the confirmation as the plan reviewed. Kept apart from the state
+  // polls (heartbeat, focus, visibility), which run while the gate is open: a plan made again in a terminal meanwhile
+  // must meet the server's "plan changed since you reviewed it" refusal, never be executed under the old summary.
+  gatePlanId = s.plan_id;
   $("#gate-title").textContent = `Confirm ${phase} execute` + (accept ? ", accepting the listed changes" : "");
   $("#gate-sum").textContent = `Plan ${s.plan_id}\n${(s.lines || []).join("\n")}`;
   $("#gate-warn").textContent = GATE_WARN[phase] || "This mutates workspace state.";
@@ -367,7 +393,7 @@ function closeGate() { overlay.hidden = true; }
 
 async function confirmExecute() {
   closeGate();
-  await postRun({ phase: gatePhase, command: "execute", confirm: true, plan_id: planId, jobs: jobsValue(),
+  await postRun({ phase: gatePhase, command: "execute", confirm: true, plan_id: gatePlanId, jobs: jobsValue(),
                   ...(gateAccept ? { accept_changes: gateAccept } : {}) });
 }
 
@@ -382,15 +408,7 @@ function closeInitLib() { initOverlay.hidden = true; }
 async function confirmInitLib() {
   const path = $("#initlib-path").value.trim();
   closeInitLib();
-  try {
-    await fetch("/api/run", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ phase: "merge", command: "init-library", path: path || undefined, jobs: jobsValue() }),
-    });
-  } catch { /* state poll reflects reality */ }
-  await refreshState();
-  pollWhileRunning();
+  await postRun({ phase: "merge", command: "init-library", path: path || undefined, jobs: jobsValue() });
 }
 $("#initlib-cancel").onclick = closeInitLib;
 $("#initlib-go").onclick = confirmInitLib;
@@ -413,14 +431,7 @@ async function runPrune(deleteFlag) {
   const prune = _pruneSel(deleteFlag);
   if (deleteFlag && !prune.plan_ids && !prune.all) { $("#prune-err").textContent = "select plan id(s) or 'all' to delete"; return; }
   closePrune();
-  try {
-    await fetch("/api/run", {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ phase: "prep", command: "prune-quarantine", confirm: deleteFlag, prune, jobs: jobsValue() }),
-    });
-  } catch { /* state poll reflects reality */ }
-  await refreshState();
-  pollWhileRunning();
+  await postRun({ phase: "prep", command: "prune-quarantine", confirm: deleteFlag, prune, jobs: jobsValue() });
 }
 $("#prune-cancel").onclick = closePrune;
 $("#prune-dry").onclick = () => { $("#prune-err").textContent = ""; runPrune(false); };
