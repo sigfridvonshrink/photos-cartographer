@@ -706,6 +706,26 @@ def test_an_acceptance_holds_only_for_the_proposal_it_accepted():
     assert cell["proposal"]["proposed_offset_seconds"] == -3600      # ...and what takes effect is what was accepted
 
 
+@pytest.mark.spec("RUL-acceptance_holds_for_its_proposal", "BLD-offset_acceptance",
+                  test="TST-geotag_offset_inference-a_guess_moved_by_seconds_is_another_proposal")
+def test_an_accepted_guess_moved_by_a_few_seconds_is_another_proposal():
+    """The tolerance is for an offset the camera's own GPS found — a few seconds of noise in the same finding. A
+    guess accepted (the zone's, or the offset the photos record) holds only for exactly what it proposed: one a few
+    seconds from it, well within the tolerance, was never accepted and asks."""
+    accepted = {"accept_proposal": True, "accepted_offset_seconds": -7190}                # 10 s from the zone's -7200
+    cell, blk = _tzcell(accepted, tz="Europe/Brussels", rep_naive="2024:07:03 14:00:00")
+    assert cell["proposal"]["proposal_source"] == "timezone_naive" and not blk
+    assert cell["effective_time_anchor"] == "" and cell["stale_user_decision"] and cell["requires_user_input"]
+    rec = [{"relative_path": "6-photos-by-dest/B/r.arw", "source_naive_time": "2024:07:03 14:00:00",
+            "source_time_tag": "EXIF:DateTimeOriginal", "raw_times": {"OffsetTimeOriginal": "+02:00"}}]   # records -7200
+    blk = []
+    cell = cal.GeotagWorkflow("/tmp")._offset_cell("6-photos-by-dest/B", "K", {"camera_group_class": "camera"},
+                                                    {"user_decision": accepted}, [], _gpx([]), blk,
+                                                    rep_naive="2024:07:03 14:00:00", photos=rec)
+    assert cell["proposal"]["proposal_source"] == "recorded_offset" and not blk
+    assert cell["effective_time_anchor"] == "" and cell["stale_user_decision"]
+
+
 @pytest.mark.spec("RUL-written_value_over_acceptance", test="TST-geotag_offset_inference-a_written_offset_outranks_an_acceptance")
 def test_a_written_offset_outranks_an_acceptance():
     cell, _ = _tzcell({"accept_proposal": True, "accepted_offset_seconds": -7200, "manual_offset_seconds": -60},

@@ -1078,3 +1078,16 @@ def test_an_unknown_setting_stops_every_phase(tmp_path, monkeypatch, edit, named
     assert named in str(ei.value) and "does not know" in str(ei.value)
     for blockers in (_pf(ws)[0], merge.MergeWorkflow(str(ws)).preflight()[0]):
         assert any("does not know" in b and named in b for b in blockers), blockers
+
+
+@pytest.mark.spec("RUL-handoff_fields_of_this_build", "BLD-handoff_field_set_checked",
+                  test="TST-geotag_preflight-the_field_set_version_follows_the_fields_read")
+def test_the_field_set_version_follows_the_fields_read():
+    """The handoff's field-set version names what prep reads from a photo: the fields, the order of the groups they are
+    looked for in, and the other times kept. Pinned here with the version they are read under — change any of them and
+    this fails until FIELD_SET_VERSION is raised and the pin taken again, so a handoff read by other fields is never
+    taken for this build's."""
+    import hashlib
+    read = json.dumps([list(utils.METADATA_FIELDS), list(utils.METADATA_GROUP_ORDER), list(utils.OTHER_TIME_FIELDS)])
+    assert (utils.FIELD_SET_VERSION, hashlib.sha256(read.encode()).hexdigest()) == \
+        (4, "adc0adcc18736ae911fc82268fca3d49c737219aa1631252ddc4a57c78c70591")

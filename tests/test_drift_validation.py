@@ -125,6 +125,24 @@ def test_the_drift_check_reaches_as_far_as_placement(tmp_path, monkeypatch):
     assert cell["requires_user_input"] is True and len(cell["proposal"]["track_segment"]) == 2
 
 
+@pytest.mark.spec("BLD-drift_validation", test="TST-drift_validation-an_unconfirmed_offset_asks_with_no_track")
+def test_an_unconfirmed_offset_asks_with_no_track_to_check_it(tmp_path):
+    """The zone's guess, left unconfirmed in photos-21 for the check against the tracks: built over an index holding no
+    track by its photos, the check still makes the day's cell, and it asks — an offset nobody accepted is never passed
+    over for want of tracks."""
+    wf = _wf(tmp_path)
+    files = [_file(f"{DEST}/a.arw", "2024:07:03 14:00:00")]
+    gpx = _gpx([(50.0, 4.0, _utc(12))])
+    art = _complete_time(wf, files, gpx, {})
+    assert art["destinations"][DEST]["camera_group_time_decisions"][CAM]["effective_time_anchor"]["source"] == \
+        "timezone_unconfirmed"
+    drift, blk = _drift(wf, files, art, _gpx())
+    assert not blk
+    cell = drift["destinations"][DEST]["drift_decisions"][CAM]
+    assert cell["requires_user_input"] and cell["effective_drift_offset"] == ""
+    assert drift["requires_user_input"]
+
+
 def test_frames_listed_earliest_first(tmp_path):
     wf = _wf(tmp_path)
     files = [_file(f"{DEST}/late.arw", "2024:07:03 16:00:00"),

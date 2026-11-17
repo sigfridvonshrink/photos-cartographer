@@ -71,6 +71,7 @@ def test_interpolation_midpoint():
     assert r["method"] == "interpolated" and r["lon"] == pytest.approx(4.001, abs=1e-6)  # ratio 0.5
 
 
+@pytest.mark.spec("RUL-track_placement_bounded", test="TST-geotag_gps_placement-each_interpolation_gate_blocks")
 def test_interpolation_each_gate_blocks():
     near = _cfg(gpx_direct_match_max_seconds=1.0)                    # force the interp path
     gap_fail = _gpx([_pt(50.0, 4.0, 12, 0, 0), _pt(50.0, 4.0001, 12, 5, 0)])    # 300 s > 120
@@ -98,6 +99,7 @@ def test_extrapolation_backward_projects_velocity():
     assert r["method"] == "extrapolated" and r["lon"] < 4.001          # projected back west
 
 
+@pytest.mark.spec("RUL-track_placement_bounded", test="TST-geotag_gps_placement-extrapolation_past_window_blocked")
 def test_extrapolation_past_window_blocked():
     g = _gpx([_pt(50.0, 4.0, 12, 5, 0), _pt(50.0, 4.001, 12, 6, 0)])
     assert cal.place_gps(_utc(12, 9, 0), g, CFG) is None               # 180 s past last > 120 (forward)
@@ -197,6 +199,19 @@ def test_two_tracks_are_never_joined():
     r = cal.place_gps(_utc(12, 1, 15), _gpx(a + b), _cfg(gpx_direct_match_max_seconds=5.0))
     assert r["method"] == "interpolated" and r["lat"] in (50.0, 50.0002)   # wholly one track's
     assert r["gpx_file"] in ("a.gpx", "b.gpx") and "gpx_after_file" not in r
+
+
+@pytest.mark.spec("RUL-tracks_never_joined", test="TST-geotag_gps_placement-a_photo_between_two_files_is_not_bridged")
+def test_a_photo_between_two_files_is_never_placed_across_them():
+    """One file ends at 12:00:00, another starts 100 s later, both heading east: a photo at 12:00:50 falls in the gap
+    between them. Joined, the two would place it between a's last point and b's first; apart, it is carried past the end
+    of one of them — never interpolated across the two."""
+    cfg = _cfg(gpx_direct_match_max_seconds=5.0)
+    a = _run_of(50.0, 4.0, -60, 7, 10, "a.gpx", dlon=0.0001)                   # 11:59:00..12:00:00
+    b = _run_of(50.0, 4.0012, 100, 7, 10, "b.gpx", dlon=0.0001)                # 12:01:40..12:02:40
+    r = cal.place_gps(_utc(12, 0, 50), _gpx(a + b), cfg)
+    assert r is not None and r["method"] == "extrapolated"
+    assert r in (cal.place_gps(_utc(12, 0, 50), _gpx(a), cfg), cal.place_gps(_utc(12, 0, 50), _gpx(b), cfg))
 
 
 @pytest.mark.spec("RUL-tracks_never_joined",

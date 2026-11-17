@@ -83,6 +83,28 @@ def test_classify_all_branches():
     assert cal.classify_gps(_file("a", "d"), None, g, cfg, None, {})[0] == "blocked"   # waits: never left unplaced
 
 
+@pytest.mark.spec("RUL-own_position_kept", test="TST-geotag_gps_decisions-a_position_written_does_not_replace_an_own_one")
+def test_a_position_written_does_not_replace_a_photo_s_own():
+    """A photo holding its own position keeps it though a position is written for it, unless that position answers
+    the question its contradicted own position raised."""
+    g, cfg = _gpx(), utils.CONFIG
+    written = {"manual_lat": 5, "manual_lon": 6}
+    assert cal.classify_gps(_file("a", "d", native=True), None, g, cfg, None, written) == ("preserve_native", None)
+    assert cal.classify_gps(_file("a", "d", native=True), None, g, cfg, None, written, replace_own=True) == \
+        ("manual_locked", {"lat": 5, "lon": 6})
+
+
+@pytest.mark.spec("RUL-placement_order", test="TST-geotag_gps_decisions-the_tracks_come_before_the_fallback")
+def test_the_tracks_come_before_the_folder_fallback():
+    """A photo the tracks place, in a destination with a folder fallback, takes the tracks' position."""
+    g, cfg = _gpx(), utils.CONFIG
+    fallback = {"lat": 1, "lon": 2}
+    ru = datetime(2024, 7, 3, 12, 0, 30, tzinfo=timezone.utc)
+    near_end = datetime(2024, 7, 3, 12, 2, 30, tzinfo=timezone.utc)
+    assert cal.classify_gps(_file("a", "d"), ru, g, cfg, fallback, {})[0] == "gpx_interpolation"
+    assert cal.classify_gps(_file("a", "d"), near_end, g, cfg, fallback, {})[0] == "gpx_extrapolation"
+
+
 @pytest.mark.parametrize("lat, lon, ok", [(50, 4, True), (-90, 180, True), (91, 0, False),
                                           (0, 181, False), ("x", 0, False), (0, True, False)])
 @pytest.mark.spec("RUL-checked_positions_and_times", test="TST-geotag_gps_decisions-valid_coord")

@@ -683,6 +683,7 @@ def test_own_leftover_cleared_where_the_journal_shows_the_write_begun(tmp_path, 
 
 
 @pytest.mark.spec("RUL-other_write_leftover_holds_photo", "RUL-write_leftovers_by_dest_warned", "BLD-own_leftover_cleared",
+                  "RUL-geotag_clears_own_leftover",
                   test="TST-geotag_execution-another_leftover_holds_its_photo_back")
 def test_another_leftover_holds_its_photo_back(tmp_path, monkeypatch):
     """A leftover beside a photo whose write the journal does not show begun is not geotag's to remove — it may be the
@@ -1407,6 +1408,7 @@ def test_one_photo_s_failure_is_its_own(tmp_path, monkeypatch):
     s = _summary(ctl)
     assert s["status"] == "partial" and len(s["blockers"]) == 1
     assert "a.arw: could not be applied (OSError" in s["blockers"][0]
+    assert s["failures"] and all(f["relative_path"].endswith("a.arw") for f in s["failures"])   # named by its photo
     plan = json.load(open(ctl / "photos-24-executable-plan.json"))
     journal = json.load(open(utils.journal_path(str(ws), plan["plan_id"])))
     b_ops = [o["operation_id"] for o in plan["destinations"]["6-photos-by-dest/T"]["operations"]
@@ -1437,6 +1439,29 @@ def test_what_a_killed_run_applied_is_recorded_by_the_next(tmp_path, monkeypatch
     after = journal["media_after"]
     assert len(after) == 2 and all(os.stat(ws / rel).st_size == v["size"] for rel, v in after.items())
     assert not any(rel.endswith(("a.arw", "b.arw")) for rel in after)                    # under their new names
+
+
+@pytest.mark.spec("RUL-applied_unrecorded_is_recorded", "RUL-found_applied_never_remade",
+                  test="TST-geotag_execution-a_write_with_no_rename_found_applied_is_recorded")
+def test_a_write_with_no_rename_found_applied_is_recorded(tmp_path, monkeypatch):
+    """A photo whose plan writes its time and renames nothing, written by a run killed before its journal reached the
+    disk: the next run finds it at its own name holding the planned values, writes nothing again, and records the write
+    applied."""
+    wf = cal.GeotagWorkflow(str(tmp_path))
+    photo = tmp_path / "x.jpg"; photo.write_bytes(b"orig")
+    st = photo.stat()
+    ops = [_op("o", "metadata_time_write", "x.jpg", pre={"size": st.st_size, "mtime_ns": st.st_mtime_ns,
+                                                         "content_fingerprint": "FP"},
+               writes={"DateTimeOriginal": "2024:07:03 14:00:00"})]
+    photo.write_bytes(b"orig, written")                              # the killed run's write
+    written = []
+    monkeypatch.setattr(cal.ContentHasher, "fingerprint_image", staticmethod(lambda p: {"value": "FP"}))
+    monkeypatch.setattr(cal.GeotagWorkflow, "_exiftool_write", lambda self, p, t: written.append(t) or True)
+    monkeypatch.setattr(cal.GeotagWorkflow, "_exiftool_read",
+                        lambda self, p, keys: {"DateTimeOriginal": "2024:07:03 14:00:00"})
+    r = wf._apply_file("x.jpg", ops, {}, {})                          # the journal lost
+    assert r["blocker"] is None and r["applied"] == ["o"] and written == []
+    assert photo.read_bytes() == b"orig, written"
 
 
 @pytest.mark.spec("RUL-content_acceptance_is_of_that_content", "RUL-content_changed_write_held",

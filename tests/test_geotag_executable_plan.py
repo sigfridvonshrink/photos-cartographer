@@ -215,7 +215,7 @@ def test_plan_ready_with_ops_and_full_depends_on(tmp_path):
               "config_fingerprint", "code_fingerprint", "camera_group_fingerprint", "camera_group_key_version",
               "handoff", "prep_cache_fingerprint", "gpx_fingerprint", "metadata_field_set_version",
               "filename_format_fingerprint", "folders_fingerprint", "media_extensions_fingerprint",
-              "media_preconditions", "planned_operation_fingerprint"):
+              "media_preconditions", "planned_operation_fingerprint", "country_table", "gpx_window"):
         assert k in dep, k
     # Each decision record is named and hashed directly — none vouched for through another's depends_on.
     for k in ("time_decisions", "drift_validation", "gps_decisions"):

@@ -272,6 +272,30 @@ def test_the_points_an_executed_plan_used_stay_withdrawn(tracks, tmp_path):
     assert _rows(record, "SELECT COUNT(*) FROM gpx_track_files WHERE path = 'b.gpx'") == [(1,)]
 
 
+@pytest.mark.spec("BLD-withdrawn_track_points",
+                  test="TST-kept_tracks-the_tracks_a_drift_confirmation_was_made_against_stay_withdrawn")
+def test_the_tracks_a_drift_confirmation_was_made_against_stay_withdrawn(tracks, tmp_path):
+    """An executed plan whose offset was confirmed against a track at the check against the tracks rests on that
+    track, though it places no photo by it: taken out afterwards, its entry is kept, withdrawn, with its points."""
+    ws = tmp_path / "ws"
+    (ws / ".photos-ingest").mkdir(parents=True)
+    drift = {"destinations": {"6-photos-by-dest/D": {"drift_decisions": {"K": {
+        "effective_drift_offset": {"offset_seconds": -7200, "source": "gps_drift_validated"},
+        "proposal": {"tracks": [{"gpx_file": "b.gpx", "sha256": "x"}]}}}}}}
+    (ws / ".photos-ingest" / cal.DRIFT_VALIDATION_ARTIFACT).write_text(json.dumps(drift))
+    plan = {"plan_id": "plan-1", "destinations": {"6-photos-by-dest/D": {"operations": []}}}
+    used = cal.GeotagWorkflow(str(ws))._tracks_used(plan)
+    assert used == ["b.gpx"]
+    record = tmp_path / "record.db"
+    _build(tracks, record)
+    cal.GPXIndex.mark_used(str(record), "plan-1", used, JULY)
+    (tracks / "b.gpx").unlink()
+    _build(tracks, record)
+    withdrawn = _rows(record, "SELECT f.path, COUNT(p.point_index) FROM gpx_track_files f LEFT JOIN gpx_track_points p "
+                              "USING (track_id) WHERE f.withdrawn = 1 GROUP BY f.path")
+    assert withdrawn == [("b.gpx", 1)]
+
+
 # --- what cannot be checked ------------------------------------------------------------------------------
 
 @pytest.mark.skipif(hasattr(os, "geteuid") and os.geteuid() == 0, reason="root lists every folder")

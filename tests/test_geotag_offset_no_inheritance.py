@@ -312,6 +312,8 @@ def test_sibling_offset_does_not_leak(tmp_path):
     assert _cell(art, f"{BYDEST}/Trip/B")["proposal"] == {"proposal_source": "manual_required"}
 
 
+@pytest.mark.spec("RUL-offset_from_own_evidence",
+                  test="TST-geotag_offset_no_inheritance-manual_parent_offset_does_not_reroot_children")
 def test_manual_parent_offset_does_not_reroot_children(tmp_path):
     wf = _wf(tmp_path)
     files = PARENT_FRAMES + [_file(f"{BYDEST}/Trip/Sub/c.arw", f"{BYDEST}/Trip/Sub"),
@@ -324,6 +326,26 @@ def test_manual_parent_offset_does_not_reroot_children(tmp_path):
     assert _cell(art, f"{BYDEST}/Trip/Sub")["effective_time_anchor"] == {"offset_seconds": -100, "source": "manual"}
     assert _cell(art, f"{BYDEST}/Trip/Sub/Deep")["effective_time_anchor"] == {"offset_seconds": -7200,
                                                                               "source": "same_day_auto"}
+
+
+@pytest.mark.spec("RUL-offset_from_own_evidence",
+                  test="TST-geotag_offset_no_inheritance-a_written_or_zone_offset_is_passed_to_no_other_destination")
+def test_a_written_or_zone_offset_is_passed_to_no_other_destination(tmp_path):
+    """The museum's offset is one the user wrote, or the zone's guess the user accepted: neither is the camera's own GPS,
+    so the castle — the same camera, the same day, nothing of its own — is offered neither."""
+    wf = _wf(tmp_path)
+    museum, castle = f"{BYDEST}/Museum", f"{BYDEST}/Castle"
+    files = [_file(f"{museum}/a.arw", museum, naive="2024:07:03 14:00:00"),
+             _file(f"{castle}/c.arw", castle, naive="2024:07:03 17:00:00")]
+    for ud, source in (({"manual_offset_seconds": -100}, "manual"),
+                       ({"accept_proposal": True, "accepted_offset_seconds": -7200}, "timezone_accepted")):
+        prior = {"destinations": {museum: {"destination_timezone": {"user_decision": {"manual_iana_timezone": "Europe/Brussels"}},
+                                           "camera_group_time_decisions": {CAM: {"user_decision": ud}}}}}
+        art, blk = _build(wf, files, _gpx([]), prior)
+        assert not blk, blk
+        assert _cell(art, museum)["effective_time_anchor"]["source"] == source
+        assert _cell(art, castle)["proposal"] == {"proposal_source": "manual_required"}
+        assert _cell(art, castle)["effective_time_anchor"] == ""
 
 
 def test_determinism_rerun_byte_identical(tmp_path):
@@ -604,6 +626,15 @@ def test_a_country_of_one_timezone_gives_it_and_one_of_several_gives_none(tmp_pa
     prior["destinations"][f"{y}/Japonia"] = _country("Japan")
     _art, blk = wf.build_time_decisions(files, BOTH, prior, _gpx([]))
     assert len(blk) == 1 and "country 'Japan'" in blk[0]
+    # a country of several zones whose own destination is given a zone of its own gives that zone to nothing inside it
+    sua = {"destination_timezone": {"user_decision": {"country": "US", "manual_iana_timezone": "America/New_York"}}}
+    own = [_file(f"{y}/SUA/x.arw", f"{y}/SUA"), _file(f"{y}/SUA/Oregon/c.arw", f"{y}/SUA/Oregon")]
+    art, blk = wf.build_time_decisions(own, BOTH, {"destinations": {y: _tz("Europe/Bucharest"), f"{y}/SUA": sua}}, _gpx([]))
+    assert not blk, blk
+    assert art["destinations"][f"{y}/SUA"]["destination_timezone"]["effective_iana_timezone"] == "America/New_York"
+    oregon = art["destinations"][f"{y}/SUA/Oregon"]["destination_timezone"]
+    assert oregon["effective_iana_timezone"] == "" and oregon["requires_user_input"]
+    assert oregon["proposal_source"] == "none"                         # neither New York nor Bucharest is proposed
 
 
 @pytest.mark.spec("RUL-country_chosen_once", "BLD-country_choice", "RUL-country_removal_told",
