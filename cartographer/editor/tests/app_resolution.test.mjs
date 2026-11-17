@@ -188,3 +188,18 @@ test("previewTz: a zone its photos contradict, not kept, is neither in effect no
   work.time.destinations[i].destination_timezone.user_decision.manual_iana_timezone = "Europe/Madrid";
   assert.equal(app.previewTz(pr).tz, "Europe/Madrid");
 });
+
+test("an offset set near a GPS group is previewed as picked as geotag counts it: within the spread, never imprecise", () => {
+  // RUL-chosen_group_is_anchored: geotag records `gpx_anchor_chosen` for an offset within the configured spread of one
+  // of a GPS proposal's groups, and never for one the tracks left imprecise; the label says whether a drift check follows.
+  const dest = "6-photos-by-dest/G", key = "CAM", ref = { file: "time", dest, kind: "offset", key };
+  const gps = { proposal_source: "gpx_self_anchor", proposed_offset_seconds: 3600, imprecise_seconds: 0,
+    groups: [{ offset_seconds: 3600, count: 4 }, { offset_seconds: -7200, count: 2 }] };
+  const mk = (manual, proposal = gps, spread = 30) => setWork({ anchor_spread_seconds: spread, time: { destinations: {
+    [dest]: { camera_group_time_decisions: { [key]: { proposal, user_decision: { manual_offset_seconds: manual } } } } } } });
+  mk(-7190); assert.match(app.previewEffective(ref), /GPS group, picked/);       // 10 s off a group: within the spread
+  mk(-7100); assert.match(app.previewEffective(ref), /\(manual\)/);              // 100 s off: the user's own
+  mk(-7200, { ...gps, imprecise_seconds: 600 }); assert.match(app.previewEffective(ref), /\(manual\)/);   // tracks stood still
+  mk(-7190, gps, null); assert.match(app.previewEffective(ref), /\(manual\)/);   // no spread sent: an exact match only
+  mk(-7200, gps, null); assert.match(app.previewEffective(ref), /GPS group, picked/);
+});

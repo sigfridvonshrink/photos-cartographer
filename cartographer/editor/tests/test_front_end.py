@@ -73,13 +73,22 @@ def test_a_split_day_is_accepted_and_withdrawn_on_its_day():
 
 
 @pytest.mark.spec("RUL-chosen_offset_not_withheld", "RUL-offset_far_from_evidence_asks", "RUL-country_chosen_once",
-                  "RUL-default_zone_proposed_only", "RUL-zone_against_photos_needs_word",
+                  "RUL-default_zone_proposed_only", "RUL-zone_against_photos_needs_word", "RUL-chosen_group_is_anchored",
                   test="TST-front_end-the_editor_shows_settled_only_what_geotag_takes")
 def test_the_editor_shows_settled_only_what_geotag_takes():
     """An acceptance in a same-day conflict, or of a guess far from all evidence, settles nothing; a country is chosen
     once at the top of its tree; the configured default zone is only proposed; a zone the photos contradict is not in
-    effect without the user's word."""
+    effect without the user's word; an offset is shown as a GPS group picked only where geotag counts it anchored."""
     _node_test("app_resolution.test.mjs")
+
+
+@pytest.mark.spec("RUL-editor_answer_ends_date_asking", "RUL-editor_answer_ends_fallback_asking",
+                  "BLD-editor_date_asking", "BLD-editor_fallback_asking",
+                  test="TST-front_end-a_fallback_answered_ends_the_asking_below_it")
+def test_a_fallback_answered_ends_the_asking_below_it():
+    """A date fallback answered in the editor settles, before any run, every date cell it covers; a folder fallback, the
+    fallback cells and the photos nothing else places at its destination and below — nothing beside them."""
+    _node_test("app_fallback_asking.test.mjs")
 
 
 @pytest.mark.spec("RUL-chosen_offset_not_withheld", "RUL-acceptance_holds_for_its_proposal",

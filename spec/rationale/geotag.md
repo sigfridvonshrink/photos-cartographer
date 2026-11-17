@@ -802,6 +802,20 @@ one said to be in a country of several zones, or one above a zone written lower 
 be one no answer settles.
 :::
 
+:::{rat} A fallback answered settles at once what it answers below it
+:id: RAT-editor_fallback_settles_below
+:status: ruled
+:forced: no
+:follows_from: RAT-zone_asked_at_every_level
+:justifies: RUL-editor_answer_ends_date_asking, RUL-editor_answer_ends_fallback_asking
+
+A date fallback and a folder fallback pass down the folders as a timezone does, and answer the questions below them in
+the same way: a date given above times every photo below that has none, and a fallback in effect places every photo
+nothing else places. The editor shows a timezone's questions settled the moment an answer reaches them; were the date's
+and the fallback's shown still waiting while the line beside them already gives the date or the place, the user would
+be sent to answer again what is answered. So the three settle alike, as soon as the answer is given.
+:::
+
 :::{rat} The destination is an input to the time
 :id: RAT-destination_is_an_input
 :status: ruled

@@ -44,8 +44,8 @@ affordance.
   reviewed contradicted positions itself (BACKLOG 15, 16). Code site `offsetProposalBlock` / `groupChoice` /
   `proposalNotes` in `web/app.js`, tested in `app_offset_buckets.test.mjs` and `app_clock_change.test.mjs`.
 - **Per-date offset buckets**: grouped, collapsible, fan-out edit (#115).
-- **A contradicted own position is a review that waits on nothing**: the GPS worklist lists it beside the photos
-  nothing placed, both positions and the distance said, with **take the track's position** (writing it as
+- **A contradicted own position is a review that waits on nothing**: the GPS worklist lists it in the folded
+  **Placed** bucket, a sub-group of its own (**camera GPS its offset doubts**), both positions and the distance said, with **take the track's position** (writing it as
   `manual_lat`/`manual_lon`) and **keep its own position** — no third choice, no photo being left without a
   position. Code site `contradictedNote` / `takeTrackPosition` in `web/app.js`, tested in
   `app_clock_change.test.mjs` (BACKLOG 16).
@@ -114,8 +114,8 @@ affordance.
 
   Per view: **GPS** — the destination tree; each destination's first row is its fallback (its point, **own** or
   **inherited ⟵ <destination>**, the map to write its own); under it two buckets, **Fallback** (the photos the
-  fallback placed, by why the tracks missed them) and **Placed** (camera GPS, track point, between points, past track
-  end, set by hand) — or, where no fallback is in effect here or above, **Unplaced** (by why), open and first, in
+  fallback placed, by why the tracks missed them) and **Placed** (camera GPS, camera GPS its offset doubts, track
+  point, between points, past track end, set by hand) — or, where no fallback is in effect here or above, **Unplaced** (by why), open and first, in
   place of Fallback (the two cannot meet: a fallback in effect places every photo nothing else does). No camera
   level: a camera day whose photos in the destination all fell back or wait, while the tracks had points that day —
   some photo's nearest track point under a day away, its reason not "no tracks" nor a date fallback's time — is named
@@ -160,7 +160,9 @@ event/sink seam.
   staleness-aware**, but the core still validates in depth and refuses; the gating is the cheap shared
   subset (`plan_dependencies_fresh`), not a second source of truth (#193, #198, #230, #244).
 - **Execute behind a per-phase 2-step confirm gate** that summarises the *real* saved plan artifact,
-  not a simulation (#194, #196).
+  not a simulation (#194, #196). The confirmation sends the id of the plan the gate showed — never one a state poll
+  brought in while it was open — and the server refuses an execute naming none, so a plan made again meanwhile meets
+  its "plan changed since you reviewed it" refusal.
 - **Bound to 127.0.0.1**; prints a copy-paste `ssh -L` tunnel hint on loopback startup (#216).
 - **Editor folded in as the 4th tab** via an iframe at `/edit/` — one origin (so one tunnel suffices),
   zero editor changes (#199).

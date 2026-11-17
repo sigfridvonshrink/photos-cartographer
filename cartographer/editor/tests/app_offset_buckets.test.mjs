@@ -304,3 +304,16 @@ test("groupChoice: on a phone's day kept as recorded, either group ends the keep
   assert.equal(app.keepHolds(taken), false);
   assert.equal(app.chosenOffset(p, taken.user_decision), -3600);
 });
+
+test("offsetGroups: a day that waits for an answer is never folded with one that does not (grouping rule 3)", () => {
+  // Two days of one camera, the same proposal and nothing written: one in effect, one asking. Folded together, the row
+  // would show the first day's chip and notes — the waiting day shown settled (docs/design/decisions.md, rule 3).
+  const settled = { ...cell("CAM", "2024-07-03", -7200), requires_user_input: false,
+    effective_time_anchor: { offset_seconds: -7200, source: "timezone_unconfirmed" } };
+  const waits = { ...cell("CAM", "2024-07-04", -7200), requires_user_input: true, effective_time_anchor: "" };
+  const g = app.offsetGroups({ camera_group_time_decisions: { "CAM@2024-07-03": settled, "CAM@2024-07-04": waits } });
+  assert.deepEqual(g[0].proposals.map((p) => p.keys), [["CAM@2024-07-03"], ["CAM@2024-07-04"]]);
+  const stale = { ...cell("CAM", "2024-07-05", -7200), stale_user_decision: true };
+  const g2 = app.offsetGroups({ camera_group_time_decisions: { "CAM@2024-07-03": settled, "CAM@2024-07-05": stale } });
+  assert.equal(g2[0].proposals.length, 2);
+});
