@@ -606,6 +606,7 @@ per-file writes live in `photos-24-executable-plan.json`, which the editor does 
 | `relative_path` | string | The photo's workspace-relative path. |
 | `content_fingerprint` | string \| null | Its identity. |
 | `placed_by` | `"own_position"` \| `"tracks"` \| `"folder_fallback"` | What places it now: its own GPS position, the tracks, or the destination's folder fallback. A position can be chosen (§5.4, `chosen_by_user`) only for a photo the tracks or the fallback place. |
+| `position` | `{"lat": number, "lon": number}` | Where it is placed: its own position, the track's, or the fallback's. For you to see (the editor copies it and opens the map there); geotag never reads it back — the plan places each photo again from its own inputs. Absent where no position is known. |
 | `method` | `"direct_match"` \| `"interpolated"` \| `"extrapolated"` | Placed by the tracks: on a track point, between two, or past a track's end. |
 | `tracks` | object | Placed by the fallback: why the tracks did not place it — the same `reason` and evidence as a review item's (§5.4). |
 | `camera_bucket` | string | The photo's camera day: the key of its offset cell in the destination's photos-21 `camera_group_time_decisions` (`<group>@<date>`, or `<group>` where the camera's photos there are of one day). Absent where the camera has no offset cell there (a phone read by its own offsets), or the photo has no recorded time. Review items carry it too. |
