@@ -1502,16 +1502,9 @@ class WorkspacePrepWorkflow:
         Returns (carried_forward, relocated, moved_unmatched), relocated mapping each such file's new
         path to its old. Pure helper — computes the maps; mutates no plan state."""
         import collections as _collections
-        from .photos_utils import is_metadata_cache_fresh, fingerprint_reusable, media_class_for_ext
 
         def _row_reusable(path, row, md):
-            record = {'relative_path': path, 'size': row['size'], 'mtime_ns': row['mtime_ns']}
-            if row.get('content_hash'):
-                record['content_hash'] = row['content_hash']
-                media_class = media_class_for_ext(os.path.splitext(path)[1].lower().lstrip('.'))
-                if not fingerprint_reusable(row['content_hash'], media_class, current_magick_version):
-                    return False
-            return is_metadata_cache_fresh(record, md, current_metadata_context)
+            return self._row_reusable_at(path, row, md, current_metadata_context, current_magick_version)
 
         _present = set(files)
         _missing_rows = {p: r for p, r in existing_cache.items() if p not in _present}
@@ -1551,6 +1544,56 @@ class WorkspacePrepWorkflow:
         moved_unmatched = set(_new_by_dest) - set(carried_forward) - set(relocated)
         return carried_forward, relocated, moved_unmatched
 
+    @staticmethod
+    def _row_reusable_at(path, row, md, current_metadata_context, current_magick_version):
+        """Whether a database row would be reused at its own path, its file unchanged there: its fingerprint taken by
+        this build's method and its metadata fresh (BLD-carried_row)."""
+        from .photos_utils import is_metadata_cache_fresh, fingerprint_reusable, media_class_for_ext
+        record = {'relative_path': path, 'size': row['size'], 'mtime_ns': row['mtime_ns']}
+        if row.get('content_hash'):
+            record['content_hash'] = row['content_hash']
+            media_class = media_class_for_ext(os.path.splitext(path)[1].lower().lstrip('.'))
+            if not fingerprint_reusable(row['content_hash'], media_class, current_magick_version):
+                return False
+        return is_metadata_cache_fresh(record, md, current_metadata_context)
+
+    def _carry_by_geotag_journal(self, files, existing_cache, existing_metadata, current_metadata_context,
+                                 current_magick_version, moved_sources):
+        """Rows carried on the word of geotag's journal (RUL-geotag_left_fingerprint_carried, BLD-geotag_journal_carried):
+        {path: row} for each inventoried file prep's row would not be reused for at its path, that a journal of a plan
+        geotag executed records leaving there with its size and mtime, from the file's own path or one gone and taken by
+        no recognized move, holding the fingerprint of the database's row there — a row that would be reused where it
+        is. The row comes with the file's size and mtime and no metadata: the freshness gate reuses its fingerprint and
+        the file is read for its metadata alone (RUL-geotag_left_metadata_read). Pure helper — mutates no plan state."""
+        from .photos_utils import geotag_journals_left
+        entries, unreadable = geotag_journals_left(self.workspace_root)
+        for path in unreadable:      # never prep's record to stop on (RUL-unreadable_geotag_journal_vouches_nothing)
+            get_reporter().warn(f"Geotag's journal {os.path.relpath(path, self.workspace_root)} cannot be read; the "
+                                "photos it records are fingerprinted again.")
+        present, used, carried = set(files), set(moved_sources), {}
+        for rel in files:
+            if rel not in entries:
+                continue
+            st = os.stat(os.path.join(self.workspace_root, rel))
+            own = existing_cache.get(rel)
+            if own and (own['size'], own['mtime_ns']) == (st.st_size, st.st_mtime_ns):
+                continue                                  # its own row speaks for it
+            for entry in entries[rel]:
+                src, fp = entry.get("from"), entry.get("fingerprint")
+                if (entry.get("size"), entry.get("mtime_ns")) != (st.st_size, st.st_mtime_ns) \
+                        or not isinstance(src, str) or not fp or src in used or (src != rel and src in present):
+                    continue
+                row = existing_cache.get(src)
+                if not row or not row.get('content_hash') or not self._row_reusable_at(
+                        src, row, existing_metadata.get(src), current_metadata_context, current_magick_version):
+                    continue
+                if json.loads(row['content_hash']).get('value') != fp:
+                    continue                              # not the photo prep fingerprinted
+                used.add(src)
+                carried[rel] = dict(row, relative_path=rel, size=st.st_size, mtime_ns=st.st_mtime_ns)
+                break
+        return carried
+
     def _aggregate_worker_results(self, worker_results, metadata_plan_status, blockers, warnings,
                                   unpersisted_prior_plan=False, memo_paths=frozenset()):
         """Sort + aggregate the per-file worker results on the main thread (deterministic). Appends to the
@@ -1584,6 +1627,12 @@ class WorkspacePrepWorkflow:
         if memo_hits:
             get_reporter().log(f"Reused {memo_hits} fingerprint(s) from the previous plan "
                                "(not yet executed, so not in the cache).")
+        # The photos whose fingerprint geotag's journal vouched for (BLD-geotag_journal_carried): not fingerprinted, so
+        # not in the re-hash counts; named here so a re-plan after geotag's execution says why it was quick.
+        geotag_hits = sum(1 for res in worker_results if res.get("geotag_carried"))
+        if geotag_hits:
+            get_reporter().log(f"Reused {geotag_hits} fingerprint(s) geotag's execution confirmed (its journal); "
+                               "their metadata, which it wrote, was read again.")
 
         # Re-hash diagnostics (RUL-rehash_explained): always-on when any media was re-fingerprinted. Split the
         # EXPECTED new-file hashes from previously-cached files that re-hashed, name the reason buckets,
@@ -1853,7 +1902,7 @@ class WorkspacePrepWorkflow:
         (carried_forward, existing_cache, existing_metadata, current_metadata_context,
          current_exiftool_version, current_magick_version, current_field_set_version,
          current_extraction_options_fingerprint, failed_metadata_folders, metadata_results,
-         moved_unmatched) = _ctx
+         moved_unmatched, geotag_carried) = _ctx
         from .photos_utils import METADATA_SCHEMA_VERSION, CAMERA_GROUP_KEY_VERSION
         if rel_path in carried_forward:
             # Recognized move into by-dest: carry the cached identity forward; do
@@ -1922,13 +1971,18 @@ class WorkspacePrepWorkflow:
             result["db_file"] = new_cached
             return result
 
+        # A photo geotag's execution left as its journal records it: its row's fingerprint, which geotag confirmed, is
+        # reused, and only its metadata is read again (RUL-geotag_left_fingerprint_carried, RUL-geotag_left_metadata_read).
+        fingerprint_carried = (rel_path in geotag_carried and cached is not None and content_hash_fresh
+                               and (cached['size'], cached['mtime_ns']) == (stat.st_size, stat.st_mtime_ns))
+
         # Re-fingerprint diagnostics: this file fell through the freshness gate and (if media) will be
         # decoded. Classify WHY so an unexpected re-hash is visible — `new` (first ingest, expected),
         # else a previously-cached file restaled by `moved-unmatched` (a by-dest move that missed the
         # bijective match), `size-changed`, `mtime-changed`, `metadata-stale` (an exiftool/field-set/
         # camera-group-key stamp moved), `failed-before` (a failed fingerprint, taken again on every
         # run), or `engine-changed` (ImageMagick/ffmpeg version bump).
-        if media_class in ('image', 'raw', 'video'):
+        if media_class in ('image', 'raw', 'video') and not fingerprint_carried:
             if cached is None:
                 result["rehash_reason"] = "moved-unmatched" if rel_path in moved_unmatched else "new"
             elif cached['size'] != stat.st_size:
@@ -1948,7 +2002,10 @@ class WorkspacePrepWorkflow:
         # (RUL-fingerprint_survives_mutation). Non-media (other-class) is not fingerprinted at all
         # (RUL-strays_leave_no_trace) — it is moved inert to 1-strays and never enters a content decision.
         content_hash_res = None
-        if media_class in ['image', 'raw']:
+        if fingerprint_carried:
+            content_hash_res = json.loads(cached['content_hash'])
+            result["geotag_carried"] = True
+        elif media_class in ['image', 'raw']:
             content_hash_res = ContentHasher.fingerprint_image(abs_path)
         elif media_class == 'video':
             content_hash_res = ContentHasher.fingerprint_video(abs_path)
@@ -2898,6 +2955,13 @@ class WorkspacePrepWorkflow:
             if existing_metadata.get(_old):
                 existing_metadata[_new] = dict(existing_metadata[_old], relative_path=_new)
         recognized_moves = {**{n: cf["source"] for n, cf in carried_forward.items()}, **relocated}
+        # A photo geotag's execution left as its journal records it: the row of the file geotag found, at the path it
+        # left it, its metadata left behind to be read again (BLD-geotag_journal_carried). Like the move match, it is
+        # proved against the executed state only, before the memo is laid under it.
+        geotag_carried = self._carry_by_geotag_journal(
+            files, existing_cache, existing_metadata, current_metadata_context, current_magick_version,
+            set(recognized_moves.values()))
+        existing_cache.update(geotag_carried)
 
         # Plan-time decode memo (RUL-memo_proves_no_move). Move recognition above deliberately runs against the
         # EXECUTED state only — a memo row proves nothing about where prep has put a file — so the
@@ -2954,7 +3018,7 @@ class WorkspacePrepWorkflow:
                 _ctx = (carried_forward, existing_cache, existing_metadata, current_metadata_context,
                         current_exiftool_version, current_magick_version, current_field_set_version,
                         current_extraction_options_fingerprint, failed_metadata_folders, metadata_results,
-                        moved_unmatched)
+                        moved_unmatched, set(geotag_carried))
                 future_to_file = {executor.submit(self._process_file, f, _ctx): f for f in files}
                 try:
                     for future in concurrent.futures.as_completed(future_to_file):

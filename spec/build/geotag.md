@@ -987,6 +987,17 @@ decision and its drift confirmation, the effective values derived again each run
 `geotag execute` SHALL, under the workspace lock: revalidate every dependency of photos-24 — and, when it holds an operation, that the image engine is the handoff's `depends_on.cache.image_engine_version` — and stop before any change if one moved; take the snapshot labelled `geotag`, a required one that fails ending the run as `rejected`; keep photos-21, -22 and -23 in `executed/<plan id>/`; pin and move the own values, single-threaded; then, per photo and under `-j`, skip one whose operations the journal confirms; take one gone from its path with its rename target in place as applied before — its operations recorded, not redone — once the target has the planned fingerprint (or the accepted one) and holds the planned tags, else block; and for one whose size or modification time changed since the plan block if its decoded content differs and is not accepted, else read its tags back — holding the planned values it is counted applied, otherwise, or with only a rename planned, it blocks as edited since the plan. Otherwise it writes the photo's tags in one `exiftool` call ({need}`BLD-metadata_safe_write`), retakes its fingerprint — a changed one, not accepted, or one that cannot be taken, a mismatch that holds the photo's writes and rename back — and renames it, the target checked free. Anything a photo's application raises is that photo's failure and blocker. The results merge in path order into the journal, kept per plan id — each confirmed photo's final path, size and modification time under `media_after` — and photos-25.
 :::
 
+:::{bld} The journal says where each photo came from and what it holds
+:id: BLD-media_after_identity
+:status: ruled
+:realises: RUL-geotag_left_fingerprint_carried
+:uses: BLD-geotag_execution
+
+Each entry of `media_after` in a geotag journal SHALL hold, beside the photo's `size` and `mtime_ns`, `from` — the path
+the plan names the photo by — and `fingerprint` — the fingerprint value execution confirmed the photo holds, taken after
+its write or found at its target, or, for a photo only renamed, the plan's `content_fingerprint`.
+:::
+
 :::{bld} How geotag knows a photo holds what it planned
 :id: BLD-own_write_recognised
 :status: ruled

@@ -438,6 +438,25 @@ exiftool is a reason to check what the row says, never to forget whose it is. Fo
 a new file, and a fingerprint that changed with it would part the photo from its history.
 :::
 
+:::{rat} Geotag's journal has already proved the fingerprint
+:id: RAT-geotag_journal_proves_fingerprint
+:status: ruled
+:forced: no
+:follows_from: RAT-size_time_sign_change, RAT-journal_is_the_account, RAT-move_launders_nothing
+:justifies: RUL-geotag_left_fingerprint_carried, RUL-geotag_left_metadata_read, RUL-unreadable_geotag_journal_vouches_nothing
+
+Geotag's execution changes nearly every photo it places — its time and position written, its name made its time — and
+prep must plan again after it, where size, time and name all say a changed or a new file: each would be decoded again,
+minutes for every hundred RAWs and far longer for a trip. Yet geotag took each written photo's fingerprint right after
+its write and found it the one prep holds, and a rename changes no content; its journal records what it left, where,
+with what size and time. Decoding again would prove nothing the journal does not already say. Each phase keeps only its
+own records: geotag records what it left, and prep reads it, as geotag reads prep's handoff. Size and time still tell
+whether a photo is as geotag left it — one changed since, or one whose write was not confirmed, is decoded as any
+changed file — and a row prep would not have reused where geotag found the photo is no better for geotag's word. What
+geotag wrote is metadata, so that is read again, cheaply beside a decode. A journal that cannot be read proves nothing,
+but it is geotag's record, not prep's to stop on: without it the photo is decoded again, as before.
+:::
+
 :::{rat} Quarantine is outside the record
 :id: RAT-quarantine_outside_record
 :status: ruled

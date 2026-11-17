@@ -105,7 +105,10 @@ Every change to your files is made the same way, in every phase:
 - **Plan** works out every operation and saves it, at a fixed place in `.photos-ingest/` (prep's
   `photos-10-prep-plan.json`, geotag's `photos-24-executable-plan.json`, merge's
   `photos-30-merge-plan.json`). Planning moves and changes no photo; it keeps only fingerprints, so the
-  next run need not compute them again. Planning again sets the earlier plan aside as `-001`, `-002`, …
+  next run need not compute them again. After `geotag execute` has written and renamed photos, the prep run
+  that follows (often the one `geotag plan` runs for you) takes each one's fingerprint from geotag's journal —
+  geotag checked it right after its write — and reads again only the metadata geotag wrote; a photo changed
+  by hand since, or a journal that cannot be read, means fingerprinting again. Planning again sets the earlier plan aside as `-001`, `-002`, …
   rather than overwriting it — and so does each geotag execution with the earlier execution summary, and
   `geotag finalize`, run again, with the earlier archival package.
 - **Dry run** (prep and merge) checks the saved plan and summarizes it. It is the plan execute would run,
