@@ -253,6 +253,45 @@ what matters. Such choices are build choices and should be ruled under a separat
   lock and trial files, and a library file only when one is there — never scanning or indexing it. The spec keeps
   only that merge looks for an incoming photo at its own place, never de-duplicating the library as a whole
   (`RUL-library_not_scanned`).
+- **`init-library` may look for the guard before it takes the lock**, to know whether it is run in a workspace at all.
+  The phases take the lock first and look for the guard under it (`BLD-lock_after_guard`).
+- **Prep finds a link below the top level by the walk that would cross it**, after the workspace check. The spec keeps
+  only that what the top level shows is checked right after the lock and the seal (`RUL-shape_checked_first`).
+- **An empty hidden folder in the dump is removed, not moved to the quarantine**: it holds nothing to keep. The spec
+  sets aside hidden files, and the files of hidden folders (`RUL-dump_hidden_files_quarantined`).
+- **Links in the strays folder are not looked for**: no phase reads it. The spec forbids a link anywhere among the files a
+  phase reads (`RUL-no_links`).
+- **A `gpx_root` that is missing, or a folder of which cannot be listed, gives the tracks' fingerprint a value made from
+  its path.** The spec keeps only that each such root gives a value of its own (`BLD-gpx_fingerprint`).
+- **Stopping a running execute in the console asks for a confirmation** first; stopping a plan or a dry run does not.
+- **The editor's preview may show a linked file's target**: it only displays. The phases refuse the link
+  (`RUL-no_links`).
+- **The snapshot settings are checked for their characters**; zfs's own length limits are met when the snapshot is
+  taken. The spec keeps the check of a snapshot's name before any snapshot (`RUL-checked_snapshot_names`).
+- **The console's execute gate leaves the plan's code fingerprint to the phase**, which refuses a plan made by other
+  code; the gate summarizes the plan as it is.
+- **A plan, a dry run or finalize names, file by file, the changes accepted since the last execution**, though no record
+  of theirs holds them. The spec keeps that the record an execution writes names them (`RUL-accepted_changes_logged`).
+- **A prune forgives the files of its folders already gone** from the quarantine. The spec keeps that only a prune
+  changes the quarantine (`RUL-quarantine_changed_only_by_prune`).
+- **An acceptance code certifies the list printed, not the bytes behind it**: a file changed again in the same way is
+  the same line of the list. The spec keeps that a code accepts only its list (`RUL-code_accepts_only_its_list`).
+- **The editor refuses a save when any record it loaded has changed since, and an edit that carries no answer.** The
+  spec keeps that a save writes only what was shown (`RUL-save_only_what_was_shown`).
+- **`geotag plan` names the first ten track points it skipped**, with their files, and counts the rest; every one stays
+  among the catalogue's warnings. The spec keeps that each skipped point is reported (`RUL-unreadable_point_reported`).
+- **A `geotag plan` ended by an error the build did not foresee prunes no track points**; the next plan prunes them
+  (`RUL-unused_points_not_kept`).
+- **`geotag execute` runs four workers unless `-j` says otherwise** — like `-j` itself, a transient, machine-dependent
+  knob.
+- **Execute's stop on a workspace changed since planning names the first change found** — of several track files
+  appeared since planning, one. The run stops either way (`BLD-track_file_blocker`).
+- **The editor saves nothing while a decision it shows fails its checks**, its checks being at times stricter than
+  geotag's: a reading of a repeated time given an offset that is neither of its two, which geotag takes as stale, is
+  invalid in the editor.
+- **The console shows every refusal the server sends** — of a run, of `init-library`, of a prune, of Stop, of the
+  execute gate — in its log pane, never dropping it; a gate that closes on blockers says why.
+- **A progress task that was aborted is not shown as finished**, on the terminal or in the console.
 
 ---
 

@@ -648,7 +648,7 @@ starts `ffmpeg` per video. Each tool gets two attempts per file, a dead worker r
 
 Where `magick` is absent, each per-file `identify` attempt SHALL be killed once ten seconds pass with no output from it,
 the attempt counting as failed — so a photo whose decode is slower than that fails both attempts and its fingerprint is
-recorded as failed; the persistent `magick` worker has no such limit.
+recorded as failed; the persistent `magick` and `exiftool` workers and `ffmpeg` have no such limit.
 :::
 
 :::{bld} Planning in a fixed order

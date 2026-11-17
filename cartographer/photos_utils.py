@@ -1955,8 +1955,12 @@ def check_workspace(ws: str, phase: str, command: str, accept_code=None, record_
     elif accept_code:
         reporter.log(f"Nothing to accept with the code {accept_code}: no change awaits acceptance.")
     if earlier:
+        # Named, not only counted, by every checking command — a plan, a dry run and finalize included, whose record
+        # names none (the owner's preference, docs/design/decisions.md).
         reporter.log(f"{len(earlier)} change(s) accepted earlier since the last execution "
-                     f"({ACCEPTED_CHANGES_ARTIFACT}).")
+                     f"({ACCEPTED_CHANGES_ARTIFACT}):")
+        for line in format_changes(earlier):
+            reporter.log(line)
     if logged:
         reporter.log("Changed by hand since the last execution, as a workspace allows:")
         for line in format_changes(logged):

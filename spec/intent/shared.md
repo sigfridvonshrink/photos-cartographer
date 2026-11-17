@@ -149,7 +149,9 @@ of two phases, a merge, a finalize, or a quarantine prune.
 :verify: required
 :upholds: INV-one_run_at_a_time
 
-Every run, and every change to the workspace's media or control records, SHALL hold the workspace's lock.
+Every run, and every change to the workspace's media or control records, SHALL hold the workspace's lock — the
+filesystem's trial before it, which leaves nothing ({need}`RUL-filesystem_trial_leaves_nothing`), and the editor's own
+session lock aside.
 :::
 
 :::{rul} A workspace has one lock
@@ -313,7 +315,8 @@ A snapshot SHALL be taken only while the lock is held.
 :verify: required
 :refines: RUL-snapshot_timing
 
-When the configuration requires snapshots, a run that cannot take one SHALL stop before it changes anything.
+When the configuration requires snapshots, a run that cannot take one SHALL stop before it changes any photo or the
+library, writing only its record of the stop.
 :::
 
 :::{rul} Without a required snapshot, the run goes on
@@ -418,7 +421,7 @@ A run stopped by a setting cartographer does not know SHALL name the setting.
 :criticality: med
 :verify: required
 
-A prep run SHALL create the configuration from the seed defaults when it finds none.
+A workspace's first prep run SHALL create the configuration from the seed defaults when it finds none.
 :::
 
 :::{rul} The workspace's configuration governs it, not the defaults
@@ -718,7 +721,7 @@ phase's output.
 :uses: DEF-strays_folder, DEF-quarantine
 
 Prep SHALL leave out of its inventory of media, each as a whole: the control records' place, the quarantine, a
-version-control directory, and the strays folder with everything in it; and every hidden file.
+version-control directory at the workspace's top level, and the strays folder with everything in it; and every hidden file.
 :::
 
 :::{rul} A hidden folder holding files stops prep
@@ -2227,8 +2230,8 @@ A phase SHALL create every field a decision needs, so the user fills in values, 
 :uses: DEF-prep
 
 Prep SHALL take no decision and wait on no answer, organizing from the state of the workspace and its configuration
-alone: its one question, whether to download the table of countries ({need}`RUL-zone_table_never_stops_prep`), never
-holds it up.
+alone: its one question, whether to download the table of countries, asked only where a person is at its terminal,
+never stops it ({need}`RUL-zone_table_never_stops_prep`).
 :::
 
 :::{rul} The cause of every change can be found
@@ -2845,7 +2848,8 @@ Where a taken place holds the photo itself, byte for byte, the workspace's copy 
 :uses: DEF-library, DEF-fingerprint
 
 A photo whose picture the library already holds in a file of other bytes — the same pixels, other metadata — SHALL be
-blocked, neither file removed, for the user to settle.
+blocked, neither file removed, for the user to settle, where no library file at its place holds the photo byte for
+byte.
 :::
 
 :::{rul} Such a block names both files
@@ -2866,7 +2870,7 @@ The report of a photo blocked for the same picture in another library file SHALL
 :verify: required
 :refines: RUL-collision_by_content
 
-A taken place holding another picture — another fingerprint — SHALL mean two photos share a name: the incoming one is placed under a
+A taken place found at planning holding another picture — another fingerprint — SHALL mean two photos share a name: the incoming one is placed under a
 differentiating name.
 :::
 
@@ -2880,7 +2884,8 @@ differentiating name.
 :uses: DEF-library
 
 Where the library file in an incoming photo's place cannot be fingerprinted, merge SHALL leave that photo in photos by
-destination — neither placing it there nor under another name.
+destination — neither placing it there nor under another name — where no library file at its place holds the photo
+byte for byte.
 :::
 
 :::{rul} A photo held back does not stop the rest
@@ -2901,7 +2906,8 @@ Where a collision that cannot be settled holds one photo back, merge SHALL go on
 :verify: required
 :uses: DEF-library, DEF-fingerprint, DEF-workspace_database
 
-A library file's fingerprint SHALL be computed only when a collision needs it.
+A library file's fingerprint SHALL be computed only when a collision or the check of a place an earlier run filled
+needs it.
 :::
 
 :::{rul} A library file's fingerprint is kept while the file is unchanged
@@ -2914,7 +2920,8 @@ A library file's fingerprint SHALL be computed only when a collision needs it.
 
 A library file's fingerprint, once computed, SHALL be kept, so that a library file unchanged since is never
 fingerprinted again in the workspace, in that run or a later one, while the way photos are decoded is unchanged too —
-save for the one check before a photo is removed from the workspace.
+save for the one check before a photo is removed from the workspace, and the check that a photo an earlier run placed
+is still there.
 :::
 
 :::{rul} A library file is fingerprinted again before a photo it holds is removed
@@ -3221,7 +3228,8 @@ Whether a workspace is finished SHALL be read from its seal alone, never from th
 :refines: RUL-merge_is_terminal
 :uses: DEF-sealed_workspace
 
-In a sealed workspace prep's plan, dry run and execution, geotag and merge SHALL stop as they start, changing nothing
+In a sealed workspace prep's plan, dry run and execution, geotag, and merge's plan, dry run and execution, and its
+library setup given a path, SHALL stop as they start, changing nothing
 but the owner record of the workspace lock; pruning the quarantine is the exception ({need}`RUL-sealed_prune_allowed`).
 Its records MAY still be read.
 :::
@@ -3326,7 +3334,8 @@ check that it has not changed.
 :uses: DEF-configuration
 :refines: INV-authored_values_checked
 
-A path the configuration names SHALL be neither empty nor blank, and hold no character the platform forbids.
+A path the configuration names SHALL be neither blank, nor empty where the setting gives empty no meaning of its own,
+and hold no character the platform forbids.
 :::
 
 :::{rul} A snapshot's name is checked before any snapshot
@@ -3724,7 +3733,7 @@ Planning SHALL write nothing but its plan, its decision records, what it keeps s
 again, the changes to the workspace the user accepts ({need}`RUL-acceptance_recorded`), the user's answer to whether to
 download the table of countries with the table downloaded ({need}`RUL-zone_table_asked_once`), and — on a workspace's
 first run — the configuration it seeds; a prep execution that geotag's plan runs
-({need}`RUL-auto_reprep_moves_no_media`) being prep's execution, not planning.
+({need}`RUL-auto_reprep_moves_no_media`) being prep's execution, not planning, and a run's locks no record.
 :::
 
 :::{rul} Execution carries out the plan, and only the plan
@@ -3792,8 +3801,8 @@ file system entries alone, reading no media file.
 :verify: required
 :refines: RUL-workspace_checked_first
 
-The comparison SHALL cover every file of the managed folders but the inbox, and of the quarantine, hidden files aside,
-which no phase reads — never the inbox, which is the user's to fill, nor the control records, which keep checks of their
+The comparison SHALL cover every file of the managed folders but the inbox, hidden files aside, which no phase reads,
+and every file of the quarantine, hidden ones included — never the inbox, which is the user's to fill, nor the control records, which keep checks of their
 own.
 :::
 
@@ -4241,7 +4250,8 @@ The decision editor SHALL NOT save while a record it answers into is not the one
 
 The decision editor SHALL write the records a save changes one after another, each whole: the time decisions, the
 drift validation, the GPS decisions — each standing on the ones before it — then the execution's summary and the
-configuration, which stand on none of them; so that a save cut short leaves only a leading part of it written.
+configuration, which stand on none of them, and then the answer about the table of countries, which stands on none;
+so that a save cut short leaves only a leading part of it written.
 :::
 
 :::{rul} A save keeps the record it replaces
