@@ -2739,6 +2739,9 @@ class GeotagWorkflow:
                     elif o["type"] == "metadata_gps_write" and o.get("gps_origin") == "apply_manual":
                         o["provenance"] = {"because": manual_gps_pointer(cat, dest, rel, g_d.get("folder_fallback"))}
                         o["pre_state"] = held_pre_state(f)        # the position it replaces, for the log
+                    elif o["type"] == "metadata_gps_write" and o.get("gps_origin") == "restore_own":
+                        # its own position given back: the log keeps the one it replaces (RUL-log_records_gps_reverts)
+                        o["pre_state"] = held_pre_state(f)
                     elif o["type"] == "gps_marker_write" and (o.get("writes") or {}).get("GPSLatitude") == "":
                         o["pre_state"] = held_pre_state(f)        # the position it clears, for the log
                 if fops:

@@ -2384,9 +2384,9 @@ def _make_op(typ, rel, reason, semantic, preconditions):
 
 
 def time_fixed_marker_op(file, method, clear_position=False):
-    """The marker write recording that geotag fixed `file`'s time and wrote no position: `method`, the
-    device's own GPSProcessingMethod with the suffix appended. With `clear_position`, the position an
-    earlier geotag run wrote is cleared too."""
+    """The marker write of `file` to which geotag writes no position: `method`, the device's own
+    GPSProcessingMethod — with the suffix appended where geotag corrected its time. With `clear_position`, the position
+    an earlier geotag run wrote is cleared too."""
     pre = {"content_fingerprint": file.get("content_fingerprint"),
            "size": file.get("size"), "mtime_ns": file.get("mtime_ns")}
     writes = {"GPSProcessingMethod": method}
@@ -2429,8 +2429,13 @@ def plan_file_ops(file, resolved_utc, tz, gps_category, gps_coord, rename):
     # Corrected is the time geotag writes, never merely the one resolved (DEF-corrected_time): marked only when this
     # plan writes it, or when the field the photo holds already carries geotag's mark from an earlier run. A photo
     # holding its true time already is decided from its own values again on a re-run, with the same result: nothing
-    # to write (RUL-only_corrected_time_marked).
-    time_corrected = geotag_marker(held.get("method")) is not None
+    # to write (RUL-only_corrected_time_marked). A position marker says only that geotag wrote the position: on a
+    # pinned photo the time it holds is corrected only where it is one geotag wrote (BLD-time_written_recorded).
+    held_mark = geotag_marker(held.get("method"))
+    if held_mark in POSITION_MARKERS and file.get("from_originals"):
+        time_corrected = {k: held.get(k) for k in TIME_PAIR} in (file.get("times_written") or [])
+    else:
+        time_corrected = held_mark is not None
     dto, off = _local_time_and_offset(resolved_utc, tz)
     if dto is not None:
         writes = {"DateTimeOriginal": dto, "OffsetTimeOriginal": off}   # a local time always comes with its offset
@@ -2451,11 +2456,28 @@ def plan_file_ops(file, resolved_utc, tz, gps_category, gps_coord, rename):
                                  "gps_origin": _GPS_OP_ORIGIN[gps_category]}, pre))
             ops.append(_make_op("gps_marker_write", rel, "gps provenance",
                                 {"writes": {"GPSProcessingMethod": new_marker}}, pre))
+    elif held_mark in POSITION_MARKERS:
+        # A position geotag wrote that the decision no longer places — a withdrawn manual position: undone, as if it
+        # had never been written (RUL-withdrawal_undoes). The field goes back to the device's own value, marked only
+        # where the time is corrected (RUL-only_corrected_time_marked).
+        method = device_method(file.get("processing_method"))
+        target = with_time_fixed(method) if time_corrected else method
+        if gps_category == "preserve_native":
+            # written over the photo's own — a withdrawn answer to a contradicted own position: its own, pinned before
+            # geotag's first write, is given back (RUL-own_position_kept)
+            own = file.get("native_gps") or {}
+            if not (isinstance(held.get("lat"), (int, float)) and isinstance(held.get("lon"), (int, float))
+                    and round(held["lat"], 6) == round(own["lat"], 6) and round(held["lon"], 6) == round(own["lon"], 6)):
+                ops.append(_make_op("metadata_gps_write", rel, "gps:own_position_restored",
+                                    {"writes": _coordinate_tags(own["lat"], own["lon"]), "gps_origin": "restore_own"},
+                                    pre))
+            ops.append(_make_op("gps_marker_write", rel, "gps provenance", {"writes": {"GPSProcessingMethod": target}},
+                                pre))
+        else:
+            ops.append(time_fixed_marker_op(file, target, clear_position=True))   # geotag's old fix: not kept
     elif time_corrected:
         target = with_time_fixed(device_method(file.get("processing_method")))
-        if geotag_marker(held.get("method")) in POSITION_MARKERS:
-            ops.append(time_fixed_marker_op(file, target, clear_position=True))   # geotag's old fix: not kept
-        elif (held.get("method") or "").strip() != target:
+        if (held.get("method") or "").strip() != target:
             ops.append(time_fixed_marker_op(file, target))
 
     if rename and rename.get("rename"):

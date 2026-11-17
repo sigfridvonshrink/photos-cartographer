@@ -667,7 +667,8 @@ the record as one it cannot read until the field is removed.
   wrong fix (jitter, a fix from minutes before). `requires_user_input: false`: the photo keeps its own position. To
   replace it, set `manual_lat`/`manual_lon` — the editor's **take the track's position** writes `proposed_position`
   — and it is written as `manual_locked`, the log keeping the position it replaced. Its `user_decision` holds only
-  those two. An answered item stays while its answer does. Never raised for a group named several bodies (§5d). A contradicted photo the
+  those two. An answered item stays while its answer does; cleared, the photo has its own position again — written
+  back into it where your answer was already written, the log keeping the position it replaced. Never raised for a group named several bodies (§5d). A contradicted photo the
   tracks place nowhere at its corrected time is not an item: it keeps its own position and is listed in its
   destination's `gps_decisions.contradicted_without_track` (`[{ "relative_path", "content_fingerprint" }]`).
 

@@ -439,7 +439,8 @@ GPS is placed only once every photo's true time is resolved. A photo keeps its o
 replace it: a photo whose own position agrees with none of its camera's other photos on the tracks, once their
 agreed offset is in effect, most likely holds a wrong fix, and where the track at its corrected time is farther
 from it than an anchor may be, the track's position is offered in the GPS view. Nothing waits on it, and nothing
-replaces its own position but your answer; the log keeps the position replaced. A group marked several bodies is
+replaces its own position but your answer; the log keeps the position replaced. Take the answer back and the photo's
+own position is written back into it, as if you had never given one. A group marked several bodies is
 never doubted so.
 A position of exactly latitude 0, longitude 0 is not one — it is what a device writes with no fix — so
 that photo is placed like one without, its camera's clock is never read from it, and the log records the
