@@ -1225,7 +1225,9 @@ def test_a_changed_time_kept_is_the_photo_s_true_local_time(tmp_path, monkeypatc
         ("2024:07:03 14:20:00", "2024:07:03 14:20:00")                  # its own values stay
     _plan(monkeypatch, ws)
     art, cell = _changed_cell(ws)
-    assert cell is None and not art["requires_user_input"] and _ops(ws) == {}   # decided: nothing asked or written
+    assert not art["requires_user_input"] and _ops(ws) == {}                     # decided: nothing asked or written
+    # the answer stays in the record while it stands, there to be withdrawn
+    assert cell["user_decision"]["keep"] == "new" and cell["effective_answer"] == "new" and not cell["requires_user_input"]
     row = _rows(ws)[f"{T}/{KEPT}"]
     assert (row["time_rule_used"], row["resolved_utc"]) == ("kept_true_time", "2024-07-03T12:45:00Z")
 
@@ -1252,6 +1254,48 @@ def test_a_time_changed_after_one_was_kept_restores_the_kept_one(tmp_path, monke
     _plan(monkeypatch, ws)
     w = _ops(ws)[f"{T}/{KEPT}"]["writes"]
     assert (w["DateTimeOriginal"], w["OffsetTimeOriginal"]) == ("2024:07:03 14:45:00", "+02:00")
+
+
+@pytest.mark.spec("RUL-kept_time_holds_while_answer_stands", "BLD-changed_time_kept_pinned",
+                  test="TST-geotag_rerun_markers-a_withdrawn_keep_asks_again")
+def test_a_withdrawn_keep_answer_asks_the_question_again(tmp_path, monkeypatch):
+    """A time kept and executed: the answer stays in photos-21. Withdrawn there, the kept time is decided from no
+    longer — the question is asked again, and nothing is written back unasked. Answered then to take back geotag's
+    time, the plan writes it, and execution takes the kept time out of the pin: the next plan asks nothing."""
+    ws = _executed_round(tmp_path, monkeypatch)
+    _hand_set_time(ws, "2024:07:03 14:45:00", "+02:00")
+    _plan(monkeypatch, ws)
+    _answer_changed(ws, "new")
+    _plan(monkeypatch, ws)
+    _execute(monkeypatch, ws)
+    _plan(monkeypatch, ws)
+    _, cell = _changed_cell(ws)
+    assert cell["user_decision"]["keep"] == "new" and not cell["requires_user_input"]
+    p = ws / ".photos-ingest" / cal.TIME_DECISIONS_ARTIFACT
+    a = json.loads(p.read_text())
+    (cell,) = a["destinations"][T]["changed_times"].values()
+    cell["user_decision"] = {"keep": "", "answered_for": ""}                 # withdrawn, as the editor clears it
+    p.write_text(json.dumps(a))
+    plan_before = _plan_record(ws)
+    _plan(monkeypatch, ws)
+    art, cell = _changed_cell(ws)
+    assert cell["requires_user_input"] and art["requires_user_input"]        # asked again
+    assert cell["held_time"] == {"DateTimeOriginal": "2024:07:03 14:45:00", "OffsetTimeOriginal": "+02:00"}
+    assert _plan_record(ws) == plan_before                                   # nothing planned, nothing written back
+    (pin,) = _originals(ws).values()
+    assert "true_time" in pin                                                # nothing reverted unasked
+    _answer_changed(ws, "geotag")
+    _plan(monkeypatch, ws)
+    plan = _plan_record(ws)
+    assert plan["status"] == "ready" and plan["true_times_dropped"] == [f"{T}/{KEPT}"], plan
+    w = _ops(ws)[f"{T}/{KEPT}"]["writes"]
+    assert (w["DateTimeOriginal"], w["OffsetTimeOriginal"]) == ("2024:07:03 14:30:00", "+02:00")
+    _execute(monkeypatch, ws)
+    (pin,) = _originals(ws).values()
+    assert "true_time" not in pin
+    _plan(monkeypatch, ws)
+    art, cell = _changed_cell(ws)
+    assert cell is None and not art["requires_user_input"] and _ops(ws) == {}
 
 
 @pytest.mark.spec("RUL-kept_time_not_clock_evidence", "BLD-changed_time_kept_not_anchor",

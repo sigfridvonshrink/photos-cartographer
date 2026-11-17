@@ -1657,7 +1657,7 @@
     }
   },
   "depends_on": {
-    "camera_group_key_version": 1,
+    "camera_group_key_version": 2,
     "camera_time_policy_fingerprint": "38ef860b9f5d26b78f05fe4692e64328729afdd4089a3300ef41e26df8390180",
     "gpx_fingerprint": "example-gpx-fingerprint",
     "handoff": {
@@ -2018,18 +2018,11 @@
             "proposal_source": "gpx_self_anchor",
             "proposed_offset_seconds": -7200,
             "proposed_real_utc": "2024-07-03T12:00:00Z",
-            "recommended_gpx_match": {
-              "distance_m": 0.0,
-              "gpx_file": "trip-2024-07-03.gpx",
-              "match_type": "gpx_point_match",
-              "segment_duration_seconds": null
-            },
             "skipped": {
               "examples": [],
               "no_nearby_track": 0,
               "outside_time_window": 0
             },
-            "supporting_count": 1,
             "tied": false
           },
           "representative": {

@@ -1657,7 +1657,7 @@
     }
   },
   "depends_on": {
-    "camera_group_key_version": 1,
+    "camera_group_key_version": 2,
     "camera_time_policy_fingerprint": "17a94d3e0d38d4f07120b41415af2eda0310f2644f39cf96c5a3897dad0bd484",
     "gpx_fingerprint": "example-gpx-fingerprint",
     "handoff": {

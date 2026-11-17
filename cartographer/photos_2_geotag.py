@@ -197,6 +197,20 @@ class GeotagCache:
             self.conn.execute("UPDATE original_values SET original = ? WHERE content_fingerprint = ?",
                               (json.dumps(original, sort_keys=True), fp))
 
+    def originals_drop_true_time(self, fp):
+        """Take out of the pinned file's own values the time the user kept as its true one, once their answer to keep
+        it is withdrawn and answered otherwise (BLD-changed_time_kept_pinned). A file with no pin, or none kept, is
+        not touched."""
+        with self.conn:
+            row = self.conn.execute("SELECT original FROM original_values WHERE content_fingerprint = ?",
+                                    (fp,)).fetchone()
+            if row is None:
+                return
+            original = json.loads(row[0])
+            if original.pop("true_time", None) is not None:
+                self.conn.execute("UPDATE original_values SET original = ? WHERE content_fingerprint = ?",
+                                  (json.dumps(original, sort_keys=True), fp))
+
     def time_written_record(self, fp, pair):
         """Record, beside a pinned file's own values, a time and offset geotag is about to write to it
         (BLD-time_written_recorded): every one is kept, so a re-plan knows each time the photo can hold from geotag.
@@ -312,6 +326,10 @@ DECISION_FIELDS = {
     "gps": {
         "folder_fallback": ("a destination's fallback position", ("fallback_lat", "fallback_lon")),
         "gps_decisions": ("a photo's position decision", REVIEW_DECISION_FIELDS),
+    },
+    # photos-25: a photo's changed content accepted (BLD-geotag_checks_decisions)
+    "execution": {
+        "fingerprint_mismatches": ("a photo's content acceptance", ("accept_fingerprint_change",)),
     },
 }
 # The blocks of one decision per destination; the others are cell families, one decision per cell.
@@ -1050,13 +1068,24 @@ class GeotagWorkflow:
                 files[-1] = dict(from_originals(files[-1], originals[key]), original_key=key,
                                  times_written=written.get(key) or [])   # the times geotag wrote (BLD-time_written_recorded)
                 if isinstance(originals[key].get("true_time"), dict):
-                    # a time the user kept on an earlier pass: its true local time from then on
-                    # (BLD-changed_time_kept_pinned)
-                    files[-1] = keep_true_time(files[-1], originals[key]["true_time"])
+                    # a time the user kept on an earlier pass: its true local time from then on — while their answer
+                    # stands. Withdrawn in photos-21, it is decided from as such no longer: the photo's time is asked
+                    # about again, nothing written back until answered (BLD-changed_time_kept_pinned)
+                    # Withdrawn: the answer for the kept time no longer "new", or cleared — not an answer about a time
+                    # changed again since, which names that time
+                    kept = {k: originals[key]["true_time"].get(k) for k in TIME_PAIR}
+                    standing = _earlier_decision(answers, files[-1]).get("user_decision")
+                    standing = standing if isinstance(standing, dict) else None
+                    if standing is not None and standing.get("keep") != "new" \
+                            and standing.get("answered_for") in ("", None, kept):
+                        files[-1]["kept_time_withdrawn"] = dict(originals[key]["true_time"])
+                    else:
+                        files[-1] = dict(keep_true_time(files[-1], originals[key]["true_time"]),
+                                         kept_from_pin=dict(originals[key]["true_time"]))
                 ch = changed_time(files[-1])
                 if ch is not None:
                     # its time changed since geotag wrote it: the user's answer, found by its fingerprint
-                    ud = (answers.get(fp) or answers.get(key) or {}).get("user_decision")
+                    ud = _earlier_decision(answers, files[-1]).get("user_decision")
                     answer = _changed_time_answer(ud if isinstance(ud, dict) else {}, ch)
                     if answer == "new":
                         # kept: the photo's true local time (BLD-changed_time_kept), its pin's at execution
@@ -1228,19 +1257,20 @@ class GeotagWorkflow:
                 waits_at = inherited_tz[0]
                 inherited_tz = None                 # the destination above waits on its own photos: so does this
             prior_ud = (prior_d.get("destination_timezone") or {}).get("user_decision") or {}
-            own_country, removed = prior_ud.get("country", "") or "", None
+            own_country, removed = prior_ud.get("country", ""), None
+            own_country = "" if own_country is None else own_country
+            if not isinstance(own_country, str):
+                # A value that is not a country's code at all — a list, a number, false — is named like any other the
+                # user wrote that cannot be taken, never read as no answer (RUL-checked_shapes).
+                blockers.append(f"{dest}: destination_timezone.user_decision.country must be a country's code "
+                                f"written as text, not {own_country!r}")
+                own_country = ""
             above = next((eff_country[a] for a in _walk_ancestors(dest) if a in eff_country), None)
             if own_country and above:
                 # What lies inside a destination is in that destination's country: the one said above stands, this one is taken out
                 # of the decision — said aloud, and left in the record of this run.
                 removed = {"country": own_country, "because": above[1], "country_there": above[0]}
                 self.country_removals.append(dict(removed, destination=dest))
-                own_country = ""
-            if own_country and not isinstance(own_country, str):
-                # A value that is not a country's code at all — a list, a number — is named like any other
-                # the user wrote that cannot be taken (RUL-checked_timezones' neighbours: every value is checked).
-                blockers.append(f"{dest}: destination_timezone.user_decision.country must be a country's code "
-                                f"written as text, not {type(own_country).__name__}")
                 own_country = ""
             if own_country and own_country not in table:
                 blockers.append(f"{dest}: destination_timezone.user_decision.country {own_country!r} is not a "
@@ -1267,6 +1297,7 @@ class GeotagWorkflow:
             # the zone it would take — the one written for it, else the one it inherits — is set against what its own
             # photos record.
             written = prior_ud.get("manual_iana_timezone")
+            written = written if isinstance(written, str) else None     # one not text is a blocker below
             candidate = written if written and _valid_iana(written) else (inherited_tz[1] if inherited_tz else None)
             against = _offsets_against_zone(by_dest[dest], groups, candidate) if candidate and not is_container else None
             if written or own_country:
@@ -1620,6 +1651,18 @@ class GeotagWorkflow:
             out = {}
             for f in sorted(by_dest.get(dest) or [], key=lambda x: x["relative_path"]):
                 ch = f.get("changed_time")
+                if not ch and f.get("kept_from_pin"):
+                    # a time kept on an earlier pass: its answer stays in the record while it stands, for the user to
+                    # withdraw it there (RUL-kept_time_holds_while_answer_stands)
+                    kept = {k: f["kept_from_pin"].get(k) for k in TIME_PAIR}
+                    written_ = f.get("times_written") or []
+                    d.setdefault("changed_times", {})[f["relative_path"]] = {
+                        "content_fingerprint": f.get("content_fingerprint"), "held_time": kept,
+                        "geotag_wrote": dict(written_[-1]) if written_ else None,
+                        "own_time": {k: (f.get("own_time") or {}).get(k) for k in TIME_PAIR},
+                        "user_decision": {"keep": "new", "answered_for": kept}, "effective_answer": "new",
+                        "requires_user_input": False, "stale_user_decision": False}
+                    continue
                 if not ch:
                     continue
                 rel = f["relative_path"]
@@ -1657,7 +1700,7 @@ class GeotagWorkflow:
                     out[rel]["offset_tag_disagrees"] = disagrees
                     self.kept_tag_disagreements.append(dict(disagrees, relative_path=rel, answer=answer or ""))
             if out:
-                d["changed_times"] = out
+                d["changed_times"] = dict(sorted({**(d.get("changed_times") or {}), **out}.items()))
 
     def _ask_local_time_readings(self, destinations, by_dest, groups, prior_dests, blockers):
         """Each photo read by its destination's zone at a time the zone skips or repeats is asked about here, alone
@@ -1989,7 +2032,13 @@ class GeotagWorkflow:
         else:
             proposed, source, inherited_from = None, "none", None
         ud = prior_tz.get("user_decision") or {}
-        manual = ud.get("manual_iana_timezone", "") or ""
+        manual = ud.get("manual_iana_timezone", "")
+        manual = "" if manual is None else manual
+        if not isinstance(manual, str):
+            # false, 0 or [] is no zone, and no "no answer" either: named, never read as empty (RUL-checked_shapes)
+            blockers.append(f"{dest}: destination_timezone.user_decision.manual_iana_timezone must be a timezone "
+                            f"written as text, not {manual!r}.")
+            manual = ""
         # The photos here that record another offset than the zone has: the zone stands against them only
         # on the user's explicit word, which names the offsets it was given for — a photo arriving with yet
         # another offset was never spoken for, and asks again.
@@ -2118,9 +2167,10 @@ class GeotagWorkflow:
         accept = _decision_flag(ud, "accept_proposal", f"{dest}: camera_group_time_decisions[{loc}].user_decision", blockers)
         manual_off = ud.get("manual_offset_seconds", "")
         accepted_off = ud.get("accepted_offset_seconds", "")
-        # A phone's photos kept as they record themselves, its own GPS set aside (BLD-phone_offset_cell).
-        keep = phone and _decision_flag(ud, "keep_as_recorded",
-                                        f"{dest}: camera_group_time_decisions[{loc}].user_decision", blockers)
+        # A phone's photos kept as they record themselves, its own GPS set aside (BLD-phone_offset_cell) — the value
+        # checked on every offset cell, a camera's too, never passed over (RUL-checked_shapes).
+        keep = _decision_flag(ud, "keep_as_recorded",
+                              f"{dest}: camera_group_time_decisions[{loc}].user_decision", blockers) and phone
         effective, stale, decision_mode = "", False, None
 
         if manual_off != "" and manual_off is not None:
@@ -2689,6 +2739,49 @@ class GeotagWorkflow:
         return {"own_position": mine, "apart_meters": apart,
                 "proposed_position": {"lat": p["lat"], "lon": p["lon"], "method": p["method"], "gpx_file": p["gpx_file"]}}
 
+    def authored_value_blockers(self, files, prior_drift, prior_gps):
+        """Located blockers for the values the user wrote in photos-22 and photos-23 (BLD-geotag_checks_decisions),
+        found before any decision record is written, so an invalid one stops the plan with nothing changed
+        (RUL-invalid_value_stops) — each record's structure and fields, its drift answers' offsets and flags, its
+        fallback and review positions, and the photos its chosen positions name. What these values decide is worked
+        out by their stages, later; whether each can be taken at all does not wait for them."""
+        out = []
+        drift = _decision_shape_blockers(prior_drift, "drift")
+        out += drift
+        if not drift:
+            for dest, d in sorted(((prior_drift or {}).get("destinations") or {}).items()):
+                for loc, cell in sorted((d.get("drift_decisions") or {}).items()):
+                    ud = cell.get("user_decision") or {}
+                    where = f"{dest}: drift_decisions[{loc}].user_decision"
+                    confirmed = _decision_flag(ud, "confirmed", where, out)
+                    written = lambda v: v not in ("", None)
+                    if written(ud.get("corrected_offset_seconds")) and not _valid_offset(ud["corrected_offset_seconds"]):
+                        out.append(f"{where}.corrected_offset_seconds must be empty or a whole number of seconds.")
+                    against = ud.get("confirmed_offset_seconds")
+                    if written(against) and not _valid_offset(against):
+                        out.append(f"{where}.confirmed_offset_seconds must be a whole number of seconds.")
+                    elif confirmed and not written(against):
+                        out.append(f"{where}.confirmed_offset_seconds must be the offset confirmed.")
+                    named = ud.get("confirmed_against_tracks")
+                    if confirmed and not (isinstance(named, list) and all(
+                            isinstance(t, dict) and isinstance(t.get("gpx_file"), str) and t["gpx_file"]
+                            and isinstance(t.get("sha256"), str) and t["sha256"] for t in named)):
+                        out.append(f"{where}.confirmed_against_tracks must name the tracks the confirmation was "
+                                   "made against, each with its gpx_file and sha256.")
+        gps = _decision_shape_blockers(prior_gps, "gps")
+        out += gps
+        if not gps:
+            by_dest = {}
+            for f in files:
+                by_dest.setdefault(f["destination"], []).append(f)
+            for dest, d in sorted(((prior_gps or {}).get("destinations") or {}).items()):
+                self._folder_fallback_cell(dest, d.get("folder_fallback") or {}, None, out)
+                items = (d.get("gps_decisions") or {}).get("review_items") or []
+                for ri in items:
+                    self._validate_review_decision(dest, ri["relative_path"], ri.get("user_decision") or {}, out)
+                self._check_chosen_items(dest, items, by_dest.get(dest, []), out)
+        return out
+
     def _folder_fallback_cell(self, dest, prior_fb, inherited, blockers):
         """A destination's `folder_fallback` (BLD-folder_fallback_cell): the fallback it inherits from the nearest
         destination above it that has one written, applied by itself (RUL-inherited_fallback_applies), unless a
@@ -2936,6 +3029,9 @@ class GeotagWorkflow:
             "true_times_kept": {f["relative_path"]: dict(f["time_kept"],
                                                          content_fingerprint=f.get("content_fingerprint"))
                                 for f in sorted(files, key=lambda x: x["relative_path"]) if f.get("time_kept")},
+            # the kept times whose answer was withdrawn and answered otherwise, which execution takes out of the pins
+            "true_times_dropped": sorted(f["relative_path"] for f in files
+                                         if f.get("kept_time_withdrawn") and not f.get("time_kept")),
             "destinations": destinations,
             "depends_on": depends_on,
         }
@@ -3316,6 +3412,11 @@ class GeotagWorkflow:
         jpath = journal_path(ws, plan["plan_id"])
         _j = _read_record(jpath) or {}
         journal, media_after = _j.get("operations") or {}, _j.get("media_after") or {}
+        # the user's acceptances of changed content are checked as every decision is, before anything is done
+        # (BLD-geotag_checks_decisions): an invalid one stops the run, located, the record left as it is
+        invalid = self._mismatch_decision_blockers(ws, plan["plan_id"])
+        if invalid:
+            return {"status": "rejected", "plan_id": plan.get("plan_id"), "stale": invalid, "invalid": True}
         accepted = self._accepted_mismatches(ws, plan["plan_id"])
         # the failures the previous execution of this plan recorded: a write failing again the same way is told
         # with its way out (BLD-repeated_write_failure)
@@ -3386,6 +3487,9 @@ class GeotagWorkflow:
                 if fp and f.get("original_key") not in (None, fp):
                     # the pin follows the new value (BLD-original_values_follow_fingerprint)
                     cache.originals_rekey(f["original_key"], fp)
+                if f["relative_path"] in (plan.get("true_times_dropped") or []) and f.get("from_originals"):
+                    # an answer to keep the time withdrawn, and answered otherwise (BLD-changed_time_kept_pinned)
+                    cache.originals_drop_true_time(f["original_key"])
                 kept = kept_times.get(f["relative_path"])
                 if kept and f.get("from_originals") and \
                         {k: held_values(f).get(k) for k in TIME_PAIR} == {k: kept.get(k) for k in TIME_PAIR}:
@@ -3489,6 +3593,33 @@ class GeotagWorkflow:
                 return []
             return [f for f in (prior.get("failures") or []) if isinstance(f, dict)]
         return []
+
+    @staticmethod
+    def _mismatch_decision_blockers(ws, plan_id):
+        """Located blockers for photos-25's content acceptances of this plan (RUL-checked_shapes,
+        RUL-unknown_decision_field_refused): each entry an object whose `user_decision` is an object holding
+        `accept_fingerprint_change` true or false, and no other field."""
+        prior = _read_record(execution_summary_path(ws))
+        if prior is None or prior.get("plan_id") != plan_id:
+            return []
+        out = []
+        held = prior.get("fingerprint_mismatches")
+        if held is None:
+            return out
+        if not isinstance(held, list):
+            return [f"{EXECUTION_SUMMARY_ARTIFACT}: fingerprint_mismatches must be a list."]
+        what, fields = DECISION_FIELDS["execution"]["fingerprint_mismatches"]
+        for i, m in enumerate(held):
+            where = f"{EXECUTION_SUMMARY_ARTIFACT}: fingerprint_mismatches[" + (
+                str(m.get("relative_path")) if isinstance(m, dict) else str(i)) + "]"
+            ud = m.get("user_decision") if isinstance(m, dict) else None
+            if not isinstance(ud, dict):
+                out.append(f"{where}: must be an object holding user_decision, an object.")
+                continue
+            _decision_flag(ud, "accept_fingerprint_change", f"{where}.user_decision", out)
+            out.extend(f"{where}.user_decision.{k}: {what} has no such field — remove it." for k in ud
+                       if k not in fields)
+        return out
 
     @classmethod
     def _accepted_mismatches(cls, ws, plan_id):
@@ -4004,6 +4135,14 @@ def _load_prior_decisions(path):
     return prior, None
 
 
+def _split_authored(wf, files, later):
+    """(photos-22's blockers, photos-23's) of `wf.authored_value_blockers`, apart, for each to be named under its
+    record."""
+    drift = wf.authored_value_blockers(files, later[DRIFT_VALIDATION_ARTIFACT], None)
+    gps = wf.authored_value_blockers(files, None, later[GPS_DECISIONS_ARTIFACT])
+    return drift, gps
+
+
 def _stop_on_unreadable_decisions(reporter, problem):
     """A decision artifact that does not parse stops geotag before anything is made from it."""
     reporter.error("\nGeotag cannot proceed: a decision artifact cannot be read:")
@@ -4303,11 +4442,24 @@ def run(args):
             artifact, td_blockers = wf.build_time_decisions(files, groups, prior, gpx)
             # the tracks as widened for photos-21's readers (BLD-track_window)
             _stop_on_tracks(reporter, gpx, "No geotag JSON was written.")
-            if td_blockers:
-                reporter.error("\nGeotag cannot proceed: invalid value(s) in photos-21-time-decisions.json:")
-                for b in td_blockers:
-                    reporter.log(f"  - {b}")
-                reporter.log("\nFix the field(s) and re-run; the artifact was left unchanged.")
+            # photos-22 and photos-23 as the user left them, checked now: an invalid value in any of the three stops
+            # the plan before any of them is written (BLD-geotag_checks_decisions, RUL-invalid_value_stops)
+            later = {}
+            for path, name in ((drift_validation_path(workspace_root), DRIFT_VALIDATION_ARTIFACT),
+                               (gps_decisions_path(workspace_root), GPS_DECISIONS_ARTIFACT)):
+                later[name], problem = _load_prior_decisions(path)
+                if problem:
+                    _stop_on_unreadable_decisions(reporter, problem)
+            found = [(TIME_DECISIONS_ARTIFACT, td_blockers)] + [
+                (name, blk) for name, blk in zip((DRIFT_VALIDATION_ARTIFACT, GPS_DECISIONS_ARTIFACT),
+                                                 _split_authored(wf, files, later))]
+            if any(blk for _n, blk in found):
+                for name, blk in found:
+                    if blk:
+                        reporter.error(f"\nGeotag cannot proceed: invalid value(s) in {name}:")
+                        for b in blk:
+                            reporter.log(f"  - {b}")
+                reporter.log("\nFix the field(s) and re-run; nothing was changed — no decision record was written.")
                 sys.exit(2)
             # Back up any prior hand-edited decision file before regenerating it (incremental -NNN),
             # so an authored decision is always recoverable.
@@ -4537,6 +4689,13 @@ def run(args):
                 reporter.error(f"\nExecution cannot proceed: {e}. Nothing was changed.")
                 emit_next_step(reporter, f"repair it (or move it out of {CONTROL_DIR}/ if it cannot be "
                                          "repaired), then re-run `geotag execute`.")
+                sys.exit(2)
+            if summary.get("invalid"):
+                reporter.error(f"\nExecution cannot proceed: invalid value(s) in {EXECUTION_SUMMARY_ARTIFACT}:")
+                for s in summary["stale"]:
+                    reporter.log(f"  - {s}")
+                reporter.log("\nFix the field(s) and re-run; nothing was changed.")
+                emit_next_step(reporter, f"fix the field(s) in {EXECUTION_SUMMARY_ARTIFACT}, then re-run `geotag execute`.")
                 sys.exit(2)
             if summary.get("status") == "rejected":
                 reporter.error("\nExecution rejected — the plan is stale; re-run `geotag plan` to replan:")

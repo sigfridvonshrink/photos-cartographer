@@ -974,8 +974,8 @@ An offset proposed from another destination of the same day SHALL take effect by
 :refines: RUL-offset_per_camera_destination_day
 :uses: DEF-clock_offset
 
-A camera's clock offset derived from its destination's timezone SHALL be the zone's at the earliest camera time of its
-day there, for every photo of that day.
+A camera's clock offset derived from its destination's timezone SHALL be the zone's at the earliest camera time its
+photos of that day there still hold, for every photo of that day.
 :::
 
 :::{rul} One clock is not read two ways in one day
@@ -1605,7 +1605,8 @@ offsets, nor be counted in one.
 :verify: required
 :refines: RUL-unknown_group_stops_geotag
 
-Geotag SHALL NOT plan while the configuration classes a camera group as both a phone and a camera with a fixed clock.
+Geotag SHALL NOT plan while the configuration classes a camera group in photos by destination as both a phone and a
+camera with a fixed clock.
 :::
 
 :::{rul} The configuration says which camera groups are several bodies
@@ -2010,6 +2011,7 @@ does records the zone's.
 :criticality: high
 :verify: required
 :refines: RUL-untagged_phone_photo_read_as_siblings
+:excepts: RUL-anchor_offset_auto_as_configured
 :uses: RUL-phone_anchored_like_camera
 
 Where its tagged photos do not, a phone's photos of a day in a destination recording no offset SHALL be read, without
@@ -2215,6 +2217,7 @@ An offset changed since it was confirmed SHALL be asked about again.
 :anti: yes
 :verify: required
 :refines: RUL-unanchored_offset_confirmed
+:excepts: RUL-tracks_elsewhere_restale_nothing
 :uses: DEF-tracks
 
 A confirmation SHALL hold only while every track file it was made against is there unchanged.
@@ -2820,6 +2823,7 @@ A position geotag clears SHALL be cleared whole.
 :criticality: high
 :verify: required
 :refines: RUL-offset_per_camera_destination_day
+:excepts: RUL-gps_time_far_from_evidence_withheld
 
 A camera's clock offset for a day, once resolved, SHALL stay that day's offset for photos of that camera arriving
 later — one found from its own GPS included, though the later photos bring no anchor.
@@ -2832,6 +2836,7 @@ later — one found from its own GPS included, though the later photos bring no 
 :anti: yes
 :verify: required
 :refines: RUL-day_offset_kept_for_later_photos
+:excepts: RUL-tracks_elsewhere_restale_nothing
 
 An offset found from a camera's own positions on the tracks SHALL be kept for later photos only while every track file
 it was found from is there unchanged.

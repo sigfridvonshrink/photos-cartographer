@@ -3,7 +3,7 @@
   "artifact_type": "gps_decisions",
   "decision_mode": "no_op_or_auto_resolved",
   "depends_on": {
-    "gps_policy_fingerprint": "e3e1e2845a43dd2da3a139f976622ac01901abdbac30bf52ebe974d18ea21290",
+    "gps_policy_fingerprint": "8e10036be79b05bf64794ab358fd73904d71eeea9c91c29ef9357283bc411967",
     "gpx_fingerprint": "example-gpx-fingerprint",
     "handoff": {
       "artifact_name": "photos-11-handoff.json",
@@ -28,13 +28,7 @@
       },
       "gps_decisions": {
         "automatic_decision_summary": {
-          "confidence": "automatic",
-          "gpx_files_used": [],
-          "max_distance_to_track_m": 1000.0,
-          "max_interpolation_gap_seconds": 1800.0,
-          "notes": [
-            "Automatic decisions are summarized here; exact file-level write operations are listed only in photos-24-executable-plan.json."
-          ]
+          "gpx_files_used": []
         },
         "placed_photos": [
           {
@@ -74,13 +68,7 @@
       },
       "gps_decisions": {
         "automatic_decision_summary": {
-          "confidence": "automatic",
-          "gpx_files_used": [],
-          "max_distance_to_track_m": 1000.0,
-          "max_interpolation_gap_seconds": 1800.0,
-          "notes": [
-            "Automatic decisions are summarized here; exact file-level write operations are listed only in photos-24-executable-plan.json."
-          ]
+          "gpx_files_used": []
         },
         "placed_photos": [
           {
@@ -134,13 +122,7 @@
       },
       "gps_decisions": {
         "automatic_decision_summary": {
-          "confidence": "automatic",
-          "gpx_files_used": [],
-          "max_distance_to_track_m": 1000.0,
-          "max_interpolation_gap_seconds": 1800.0,
-          "notes": [
-            "Automatic decisions are summarized here; exact file-level write operations are listed only in photos-24-executable-plan.json."
-          ]
+          "gpx_files_used": []
         },
         "placed_photos": [
           {
@@ -185,13 +167,7 @@
       },
       "gps_decisions": {
         "automatic_decision_summary": {
-          "confidence": "automatic",
-          "gpx_files_used": [],
-          "max_distance_to_track_m": 1000.0,
-          "max_interpolation_gap_seconds": 1800.0,
-          "notes": [
-            "Automatic decisions are summarized here; exact file-level write operations are listed only in photos-24-executable-plan.json."
-          ]
+          "gpx_files_used": []
         },
         "placed_photos": [
           {
@@ -243,14 +219,8 @@
       },
       "gps_decisions": {
         "automatic_decision_summary": {
-          "confidence": "automatic",
           "gpx_files_used": [
             "trip-2024-07-03.gpx"
-          ],
-          "max_distance_to_track_m": 1000.0,
-          "max_interpolation_gap_seconds": 1800.0,
-          "notes": [
-            "Automatic decisions are summarized here; exact file-level write operations are listed only in photos-24-executable-plan.json."
           ]
         },
         "placed_photos": [
@@ -343,13 +313,7 @@
       },
       "gps_decisions": {
         "automatic_decision_summary": {
-          "confidence": "automatic",
-          "gpx_files_used": [],
-          "max_distance_to_track_m": 1000.0,
-          "max_interpolation_gap_seconds": 1800.0,
-          "notes": [
-            "Automatic decisions are summarized here; exact file-level write operations are listed only in photos-24-executable-plan.json."
-          ]
+          "gpx_files_used": []
         },
         "placed_photos": [
           {

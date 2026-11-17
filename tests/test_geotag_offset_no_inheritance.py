@@ -428,6 +428,36 @@ def test_a_country_s_zone_stops_where_its_own_photos_speak_against_it(tmp_path):
     assert tz[f"{jp}/Kyoto"]["effective_iana_timezone"] == "Asia/Tokyo"
 
 
+@pytest.mark.spec("RUL-checked_shapes", "RUL-invalid_value_never_repaired", "BLD-geotag_checks_decisions",
+                  test="TST-geotag_offset_no_inheritance-a_falsy_value_is_no_answer_but_a_blocker")
+@pytest.mark.parametrize("value", [False, 0, []], ids=["false", "zero", "list"])
+@pytest.mark.parametrize("field", ["manual_iana_timezone", "country"])
+def test_a_falsy_value_that_is_not_text_is_a_blocker_not_no_answer(tmp_path, field, value):
+    """`false`, `0` or `[]` written for a destination's zone or country is not an empty answer: it is a blocker naming
+    the field, never read as none."""
+    wf = _wf(tmp_path)
+    dest = f"{BYDEST}/Roadtrip"
+    prior = {"destinations": {dest: {"destination_timezone": {"user_decision": {field: value}}}}}
+    _art, blk = wf.build_time_decisions([_phone(f"{dest}/a.jpg", dest, "2024:07:03 10:00:00", "+01:00")], BOTH,
+                                        prior, _gpx([]))
+    assert any(f"{dest}: destination_timezone.user_decision.{field}" in b for b in blk), blk
+
+
+@pytest.mark.spec("RUL-checked_shapes", "BLD-geotag_checks_decisions",
+                  test="TST-geotag_offset_no_inheritance-keep_as_recorded_is_checked_on_every_cell")
+def test_keep_as_recorded_is_checked_on_a_camera_s_cell_too(tmp_path):
+    """`keep_as_recorded: "maybe"` on a camera's offset cell, where it decides nothing, is still no yes or no: a
+    blocker, never passed over."""
+    wf = _wf(tmp_path)
+    dest = f"{BYDEST}/Roadtrip"
+    prior = {"destinations": {dest: {
+        "destination_timezone": {"user_decision": {"manual_iana_timezone": "Europe/Lisbon"}},
+        "camera_group_time_decisions": {CAM: {"user_decision": {"keep_as_recorded": "maybe"}}}}}}
+    _art, blk = wf.build_time_decisions([_file(f"{dest}/a.arw", dest)], BOTH, prior, _gpx([]))
+    assert any(f"camera_group_time_decisions[{CAM}].user_decision.keep_as_recorded must be true or false" in b
+               for b in blk), blk
+
+
 @pytest.mark.spec("RUL-destination_has_one_timezone", "RUL-zone_against_photos_needs_word", "BLD-timezone_cell",
                   test="TST-geotag_offset_no_inheritance-a_destination_has_one_timezone")
 def test_a_destination_has_one_timezone_for_all_its_photos(tmp_path):

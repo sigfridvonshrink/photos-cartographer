@@ -1658,7 +1658,7 @@
   },
   "decision_mode": "no_op_or_auto_resolved",
   "depends_on": {
-    "camera_group_key_version": 1,
+    "camera_group_key_version": 2,
     "camera_time_policy_fingerprint": "9b24ea72b2b7545630cb0104e61188cce2626f54f34cd205cd51930c6c40e55a",
     "gpx_fingerprint": "example-gpx-fingerprint",
     "handoff": {
@@ -1859,18 +1859,11 @@
             "proposal_source": "gpx_self_anchor",
             "proposed_offset_seconds": -3600,
             "proposed_real_utc": "2024-07-03T12:00:00Z",
-            "recommended_gpx_match": {
-              "distance_m": 0.0,
-              "gpx_file": "clock.gpx",
-              "match_type": "gpx_point_match",
-              "segment_duration_seconds": null
-            },
             "skipped": {
               "examples": [],
               "no_nearby_track": 0,
               "outside_time_window": 0
             },
-            "supporting_count": 1,
             "tied": true
           },
           "representative": {
@@ -1964,18 +1957,11 @@
             "proposal_source": "gpx_self_anchor",
             "proposed_offset_seconds": -7200,
             "proposed_real_utc": "2024-07-03T08:00:00Z",
-            "recommended_gpx_match": {
-              "distance_m": 0.0,
-              "gpx_file": "clock.gpx",
-              "match_type": "gpx_point_match",
-              "segment_duration_seconds": null
-            },
             "skipped": {
               "examples": [],
               "no_nearby_track": 0,
               "outside_time_window": 0
             },
-            "supporting_count": 1,
             "tied": false
           },
           "representative": {
@@ -2061,18 +2047,11 @@
             "proposal_source": "gpx_self_anchor",
             "proposed_offset_seconds": -3600,
             "proposed_real_utc": "2024-07-03T12:00:00Z",
-            "recommended_gpx_match": {
-              "distance_m": 0.0,
-              "gpx_file": "clock.gpx",
-              "match_type": "gpx_point_match",
-              "segment_duration_seconds": null
-            },
             "skipped": {
               "examples": [],
               "no_nearby_track": 0,
               "outside_time_window": 0
             },
-            "supporting_count": 1,
             "tied": false
           },
           "representative": {
@@ -2232,18 +2211,11 @@
             "proposal_source": "gpx_self_anchor",
             "proposed_offset_seconds": -7200,
             "proposed_real_utc": "2024-07-03T12:00:00Z",
-            "recommended_gpx_match": {
-              "distance_m": 0.0,
-              "gpx_file": "conflict-a.gpx",
-              "match_type": "gpx_point_match",
-              "segment_duration_seconds": null
-            },
             "skipped": {
               "examples": [],
               "no_nearby_track": 0,
               "outside_time_window": 0
             },
-            "supporting_count": 0,
             "tied": true
           },
           "representative": {
@@ -2350,18 +2322,11 @@
             "proposal_source": "gpx_self_anchor",
             "proposed_offset_seconds": -7200,
             "proposed_real_utc": "2024-07-04T12:00:00Z",
-            "recommended_gpx_match": {
-              "distance_m": 0.0,
-              "gpx_file": "trip-2024-07-04.gpx",
-              "match_type": "gpx_point_match",
-              "segment_duration_seconds": null
-            },
             "skipped": {
               "examples": [],
               "no_nearby_track": 0,
               "outside_time_window": 0
             },
-            "supporting_count": 0,
             "tied": true
           },
           "representative": {
@@ -2453,18 +2418,11 @@
             "proposal_source": "gpx_self_anchor",
             "proposed_offset_seconds": -7200,
             "proposed_real_utc": "2024-07-03T12:00:15Z",
-            "recommended_gpx_match": {
-              "distance_m": 33.36,
-              "gpx_file": "segment.gpx",
-              "match_type": "gpx_segment_interpolation",
-              "segment_duration_seconds": 30
-            },
             "skipped": {
               "examples": [],
               "no_nearby_track": 0,
               "outside_time_window": 0
             },
-            "supporting_count": 0,
             "tied": false
           },
           "representative": {
@@ -2556,18 +2514,11 @@
             "proposal_source": "gpx_self_anchor",
             "proposed_offset_seconds": -7200,
             "proposed_real_utc": "2024-07-03T12:00:00Z",
-            "recommended_gpx_match": {
-              "distance_m": 0.0,
-              "gpx_file": "single.gpx",
-              "match_type": "gpx_point_match",
-              "segment_duration_seconds": null
-            },
             "skipped": {
               "examples": [],
               "no_nearby_track": 0,
               "outside_time_window": 0
             },
-            "supporting_count": 0,
             "tied": false
           },
           "representative": {

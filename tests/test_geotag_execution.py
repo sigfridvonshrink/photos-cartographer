@@ -300,6 +300,29 @@ def test_accept_fingerprint_change_finalizes(tmp_path, monkeypatch):
     assert _summary(ctl)["status"] == "success"
 
 
+@pytest.mark.spec("RUL-checked_shapes", "RUL-unknown_decision_field_refused", "RUL-invalid_value_located",
+                  "BLD-geotag_checks_decisions",
+                  test="TST-geotag_execution-a_content_acceptance_is_checked")
+@pytest.mark.parametrize("decision, said", [({"accept_fingerprint_change": "true"}, "must be true or false"),
+                                            ({"accept_fingerprint_change": True, "accept_all": True}, "accept_all")])
+def test_a_content_acceptance_is_checked(tmp_path, monkeypatch, capsys, decision, said):
+    """An acceptance of changed content written as text, or beside a field it does not have, is no answer to take:
+    execute stops on it, naming the photo and the field, before anything is done — the record left as written."""
+    ws, ctl = _ready_ws(tmp_path, monkeypatch)
+    _mock_tools(monkeypatch, ws, content_changed=True)
+    _execute(monkeypatch, ws)
+    s = _summary(ctl)
+    s["fingerprint_mismatches"][0]["user_decision"] = decision
+    (ctl / "photos-25-execution-summary.json").write_text(json.dumps(s))
+    before = (ctl / "photos-25-execution-summary.json").read_bytes()
+    capsys.readouterr()
+    assert _execute(monkeypatch, ws) == 2
+    err = "".join(capsys.readouterr())
+    rel = s["fingerprint_mismatches"][0]["relative_path"]
+    assert f"fingerprint_mismatches[{rel}].user_decision" in err and said in err, err
+    assert (ctl / "photos-25-execution-summary.json").read_bytes() == before
+
+
 # --- concurrency equality (Tier 3) -------------------------------------------
 
 def _execute_jobs(monkeypatch, ws, n):
