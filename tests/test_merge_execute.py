@@ -1216,7 +1216,7 @@ def test_the_latest_earlier_plan_s_place_is_carried(tmp_path, older, later):
     assert rec["library_target"] == os.path.join(str(lib), "Trip", "y.jpg")
 
 
-@pytest.mark.spec("BLD-job_records_kept", "RUL-history_retained",
+@pytest.mark.spec("RUL-merge_run_records_kept", "BLD-merge_records",
                   test="TST-merge_execute-an_earlier_merge_summary_is_kept_aside")
 def test_an_earlier_merge_summary_is_kept_aside(tmp_path):
     """Each execute's summary sets the one before it aside under `-NNN`, as geotag's are: a partial merge's summary,

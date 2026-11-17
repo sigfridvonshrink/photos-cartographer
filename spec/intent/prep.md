@@ -960,7 +960,8 @@ Pruning the quarantine by age SHALL refuse an age of less than one day.
 :refines: RUL-prune_explicit
 
 Prep's prune command SHALL touch nothing outside the quarantine but its own record of what it deletes
-({need}`RUL-prune_recorded`).
+({need}`RUL-prune_recorded`) and the workspace's record, from which it takes what it deleted
+({need}`RUL-quarantine_changed_only_by_prune`).
 :::
 
 :::{rul} A prune that deletes is recorded

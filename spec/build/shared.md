@@ -1315,7 +1315,7 @@ copy's: a library file of the same fingerprint and other bytes blocks the photo,
 :::{bld} The merge summary
 :id: BLD-merge_records
 :status: ruled
-:realises: RUL-merge_records_landing, RUL-nothing_built_from_merge_records, RUL-merge_outcome_recorded, RUL-merge_summary_only_for_execution
+:realises: RUL-merge_records_landing, RUL-nothing_built_from_merge_records, RUL-merge_outcome_recorded, RUL-merge_summary_only_for_execution, RUL-merge_run_records_kept
 :uses: BLD-archive_manifest, BLD-workspace_database
 
 Merge SHALL write `photos-31-merge-summary.json` when its execute ends — `success`, `partial` or `failed` — or refuses
@@ -1329,7 +1329,8 @@ nothing changed); the merge run and plan ids, `library_root`, the geotag plan an
 moved and those an earlier run had, and the SHA-256 of `photos-24-executable-plan.json`,
 `photos-25-execution-summary.json` and `photos-11-handoff.json`; and, apart, the run's times and job count. A run whose
 terminal writes ({need}`BLD-merge_success_sequence`) fail after its summary leaves the summary `success` and no seal,
-which the next run completes.
+which the next run completes. The summary is written as {need}`BLD-plan_backups` writes a plan, an existing one that
+differs first copied whole to the next free `-NNN`.
 :::
 
 :::{bld} What a whole merge writes, and the seal last
@@ -1587,12 +1588,13 @@ left over is `deleted` in photos by date, photos by destination, videos by date 
 elsewhere; any file left over `appeared`. A move from photos by date into photos by destination, or within the latter,
 is `sorted` (`copied` under a new inode), one back from photos by destination into photos by date `moved_back`, any
 other `moved`. `changed`, `appeared`, `removed` and `moved` stop the command, exit 2; the others pass. Prep calls it in
-`_run_locked` for its plan, dry run and execute once its shape check has passed and the configuration loads, comparing
-nothing where there is no record; geotag in `run` for its plan, execute and finalize, before the automatic re-prep,
+`_run_locked` for its plan, dry run and execute once its shape check has passed and the configuration loads, initialized
+or not, comparing nothing where there is no record; geotag in `run` for its plan, execute and finalize, before the automatic re-prep,
 where its preflight would find the workspace initialized and unsealed, the configuration readable, the top level as it
 should be and no link in photos by destination; merge in `_run_locked_workflow` for its plan, dry run and execute,
 before its preflight validates the library, the handoff or the photos, where the preflight's first steps find the
-workspace initialized and unsealed, the configuration readable and the top level as it should be. Geotag and merge stop, exit 2, on a workspace with no record. `prune-quarantine`,
+workspace initialized and unsealed, the configuration readable, the top level as it should be and no link in photos by
+destination. Geotag and merge stop, exit 2, on a workspace with no record. `prune-quarantine`,
 `init-library` and the editor never call it.
 :::
 
@@ -1623,8 +1625,9 @@ The check SHALL print the changes it passes, `sorted` aside, and those accepted,
 prep's execute adds them, each with its `run`, to `workspace_changes` of `photos-15-prep-log.json`, after the earlier
 runs' — an execute that ends short of writing its log adds them there, the rest of the log as it was, before it records
 the state it leaves; geotag's execute writes them as `workspace_changes` of `photos-25-execution-summary.json`, merge's as
-`workspace_changes` of `photos-31-merge-summary.json`, each — an execute that ends short too — in the same step that
-records the state it leaves. A plan, a dry run and finalize print them.
+`workspace_changes` of `photos-31-merge-summary.json`; an execute of either cut short, which writes no summary, adds them
+to `workspace_changes` of its plan's journal in the same step that records the state it leaves, each later write of that
+journal carrying them over. A plan, a dry run and finalize print them.
 :::
 
 ## 18. The workspace's filesystem

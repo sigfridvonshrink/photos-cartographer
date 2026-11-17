@@ -1086,10 +1086,11 @@ def test_an_unknown_setting_stops_every_phase(tmp_path, monkeypatch, edit, named
                   test="TST-geotag_preflight-the_field_set_version_follows_the_fields_read")
 def test_the_field_set_version_follows_the_fields_read():
     """The handoff's field-set version names what prep reads from a photo: the fields, the order of the groups they are
-    looked for in, and the other times kept. Pinned here with the version they are read under — change any of them and
-    this fails until FIELD_SET_VERSION is raised and the pin taken again, so a handoff read by other fields is never
-    taken for this build's."""
+    looked for in, where the position's Composite value stands in it, and the other times kept. Pinned here with the
+    version they are read under — change any of them and this fails until FIELD_SET_VERSION is raised and the pin taken
+    again, so a handoff read by other fields is never taken for this build's."""
     import hashlib
-    read = json.dumps([list(utils.METADATA_FIELDS), list(utils.METADATA_GROUP_ORDER), list(utils.OTHER_TIME_FIELDS)])
+    read = json.dumps([list(utils.METADATA_FIELDS), list(utils.METADATA_GROUP_ORDER), list(utils.OTHER_TIME_FIELDS),
+                       utils.POSITION_FIELDS], sort_keys=True)
     assert (utils.FIELD_SET_VERSION, hashlib.sha256(read.encode()).hexdigest()) == \
-        (4, "adc0adcc18736ae911fc82268fca3d49c737219aa1631252ddc4a57c78c70591")
+        (5, "2a0096f07fb55160d77e5e1364e845e73a1040227f6a58d93a87c4e19a9b12ad")

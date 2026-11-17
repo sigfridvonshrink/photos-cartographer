@@ -3484,14 +3484,12 @@ def _shape_blockers(workspace_root) -> list:
 
 
 def _check_workspace(args, workspace_root) -> list:
-    """Prep's check of the workspace against the state its last execution left (BLD-workspace_check): wherever an
-    execution recorded one — a first execute that failed among them, which leaves the workspace uninitialized but its
-    state recorded — and the configuration loads, the folders being known by it; a workspace no execution has recorded
-    compares nothing (RUL-first_prep_compares_nothing), and a configuration that cannot be read is the plan's to
-    report. Returns the changes this run names in its log; exits 2 on a stop."""
-    from .photos_utils import load_config, read_workspace_record
-    if read_workspace_record(workspace_root)[0] is None:
-        return []
+    """Prep's check of the workspace against the state its last execution left (BLD-workspace_check), initialized or
+    not — a first execute that failed leaves the workspace uninitialized but its state recorded — wherever the
+    configuration loads, the folders being known by it: a workspace no execution has recorded compares nothing
+    (RUL-first_prep_compares_nothing), and a configuration that cannot be read is the plan's to report. Returns the
+    changes this run names in its log; exits 2 on a stop."""
+    from .photos_utils import load_config
     try:
         load_config(workspace_root)
     except Exception:
@@ -3545,8 +3543,14 @@ def _run_locked(args, workspace_root, reporter):
     # execution has recorded the workspace (RUL-first_prep_compares_nothing): one deleted from a workspace an execution
     # has recorded stops prep, naming it, never seeded again unasked (RUL-config_authoritative).
     if args.command in ("plan", "dry-run", "execute"):
-        from .photos_utils import config_path as _config_path, read_workspace_record
-        if not os.path.exists(_config_path(workspace_root)) and read_workspace_record(workspace_root)[0] is not None:
+        from .photos_utils import config_path as _config_path, WorkspaceRecordUnreadable
+
+        def _recorded():
+            try:
+                return read_workspace_record(workspace_root)[0] is not None
+            except WorkspaceRecordUnreadable:
+                return True     # a record there, though unreadable: not a first run
+        if not os.path.exists(_config_path(workspace_root)) and _recorded():
             reporter.error(f"The workspace's configuration {os.path.relpath(_config_path(workspace_root), workspace_root)}"
                            " is missing. Prep seeds it on a workspace's first run only: restore it (from an archived "
                            "copy, or the settings you chose), then run prep again. Nothing was scanned, planned or "

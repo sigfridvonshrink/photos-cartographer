@@ -10,7 +10,8 @@ intent it implements. *Why* a choice was made is in [the rationale](../rationale
 :status: ruled
 :realises: RUL-prep_no_time_or_gps
 
-Prep's execute SHALL carry out only folder creations, moves, renames, quarantine moves and database writes, refusing a
+Prep's execute SHALL carry out only folder creations, moves, renames, quarantine moves, removals of emptied folders
+({need}`BLD-folder_removals`) and database writes, refusing a
 plan that holds any other operation — a metadata write among them.
 :::
 
@@ -79,9 +80,9 @@ copy and its record stand; else the answer is recorded with `failure` and the ca
 :status: ruled
 :realises: RUL-init_taken_place_suffixed, RUL-init_moves_dump_to_inbox
 
-The initializing run's move of a dump file SHALL go to `0-sources/<its path>`, and where that path, ignoring case, is
-another file's current or planned path, to the same folder under `<name>-NNN.<ext>` with the first `NNN` from `001` so
-free ({need}`BLD-name_suffix`), the extension kept as it was; the suffixed name is the one the later stages name the
+The initializing run's move of a dump file not set aside as a duplicate SHALL go to `0-sources/<its path>`, and where
+that path, ignoring case, is another file's current or planned path, to the same folder under `<name>-NNN.<ext>` with the
+first `NNN` from `001` so free among the folder's names on disk and planned, ignoring case ({need}`BLD-name_suffix`), the extension kept as it was; the suffixed name is the one the later stages name the
 file from.
 :::
 
@@ -147,17 +148,18 @@ Prep's records SHALL carry their dependencies so:
 
 - **The plan** records its schema version, the configuration's hash, its metadata dependencies — exiftool and its
   version, and the versions of the field set, the extraction options, the metadata schema and the camera-group
-  derivation — and the size and mtime of every file it reads without changing, those in `6-photos-by-dest` among them.
+  derivation —, the image engine and its version, and the size and mtime of every file it reads without changing, those
+  in `6-photos-by-dest` among them.
   Execute recomputes each and refuses the plan when one differs or is absent.
 - **The journal**'s `depends_on` records the plan's schema version, the configuration's hash, and the cache's schema and
   fingerprint-algorithm versions.
 - **The handoff**'s `depends_on` records the configuration's hash, the metadata dependencies, the plan's and the cache's
-  schema versions, the fingerprint algorithm and the image engine with its version, the journal's hash, the prep log's
+  schema versions, the fingerprint algorithm and the image engine with its version — the plan's —, the journal's hash, the prep log's
   hash ({need}`BLD-prep_log_vouched`), and the fingerprint of the final inventory.
 - **The workspace database** records its schema and fingerprint-algorithm versions in its `meta` table.
 
-A run's inventory and freshness maps are its own working state, recorded nowhere. No command option affects what prep
-plans, so no record carries one.
+A run's inventory and freshness maps are its own working state, recorded in its plan alone
+({need}`BLD-prep_plan_contents`). No command option affects what prep plans, so no record carries one.
 :::
 
 :::{bld} The handoff vouches for prep's log
@@ -225,8 +227,8 @@ blocker it finds, the plan still saved — is not empty.
 :status: ruled
 :realises: RUL-duplicate_set_aside_as_found, RUL-copy_kept_by_folder
 
-Prep's planning SHALL run its stages in this order: initialization and inventory; duplicates; extension case; redundant
-JPEGs; organization by class and time; database reconciliation.
+Prep's planning SHALL run its stages in this order: initialization and inventory, a duplicate set aside before its
+dump is moved; duplicates; extension case; redundant JPEGs; organization by class and time; database reconciliation.
 :::
 
 :::{bld} Each stage works from the paths the stages before it planned
@@ -302,7 +304,7 @@ At plan, after duplicates are set aside and before any name is checked, prep SHA
 ({need}`BLD-set_aside_pair_recorded`) no file prep scanned holds — the inbox and `6-photos-by-dest` among them — and
 which a workspace check found `deleted`: this run's, an earlier prep run's as `workspace_changes` of
 `photos-15-prep-log.json` keeps it, or a geotag execution's as `photos-25-execution-summary.json` or a `-NNN` copy of it
-keeps it ({need}`BLD-workspace_changes_logged`); a RAW moved out of the workspace is one, the check comparing only
+keeps it, or, an execution cut short, its plan's journal ({need}`BLD-workspace_changes_logged`); a RAW moved out of the workspace is one, the check comparing only
 the files inside it. The move carries the JPEG's `content_fingerprint`, and the RAW's
 `raw_path` — the path the check found it deleted at — and `raw_fingerprint`, into the quarantine manifest; the JPEG's
 entry in the prep log gains the step `raw_culled` with `from`, `to`, `raw_path` and `raw_fingerprint`, its `prep_path`
@@ -339,8 +341,8 @@ A day's folder SHALL be named `YYYY-MM-DD` from its recorded time's date, whatev
 :realises: RUL-cache_schema_not_migrated
 
 The workspace database's `meta` table SHALL hold `cache_schema_version` and `fingerprint_algorithm_version`, written by
-each prep execute; prep's plan stops before reading the database when `cache_schema_version` is present and not this
-build's.
+each prep execute; prep's plan and execute stop before reading the database when `cache_schema_version` is present and
+not this build's, execute before it writes the row over.
 :::
 
 :::{bld} A fingerprint records its method
@@ -385,7 +387,7 @@ prunes; an unmatched row is a ghost, and its file is read as new.
 :realises: RUL-reuse_valid_work, RUL-database_matches_files, RUL-quarantined_leaves_database
 
 Each move or rename in prep's plan SHALL carry its database effects — the row of its source removed and, but for a
-quarantine move, the file's row with its fingerprint and metadata written at its destination — applied by execute once
+quarantine move and a stray's ({need}`BLD-stray_records`), the file's row with its fingerprint and metadata written at its destination — applied by execute once
 the operation succeeds.
 :::
 
@@ -454,8 +456,9 @@ and each destination folder's duplicates hold the duplicates alone, the others l
 :realises: RUL-metadata_kept_for_geotag, RUL-metadata_group_order, RUL-metadata_freshness, RUL-time_field_first_valid
 
 Prep SHALL read metadata with `exiftool -json -n -a -G0`, taking each field from the first group holding it in the order
-`EXIF`, `XMP`, `MakerNotes`, `IPTC`, `QuickTime`, `File` — `Composite` first for the GPS position, the recorded position
-signed by its hemisphere reference, which EXIF holds apart from it — and a time field from the first group holding a
+`EXIF`, `XMP`, `MakerNotes`, `IPTC`, `QuickTime`, `File` — `Composite` first for the GPS position where EXIF holds one,
+the recorded position signed by its hemisphere reference, which EXIF holds apart from it, and else right after `XMP` —
+and a time field from the first group holding a
 valid time in it; it keeps the fields in `metadata_cache.parsed_json` with the recorded time's field and group, stamped
 with `exiftool`, its version, the field-set version, the SHA-256 of the options, the metadata-schema version and the
 camera-group-key version.
@@ -563,7 +566,8 @@ plan's summary carries the quarantine's footprint. An age below one day is refus
 :status: ruled
 :realises: RUL-handoff_describes_workspace, RUL-prep_records_on_success, RUL-prep_records_written_whole
 
-Prep's execute SHALL write `photos-11-handoff.json` last but for the database image and the mark, through a temporary
+Prep's execute SHALL write `photos-11-handoff.json` last but for the workspace's record, the database image and the
+mark, through a temporary
 file renamed over it, holding: `schema_version`, `tool`, `run_metadata` (plan and execution ids), `cache_fingerprint`,
 `folders_scanned` (the managed folders but `1-strays`, each with whether prep may change it), `files` (sorted, each with
 its path, size, `mtime_ns`, `inode` — as the file's database row last recorded it — media class, fingerprint and its
@@ -590,7 +594,8 @@ at another inode changes both, though its size, time and fingerprint do not.
 :status: ruled
 :realises: RUL-unreadable_prep_log_stops
 
-Where `photos-15-prep-log.json` exists and is not readable JSON holding a `photos` object, prep's plan SHALL record a
+Where `photos-15-prep-log.json` exists and is not readable JSON holding a `photos` object and, where present, a
+`workspace_changes` list of objects, prep's plan SHALL record a
 blocker naming it, execute's preflight refuses on the same before any change, and the log's rebuild fails the run
 rather than read it as empty; with no such file, the earlier log is empty.
 :::
@@ -657,9 +662,9 @@ recorded as failed; the persistent `magick` and `exiftool` workers and `ffmpeg` 
 :status: ruled
 :realises: RUL-jobs_change_nothing
 
-Prep SHALL walk the workspace and take its files' sizes and times on one thread, sorted, before any parallel work, and
-gather the workers' results by path; two plans of one workspace differ only in `plan_id`, `created_at` and the
-operations' ids.
+Prep SHALL walk the workspace on one thread, sorted, before any parallel work, and gather the workers' results by path;
+two plans of one workspace differ only in `plan_id`, `created_at`, the operations' ids and the run's counters under
+`summary.performance_and_cache`.
 :::
 
 :::{bld} The re-fingerprint summary
