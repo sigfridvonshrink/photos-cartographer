@@ -170,7 +170,7 @@ def test_a_changed_pin_is_written_over_the_old_one(tmp_path):
                               "GPSProcessingMethod": "manual_locked"}      # the position it replaces
 
 
-@pytest.mark.spec("RUL-log_records_gps_reverts")
+@pytest.mark.spec("RUL-log_records_gps_reverts", test="TST-geotag_gps_ledger-a_pin_never_overrides_native_gps")
 def test_a_pin_never_overrides_native_gps(tmp_path):
     """Preserve-native wins: a photo carrying its own GPS keeps it, whatever pin it is given."""
     rel = f"{BYDEST}/T/a.jpg"

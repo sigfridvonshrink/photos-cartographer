@@ -417,7 +417,7 @@ def test_finalize_archives_the_whole_control_directory(tmp_path, monkeypatch):
         assert hashlib.sha256(archived[rec["path"]]).hexdigest() == rec["sha256"], rec["path"]
 
 
-@pytest.mark.spec("RUL-finalize_explicit")
+@pytest.mark.spec("RUL-finalize_explicit", test="TST-geotag_finalize-finalize_bundles_archive_but_performs_no_merge")
 def test_finalize_bundles_archive_but_performs_no_merge(tmp_path, monkeypatch):
     """RUL-finalize_non_destructive (anti): finalize assembles the archival package (photos-26 complete-log + DB +
     manifest) but NEVER merges into a library — it produces no merge artifacts and moves no media. Snapshot the

@@ -89,7 +89,7 @@ def _drift(wf, files, time_art, gpx, prior=None):
 
 # --- Trigger matrix ---------------------------------------------------------
 
-@pytest.mark.spec("BLD-drift_validation")
+@pytest.mark.spec("BLD-drift_validation", test="TST-drift_validation-manual_offset_no_anchor_with_coverage_triggers")
 def test_manual_offset_no_anchor_with_coverage_triggers(tmp_path):
     wf = _wf(tmp_path)
     files = [_file(f"{DEST}/a.arw", "2024:07:03 14:00:00")]               # no native gps
@@ -263,7 +263,7 @@ def test_zero_scrub_must_be_explicit(tmp_path):
     assert drift["status"] == "complete"
 
 
-@pytest.mark.spec("BLD-drift_validation")
+@pytest.mark.spec("BLD-drift_validation", test="TST-drift_validation-correction_changes_resolved_utc")
 def test_correction_changes_resolved_utc(tmp_path):
     _, files, art, _, drift, blk = _triggered(tmp_path, {"confirmed": True, "corrected_offset_seconds": -3600, "confirmed_offset_seconds": 0, "confirmed_against_tracks": TRIP})
     assert not blk
@@ -316,7 +316,7 @@ def test_an_offset_written_is_checked_confirmed_or_not(tmp_path, field, value):
 
 # --- Preservation / fingerprint cascade -------------------------------------
 
-@pytest.mark.spec("BLD-drift_validation")
+@pytest.mark.spec("BLD-drift_validation", test="TST-drift_validation-confirmation_preserved_across_rebuild")
 def test_confirmation_preserved_across_rebuild(tmp_path):
     wf, files, art, gpx, drift, _ = _triggered(tmp_path, {"confirmed": True, "corrected_offset_seconds": -120, "confirmed_offset_seconds": 0, "confirmed_against_tracks": TRIP})
     # feed the built artifact back as prior -> the confirmation survives a regenerate

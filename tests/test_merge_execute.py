@@ -326,7 +326,8 @@ def test_execute_occupied_by_different_content_at_execute_blocks_no_clobber(tmp_
     assert s["failures"]
 
 
-@pytest.mark.spec("RUL-development_after_merge")
+@pytest.mark.spec("RUL-development_after_merge",
+                  test="TST-merge_execute-merge_never_performs_jpg_tif_development_breakout")
 def test_merge_never_performs_jpg_tif_development_breakout(tmp_path):
     """RUL-development_after_merge (anti): the jpg/tif development breakout is a later library-side processing phase,
     NOT merge's job. test_dev_subfolder_blocks proves a PRE-EXISTING dev subfolder blocks the run;
@@ -345,7 +346,8 @@ def test_merge_never_performs_jpg_tif_development_breakout(tmp_path):
         assert "jpg" not in dns and "tif" not in dns, (dp, dns)
 
 
-@pytest.mark.spec("RUL-library_mirrors_destinations")
+@pytest.mark.spec("RUL-library_mirrors_destinations",
+                  test="TST-merge_execute-merge_never_mutates_by_dest_name_or_content_only_library_renames")
 def test_merge_never_mutates_by_dest_name_or_content_only_library_renames(tmp_path):
     """RUL-library_mirrors_destinations (anti): merge never mutates by-dest content or a file's name; ONLY a library
     collision forces an incoming rename — and that rename happens at the LIBRARY target, never in by-dest. The
@@ -1016,7 +1018,7 @@ def test_plan_mutates_nothing_no_terminal_artifacts(tmp_path):
         assert not os.path.exists(ctl / n), n
 
 
-@pytest.mark.spec("BLD-merge_records")
+@pytest.mark.spec("BLD-merge_records", test="TST-merge_execute-stale_plan_rejection_writes_no_summary")
 def test_stale_plan_rejection_writes_no_summary(tmp_path):
     """A stale-plan rejection is a pre-mutation abort: it must write NO photos-31 summary at all
     (distinct from a required-snapshot abort, which records a `rejected` summary) and move nothing."""
@@ -1061,7 +1063,8 @@ def test_an_execute_a_precondition_stops_after_a_clean_plan_changes_nothing(tmp_
     assert not os.path.exists(merge.merge_summary_path(str(ws)))
 
 
-@pytest.mark.spec("RUL-execution_only_the_plan")
+@pytest.mark.spec("RUL-execution_only_the_plan",
+                  test="TST-merge_execute-execute_applies_saved_plan_verbatim_no_rederive")
 def test_execute_applies_saved_plan_verbatim_no_rederive(tmp_path):
     """Execute consumes the saved photos-30 disposition/target VERBATIM — it never re-derives the
     placement from the handoff/scan. Doctor the saved target name; execute must place the file under

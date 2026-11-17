@@ -28,7 +28,7 @@ def test_photos_1_prep_exists():
 def test_photos_utils_exists():
     assert os.path.exists('cartographer/photos_utils.py')
 
-@pytest.mark.spec("RUL-prep_no_time_or_gps")
+@pytest.mark.spec("RUL-prep_no_time_or_gps", test="TST-prep_split-no_geotag_command")
 def test_no_geotag_command():
     parser = mock.MagicMock()
     # we just want to ensure that 'geotag' is not mentioned in the argparse setup or the file content as an active command path
@@ -39,14 +39,14 @@ def test_no_geotag_command():
         assert 'add_parser("refresh-library"' not in content
         assert 'add_parser("merge"' not in content
 
-@pytest.mark.spec("RUL-prep_takes_no_decision")
+@pytest.mark.spec("RUL-prep_takes_no_decision", test="TST-prep_split-no_geotag_json_generation")
 def test_no_geotag_json_generation():
     with open('cartographer/photos_1_prep.py', 'r') as f:
         content = f.read()
         assert 'class GeotagGenerator' not in content
         assert 'class GeotagWorkflow' not in content
 
-@pytest.mark.spec("RUL-prep_no_time_or_gps")
+@pytest.mark.spec("RUL-prep_no_time_or_gps", test="TST-prep_split-prep_plans_contain_no_time_metadata")
 def test_prep_plans_contain_no_time_metadata():
     with open('cartographer/photos_1_prep.py', 'r') as f:
         content = f.read()
@@ -143,7 +143,8 @@ def test_by_dest_duplicate_does_not_mutate_behavior():
                 assert op.source == '0-sources/duplicate.jpg'
 
 @mock.patch("photos_1_prep.ContentHasher.fingerprint_image")
-@pytest.mark.spec("RUL-prep_leaves_by_dest_as_found")
+@pytest.mark.spec("RUL-prep_leaves_by_dest_as_found",
+                  test="TST-prep_split-by_dest_duplicate_does_not_mutate_behavior_with_hashes")
 def test_by_dest_duplicate_does_not_mutate_behavior_with_hashes(mock_hash_image, tmp_path):
     ws = tmp_path / "workspace"
     ws.mkdir()

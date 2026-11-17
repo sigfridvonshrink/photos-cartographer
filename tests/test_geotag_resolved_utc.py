@@ -57,7 +57,7 @@ def _one(file, art=None):
 
 # --- the computation, branch by branch --------------------------------------
 
-@pytest.mark.spec("RUL-offset_per_camera_destination_day")
+@pytest.mark.spec("RUL-offset_per_camera_destination_day", test="TST-geotag_resolved_utc-camera_offset")
 def test_camera_offset():
     r = _one(_file("6-photos-by-dest/B/a.arw", CAM, "2024:07:03 14:12:08"))
     assert r["resolved_utc"] == "2024-07-03T12:12:21Z" and r["resolved_utc_status"] == "valid"
@@ -65,7 +65,7 @@ def test_camera_offset():
     assert r["time_decision_scope"] == f"{CAM}|6-photos-by-dest/B"
 
 
-@pytest.mark.spec("BLD-geotag_stage_order")
+@pytest.mark.spec("BLD-geotag_stage_order", test="TST-geotag_resolved_utc-camera_offset_missing_is_unresolved")
 def test_camera_offset_missing_is_unresolved():
     r = _one(_file("6-photos-by-dest/B/a.arw", CAM, "2024:07:03 14:12:08"), _art(offset=None))
     assert r["resolved_utc"] is None and r["resolved_utc_status"] == "unresolved"
@@ -116,7 +116,7 @@ def test_smartphone_destination_timezone_dst():
     assert winter["resolved_utc"] == "2024-01-03T13:00:00Z"
 
 
-@pytest.mark.spec("BLD-resolved_utc")
+@pytest.mark.spec("BLD-resolved_utc", test="TST-geotag_resolved_utc-smartphone_no_offset_no_timezone_is_unresolved")
 def test_smartphone_no_offset_no_timezone_is_unresolved():
     r = _one(_file("6-photos-by-dest/B/n.jpg", PHONE, "2024:07:03 14:00:00"), _art(tz=""))
     assert r["resolved_utc"] is None and r["time_rule_used"] == "timezone_missing"
@@ -183,7 +183,7 @@ def test_cache_round_trips_and_replaces(tmp_path):
     c.close()
 
 
-@pytest.mark.spec("BLD-resolved_utc_fingerprint")
+@pytest.mark.spec("BLD-resolved_utc_fingerprint", test="TST-geotag_resolved_utc-fingerprint_stable_and_sensitive")
 def test_fingerprint_stable_and_sensitive():
     rows = _rows()
     inp = {"photos_21_sha256": "abc", "gpx_fingerprint": "g"}
@@ -196,7 +196,8 @@ def test_fingerprint_stable_and_sensitive():
 
 # --- end-to-end through run -------------------------------------------------
 
-@pytest.mark.spec("BLD-resolved_utc")
+@pytest.mark.spec("BLD-resolved_utc",
+                  test="TST-geotag_resolved_utc-resolved_utc_cache_created_only_after_photos21_complete")
 def test_resolved_utc_cache_created_only_after_photos21_complete(tmp_path, monkeypatch, capsys):
     """BLD-geotag_stage_order: the resolved-UTC cache is written ONLY after upstream validation — specifically once
     photos-21 is complete. Here the GPX anchor auto-resolves the camera offset, but with no default
@@ -276,7 +277,7 @@ def test_resolved_utc_cache_created_only_after_photos21_complete(tmp_path, monke
                             ("6-photos-by-dest/B/b.arw", "2024-07-03T12:13:21Z")]
 
 
-@pytest.mark.spec("BLD-resolved_utc")
+@pytest.mark.spec("BLD-resolved_utc", test="TST-geotag_resolved_utc-run_populates_cache_when_complete")
 def test_run_populates_cache_when_complete(tmp_path, monkeypatch, capsys):
     MANAGED = ["0-sources", "1-strays", "2-missing-metadata", "3-redundant-jpgs",
                "4-videos-by-date", "5-photos-by-date", "6-photos-by-dest"]

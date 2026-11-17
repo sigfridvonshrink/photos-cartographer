@@ -200,7 +200,7 @@ def test_sealed_blocks_and_warns_on_dump(tmp_path):
     assert any("new dump" in w.lower() for w in warnings), warnings
 
 
-@pytest.mark.spec("RUL-only_prep_builds_structure")
+@pytest.mark.spec("RUL-only_prep_builds_structure", test="TST-merge_preflight-uninitialized_blocks")
 def test_uninitialized_blocks(tmp_path):
     ws, _ = _make(tmp_path, guard=False)
     blockers, _, _ = _pf(ws)
@@ -245,7 +245,7 @@ def test_missing_managed_folder_block_tells_to_restore_and_run_again(tmp_path):
     assert "Restore the 0-6 structure" in block[0] and "before merging" in block[0], block[0]
 
 
-@pytest.mark.spec("RUL-top_level_only_managed")
+@pytest.mark.spec("RUL-top_level_only_managed", test="TST-merge_preflight-loose_root_file_blocks")
 def test_loose_root_file_blocks(tmp_path):
     ws, _ = _make(tmp_path)
     (ws / "stray.txt").write_text("loose")
@@ -362,7 +362,7 @@ def test_geotag_not_executed_blocks(tmp_path):
     assert any("was not executed" in b for b in blockers), blockers
 
 
-@pytest.mark.spec("RUL-merge_takes_finalized_current")
+@pytest.mark.spec("RUL-merge_takes_finalized_current", test="TST-merge_preflight-geotag_failed_status_blocks")
 def test_geotag_failed_status_blocks(tmp_path):
     ws, _ = _make(tmp_path, summary_status="partial")
     blockers, _, _ = _pf(ws)
@@ -726,7 +726,7 @@ def test_init_library_refuses_a_disturbed_workspace(tmp_path, with_path, defect)
     assert (ws / ".photos-ingest" / "photos-00-config.json").read_bytes() == cfg_before
 
 
-@pytest.mark.spec("BLD-init_library_cases")
+@pytest.mark.spec("BLD-init_library_cases", test="TST-merge_preflight-init_library_in_workspace_no_path_uses_config")
 def test_init_library_in_workspace_no_path_uses_config(tmp_path):
     ws, lib = _fresh_ws_and_lib(tmp_path)
     rc = merge.do_init_library(None, str(ws))
@@ -751,7 +751,8 @@ def test_init_library_without_path_refuses_a_locked_workspace(tmp_path):
     held.release()
 
 
-@pytest.mark.spec("BLD-init_library_cases")
+@pytest.mark.spec("BLD-init_library_cases",
+                  test="TST-merge_preflight-init_library_outside_workspace_with_path_blesses_only")
 def test_init_library_outside_workspace_with_path_blesses_only(tmp_path):
     lib = tmp_path / "lib"
     lib.mkdir()
@@ -762,7 +763,7 @@ def test_init_library_outside_workspace_with_path_blesses_only(tmp_path):
     assert utils.is_library(str(lib))
 
 
-@pytest.mark.spec("BLD-init_library_cases")
+@pytest.mark.spec("BLD-init_library_cases", test="TST-merge_preflight-init_library_outside_workspace_no_path_errors")
 def test_init_library_outside_workspace_no_path_errors(tmp_path):
     plain = tmp_path / "not_a_ws"
     plain.mkdir()

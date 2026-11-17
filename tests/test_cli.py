@@ -261,7 +261,7 @@ def test_prune_quarantine_dry_run_and_delete(tmp_path, monkeypatch, capsys):
 
 # --- sealed-workspace guard --------------------------------------------------
 
-@pytest.mark.spec("RUL-sealed_refuses")
+@pytest.mark.spec("RUL-sealed_refuses", test="TST-cli-sealed_workspace_refuses_and_releases_lock")
 def test_sealed_workspace_refuses_and_releases_lock(tmp_path, monkeypatch, capsys):
     ws = _ws(tmp_path)
     (ws / ".photos-ingest" / "photos-00-sealed.json").write_text('{"sealed": true}')
@@ -313,7 +313,7 @@ def test_prune_quarantine_is_the_sole_op_allowed_on_a_sealed_workspace(tmp_path,
     assert not qd.exists()                                       # delete worked on the sealed ws
 
 
-@pytest.mark.spec("RUL-sealed_refuses")
+@pytest.mark.spec("RUL-sealed_refuses", test="TST-cli-seal_refuses_all_three_phases_except_prune_quarantine")
 def test_seal_refuses_all_three_phases_except_prune_quarantine(tmp_path, monkeypatch, capsys):
     """RUL-sealed_refuses / RUL-sealed_prune_allowed: once a workspace is SEALED, every media-mutating phase refuses
     on it — prep plan, geotag plan, AND merge plan all hard-stop with exit 2 — with the SOLE exception of prep
@@ -603,7 +603,7 @@ def test_execute_without_saved_plan_exits_nonzero(tmp_path, monkeypatch, capsys)
     assert "run `plan` first" in capsys.readouterr().err
 
 
-@pytest.mark.spec("RUL-config_validated_before_use")
+@pytest.mark.spec("RUL-config_validated_before_use", test="TST-cli-invalid_config_rejected_at_load")
 def test_invalid_config_rejected_at_load(tmp_path, monkeypatch, capsys):
     bad = {k: v for k, v in utils.CONFIG.items() if k != "jobs"}
     bad = dict(bad); bad["zfs"] = dict(bad["zfs"], enabled=False)

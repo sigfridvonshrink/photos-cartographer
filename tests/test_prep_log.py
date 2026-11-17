@@ -136,7 +136,8 @@ def test_quarantined_duplicate_recorded(tmp_path, monkeypatch):
     assert dq[0]["retained_counterpart"]                              # the kept file at dedup time
 
 
-@pytest.mark.spec("RUL-prep_no_time_or_gps")
+@pytest.mark.spec("RUL-prep_no_time_or_gps",
+                  test="TST-prep_log-prep_organizes_by_raw_naive_timestamp_no_tz_or_utc_shift")
 def test_prep_organizes_by_raw_naive_timestamp_no_tz_or_utc_shift(tmp_path, monkeypatch):
     """RUL-prep_no_time_or_gps (anti): prep organizes by the RAW camera-naive timestamp and never timezone/UTC-corrects
     it (that is geotag's job). Use a late-evening naive time that ANY tz/UTC conversion would push to
@@ -158,7 +159,8 @@ def test_prep_organizes_by_raw_naive_timestamp_no_tz_or_utc_shift(tmp_path, monk
     assert entry["prep_path"] == "5-photos-by-date/2023-03-26/2023-03-26--23-45-00.jpg"
 
 
-@pytest.mark.spec("RUL-record_whole_each_phase")
+@pytest.mark.spec("RUL-record_whole_each_phase",
+                  test="TST-prep_log-prep_log_is_complete_and_standalone_without_geotag_or_merge")
 def test_prep_log_is_complete_and_standalone_without_geotag_or_merge(tmp_path, monkeypatch):
     """RUL-record_whole_each_phase: the prep log (photos-15) is complete and self-sufficient even if geotag/merge never
     run. After a prep-only run, NO geotag (photos-2x) / merge (photos-3x) artifact exists, yet photos-15
@@ -184,7 +186,8 @@ def test_prep_log_is_complete_and_standalone_without_geotag_or_merge(tmp_path, m
     assert all(s.get("run") for s in entry["journey"])                # every step attributed to its run
 
 
-@pytest.mark.spec("RUL-no_meaning_from_names")
+@pytest.mark.spec("RUL-no_meaning_from_names",
+                  test="TST-prep_log-nonconforming_name_is_ignored_timestamp_comes_from_metadata")
 def test_nonconforming_name_is_ignored_timestamp_comes_from_metadata(tmp_path, monkeypatch):
     """RUL-no_meaning_from_names: prep never parses meaning from a non-conforming filename — it re-ingests the file and
     takes the timestamp from metadata. A file whose name MISLEADINGLY encodes 2099 but whose EXIF

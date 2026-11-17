@@ -194,7 +194,7 @@ def test_execute_writes_the_database_versions(tmp_path, monkeypatch):
     assert prep.WorkspaceCache(str(ws)).get_meta("fingerprint_algorithm_version") == prep.FINGERPRINT_ALGORITHM_VERSION
 
 
-@pytest.mark.spec("BLD-prep_dependencies")
+@pytest.mark.spec("BLD-prep_dependencies", test="TST-fingerprints-cache_meta_records_versions")
 def test_cache_meta_records_versions(tmp_path, monkeypatch):
     _mock(monkeypatch)
     ws = _ws(tmp_path)

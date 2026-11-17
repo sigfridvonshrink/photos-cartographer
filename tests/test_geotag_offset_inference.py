@@ -92,7 +92,8 @@ def test_point_match_offset_sign():
     assert c2["offset_seconds"] == 21
 
 
-@pytest.mark.spec("BLD-anchor_matching")
+@pytest.mark.spec("BLD-anchor_matching",
+                  test="TST-geotag_offset_inference-point_just_past_threshold_then_segment_or_none")
 def test_point_just_past_threshold_then_segment_or_none():
     far = _gpx([_pt(50.0, 4.0, _utc(12, 0, 0)), _pt(50.0, 4.001, _utc(12, 0, 30))])
     # a frame ~111 m from both points (beyond 30 m) but the segment between them is far too ->
@@ -355,7 +356,7 @@ def test_cell_manual_offset_and_bad_offset(monkeypatch):
     assert blk and bad["effective_time_anchor"] == ""
 
 
-@pytest.mark.spec("RUL-timezone_auto_resolves")
+@pytest.mark.spec("RUL-timezone_auto_resolves", test="TST-geotag_offset_inference-cell_no_anchor_is_manual_required")
 def test_cell_no_anchor_is_manual_required(monkeypatch):
     cell, _ = _cell({}, [], _gpx([]))
     assert cell["proposal"] == {"proposal_source": "manual_required"} and cell["requires_user_input"]
@@ -442,7 +443,7 @@ def _tzcell(prior_ud, *, tz, rep_naive, frames=None, date=None):
     return cell, blockers
 
 
-@pytest.mark.spec("BLD-timezone_naive_offset")
+@pytest.mark.spec("BLD-timezone_naive_offset", test="TST-geotag_offset_inference-timezone_naive_offset_is_dst_aware")
 def test_timezone_naive_offset_is_dst_aware():
     assert cal._timezone_naive_offset("2024:07:03 14:00:00", "Europe/Brussels")[0] == -7200   # summer +2
     assert cal._timezone_naive_offset("2024:01:03 14:00:00", "Europe/Brussels")[0] == -3600   # winter +1

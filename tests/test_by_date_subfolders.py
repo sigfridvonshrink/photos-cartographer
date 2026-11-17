@@ -95,7 +95,8 @@ def test_untimestamped_stays_flat_in_missing_metadata(tmp_path, monkeypatch):
     assert (ws / "2-missing-metadata" / "UNKN_nodate.jpg").exists()        # flat, no day folder
 
 
-@pytest.mark.spec("BLD-planned_paths_tracked", "RUL-suffix_choice_by_phase")
+@pytest.mark.spec("BLD-planned_paths_tracked", "RUL-suffix_choice_by_phase",
+                  test="TST-by_date_subfolders-same_day_collides_other_day_does_not")
 def test_same_day_collides_other_day_does_not(tmp_path, monkeypatch):
     # a.jpg and b.jpg share a timestamp (same day -> collision -> suffix); c.jpg is another day (no
     # collision -> bare), proving the day folder alone separates same-name files across days.

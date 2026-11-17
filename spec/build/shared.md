@@ -456,11 +456,13 @@ Prep, geotag and merge SHALL find a workspace's misplaced top-level entries with
 :::{bld} Where each phase applies the shape guards
 :id: BLD-shape_guards_by_phase
 :status: ruled
-:realises: RUL-no_links, RUL-who_checks_for_links, RUL-missing_folder_blocks, RUL-shape_checked_first, RUL-link_named, RUL-geotag_merge_check_links, RUL-missing_folder_named, RUL-empty_inbox_normal, RUL-link_never_followed
+:realises: RUL-no_links, RUL-who_checks_for_links, RUL-missing_folder_blocks, RUL-shape_checked_first, RUL-link_named, RUL-geotag_merge_check_links, RUL-missing_folder_named, RUL-empty_inbox_normal, RUL-link_never_followed, RUL-missing_folder_never_recreated
 
 Links: prep across the tree it walks ({need}`RUL-who_checks_for_links`); geotag and merge at the workspace root and
 throughout `6-photos-by-dest` at startup, by a walk that follows nothing and reads no file
-({need}`RUL-geotag_merge_check_links`), and through the handoff for the rest. Missing managed folders: prep, geotag and merge alike ({need}`RUL-missing_folder_blocks`). A link or a missing folder
+({need}`RUL-geotag_merge_check_links`), and through the handoff for the rest. Missing managed folders: prep, geotag and merge alike ({need}`RUL-missing_folder_blocks`), and prep's execute
+again before its first operation, so a folder lost since the plan is not made again by a move into it
+({need}`RUL-missing_folder_never_recreated`). A link or a missing folder
 is named in its blocker, and an empty inbox passes.
 :::
 

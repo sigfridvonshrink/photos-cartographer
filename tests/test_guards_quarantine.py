@@ -310,7 +310,7 @@ def test_0sources_dotfiles_quarantined(tmp_path, monkeypatch):
     assert ".DS_Store" in moved and "t.jpg" in moved
 
 
-@pytest.mark.spec("RUL-dump_hidden_files_quarantined")
+@pytest.mark.spec("RUL-dump_hidden_files_quarantined", test="TST-guards_quarantine-init_root_dotfiles_quarantined")
 def test_init_root_dotfiles_quarantined(tmp_path, monkeypatch):
     _mock(monkeypatch)
     ws = tmp_path / "ws"; ws.mkdir()                           # uninitialized (no guard / no 0-6)

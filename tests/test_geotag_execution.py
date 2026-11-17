@@ -131,7 +131,7 @@ def _summary(ctl):
 
 # --- clean apply -------------------------------------------------------------
 
-@pytest.mark.spec("BLD-execution_summary")
+@pytest.mark.spec("BLD-execution_summary", test="TST-geotag_execution-clean_execute_applies_and_renames")
 def test_clean_execute_applies_and_renames(tmp_path, monkeypatch):
     ws, ctl = _ready_ws(tmp_path, monkeypatch)
     _mock_tools(monkeypatch, ws)
@@ -335,7 +335,8 @@ def _execute_jobs(monkeypatch, ws, n):
         return e.code if isinstance(e.code, int) else (0 if e.code is None else 1)
 
 
-@pytest.mark.spec("RUL-execution_jobs_change_nothing", "BLD-geotag_execution")
+@pytest.mark.spec("RUL-execution_jobs_change_nothing", "BLD-geotag_execution",
+                  test="TST-geotag_execution-execute_j1_and_jN_produce_identical_summary_and_tree")
 def test_execute_j1_and_jN_produce_identical_summary_and_tree(tmp_path, monkeypatch):
     """Concurrency is a performance knob with NO semantic effect: executing the SAME geotag plan under
     -j1 vs -j4 yields a byte-identical photos-25 summary (modulo the volatile run_metadata, which by
@@ -360,7 +361,8 @@ def test_execute_j1_and_jN_produce_identical_summary_and_tree(tmp_path, monkeypa
     assert t1 == t4 == ["2024-07-03--14-00-00.arw", "2024-07-03--15-00-00.arw"]  # identical tree
 
 
-@pytest.mark.spec("BLD-merge_execute", "BLD-geotag_execution")
+@pytest.mark.spec("BLD-merge_execute", "BLD-geotag_execution",
+                  test="TST-geotag_execution-journal_written_by_one_writer_at_a_time")
 def test_journal_written_by_one_writer_at_a_time(tmp_path, monkeypatch):
     """One writer at a time (BLD-geotag_execution, BLD-own_leftover_cleared): the main thread persists each photo's
     confirmations and a worker notes a write begun before it starts it, both under one lock — under -j4 no two journal
@@ -395,7 +397,8 @@ def test_journal_written_by_one_writer_at_a_time(tmp_path, monkeypatch):
     assert any(t == "MainThread" for t, _ops in writes) and set(writes[-1][1].values()) == {"confirmed"}
 
 
-@pytest.mark.spec("RUL-control_records_never_media")
+@pytest.mark.spec("RUL-control_records_never_media",
+                  test="TST-geotag_execution-geotag_writes_no_artifacts_into_by_dest")
 def test_geotag_writes_no_artifacts_into_by_dest(tmp_path, monkeypatch):
     """RUL-control_records_never_media (anti): geotag's artifacts (photos-2*.json, plan/summary/journal) live ONLY under
     .photos-ingest/ — NEVER inside the scanned media tree 6-photos-by-dest. Drive a full plan +
@@ -1046,7 +1049,7 @@ def test_execute_on_sealed_workspace_warns_and_blocks(tmp_path, monkeypatch):
     assert _execute(monkeypatch, ws) == 2                             # sealed -> blocked (exit 2)
 
 
-@pytest.mark.spec("BLD-execution_summary")
+@pytest.mark.spec("BLD-execution_summary", test="TST-geotag_execution-summary_keeps_run_metadata_separate")
 def test_summary_keeps_run_metadata_separate(tmp_path, monkeypatch):
     ws, ctl = _ready_ws(tmp_path, monkeypatch)
     _mock_tools(monkeypatch, ws)
@@ -1074,7 +1077,7 @@ def _mock_zfs(monkeypatch, *, fail=False):
     monkeypatch.setattr(_sp, "run", run)
 
 
-@pytest.mark.spec("BLD-geotag_execution")
+@pytest.mark.spec("BLD-geotag_execution", test="TST-geotag_execution-execute_records_zfs_snapshot")
 def test_execute_records_zfs_snapshot(tmp_path, monkeypatch):
     zfs = {"enabled": True, "snapshots_required": True, "snapshot_prefix": "px-",
            "datasets": {"workspace": "auto", "library": "auto"}}
@@ -1085,7 +1088,8 @@ def test_execute_records_zfs_snapshot(tmp_path, monkeypatch):
     assert s["snapshot"]["ok"] and s["snapshot"]["snapshot_name"] == f"pool/ws@px-geotag-{s['plan_id']}"
 
 
-@pytest.mark.spec("BLD-geotag_execution", "RUL-required_snapshot_or_nothing")
+@pytest.mark.spec("BLD-geotag_execution", "RUL-required_snapshot_or_nothing",
+                  test="TST-geotag_execution-execute_aborts_when_required_snapshot_fails")
 def test_execute_aborts_when_required_snapshot_fails(tmp_path, monkeypatch):
     zfs = {"enabled": True, "snapshots_required": True, "snapshot_prefix": "px-",
            "datasets": {"workspace": "auto", "library": "auto"}}
@@ -1262,7 +1266,8 @@ def test_snapshot_is_taken_while_the_lock_is_held(tmp_path, monkeypatch):
     assert utils.WorkspaceLock(str(ws), create=False).held_owner() is None   # the probe tells held from free
 
 
-@pytest.mark.spec("RUL-execution_only_the_plan")
+@pytest.mark.spec("RUL-execution_only_the_plan",
+                  test="TST-geotag_execution-execute_applies_recorded_plan_verbatim_no_recalc")
 def test_execute_applies_recorded_plan_verbatim_no_recalc(tmp_path, monkeypatch):
     """RUL-execution_only_the_plan (anti): execute applies the recorded photos-24 plan VERBATIM and never recalculates a
     decision. Doctor a saved rename target to a value the planner would never derive (re-stamping
@@ -1293,7 +1298,8 @@ def test_execute_applies_recorded_plan_verbatim_no_recalc(tmp_path, monkeypatch)
     assert _summary(ctl)["status"] == "success"
 
 
-@pytest.mark.spec("BLD-drift_validation")
+@pytest.mark.spec("BLD-drift_validation",
+                  test="TST-geotag_execution-execute_rejects_when_drift_validation_changed_after_planning")
 def test_execute_rejects_when_drift_validation_changed_after_planning(tmp_path, monkeypatch):
     """RUL-geotag_plan_carries_every_dependency (anti): photos-22 (the GPS-drift confirmation) is a recorded plan
     dependency, so an execute whose drift artifact changed after planning is rejected before ANY mutation — the drift
@@ -1332,7 +1338,7 @@ def test_resume_after_journal_lost_skips_applied_files(tmp_path, monkeypatch):
     assert not s["blockers"] and not s["failures"]                    # not blocked on the renamed files
 
 
-@pytest.mark.spec("BLD-geotag_execution")
+@pytest.mark.spec("BLD-geotag_execution", test="TST-geotag_execution-journal_persisted_incrementally_during_run")
 def test_journal_persisted_incrementally_during_run(tmp_path, monkeypatch):
     """The journal is flushed per-file as the run proceeds (not only at the end), so a crash mid-run
     leaves a journal that records the already-applied files."""
@@ -1351,7 +1357,7 @@ def test_journal_persisted_incrementally_during_run(tmp_path, monkeypatch):
     assert len(flushes) >= 2 and flushes == sorted(flushes) and flushes[-1] > flushes[0]
 
 
-@pytest.mark.spec("BLD-geotag_records_by_destination")
+@pytest.mark.spec("BLD-geotag_records_by_destination", test="TST-geotag_execution-summary_grouped_by_destination")
 def test_summary_grouped_by_destination(tmp_path, monkeypatch):
     """photos-25 carries a per-destination operation breakdown (BLD-execution_summary) that sums to the global
     totals."""
@@ -1366,7 +1372,7 @@ def test_summary_grouped_by_destination(tmp_path, monkeypatch):
     assert sum(v["renames"] for v in s["destinations"].values()) == s["totals"]["renames"]
 
 
-@pytest.mark.spec("RUL-handoff_verified_by_content")
+@pytest.mark.spec("RUL-handoff_verified_by_content", test="TST-geotag_execution-noop_reprep_does_not_restale_plan")
 def test_noop_reprep_does_not_restale_plan(tmp_path, monkeypatch):
     """A no-op prep re-run refreshes only the handoff's run_metadata (and its byte layout); geotag
     depends on the handoff CONTENT fingerprint, so the plan must NOT restale — but a real content change

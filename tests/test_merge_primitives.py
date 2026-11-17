@@ -195,7 +195,7 @@ def test_validate_merge_config_accepts_valid(tmp_path):
     utils.validate_merge_config(_cfg(lib), str(ws))      # no raise
 
 
-@pytest.mark.spec("RUL-library_place_checked")
+@pytest.mark.spec("RUL-library_place_checked", test="TST-merge_primitives-validate_merge_config_rejects_bad_inputs")
 def test_validate_merge_config_rejects_bad_inputs(tmp_path):
     import pytest
     ws = tmp_path / "ws"; ws.mkdir()

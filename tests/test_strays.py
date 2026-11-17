@@ -158,7 +158,8 @@ def test_a_stray_is_named_only_in_the_plan_that_moves_it(tmp_path, monkeypatch):
             conn.close()
 
 
-@pytest.mark.spec("RUL-not_inventoried", "RUL-strays_never_processed")
+@pytest.mark.spec("RUL-not_inventoried", "RUL-strays_never_processed",
+                  test="TST-strays-strays_scan_skipped_on_next_run")
 def test_strays_scan_skipped_on_next_run(tmp_path, monkeypatch):
     _install(monkeypatch)
     ws = _ws(tmp_path)
@@ -470,6 +471,25 @@ def test_a_hidden_track_file_blocks_and_stays_put(tmp_path, monkeypatch, rel):
     assert not [op for op in plan.operations if rel in ((op.source or "") + (op.destination or ""))]
     with pytest.raises(ValueError, match="blockers"):
         prep.PlanExecutor(str(ws)).execute(plan)
+    assert (ws / rel).exists()
+
+
+@pytest.mark.spec("RUL-track_files_block_prep", "RUL-track_file_left_in_place",
+                  test="TST-strays-a_hidden_track_file_in_the_root_dump_blocks_on_the_run_that_initializes")
+@pytest.mark.parametrize("rel", [".day3.gpx", ".cache/day4.gpx", "dump/.gps/day5.gpx"],
+                         ids=["root_dotfile", "in_a_hidden_root_folder", "in_a_hidden_folder_of_a_dump"])
+def test_a_hidden_track_file_in_the_root_dump_blocks_on_the_run_that_initializes(tmp_path, monkeypatch, rel):
+    """On the run that initializes a workspace the dump still lies at its root: a track file hidden there blocks the
+    plan like any track, and is left where it is."""
+    _install(monkeypatch)
+    ws = tmp_path / "ws"
+    (ws / rel).parent.mkdir(parents=True, exist_ok=True)
+    (ws / rel).write_text("<gpx/>")
+    (ws / "dump").mkdir(exist_ok=True)
+    (ws / "dump" / "photo.jpg").write_bytes(b"img")
+    plan = _plan(ws)
+    assert any(rel in b and "Track file" in b for b in plan.blockers), plan.blockers
+    assert not [op for op in plan.operations if rel in ((op.source or "") + (op.destination or ""))]
     assert (ws / rel).exists()
 
 

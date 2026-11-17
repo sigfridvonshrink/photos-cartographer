@@ -654,6 +654,24 @@ def test_prep_builds_the_structure_once_and_never_removes_a_folder(tmp_path, mon
     assert not (ws / "2-missing-metadata").exists()
 
 
+@pytest.mark.spec("RUL-missing_folder_never_recreated",
+                  test="TST-lifecycle-a_folder_lost_between_plan_and_execute_is_not_recreated")
+def test_a_folder_lost_between_plan_and_execute_is_not_recreated(tmp_path, monkeypatch):
+    """A managed folder lost after the plan was made stops execute before its first operation: a move into it never
+    makes it again, and the media waiting to go there stays where it is."""
+    _install(monkeypatch)
+    ws = _initialized(tmp_path)
+    (ws / "0-sources" / "x.jpg").write_bytes(b"img")
+    plan = _plan(ws)
+    assert not plan.blockers, plan.blockers
+    assert any((op.destination or "").startswith("5-photos-by-date/") for op in plan.operations)
+    os.rmdir(ws / "5-photos-by-date")                          # lost out-of-band after planning
+    with pytest.raises(ValueError, match="5-photos-by-date"):
+        prep.PlanExecutor(str(ws)).execute(plan)
+    assert not (ws / "5-photos-by-date").exists()
+    assert (ws / "0-sources" / "x.jpg").exists()
+
+
 @pytest.mark.spec("RUL-more_dumps_until_merge", test="TST-lifecycle-new_dump_after_successful_geotag_is_organized")
 def test_new_dump_after_successful_geotag_is_organized(tmp_path, monkeypatch):
     """A dump arriving after geotag executed and finalized is prep's again: the loop resumes from prep."""

@@ -60,7 +60,7 @@ def test_local_basename_unpositionable_is_none():
 
 # --- the shared first-free allocation geotag uses ----------------------------------------------------------
 
-@pytest.mark.spec("RUL-suffix_choice_by_phase")
+@pytest.mark.spec("RUL-suffix_choice_by_phase", test="TST-geotag_rename_planning-allocate_name_suffix_progression")
 def test_allocate_name_suffix_progression():
     occ = set()
     assert utils.allocate_suffix("2024-07-03--14-00-00", "jpg", occ, bare_first=True) == "2024-07-03--14-00-00.jpg"
@@ -194,7 +194,7 @@ def test_unpositionable_file_keeps_name():
     assert _names(rows) == [("x.jpg", "x.jpg", False)]
 
 
-@pytest.mark.spec("BLD-format_recorded")
+@pytest.mark.spec("BLD-format_recorded", test="TST-geotag_rename_planning-extension_preserved_in_rename")
 def test_extension_preserved_in_rename():
     rows = cal.plan_renames([_f("6-photos-by-dest/T/raw.arw", "2024-07-03T12:00:00Z")], FMT)
     assert rows[0]["planned_name"] == "2024-07-03--14-00-00.arw"

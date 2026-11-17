@@ -470,7 +470,7 @@ def test_stale_dependency_under_concurrency_blocks_execution(mock_read_metadata_
 @patch("subprocess.Popen")
 @patch("photos_1_prep.ContentHasher.fingerprint_image")
 @patch("photos_utils.MetadataReader.read_metadata_concurrently")
-@pytest.mark.spec("RUL-prep_run_summarised")
+@pytest.mark.spec("RUL-prep_run_summarised", test="TST-concurrency-progress_summary_fields")
 def test_progress_summary_fields(mock_read_metadata_concurrently, mock_hash_image, mock_popen, workspace):
     mock_hash_image.return_value = {"status": "valid", "strategy": "image-content-hash", "value": "dummyhash"}
     mock_popen.return_value = MagicMock()

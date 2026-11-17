@@ -95,7 +95,7 @@ def test_a_time_the_file_holds_is_not_written_again():
     ("gpx_extrapolation", "recompute_automated", "extrapolated"),
     ("manual_locked", "apply_manual", "manual_locked"),
     ("manual_fallback", "apply_manual", "manual_fallback")])
-@pytest.mark.spec("BLD-placement_order")
+@pytest.mark.spec("BLD-placement_order", test="TST-geotag_executable_plan-gps_write_and_marker")
 def test_gps_write_and_marker(cat, origin, marker):
     ops = cal.plan_file_ops(_file(), UTC, "Europe/Brussels", cat, {"lat": 50.0, "lon": 4.0}, None)
     gw = next(o for o in ops if o["type"] == "metadata_gps_write")
@@ -223,7 +223,7 @@ def test_plan_ready_with_ops_and_full_depends_on(tmp_path):
     assert dep["resolved_utc_cache_fingerprint"] == "rfp"
 
 
-@pytest.mark.spec("RUL-time_before_gps")
+@pytest.mark.spec("RUL-time_before_gps", test="TST-geotag_executable_plan-unresolved_utc_blocks")
 def test_unresolved_utc_blocks(tmp_path):
     files = [_model(f"{BYDEST}/T/a.arw", f"{BYDEST}/T")]
     wf, t, g = _wf(tmp_path, files=files)
@@ -232,7 +232,8 @@ def test_unresolved_utc_blocks(tmp_path):
     assert any("no valid resolved UTC" in b for b in blk)
 
 
-@pytest.mark.spec("RUL-time_before_gps")
+@pytest.mark.spec("RUL-time_before_gps",
+                  test="TST-geotag_executable_plan-time_first_gps_and_rename_gated_on_resolved_time")
 def test_time_first_gps_and_rename_gated_on_resolved_time(tmp_path):
     """RUL-time_before_gps: order is time first, GPS/rename last. With a valid resolved UTC a native frame gets a time
     write AND a rename whose target is the destination-LOCAL civil time (derived from the resolved

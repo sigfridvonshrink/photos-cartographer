@@ -90,7 +90,7 @@ def _edit(ws, fn):
 
 # --- first run ---------------------------------------------------------------
 
-@pytest.mark.spec("BLD-timezone_cell")
+@pytest.mark.spec("BLD-timezone_cell", test="TST-geotag_time_decisions-first_run_writes_artifact_requiring_input")
 def test_first_run_writes_artifact_requiring_input(tmp_path, monkeypatch):
     ws = _ws(tmp_path, files=[_hfile("6-photos-by-dest/Brussels/a.jpg")],
              device_groups={"fixed_clock_cameras": [CAM], "phones": []})
@@ -298,7 +298,8 @@ def _drift_gpx(points):
     return idx
 
 
-@pytest.mark.spec("BLD-drift_validation")
+@pytest.mark.spec("BLD-drift_validation",
+                  test="TST-geotag_time_decisions-build_drift_validation_leaves_photos21_byte_unmutated")
 def test_build_drift_validation_leaves_photos21_byte_unmutated(tmp_path):
     """BLD-drift_validation: building photos-22 (GPS-drift validation) refines a manual/tz-derived offset, but the
     validated drift offset is recorded in photos-22 — building it must NOT touch the photos-21

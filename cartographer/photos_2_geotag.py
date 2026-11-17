@@ -1288,8 +1288,11 @@ class GeotagWorkflow:
                 # a country of one timezone: that is the zone — as an inherited zone, it stops at a destination
                 # within the country whose own photos speak against it (RUL-inherited_zone_stops_within)
                 inherited_tz = (country[1], zones[0])
-            elif zones and inherited_tz is not None and (own_country or inherited_tz[1] not in zones):
-                inherited_tz = None                         # a zone from above the country is none of its own
+            elif zones and inherited_tz is not None and own_country:
+                # a zone from above the country is none of its own. Below the country's top no zone from outside it
+                # can arrive: a country of several zones waits at its top, so nothing above reaches past it, and a
+                # zone in effect within it is one of its own (a default or a written zone outside it takes no effect).
+                inherited_tz = None
             # in a country of several timezones, with none reaching it, the one zone of the country its photos'
             # recorded offsets fit (BLD-zone_from_photos_in_country)
             fitted = (_zone_from_photos(by_dest[dest], groups, zones)

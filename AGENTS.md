@@ -67,8 +67,8 @@ tools/coverage -k merge        # subset (report % will be partial)
 tools/jstest                   # node --test over cartographer/editor/tests/*.test.mjs
 
 # The spec corpus (spec/ as one Sphinx project, sphinx-needs items: intent / rationale / build, and the tests
-# as items from their marks). THE GATE: fails on any warning — a dangling link, a mark naming no item, an item
-# whose `verify` is `required` that no test verifies — and on success rewrites spec/needs.json -- commit it.
+# as items from their marks). THE GATE: fails on any warning — a dangling link, a mark naming no item, a mark with no
+# test id, an item whose `verify` is `required` that no test verifies — and on success rewrites spec/needs.json -- commit it.
 python3 -m venv spec/.venv && spec/.venv/bin/pip install -r spec/requirements.txt   # first time
 tools/spec-build
 ```

@@ -475,6 +475,15 @@ class PlanValidator:
         if plan.blockers:
             raise ValueError(f"Plan contains blockers and cannot be executed: {', '.join(plan.blockers)}")
 
+        # A managed folder gone since planning is never recreated by a move into it (RUL-missing_folder_never_recreated):
+        # checked again here, before the first operation, in a workspace already activated.
+        from .photos_utils import guard_path
+        if os.path.exists(guard_path(current_workspace)):
+            _missing = missing_managed_folders(current_workspace)
+            if _missing:
+                raise ValueError("Workspace is non-conforming: missing managed folder(s): "
+                                 f"{', '.join(_missing)}; prep will not recreate them.")
+
         # The earlier log, which execute's log is merged onto, must be readable now as it was at planning
         # (RUL-unreadable_prep_log_stops): refused before any change, never read as empty at the end.
         read_prior_prep_log(current_workspace)

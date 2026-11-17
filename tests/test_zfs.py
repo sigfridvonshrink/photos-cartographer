@@ -89,7 +89,7 @@ def test_validate_config_accepts_valid_zfs():
     {"zfs": {"enabled": "yes"}},                         # not a bool
     {"zfs": "nope"},                                     # not an object
 ])
-@pytest.mark.spec("RUL-checked_snapshot_names")
+@pytest.mark.spec("RUL-checked_snapshot_names", test="TST-zfs-validate_config_rejects_illegal")
 def test_validate_config_rejects_illegal(bad):
     with pytest.raises(ValueError):
         utils.validate_config(bad)

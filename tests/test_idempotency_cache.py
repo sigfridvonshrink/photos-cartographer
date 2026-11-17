@@ -140,7 +140,8 @@ def test_prep_idempotency_and_by_dest_accounting(mock_meta, tmp_path, monkeypatc
 
 
 @mock.patch('photos_utils.MetadataReader.read_metadata_concurrently', side_effect=mock_read_metadata_concurrently)
-@pytest.mark.spec("BLD-move_row_effects")
+@pytest.mark.spec("BLD-move_row_effects",
+                  test="TST-idempotency_cache-cache_rows_written_during_execution_not_planning")
 def test_cache_rows_written_during_execution_not_planning(mock_meta, tmp_path, monkeypatch):
     """BLD-move_row_effects: cache updates derive from the validated plan and apply during EXECUTION, never
     speculatively during planning. With a fresh (empty) cache, planning derives db_upsert operations
@@ -465,7 +466,8 @@ def test_no_special_reimport_path_from_missing_metadata(tmp_path, monkeypatch):
 
 
 @mock.patch('photos_utils.MetadataReader.read_metadata_concurrently', side_effect=mock_read_metadata_concurrently)
-@pytest.mark.spec("BLD-workspace_database")
+@pytest.mark.spec("BLD-workspace_database",
+                  test="TST-idempotency_cache-prep_execute_cache_writes_only_from_main_thread")
 def test_prep_execute_cache_writes_only_from_main_thread(mock_meta, tmp_path, monkeypatch):
     """Single-writer cache: prep applies its plan in one sequential op loop, so every DB write lands on
     the main thread even with jobs=4 (the concurrency in prep is read-only metadata extraction during

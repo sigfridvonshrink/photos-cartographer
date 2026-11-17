@@ -163,7 +163,7 @@ def test_extrapolation_counts_in_summary(tmp_path):
     assert art["status"] == "complete"
 
 
-@pytest.mark.spec("RUL-decision_stage_writes_record")
+@pytest.mark.spec("RUL-decision_stage_writes_record", test="TST-geotag_gps_decisions-all_automatic_is_complete")
 def test_all_automatic_is_complete(tmp_path):
     wf = _wf(tmp_path)
     d = f"{BYDEST}/Trip"

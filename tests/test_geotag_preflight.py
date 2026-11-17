@@ -74,13 +74,13 @@ def test_clean_workspace_passes(tmp_path):
 
 # --- lifecycle guards --------------------------------------------------------
 
-@pytest.mark.spec("RUL-only_prep_builds_structure")
+@pytest.mark.spec("RUL-only_prep_builds_structure", test="TST-geotag_preflight-uninitialized_blocks")
 def test_uninitialized_blocks(tmp_path):
     blockers, _, _ = _pf(_ws(tmp_path, guard=False))
     assert any("Not an initialized workspace" in b for b in blockers), blockers
 
 
-@pytest.mark.spec("RUL-sealed_refuses")
+@pytest.mark.spec("RUL-sealed_refuses", test="TST-geotag_preflight-sealed_blocks_and_warns_on_dump")
 def test_sealed_blocks_and_warns_on_dump(tmp_path):
     ws = _ws(tmp_path, sealed=True)
     (ws / "0-sources" / "newdump.jpg").write_bytes(b"x")   # likely new dump
@@ -89,7 +89,7 @@ def test_sealed_blocks_and_warns_on_dump(tmp_path):
     assert any("new dump" in w.lower() for w in warnings), warnings
 
 
-@pytest.mark.spec("RUL-top_level_only_managed")
+@pytest.mark.spec("RUL-top_level_only_managed", test="TST-geotag_preflight-loose_root_file_blocks")
 def test_loose_root_file_blocks(tmp_path):
     ws = _ws(tmp_path)
     (ws / "stray.txt").write_text("loose")
@@ -231,7 +231,8 @@ def test_a_photo_removed_or_changed_since_prep_stops_geotag(tmp_path):
     assert len(blockers) == 1 and "is out of date" in blockers[0] and "Trip/b.jpg" in blockers[0], blockers
 
 
-@pytest.mark.spec("RUL-database_regions_disjoint")
+@pytest.mark.spec("RUL-database_regions_disjoint",
+                  test="TST-geotag_preflight-reprep_gate_blocks_and_geotag_never_records_the_move")
 def test_reprep_gate_blocks_and_geotag_never_records_the_move(tmp_path):
     """Geotag does NO move recognition: a by-dest photo absent from the handoff (prep not re-run after
     the move) trips the re-prep gate. Geotag refuses and FIXES NOTHING — it never edits the handoff to
@@ -451,7 +452,7 @@ def test_unrecorded_by_dest_photo_demands_reprep(tmp_path):
     assert any("is out of date" in b and "photos-cartographer prep" in b for b in blockers), blockers
 
 
-@pytest.mark.spec("RUL-prep_records_sort")
+@pytest.mark.spec("RUL-prep_records_sort", test="TST-geotag_preflight-missing_by_date_photo_demands_reprep")
 def test_missing_by_date_photo_demands_reprep(tmp_path):
     # The handoff still records a 5-photos-by-date photo that is now gone (moved into by-dest).
     files = [{"relative_path": "6-photos-by-dest/Trip/a.jpg", "media_class": "image"},
@@ -503,7 +504,8 @@ def _autoreprep(ws, monkeypatch, *, command="plan", jobs=4, fail=None, plan_ops=
     return calls, rep
 
 
-@pytest.mark.spec("BLD-geotag_auto_reprep")
+@pytest.mark.spec("BLD-geotag_auto_reprep",
+                  test="TST-geotag_preflight-auto_reprep_runs_prep_plan_then_execute_for_clean_move")
 def test_auto_reprep_runs_prep_plan_then_execute_for_clean_move(tmp_path, monkeypatch):
     """A clean by-dest move (0-sources empty + an unrecorded by-dest photo) makes geotag plan auto-run the
     REAL prep phases — plan then execute, in order — so the operator goes straight to geotag. prep does
@@ -577,7 +579,7 @@ def test_auto_reprep_skips_when_nothing_pending(tmp_path, monkeypatch):
     assert calls == []
 
 
-@pytest.mark.spec("BLD-geotag_auto_reprep")
+@pytest.mark.spec("BLD-geotag_auto_reprep", test="TST-geotag_preflight-auto_reprep_skips_when_sources_nonempty")
 def test_auto_reprep_skips_when_sources_nonempty(tmp_path, monkeypatch):
     """0-sources holding a dump is the cheapest hard gate — auto-reprep must NOT silently ingest it; it
     bows out and leaves the in-lock scope gate to report the unprocessed dump."""

@@ -73,7 +73,7 @@ def _handoff(ws):
         return json.load(f)
 
 
-@pytest.mark.spec("RUL-handoff_deterministic")
+@pytest.mark.spec("RUL-handoff_deterministic", test="TST-handoff-execution_id_present_and_distinct")
 def test_execution_id_present_and_distinct(tmp_path, monkeypatch):
     _mock(monkeypatch)
     ws = _ws(tmp_path)
@@ -251,7 +251,7 @@ def test_the_configuration_classes_camera_groups_and_never_derives_them(tmp_path
     cfg_p.write_text(seeded)
 
 
-@pytest.mark.spec("RUL-handoff_deterministic")
+@pytest.mark.spec("RUL-handoff_deterministic", test="TST-handoff-handoff_written_sorted_and_deterministic")
 def test_handoff_written_sorted_and_deterministic(tmp_path, monkeypatch):
     """The handoff must be byte-deterministic for a given workspace state (RUL-handoff_deterministic):
     routed through write_json_artifact (sort_keys), so its SHA-256 — which geotag records as a
