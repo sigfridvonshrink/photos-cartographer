@@ -594,6 +594,63 @@ def test_a_record_that_cannot_be_read_stops_the_check(tmp_path, monkeypatch, dam
     assert os.path.join(".photos-ingest", "photos-00-ingest.db") in said and "cannot be read" in said
 
 
+@pytest.mark.no_hand_built_record
+@pytest.mark.spec("RUL-workspace_checked_first", "RUL-first_prep_compares_nothing", "BLD-workspace_check",
+                  test="TST-workspace_check-prep_after_a_failed_first_execute_compares")
+def test_prep_after_a_failed_first_execute_compares(tmp_path, monkeypatch):
+    """A first execute that fails part way leaves the workspace uninitialized, but records the state it leaves: the
+    next prep compares the workspace with that record, and a photo it filed, edited since, stops it."""
+    _install(monkeypatch)
+    ws = tmp_path / "ws"
+    (ws / "dump").mkdir(parents=True)
+    (ws / "dump" / "a.jpg").write_bytes(b"AAAA")
+    (ws / "dump" / "b.jpg").write_bytes(b"BBBB")
+    moved = prep._move_no_clobber
+
+    def failing(src, dst):
+        if src.endswith(os.path.join("0-sources", "dump", "b.jpg")):
+            raise OSError("disk gone")
+        return moved(src, dst)
+    monkeypatch.setattr(prep, "_move_no_clobber", failing)
+    assert _prep(monkeypatch, ws, "plan")[0] == 0
+    assert _prep(monkeypatch, ws, "execute")[0] == 3
+    monkeypatch.setattr(prep, "_move_no_clobber", moved)
+    assert not os.path.exists(utils.guard_path(str(ws)))           # not initialized, its state recorded
+    assert utils.read_workspace_record(str(ws))[0] is not None
+    (filed,) = _by_date(ws)
+    with open(filed, "ab") as f:
+        f.write(b"edited")
+    rc, said, stop = _prep(monkeypatch, ws, "plan")
+    assert rc == 2 and stop is not None, said
+
+
+@pytest.mark.parametrize("command", ["plan", "execute"])
+@pytest.mark.spec("RUL-config_seeded_once", "RUL-config_authoritative", "RUL-planning_writes_only_its_records",
+                  test="TST-workspace_check-a_configuration_deleted_after_the_first_run_stops_prep")
+def test_a_configuration_deleted_after_the_first_run_stops_prep(tmp_path, monkeypatch, command):
+    """The configuration deleted from a workspace prep has run in is not seeded again: plan and execute each stop,
+    naming it, and write none."""
+    _install(monkeypatch)
+    ws = _ws(tmp_path)
+    (ws / "0-sources" / "a.jpg").write_bytes(b"AAAA")
+    _ingest(monkeypatch, ws)
+    (ws / "0-sources" / "b.jpg").write_bytes(b"BBBB")
+    if command == "execute":
+        assert _prep(monkeypatch, ws, "plan")[0] == 0
+    cfg = utils.config_path(str(ws))
+    os.remove(cfg)
+    rc, said, _ = _prep(monkeypatch, ws, command)
+    assert rc == 2 and "photos-00-config.json" in said, said
+    assert not os.path.exists(cfg)
+    if command == "execute":                       # the execution itself reads it, never seeds it
+        with open(utils.prep_plan_path(str(ws))) as f:
+            plan = prep.Plan.from_dict(json.load(f))
+        with pytest.raises(prep.ExecuteRefused, match="photos-00-config.json"):
+            prep.PlanExecutor(str(ws)).execute(plan)
+        assert not os.path.exists(cfg)
+    assert (ws / "0-sources" / "b.jpg").exists()
+
+
 @pytest.mark.spec("RUL-maintenance_unchecked", "RUL-quarantine_changed_only_by_prune", "BLD-workspace_record",
                   test="TST-workspace_check-maintenance_commands_do_not_check")
 def test_maintenance_commands_do_not_check(tmp_path, monkeypatch):
@@ -862,3 +919,62 @@ def test_a_change_the_killed_run_did_not_leave_still_stops(tmp_path, monkeypatch
     (changes, stop), said = _check(gws, "geotag", "finalize")
     stopped_on = said.split("--accept-changes")[0]
     assert changes is None and stop == 2 and edited[0] in stopped_on and edited[1] not in stopped_on, said
+
+
+_CULL = {"kind": "deleted", "path": f"{BY_DATE}/2023-01-02/culled.jpg", "content_fingerprint": "sig-culled"}
+
+
+@pytest.mark.spec("BLD-workspace_changes_logged", "RUL-allowed_changes_named", "RUL-geotag_summary_only_for_execution",
+                  test="TST-workspace_check-a_geotag_execution_cut_short_names_its_changes_in_its_journal")
+def test_a_geotag_execution_cut_short_names_its_changes_in_its_journal(tmp_path, monkeypatch):
+    """A geotag execution interrupted after its check passed a cull writes no summary; the cull is named in its plan's
+    journal, written as it records the state it leaves — where prep's reading of the culls finds it — and kept there
+    by the execution that resumes the plan."""
+    import test_geotag_execution as gx
+    ws, ctl = gx._ready_ws(tmp_path, monkeypatch)
+    gx._mock_tools(monkeypatch, ws)
+    monkeypatch.setattr(cal, "check_workspace", lambda *a, **k: ([dict(_CULL)], None))
+
+    def ctrl_c(*a, **k):
+        raise KeyboardInterrupt
+    real_wave = cal.GeotagWorkflow._apply_wave
+    monkeypatch.setattr(cal.GeotagWorkflow, "_apply_wave", ctrl_c)
+    assert gx._execute(monkeypatch, ws) == 130
+    assert not (ctl / "photos-25-execution-summary.json").exists()
+    plan_id = json.load(open(ctl / "photos-24-executable-plan.json"))["plan_id"]
+    journal = json.load(open(utils.journal_path(str(ws), plan_id)))
+    assert journal["workspace_changes"] == [_CULL]
+    assert prep.hand_deletions(str(ws)) == {"sig-culled": _CULL["path"]}
+    monkeypatch.setattr(cal.GeotagWorkflow, "_apply_wave", real_wave)
+    monkeypatch.setattr(cal, "check_workspace", lambda *a, **k: ([], None))
+    assert gx._execute(monkeypatch, ws) == 0
+    assert json.load(open(utils.journal_path(str(ws), plan_id)))["workspace_changes"] == [_CULL]
+
+
+@pytest.mark.spec("BLD-workspace_changes_logged", "RUL-allowed_changes_named", "RUL-merge_summary_only_for_execution",
+                  test="TST-workspace_check-a_merge_execution_cut_short_names_its_changes_in_its_journal")
+def test_a_merge_execution_cut_short_names_its_changes_in_its_journal(tmp_path, monkeypatch):
+    """A merge execution interrupted after its check passed a change writes no summary; the change is named in its
+    plan's journal, written as it records the state it leaves, and kept there by the execution that resumes it."""
+    import test_merge_execute as mx
+    monkeypatch.setattr(merge.MergeWorkflow, "_fingerprint_library_file", lambda self, p: {
+        "status": "valid", "value": mx._parse_fp(p), "strategy": "image-content-hash-v2", "engine_version": "test"})
+    ws, _lib = mx._ws(tmp_path, [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"},
+                                 {"fp": "B", "dest": "Trip", "final_name": "b.jpg"}])
+    assert merge._run_locked_workflow("plan", str(ws)) == 0
+    plan_id = json.load(open(merge.merge_plan_path(str(ws))))["plan_id"]
+    monkeypatch.setattr(merge, "check_workspace", lambda *a, **k: ([dict(_CULL)], None))
+    real_move = merge.MergeWorkflow._move_file
+
+    def ctrl_c_at_b(self, ws_, library_root, rec):
+        if rec["by_dest_source"].endswith("b.jpg"):
+            raise KeyboardInterrupt
+        return real_move(self, ws_, library_root, rec)
+    monkeypatch.setattr(merge.MergeWorkflow, "_move_file", ctrl_c_at_b)
+    assert merge._run_locked_workflow("execute", str(ws), jobs=1) == 130
+    assert not os.path.exists(merge.merge_summary_path(str(ws)))
+    assert json.load(open(utils.journal_path(str(ws), plan_id)))["workspace_changes"] == [_CULL]
+    monkeypatch.setattr(merge.MergeWorkflow, "_move_file", real_move)
+    monkeypatch.setattr(merge, "check_workspace", lambda *a, **k: ([], None))
+    assert merge._run_locked_workflow("execute", str(ws)) == 0
+    assert json.load(open(utils.journal_path(str(ws), plan_id)))["workspace_changes"] == [_CULL]

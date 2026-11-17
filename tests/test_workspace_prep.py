@@ -226,25 +226,27 @@ def test_source_changed_after_plan_abort(mock_meta, mock_hash_img, tmp_path, mon
     with pytest.raises(ValueError, match="Precondition failed: size changed"):
         executor.execute(plan, journal_path)
 
+@pytest.mark.parametrize("ext", [".xmp", ".dop", ".pp3", ".PP3"])
 @pytest.mark.spec("RUL-sidecar_blocks", "BLD-sidecar_extensions", test="TST-workspace_prep-sidecar_blocking")
-def test_sidecar_blocking(tmp_path, monkeypatch):
+def test_sidecar_blocking(tmp_path, monkeypatch, ext):
     import photos_utils as utils
     monkeypatch.setattr(utils.MetadataReader, "read_metadata_concurrently", mock_read_metadata_concurrently)
 
     ws = setup_workspace(tmp_path)
     photos_ingest.CONFIG["jobs"] = 1
 
-    # PR ACCEPTANCE TEST: sidecar blocking — in the inbox and among the sorted photos alike
-    (ws / "0-sources" / "PHOTO_555.xmp").touch()
+    # PR ACCEPTANCE TEST: sidecar blocking — each sidecar extension, of any case, in the inbox and among the sorted
+    # photos alike
+    (ws / "0-sources" / f"PHOTO_555{ext}").touch()
     (ws / "6-photos-by-dest" / "vacation").mkdir(exist_ok=True)
-    (ws / "6-photos-by-dest" / "vacation" / "2023-01-01--12-00-00.dop").touch()
+    (ws / "6-photos-by-dest" / "vacation" / f"2023-01-01--12-00-00{ext}").touch()
 
     cache = photos_ingest.WorkspaceCache(str(ws), in_memory=False)
     workflow = photos_ingest.WorkspacePrepWorkflow(str(ws), cache)
     plan = workflow.plan()
 
     sidecar = [b for b in plan.blockers if "Forbidden sidecar files detected" in b]
-    assert sidecar and "PHOTO_555.xmp" in sidecar[0] and "2023-01-01--12-00-00.dop" in sidecar[0], plan.blockers
+    assert sidecar and f"PHOTO_555{ext}" in sidecar[0] and f"2023-01-01--12-00-00{ext}" in sidecar[0], plan.blockers
 
     executor = photos_ingest.PlanExecutor(str(ws))
     journal_path = str(ws / ".photos-ingest/journal.json")
@@ -573,6 +575,7 @@ def test_deterministic_temp_names_with_existing(tmp_path, monkeypatch):
 
     assert found_002, f"The planner failed to allocate the expected -002 temp name. Found destinations: {[op.destination for op in temp_ops]}"
 
+@pytest.mark.spec("RUL-prep_replans", test="TST-workspace_prep-source_changed_after_plan_abort_no_db")
 def test_source_changed_after_plan_abort_no_db(tmp_path, monkeypatch):
     import photos_utils as utils
     monkeypatch.setattr(utils.MetadataReader, "read_metadata_concurrently", mock_read_metadata_concurrently)
@@ -733,6 +736,10 @@ def test_init_move_excludes_managed_folders_and_control_dirs(tmp_path, monkeypat
     it) and a .git dir are NEVER relocated beneath 0-sources. (The reserved-names test covers a dump
     dir NAMED like a managed folder; this covers actually-present managed + control dirs.)"""
     _mock_for_plan(monkeypatch)
+    # Each file its own picture: the dump is no duplicate of the managed folder's photo, so it is moved.
+    monkeypatch.setattr(photos_ingest.ContentHasher, "fingerprint_image",
+                        lambda p: {"status": "valid", "value": open(p, "rb").read().hex(),
+                                   "strategy": "image-content-hash-v2", "engine_version": "t"})
     ws = tmp_path / "ws"; ws.mkdir(); (ws / ".photos-ingest").mkdir()      # uninitialized -> init run
     (ws / "dump.jpg").write_bytes(b"D")                                    # a genuine root dump
     managed = ws / "5-photos-by-date"; managed.mkdir()                     # a present managed folder...

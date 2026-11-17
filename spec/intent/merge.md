@@ -106,7 +106,8 @@ block merge no more than geotag.
 :verify: required
 :uses: DEF-merge, DEF-library
 
-A merge a precondition stops SHALL change nothing in the library, the workspace's photos or merge's records.
+A merge a precondition stops SHALL change nothing in the library, the workspace's photos or merge's records, but for
+the refusal it records ({need}`RUL-merge_outcome_recorded`).
 :::
 
 :::{rul} A photo with no fingerprint stops merge
@@ -404,6 +405,17 @@ want of a required snapshot or of room in the library.
 Merge SHALL write no summary for a run stopped by anything but the want of a required snapshot or of room in the library
 — a stale plan, a plan or journal it cannot read, or any other refusal of its preflight — nor for a run interrupted,
 leaving the summary an earlier run wrote as it was.
+:::
+
+:::{rul} Merge keeps each execution's summary
+:id: RUL-merge_run_records_kept
+:status: ruled
+:criticality: med
+:anti: yes
+:verify: required
+:uses: DEF-merge
+
+Merge SHALL never overwrite an execution's summary: written again, the earlier one is first set aside, recoverably.
 :::
 
 :::{rul} Merge tells how its run ended

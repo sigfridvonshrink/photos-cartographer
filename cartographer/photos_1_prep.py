@@ -39,6 +39,7 @@ import errno
 # ==============================================================================
 # CONFIGURATION BLOCK
 # ==============================================================================
+from .photos_utils import name_taken_ignoring_case
 from .photos_utils import CONFIG, CAMERA_IDENTITY_FIELDS, folder_name, managed_folder_names, dedup_priority, is_track_file, missing_managed_folders, misplaced_top_level_entries, FOLDER_ROLES, UNTIMED_PREFIX, untimed_stem, carries_stem, filename_format_changed, code_fingerprint, hidden_folder_holds_files
 from .photos_utils import (add_accept_changes_argument, ends_unforeseen_error_apart, add_zone_table_argument, check_workspace, read_workspace_record, write_workspace_record,
                           forget_in_workspace_record, note_execution_begun)
@@ -144,16 +145,22 @@ def _append_quarantine_manifest(manifest_dir, entry):
 def read_prior_prep_log(workspace_root):
     """The earlier prep log's `photos`, {} where there is no log yet. A log that exists and cannot be read — not
     readable, not JSON, or no `photos` object — is never taken for an empty one (RUL-unreadable_prep_log_stops): it
-    raises ValueError naming the file, which the plan records as a blocker and execute refuses on."""
+    raises ValueError naming the file, which the plan records as a blocker and execute refuses on. So is a log whose
+    `workspace_changes`, where present, is not a list of objects: read as fewer changes, the next write would drop
+    the rest (BLD-unreadable_prep_log)."""
     from .photos_utils import prep_log_path
     plp = prep_log_path(workspace_root)
     if not os.path.exists(plp):
         return {}
     try:
         with open(plp) as pf:
-            photos = json.load(pf).get("photos")
+            log = json.load(pf)
+        photos = log.get("photos")
         if not isinstance(photos, dict):
             raise ValueError("it holds no photos record")
+        changes = log.get("workspace_changes", [])
+        if not (isinstance(changes, list) and all(isinstance(c, dict) for c in changes)):
+            raise ValueError("its workspace_changes are not a list of records")
     except (OSError, ValueError, AttributeError) as e:
         raise ValueError(f"Prep's log {os.path.relpath(plp, workspace_root)} cannot be read ({e}); prep will not "
                          "take it for an empty log and rewrite it from this run alone. Restore it, or remove it "
@@ -185,8 +192,8 @@ def set_aside_partners(log_photos) -> dict:
 def hand_deletions(workspace_root, workspace_changes=()) -> dict:
     """{fingerprint: the path it was deleted at} of every file a workspace check found deleted by hand — a cull
     (RUL-culling_passes) — whichever run's check found it: this run's (`workspace_changes`), an earlier prep run's, as
-    prep's log keeps it, or a geotag execution's, as its summary and the summaries kept under -NNN keep it
-    (BLD-workspace_changes_logged). A record that cannot be read adds nothing: its own reader reports it
+    prep's log keeps it, or a geotag execution's, as its summary and the summaries kept under -NNN keep it — or, cut
+    short, its plan's journal (BLD-workspace_changes_logged). A record that cannot be read adds nothing: its own reader reports it
     (BLD-culled_raw_found)."""
     import glob as _glob
     from .photos_utils import prep_log_path, CONTROL_DIR
@@ -202,6 +209,9 @@ def hand_deletions(workspace_root, workspace_changes=()) -> dict:
     sources.append(kept_changes(prep_log_path(workspace_root)))
     summary = os.path.join(workspace_root, CONTROL_DIR, "photos-25-execution-summary")
     for p in [summary + ".json"] + sorted(_glob.glob(_glob.escape(summary) + "-[0-9][0-9][0-9]*.json")):
+        sources.append(kept_changes(p))
+    # and an execution cut short, which writes no summary, as its plan's journal keeps them
+    for p in sorted(_glob.glob(os.path.join(_glob.escape(os.path.join(workspace_root, CONTROL_DIR)), "journal-*.json"))):
         sources.append(kept_changes(p))
     out = {}
     for changes in sources:
@@ -220,8 +230,7 @@ def read_prior_workspace_changes(workspace_root) -> list:
     if not os.path.exists(plp):
         return []
     with open(plp) as pf:
-        changes = json.load(pf).get("workspace_changes")
-    return [c for c in changes if isinstance(c, dict)] if isinstance(changes, list) else []
+        return json.load(pf).get("workspace_changes", [])
 
 
 def _fingerprint_method(content_hash_json):
@@ -417,12 +426,16 @@ class OperationPlanner:
 
 
 def current_metadata_dependencies() -> dict:
-    """What prep's metadata reading depends on, as of now: the extractor and its version, and the versions
-    of the field set, extraction options, metadata schema and camera-group derivation. A plan records it;
-    execution recomputes it and refuses the plan if it differs (BLD-prep_dependencies)."""
-    from .photos_utils import (get_exiftool_version, FIELD_SET_VERSION, METADATA_SCHEMA_VERSION,
-                               CAMERA_GROUP_KEY_VERSION, EXTRACTION_OPTIONS_FINGERPRINT)
+    """What prep's reading of the files depends on, as of now: the extractor and its version, the versions of the
+    field set, extraction options, metadata schema and camera-group derivation, and the image engine its fingerprints
+    are taken by, with its version. A plan records it; execution recomputes it and refuses the plan if it differs
+    (BLD-prep_dependencies), so the handoff never names an engine its fingerprints were not taken by
+    (RUL-engine_change_is_checked)."""
+    from .photos_utils import (get_exiftool_version, get_imagemagick_version, FIELD_SET_VERSION,
+                               METADATA_SCHEMA_VERSION, CAMERA_GROUP_KEY_VERSION, EXTRACTION_OPTIONS_FINGERPRINT)
     return {
+        "image_engine": "imagemagick",
+        "image_engine_version": get_imagemagick_version(),
         "extractor": "exiftool",
         "extractor_version": get_exiftool_version(),
         "field_set_version": FIELD_SET_VERSION,
@@ -636,10 +649,13 @@ class PlanExecutor:
         # the sentinel is written LAST (below, only on full success), so a crash re-enters init.
         from .photos_utils import guard_path as _guard_path
         self._was_uninitialized = not os.path.exists(_guard_path(self.workspace_root))
-        # Read the authoritative workspace config (zfs block, etc.) from photos-00-config.json
-        # before applying the plan. (Config-staleness rejection against the plan is Phase 4.)
-        from .photos_utils import load_or_seed_config
-        load_or_seed_config(self.workspace_root)
+        # Read the authoritative workspace config (zfs block, etc.) from photos-00-config.json before applying the
+        # plan: read, never seeded — the plan seeded it (RUL-config_seeded_once); one gone since is a refusal.
+        from .photos_utils import load_config
+        try:
+            load_config(self.workspace_root)
+        except (OSError, ValueError) as e:
+            raise ExecuteRefused(f"The workspace's configuration cannot be read: {e}") from e
         # Per-run journal under the control directory (retained, not overwritten),
         # unless a caller supplies an explicit path.
         if journal_path is None:
@@ -657,6 +673,16 @@ class PlanExecutor:
             # 1. Preflight validation
             self.coordinator.start_phase("executing - preflight validation")
             try:
+                # A database of another schema is never migrated: execute stops as the plan does, before the version
+                # row is stamped over it (RUL-cache_schema_not_migrated).
+                from .photos_utils import cache_schema_mismatch
+                _ro = WorkspaceCache(self.workspace_root, read_only=True)
+                try:
+                    _schema_stop = cache_schema_mismatch(_ro)
+                finally:
+                    _ro.close()
+                if _schema_stop:
+                    raise ValueError(_schema_stop)
                 PlanValidator.validate_plan_preflight(plan, self.workspace_root)
                 if plan.summary and "performance_and_cache" in plan.summary:
                     plan.summary["performance_and_cache"]["dependency_validation_status"] = "success"
@@ -765,6 +791,12 @@ class PlanExecutor:
                             # Atomic, race-free no-clobber: fails (FileExistsError) rather than
                             # overwriting if the destination exists at the moment of the move.
                             os.makedirs(os.path.dirname(abs_dest), exist_ok=True)
+                            # The name free in every case, on every filesystem (RUL-target_free_ignores_case):
+                            # one taken since planning in another case blocks the move.
+                            taken = name_taken_ignoring_case(abs_dest, abs_src)
+                            if taken:
+                                raise FileExistsError(f"{op.destination} is taken at execute by "
+                                                      f"{os.path.relpath(taken, self.workspace_root)}")
                             _move_no_clobber(abs_src, abs_dest)
 
                         # Apply DB effects
@@ -1089,7 +1121,6 @@ class PlanExecutor:
 
                     # 3. Create handoff payload
                     md_deps = plan.metadata_dependencies
-                    from .photos_utils import get_imagemagick_version as _get_imagemagick_version
                     handoff = {
                         "schema_version": 1,
                         "tool": "photos-1-prep",
@@ -1148,8 +1179,9 @@ class PlanExecutor:
                             "cache": {
                                 "schema_version": int(cache.get_meta("cache_schema_version")),
                                 "fingerprint_algorithm_version": cache.get_meta("fingerprint_algorithm_version"),
-                                "image_engine": "imagemagick",
-                                "image_engine_version": _get_imagemagick_version()
+                                # The engine the plan's fingerprints were taken by, which execute found in use.
+                                "image_engine": md_deps["image_engine"],
+                                "image_engine_version": md_deps["image_engine_version"]
                             }
                         }
                     }
@@ -1339,6 +1371,20 @@ class WorkspacePrepWorkflow:
         # the init-move / extension-normalize callers leave it False (they run only on a real collision).
         return allocate_suffix(base, ext, index, start_idx, bare_first)
 
+    def _names_taken_in(self, st, folder, own_key):
+        """The names, case folded, a suffix allocated in `folder` must not take: those on disk there, those the plan
+        already gives files there, and those of the files there now but the one being named (`own_key`)
+        (RUL-suffix_no_clobber, RUL-suffix_case_insensitive)."""
+        fl = folder.lower()
+        taken = {os.path.basename(v).lower() for k, v in st.current_paths.items()
+                 if k != own_key and os.path.dirname(v).lower() == fl}
+        taken.update(os.path.basename(d) for d in st.global_destinations if os.path.dirname(d) == fl)
+        try:
+            taken.update(n.lower() for n in os.listdir(os.path.join(self.workspace_root, folder)))
+        except OSError:
+            pass
+        return taken
+
     def _flag_dir_symlinks(self, root, dir_names, blockers):
         """Flag any subdirectory symlink encountered during a walk as a forbidden escape. os.walk does
         not descend into them (followlinks=False), so without this they would be silently ignored
@@ -1379,11 +1425,20 @@ class WorkspacePrepWorkflow:
         ws = self.workspace_root
         out = []
 
+        def _track_blocker(rel):
+            # A track file is never quarantined, hidden or not: it blocks, left where it is
+            # (RUL-track_files_block_prep, RUL-track_file_left_in_place).
+            blockers.append(f"Track file in the workspace: {rel}. Tracks are never processed as "
+                            "media — move it under gpx_root, then re-plan.")
+
         def _walk_hidden(root_abs, all_hidden):
-            for r, _dirs, fnames in os.walk(root_abs):
+            for r, dirs, fnames in os.walk(root_abs):
                 rel_to_root = os.path.relpath(r, root_abs)
                 under_hidden = all_hidden or any(
                     part.startswith('.') for part in rel_to_root.split(os.sep) if part not in ('.', ''))
+                if under_hidden:
+                    # A folder link inside a hidden folder, which the main scan does not walk (RUL-no_links).
+                    self._flag_dir_symlinks(r, dirs, blockers)
                 for fn in fnames:
                     if not (under_hidden or fn.startswith('.')):
                         continue                       # a plain file in a plain dir — the main scan owns it
@@ -1391,6 +1446,8 @@ class WorkspacePrepWorkflow:
                     rel = os.path.relpath(p, ws)
                     if os.path.islink(p):
                         blockers.append(f"Forbidden symlink detected: {rel}")
+                    elif is_track_file(fn):
+                        _track_blocker(rel)
                     else:
                         out.append(rel)
 
@@ -1415,7 +1472,10 @@ class WorkspacePrepWorkflow:
                     # dir -> only its name-hidden / under-a-dot-subdir files.
                     _walk_hidden(p, all_hidden=f.startswith('.'))
                 elif f.startswith('.'):
-                    out.append(f)                      # a root-level dump dotfile
+                    if is_track_file(f):
+                        _track_blocker(f)
+                    else:
+                        out.append(f)                  # a root-level dump dotfile
         out.sort()
         return out
 
@@ -2029,11 +2089,14 @@ class WorkspacePrepWorkflow:
                 })
         return ghost_prunes
 
-    def _plan_init_moves(self, st, db_files):
+    def _plan_init_moves(self, st, db_files, quarantined):
         """Init move (RUL-init_moves_dump_to_inbox): on an init run, move each base-dump entry into 0-sources with
-        its structure preserved (no flatten), case-insensitively collision-suffixed. Mutates the
-        op-building cluster carried on `st`. Verbatim from plan() with `<cluster> -> st.<cluster>`."""
+        its structure preserved (no flatten), case-insensitively collision-suffixed — but a file dedup has already
+        set aside from its dump path, which is not moved (RUL-duplicate_set_aside_as_found). Mutates the
+        op-building cluster carried on `st`."""
         for f in db_files:
+            if f['relative_path'] in quarantined:
+                continue
             rel_path = st.current_paths[f['relative_path']]
             # Init move (RUL-init_moves_dump_to_inbox): move each base-entry file into 0-sources with its
             # STRUCTURE PRESERVED — no flatten (MyDump/sub/a.jpg -> 0-sources/MyDump/sub/a.jpg).
@@ -2043,10 +2106,13 @@ class WorkspacePrepWorkflow:
                 _sources = folder_name('sources')
                 dest_base = os.path.join(_sources, rel_path)
                 dest = dest_base
-                # Avoid collisions case-insensitively, suffixing within the preserved subdir
-                while dest.lower() in [v.lower() for k,v in st.current_paths.items() if k != f['relative_path']] or dest.lower() in st.global_destinations:
-                    name, ext = os.path.splitext(os.path.basename(dest))
-                    dest = os.path.join(os.path.dirname(dest_base), self._allocate_suffix(name, ext.lstrip('.'), st.global_destinations))
+                # Avoid collisions case-insensitively, suffixing within the preserved subdir: the first free `-NNN`
+                # from 001 on the dump file's own stem, against the folder's names (BLD-init_move_suffix).
+                if dest.lower() in [v.lower() for k,v in st.current_paths.items() if k != f['relative_path']] or dest.lower() in st.global_destinations:
+                    name, ext = os.path.splitext(os.path.basename(dest_base))
+                    folder = os.path.dirname(dest_base)
+                    dest = os.path.join(folder, self._allocate_suffix(
+                        name, ext.lstrip('.'), self._names_taken_in(st, folder, f['relative_path'])))
 
                 st.global_destinations.add(dest.lower())
                 if rel_path != dest:
@@ -2087,7 +2153,9 @@ class WorkspacePrepWorkflow:
                 final_rel = os.path.join(os.path.dirname(rel_path), final_name)
 
                 if final_rel.lower() in [v.lower() for k, v in st.current_paths.items() if k != f['relative_path']] or final_rel.lower() in st.global_destinations:
-                    final_name = self._allocate_suffix(name, new_ext.lstrip('.'), st.global_destinations)
+                    # Against the folder's names on disk and planned, case folded (RUL-suffix_no_clobber).
+                    final_name = self._allocate_suffix(name, new_ext.lstrip('.'), self._names_taken_in(
+                        st, os.path.dirname(rel_path), f['relative_path']))
                     final_rel = os.path.join(os.path.dirname(rel_path), final_name)
 
 # Generate a deterministic temp name strictly through allocation
@@ -2300,6 +2368,10 @@ class WorkspacePrepWorkflow:
             if len(group) > 1:
                 def priority(item):
                     p = st.current_paths.get(item['relative_path'], item['relative_path'])
+                    # A file of a dump at the top level, which the initializing run moves into the inbox after this
+                    # stage, ranks as the inbox place it is moved to.
+                    if p.split('/', 1)[0] not in self.managed_folders:
+                        p = os.path.join(folder_name('sources'), p)
                     return (dedup_priority(p), p)
 
                 group.sort(key=priority)
@@ -2919,10 +2991,9 @@ class WorkspacePrepWorkflow:
             _by_dest_paths,
             set(_by_dest_paths),
             media_mutated_originals)
-        self._plan_init_moves(st, db_files)
-
-        # Duplicates are set aside first, from where they lie (RUL-duplicate_set_aside_as_found): no later stage moves
-        # or renames a file this plan quarantines, so its record keeps its dump path and name.
+        # Duplicates are set aside first, from where they lie (RUL-duplicate_set_aside_as_found) — before the
+        # initializing run moves a dump into the inbox: no stage moves or renames a file this plan quarantines, so its
+        # record keeps its dump path and name.
         content_groups = self._plan_content_groups(db_files, by_dest_files, blockers)
 
         quarantined = set()
@@ -2931,6 +3002,8 @@ class WorkspacePrepWorkflow:
         self._plan_quarantine_artifacts(st, exiftool_leftovers, dump_dotfiles, plan_id_for_quarantine)
 
         self._plan_dedup(st, content_groups, quarantined, plan_id_for_quarantine)
+
+        self._plan_init_moves(st, db_files, quarantined)
 
         self._plan_culled_raw_jpegs(st, all_db_files, db_files, quarantined, plan_id_for_quarantine)
 
@@ -3411,13 +3484,12 @@ def _shape_blockers(workspace_root) -> list:
 
 
 def _check_workspace(args, workspace_root) -> list:
-    """Prep's check of the workspace against the state its last execution left (BLD-workspace_check): on an
-    initialized workspace whose configuration loads — the folders are known by it — and where a record was written; a
-    first run, with none, compares nothing (RUL-first_prep_compares_nothing), and a configuration that cannot be read is
-    the plan's to report. Returns the changes this run names in its log; exits 2 on a stop."""
-    from .photos_utils import guard_path, load_config
-    if not os.path.exists(guard_path(workspace_root)):
-        return []
+    """Prep's check of the workspace against the state its last execution left (BLD-workspace_check), initialized or
+    not — a first execute that failed leaves the workspace uninitialized but its state recorded — wherever the
+    configuration loads, the folders being known by it: a workspace no execution has recorded compares nothing
+    (RUL-first_prep_compares_nothing), and a configuration that cannot be read is the plan's to report. Returns the
+    changes this run names in its log; exits 2 on a stop."""
+    from .photos_utils import load_config
     try:
         load_config(workspace_root)
     except Exception:
@@ -3465,6 +3537,24 @@ def _run_locked(args, workspace_root, reporter):
             for b in _shape:
                 reporter.error(f"  - {b}")
             reporter.log("Nothing was scanned, planned or changed.")
+            sys.exit(2)
+
+    # The configuration is seeded on a workspace's first run alone (RUL-config_seeded_once) — the run before any
+    # execution has recorded the workspace (RUL-first_prep_compares_nothing): one deleted from a workspace an execution
+    # has recorded stops prep, naming it, never seeded again unasked (RUL-config_authoritative).
+    if args.command in ("plan", "dry-run", "execute"):
+        from .photos_utils import config_path as _config_path, WorkspaceRecordUnreadable
+
+        def _recorded():
+            try:
+                return read_workspace_record(workspace_root)[0] is not None
+            except WorkspaceRecordUnreadable:
+                return True     # a record there, though unreadable: not a first run
+        if not os.path.exists(_config_path(workspace_root)) and _recorded():
+            reporter.error(f"The workspace's configuration {os.path.relpath(_config_path(workspace_root), workspace_root)}"
+                           " is missing. Prep seeds it on a workspace's first run only: restore it (from an archived "
+                           "copy, or the settings you chose), then run prep again. Nothing was scanned, planned or "
+                           "changed.")
             sys.exit(2)
 
     # The workspace as the last execution left it (RUL-workspace_checked_first): compared before anything is
@@ -3620,7 +3710,7 @@ def _run_locked(args, workspace_root, reporter):
         executor = PlanExecutor(workspace_root, workspace_changes=workspace_changes)
 
         # How execute ended decides its exit status (BLD-exit_statuses): refused before anything changed, 2; an
-        # operation failed or the run's closing records could not be written, 3; an error not foreseen, 1.
+        # operation failed or the run's closing records could not be written, 3; an error not foreseen, its own.
         try:
             executor.execute(plan)
         except ExecuteRefused as e:
@@ -3628,11 +3718,13 @@ def _run_locked(args, workspace_root, reporter):
             emit_next_step(reporter, "resolve the error above — for a stale plan, re-run `prep plan` — then "
                                      "re-run `prep execute`.")
             sys.exit(2)
-        except Exception as e:
+        except ExecuteFailed as e:
             reporter.error(f"Execution failed: {e}")
             emit_next_step(reporter, "resolve the error above and re-run `prep execute` "
                                      "(execute is idempotent — safe to re-run).")
-            sys.exit(3 if isinstance(e, ExecuteFailed) else 1)
+            sys.exit(3)
+        # Any other error was not foreseen: it goes on to the entry, which ends the run with a status of its own
+        # (BLD-exit_statuses), never 1, which says the workspace is locked.
 
         # Next step depends on whether sorting is still pending: an empty by-dest means this was a
         # first ingest (sort, re-prep, then geotag); a populated by-dest means the move is recorded

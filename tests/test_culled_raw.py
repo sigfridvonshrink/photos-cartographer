@@ -242,7 +242,8 @@ def test_a_cull_seen_by_an_earlier_run_still_takes_the_jpeg(tmp_path, monkeypatc
     assert op.verification["raw_path"] == raw
 
 
-@pytest.mark.spec("RUL-culled_raw_takes_its_jpeg", "RUL-allowed_changes_named", "BLD-workspace_changes_logged",
+@pytest.mark.spec("RUL-prep_records_on_success",
+                  "RUL-culled_raw_takes_its_jpeg", "RUL-allowed_changes_named", "BLD-workspace_changes_logged",
                   "BLD-culled_raw_found", "RUL-failed_prep_logs_hand_changes",
                   test="TST-culled_raw-a_cull_passed_by_a_failed_execute_still_takes_the_jpeg")
 def test_a_cull_passed_by_a_failed_execute_still_takes_the_jpeg(tmp_path, monkeypatch):

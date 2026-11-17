@@ -38,6 +38,7 @@ def workspace(tmp_path):
     os.makedirs(os.path.join(root, ".photos-ingest"), exist_ok=True)
     with open(os.path.join(root, ".photos-ingest", "photos-00-workspace-guard"), "w") as f:
         f.write("")
+    utils.load_or_seed_config(root)          # the configuration prep's first run seeded
 
     # Create some dummy files
     for i in range(10):
@@ -322,7 +323,8 @@ def test_cli_jobs_argparse(workspace):
 
 @patch("subprocess.Popen")
 @patch("photos_utils.PersistentExifToolWorker.read_metadata")
-@pytest.mark.spec("RUL-tool_failure_never_valid", test="TST-concurrency-exiftool_pool_failure_blocks_plan")
+@pytest.mark.spec("RUL-metadata_failure_blocks", "BLD-metadata_failure_blocker",
+                  "RUL-tool_failure_never_valid", test="TST-concurrency-exiftool_pool_failure_blocks_plan")
 def test_exiftool_pool_failure_blocks_plan(mock_read_metadata, mock_popen, workspace):
     mock_popen.return_value = MagicMock()
     # If the process errors out constantly
@@ -379,6 +381,8 @@ def test_exiftool_pool_failure_blocks_handoff(mock_read_metadata, mock_popen, wo
     handoff_path = os.path.join(workspace, ".photos-ingest", "photos-11-handoff.json")
     assert not os.path.exists(handoff_path)
 
+@pytest.mark.spec("RUL-metadata_failure_blocks", "BLD-metadata_failure_blocker",
+                  test="TST-concurrency-failed_folder_mapping")
 @patch("subprocess.Popen")
 @patch("photos_utils.MetadataReader.read_metadata_concurrently")
 def test_failed_folder_mapping(mock_read_metadata_concurrently, mock_popen, workspace):

@@ -420,7 +420,7 @@ unchanged re-run means the iterative decision-editing loop does not accumulate r
 :status: ruled
 :forced: yes
 :follows_from: RAT-superseded_plans_recoverable
-:justifies: RUL-geotag_run_records_kept, RUL-prep_journal_kept
+:justifies: RUL-geotag_run_records_kept, RUL-prep_journal_kept, RUL-merge_run_records_kept
 
 An execution's summary is the one account of what that run did — what it applied, what failed, which pictures came
 out changed — and a package is what was handed on for keeping. The next execution, or a finalize run again after a

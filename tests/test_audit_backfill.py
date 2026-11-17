@@ -109,6 +109,7 @@ def test_other_class_moves_to_strays(tmp_path, monkeypatch):
     assert glob.glob(str(ws / "1-strays" / "*" / "notes.txt"))     # landed in strays
 
 
+@pytest.mark.spec("RUL-handoff_describes_workspace", test="TST-audit_backfill-strays_are_abandoned_not_in_handoff")
 def test_strays_are_abandoned_not_in_handoff(tmp_path, monkeypatch):
     # Strays are abandoned once moved (RUL-strays_leave_no_trace): the act is logged, but the stray file is NOT tracked
     # in the handoff and 1-strays is NOT listed in folders_scanned — so nothing downstream depends on
@@ -213,6 +214,8 @@ def test_ghost_prune_removes_missing_cache_row(tmp_path, monkeypatch):
                for op in plan.operations), [op.type for op in plan.operations]
 
 
+@pytest.mark.spec("RUL-prep_records_on_success", "BLD-handoff_content",
+                  test="TST-audit_backfill-quarantine_writes_evidence_before_moving")
 def test_quarantine_writes_evidence_before_moving(tmp_path, monkeypatch):
     # Evidence-before-quarantine (RUL-evidence_before_quarantine): the manifest entry must be written BEFORE the move,
     # so a crash/failure mid-move never strands a file in quarantine with no record. We simulate the move
@@ -283,6 +286,8 @@ def test_camera_group_key_version_staleness_refreshes(tmp_path, monkeypatch):
 
 # --- lifecycle / zfs ---------------------------------------------------------
 
+@pytest.mark.spec("BLD-prep_dependencies", "RUL-unchecked_counts_as_changed",
+                  test="TST-audit_backfill-by_dest_change_rejects_plan_at_execute")
 def test_by_dest_change_rejects_plan_at_execute(tmp_path, monkeypatch):
     _install(monkeypatch)
     ws = _ws(tmp_path)
@@ -296,6 +301,8 @@ def test_by_dest_change_rejects_plan_at_execute(tmp_path, monkeypatch):
         prep.PlanExecutor(str(ws)).execute(plan)
 
 
+@pytest.mark.spec("RUL-jobs_change_nothing", "BLD-planning_order",
+                  test="TST-audit_backfill-fingerprint_stable_across_jobs")
 def test_fingerprint_stable_across_jobs(tmp_path, monkeypatch):
     # RUL-jobs_change_nothing: two safe job counts produce the same semantic plan and the same dependency
     # fingerprints for the SAME workspace. Planning is non-mutating, so plan twice.

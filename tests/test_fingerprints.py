@@ -127,7 +127,8 @@ def test_a_file_whose_metadata_is_read_again_is_fingerprinted_again(tmp_path, mo
     assert _plan_counting(ws, monkeypatch) == 1
 
 
-@pytest.mark.spec("RUL-fingerprint_method_matches", "BLD-fingerprint", "BLD-fingerprint_method",
+@pytest.mark.spec("RUL-database_over_memo", "RUL-memo_never_changes_plan", "BLD-plan_memo",
+                  "RUL-fingerprint_method_matches", "BLD-fingerprint", "BLD-fingerprint_method",
                   "RUL-fingerprint_method_unrecorded_retaken",
                   test="TST-fingerprints-a_fingerprint_is_reused_only_from_this_method")
 def test_a_fingerprint_is_reused_only_from_this_method(tmp_path, monkeypatch):
@@ -153,6 +154,28 @@ def test_a_fingerprint_is_reused_only_from_this_method(tmp_path, monkeypatch):
     monkeypatch.setattr(utils, "get_imagemagick_version", lambda: "u")
     _restamp(ws, ".mp4", strategy=utils.VIDEO_FINGERPRINT_STRATEGY)
     assert _plan_counting(ws, monkeypatch) == 1                     # a new ImageMagick restales the photo only
+
+
+@pytest.mark.parametrize("unrecorded", ["engine_version", "strategy"])
+@pytest.mark.spec("RUL-fingerprint_method_unrecorded_retaken", "BLD-fingerprint_method",
+                  test="TST-fingerprints-a_fingerprint_recording_no_method_is_taken_again")
+def test_a_fingerprint_recording_no_method_is_taken_again(tmp_path, monkeypatch, unrecorded):
+    """A photo's cached fingerprint that records no ImageMagick version, or no strategy, is taken again — though
+    its metadata, read for that very fingerprint, is fresh, so nothing else asks for it to be read again."""
+    _mock(monkeypatch)
+    monkeypatch.setattr(utils, "get_imagemagick_version", lambda: "t")
+    ws = _ws(tmp_path)
+    (ws / "0-sources" / "a.jpg").write_bytes(b"AAAA")
+    _run(ws)
+    assert _plan_counting(ws, monkeypatch) == 0
+    conn = sqlite3.connect(utils.db_path(str(ws)))
+    (path, ch), = conn.execute("SELECT relative_path, content_hash FROM file_cache").fetchall()
+    ch = json.dumps({k: v for k, v in json.loads(ch).items() if k != unrecorded})
+    conn.execute("UPDATE file_cache SET content_hash = ? WHERE relative_path = ?", (ch, path))
+    conn.execute("UPDATE metadata_cache SET content_hash = ? WHERE relative_path = ?", (ch, path))   # still fresh
+    conn.commit()
+    conn.close()
+    assert _plan_counting(ws, monkeypatch) == 1
 
 
 @pytest.mark.spec("BLD-prep_dependencies", "BLD-cache_versions",
@@ -281,6 +304,32 @@ def test_a_dependency_missing_or_unrecorded_stops_execution(tmp_path, monkeypatc
     with pytest.raises(ValueError, match="Stale plan"):
         prep.PlanExecutor(str(ws)).execute(plan)
     assert (ws / "0-sources" / "a.jpg").exists()
+
+
+@pytest.mark.spec("RUL-engine_change_is_checked", "BLD-prep_dependencies",
+                  test="TST-fingerprints-a_plan_made_under_another_image_engine_is_refused")
+def test_a_plan_made_under_another_image_engine_is_refused(tmp_path, monkeypatch):
+    """A plan whose fingerprints were taken under one ImageMagick, executed under another, is refused before any
+    change: no handoff names an engine its fingerprints were not taken by. Under the same engine it executes, and the
+    handoff names the engine of the plan."""
+    _mock(monkeypatch)
+    prep.CONFIG["jobs"] = 1
+    ws = _ws(tmp_path)
+    (ws / "0-sources" / "a.jpg").write_bytes(b"AAAA")
+    monkeypatch.setattr(utils, "get_imagemagick_version", lambda: "engine-A")
+    cache = prep.WorkspaceCache(str(ws))
+    plan = prep.WorkspacePrepWorkflow(str(ws), cache).plan()
+    cache.close()
+    assert not plan.blockers, plan.blockers
+    monkeypatch.setattr(utils, "get_imagemagick_version", lambda: "engine-B")
+    with pytest.raises(prep.ExecuteRefused, match="Stale plan"):
+        prep.PlanExecutor(str(ws)).execute(plan)
+    assert (ws / "0-sources" / "a.jpg").exists()
+    assert not os.path.exists(utils.handoff_path(str(ws)))
+    monkeypatch.setattr(utils, "get_imagemagick_version", lambda: "engine-A")
+    prep.PlanExecutor(str(ws)).execute(plan)
+    with open(utils.handoff_path(str(ws))) as f:
+        assert json.load(f)["depends_on"]["cache"]["image_engine_version"] == "engine-A"
 
 
 # --- Phase D: fingerprint/hash terminology (RAT-fingerprint_and_hash_opposite_jobs) ---------------------------

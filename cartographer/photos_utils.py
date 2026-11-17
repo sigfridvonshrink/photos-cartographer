@@ -962,6 +962,38 @@ def write_db_snapshot(conn, dest_path: str) -> None:
 def journal_path(ws: str, run_id: str) -> str:
     return os.path.join(ws, CONTROL_DIR, f"journal-{run_id}.json")
 
+def journal_kept_changes(path: str) -> list:
+    """The changes by hand a plan's journal keeps — those named or accepted by the checks of its executions that were
+    cut short, which wrote no summary (BLD-workspace_changes_logged) — [] where it keeps none or does not exist. Each
+    writer of the journal carries them over."""
+    try:
+        with open(path) as f:
+            kept = json.load(f).get("workspace_changes")
+    except (OSError, ValueError, AttributeError):
+        return []
+    return kept if isinstance(kept, list) else []
+
+def journal_add_changes(ws: str, plan_id: str, changes) -> None:
+    """Add the changes by hand an execution cut short had its check name or accept to its plan's journal, in the step
+    that records the state it leaves (BLD-workspace_changes_logged): its summary is never written
+    (RUL-geotag_summary_only_for_execution, RUL-merge_summary_only_for_execution), and they are then in no other
+    record. A journal it cannot read is left as it is."""
+    changes = list(changes or [])
+    if not changes:
+        return
+    path = journal_path(ws, plan_id)
+    journal = {"journal_version": 1, "plan_id": plan_id, "operations": {}}
+    if os.path.exists(path):
+        try:
+            with open(path) as f:
+                journal = json.load(f)
+        except (OSError, ValueError):
+            return
+        if not isinstance(journal, dict):
+            return
+    journal["workspace_changes"] = journal_kept_changes(path) + changes
+    write_json_artifact(path, journal)
+
 def sha256_file(path: str) -> str:
     """SHA-256 over a file's exact bytes — the byte-hash used to verify JSON-artifact
     dependencies (the prep handoff and the numbered geotag artifacts are re-hashed from
@@ -1163,12 +1195,16 @@ def is_library(library_root: str) -> bool:
 def write_library_marker(library_root: str) -> str:
     """Bless library_root as a library by creating the .photos-library marker. No-clobber and
     idempotent: a no-op success if the marker already exists. Written only by `merge init-library`;
-    plan/dry-run/execute only ever read it. Returns the marker path."""
+    plan/dry-run/execute only ever read it. Returns the marker path. An entry of the mark's name that is not a file —
+    a folder, a link — is no mark and is never taken for one: ValueError, nothing made (RUL-library_mark_made_by_setup).
+    """
     p = library_marker_path(library_root)
     try:
         os.close(os.open(p, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o644))
     except FileExistsError:
-        pass
+        if os.path.islink(p) or not os.path.isfile(p):
+            raise ValueError(f"{p} exists and is not a file, so it cannot be the library's mark; remove it, then "
+                             "run init-library again. Nothing was blessed.")
     return p
 
 def library_lock_path(library_root: str) -> str:
@@ -2567,7 +2603,8 @@ def _zfs_snapshot_exists(snap: str) -> bool:
 # 3: the other time fields geotag rewrites kept as well, each from its own group (OTHER_TIME_FIELDS).
 # 4: the sub-second fields beside CreateDate and ModifyDate read from EXIF (SubSecTimeDigitized, SubSecTime), not
 #    the Composite ones, which no group of the order holds.
-FIELD_SET_VERSION = 4
+# 5: the Composite position taken first only where EXIF holds the position, else after XMP's (POSITION_FIELDS).
+FIELD_SET_VERSION = 5
 # 2: a file's recorded time is the first field holding a valid time, not the first present.
 METADATA_SCHEMA_VERSION = 2
 # 2: a key of empty parts alone (every identity field held blank) is NO_IDENTITY_KEY, a file naming no camera.
@@ -2586,6 +2623,12 @@ def get_exiftool_version() -> str:
         return "unknown"
 
 _IMAGEMAGICK_VERSION = None
+def known_engine_version(version) -> bool:
+    """Whether `version` names an ImageMagick version — not None, nor the `"unknown"` `get_imagemagick_version` gives
+    where it cannot read one. A fingerprint taken under no known version is never reused, nor is such a version ever
+    the same as another (RUL-unchecked_counts_as_changed)."""
+    return version not in (None, "unknown")
+
 def get_imagemagick_version() -> str:
     """Resolve the ImageMagick version string once per process.
 
@@ -3178,9 +3221,12 @@ def parse_naive_time(s):
 # (for a time field, the first holding a valid time). EXIF is the camera's own record; XMP is where other
 # tools mirror it, and where a file without EXIF keeps its times; the rest hold what neither does.
 METADATA_GROUP_ORDER = ("EXIF", "XMP", "MakerNotes", "IPTC", "QuickTime", "File")
-# The GPS position is taken first from exiftool's Composite group, which signs it by its hemisphere
-# reference; EXIF holds it unsigned beside a separate reference tag.
-POSITION_FIELDS = ("GPSLatitude", "GPSLongitude", "GPSAltitude", "GPSDateTime")
+# The GPS position is taken first from exiftool's Composite group where EXIF holds it, the Composite value being EXIF's
+# signed by its hemisphere reference (EXIF holds it unsigned beside a separate reference tag). Elsewhere exiftool also
+# derives a Composite position from QuickTime's, so without EXIF's the Composite comes after XMP's, never before
+# (RUL-metadata_group_order). Each position field names the EXIF tag its Composite value is made from.
+POSITION_FIELDS = {"GPSLatitude": "GPSLatitude", "GPSLongitude": "GPSLongitude", "GPSAltitude": "GPSAltitude",
+                   "GPSDateTime": "GPSDateStamp"}
 
 METADATA_FIELDS = (
     # times, uncorrected
@@ -3210,7 +3256,10 @@ def metadata_field(item, field, valid=None):
     """`(group, value)` of `field` in a group-qualified exiftool record: from the first group of its order
     holding it — with `valid`, the first whose value passes it, else the first holding any — or
     `(None, None)`."""
-    groups = (("Composite",) if field in POSITION_FIELDS else ()) + METADATA_GROUP_ORDER
+    groups = METADATA_GROUP_ORDER
+    if field in POSITION_FIELDS:
+        groups = (("Composite",) + groups if item.get(f"EXIF:{POSITION_FIELDS[field]}") is not None
+                  else groups[:2] + ("Composite",) + groups[2:])
     held = [(g, item[f"{g}:{field}"]) for g in groups if item.get(f"{g}:{field}") is not None]
     if valid is not None:
         for g, v in held:
@@ -3537,8 +3586,8 @@ def fingerprint_valid(content_hash_json) -> bool:
 
 def fingerprint_reusable(content_hash_json, media_class, current_magick_version) -> bool:
     """Whether a cached fingerprint can be reused: a valid one, taken by the method this build uses for
-    its class — the same strategy, and for a photo the same ImageMagick version. A fingerprint that
-    records no ImageMagick version is not reusable, and a failed one never is: the failure may have
+    its class — the same strategy, and for a photo the same, known ImageMagick version. A fingerprint that
+    records no ImageMagick version, or one that could not be read, is not reusable, and a failed one never is: the failure may have
     been the machine's (a tool missing, a decode crashing), so every run takes it again
     (RUL-failed_fingerprint_retried)."""
     if not fingerprint_valid(content_hash_json):
@@ -3546,7 +3595,7 @@ def fingerprint_reusable(content_hash_json, media_class, current_magick_version)
     ch = json.loads(content_hash_json)
     if media_class in ("image", "raw"):
         return (ch.get("strategy") == IMAGE_FINGERPRINT_STRATEGY
-                and ch.get("engine_version") is not None and ch.get("engine_version") == current_magick_version)
+                and known_engine_version(ch.get("engine_version")) and ch.get("engine_version") == current_magick_version)
     if media_class == "video":
         return ch.get("strategy") == VIDEO_FINGERPRINT_STRATEGY
     return True
@@ -3703,6 +3752,32 @@ def _move_cross_fs_no_clobber(src: str, dest: str):
                 pass
     _fsync_dir(dest_dir)                                # the rename on disk before the source goes
     os.unlink(src)                                      # remove the source LAST (crash-safe)
+
+def name_taken_ignoring_case(dest: str, src: str = None):
+    """The path of an entry in `dest`'s folder whose name is `dest`'s, compared without regard to case — `src`, the
+    file being moved there, aside — or None where the name is free (RUL-target_free_ignores_case, on every
+    filesystem). A folder that does not exist yet holds nothing; one that cannot be listed is not found free
+    (RUL-unchecked_counts_as_changed): its own path is returned."""
+    folder, name = os.path.split(dest)
+    low = name.lower()
+    try:
+        entries = os.listdir(folder or ".")
+    except FileNotFoundError:
+        return None
+    except OSError:
+        return folder
+    for e in entries:
+        if e.lower() != low:
+            continue
+        p = os.path.join(folder, e)
+        try:
+            if src is not None and os.path.samefile(p, src):
+                continue
+        except OSError:
+            pass
+        return p
+    return None
+
 
 def _move_no_clobber(src: str, dest: str, cross_fs=False):
     """Move src -> dest, failing (FileExistsError) instead of overwriting an existing destination.
@@ -4305,7 +4380,10 @@ class WorkspaceCache:
         """Cache a resident library file's content fingerprint (BLD-library_file_fingerprinted),
         keyed by absolute library path + size + mtime_ns. `fp` is a ContentHasher fingerprint dict
         (value / strategy / engine_version). Re-keying on (path,size,mtime_ns) means a changed library
-        file naturally misses and is re-fingerprinted."""
+        file naturally misses and is re-fingerprinted. One taken under no known ImageMagick version is not kept: it
+        could never be reused (BLD-library_file_fingerprinted)."""
+        if not known_engine_version(fp.get("engine_version")):
+            return
         with self._write_ctx():
             self.conn.execute("""
                 INSERT INTO library_fingerprint_cache
@@ -4336,7 +4414,7 @@ class WorkspaceCache:
             row = cur.fetchone()
         if row is None or row["size"] != size or row["mtime_ns"] != mtime_ns:
             return None
-        if (row["fingerprint_strategy"] != IMAGE_FINGERPRINT_STRATEGY or engine_version is None
+        if (row["fingerprint_strategy"] != IMAGE_FINGERPRINT_STRATEGY or not known_engine_version(engine_version)
                 or row["engine_version"] != engine_version):
             return None
         return {"status": "valid", "value": row["fingerprint_value"],

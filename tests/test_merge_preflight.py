@@ -89,18 +89,18 @@ def _make(tmp_path, *, guard=True, config=True, library_in_config=True, bless_li
         (ctl / "photos-00-config.json").write_text(json.dumps(cfg))
     if cal_plan:
         pinned = fp if handoff_current else ("stale-" + fp)
-        plan = {"status": "ready",
+        plan = {"status": "ready", "plan_id": "geotag-plan-1",
                 "depends_on": {"handoff": {"dependency_type": "handoff_content",
                                            "artifact_name": "photos-11-handoff.json",
                                            "content_fingerprint": pinned}}}
         (ctl / "photos-24-executable-plan.json").write_text(json.dumps(plan))
     if cal_summary:
-        (ctl / "photos-25-execution-summary.json").write_text(json.dumps({"status": summary_status}))
+        (ctl / "photos-25-execution-summary.json").write_text(json.dumps({"status": summary_status, "plan_id": "geotag-plan-1"}))
     if complete_log:
         (ctl / "photos-26-complete-log.json").write_text(json.dumps({"photos": {}}))
     if archive_manifest:
         (ctl / "photos-26-archive-manifest.json").write_text(
-            json.dumps({"artifact_name": "photos-26-archive-manifest.json"}))
+            json.dumps({"artifact_name": "photos-26-archive-manifest.json", "plan_id": "geotag-plan-1"}))
     if finalized_media:
         (ctl / "photos-26-finalized-media.json").write_text(json.dumps({"media": {
             rel: {"size": os.stat(ws / rel).st_size, "mtime_ns": os.stat(ws / rel).st_mtime_ns}
@@ -315,6 +315,18 @@ def test_missing_handoff_blocks(tmp_path):
     assert any("photos-11-handoff.json is missing" in b for b in blockers), blockers
 
 
+@pytest.mark.spec("BLD-merge_preflight", test="TST-merge_preflight-a_handoff_that_is_no_object_is_refused_naming_it")
+def test_a_handoff_that_is_no_object_is_refused_naming_it(tmp_path, capsys):
+    """A handoff that parses but is not a JSON object is read as unreadable: merge refuses, naming it, and ends with
+    the refusal's status, not an unforeseen error's."""
+    ws, _ = _make(tmp_path)
+    (_ctl(ws) / "photos-11-handoff.json").write_text("[]")
+    capsys.readouterr()
+    assert merge._run_locked_workflow("plan", str(ws)) == 2
+    assert "photos-11-handoff.json" in "".join(capsys.readouterr())
+    assert not [n for n in os.listdir(_ctl(ws)) if n.startswith("photos-3")]
+
+
 # --- gathered preconditions (0b, 1, 1a, 2, 3) --------------------------------
 
 @pytest.mark.spec("RUL-merge_rechecks_gates", test="TST-merge_preflight-sources_not_empty_blocks")
@@ -355,6 +367,35 @@ def test_geotag_failed_status_blocks(tmp_path):
     ws, _ = _make(tmp_path, summary_status="partial")
     blockers, _, _ = _pf(ws)
     assert any("did not end successfully" in b for b in blockers), blockers
+
+
+@pytest.mark.spec("RUL-merge_takes_finalized_current", "INV-no_stale_use",
+                  test="TST-merge_preflight-a_geotag_planned_again_since_finalize_blocks")
+@pytest.mark.parametrize("record", ["photos-25-execution-summary.json", "photos-26-archive-manifest.json", "both",
+                                    "no_plan_id"])
+def test_a_geotag_planned_again_since_finalize_blocks(tmp_path, record):
+    """Geotag finalized, then planned again without executing: its execution summary and its package are of the
+    earlier plan, and merge blocks, naming each record not of the current plan — as it does where the plan names
+    none."""
+    ws, _ = _make(tmp_path)
+    p24 = _ctl(ws) / "photos-24-executable-plan.json"
+    plan = json.loads(p24.read_text())
+    if record == "no_plan_id":
+        del plan["plan_id"]
+    else:
+        plan["plan_id"] = "geotag-plan-2"
+        for name in ("photos-25-execution-summary.json", "photos-26-archive-manifest.json"):
+            if record in (name, "both"):
+                continue
+            rec = json.loads((_ctl(ws) / name).read_text())
+            (_ctl(ws) / name).write_text(json.dumps(dict(rec, plan_id="geotag-plan-2")))
+    p24.write_text(json.dumps(plan))
+    blockers, _, _ = _pf(ws)
+    named = {n for n in ("photos-25-execution-summary.json", "photos-26-archive-manifest.json")
+             if any(n in b and "not of the current" in b for b in blockers)}
+    expected = {record} if record.endswith(".json") else {"photos-25-execution-summary.json",
+                                                          "photos-26-archive-manifest.json"}
+    assert named == expected, blockers
 
 
 @pytest.mark.spec("RUL-merge_refuses_changed_since_finalize",
@@ -487,7 +528,8 @@ def test_residual_folders_do_not_block(tmp_path):
     assert blockers == [], blockers
 
 
-@pytest.mark.spec("RUL-development_after_merge", test="TST-merge_preflight-dev_subfolder_blocks")
+@pytest.mark.spec("RUL-merge_rechecks_gates",
+                  "RUL-development_after_merge", test="TST-merge_preflight-dev_subfolder_blocks")
 def test_dev_subfolder_blocks(tmp_path):
     ws, _ = _make(tmp_path)
     p = ws / "6-photos-by-dest" / "Trip" / "jpg" / "a__std.jpg"
@@ -514,6 +556,20 @@ def test_bydest_symlink_blocks(tmp_path):
     assert any("Forbidden symlink under" in b for b in blockers), blockers
 
 
+@pytest.mark.spec("RUL-shape_checked_first", "BLD-shape_guards_by_phase",
+                  test="TST-merge_preflight-a_link_among_the_photos_is_refused_before_they_are_scanned")
+def test_a_link_among_the_photos_is_refused_before_they_are_scanned(tmp_path, monkeypatch, capsys):
+    """A link in photos by destination is refused as a link before merge scans the photos: the workspace's check,
+    which scans them, is never run."""
+    ws, _ = _make(tmp_path)
+    os.symlink(str(tmp_path), str(ws / "6-photos-by-dest" / "Trip" / "link"))
+    monkeypatch.setattr(merge, "check_workspace", lambda *a, **k: pytest.fail("the photos were scanned first"))
+    capsys.readouterr()
+    assert merge._run_locked_workflow("plan", str(ws)) == 2
+    assert "Forbidden symlink under 6-photos-by-dest" in "".join(capsys.readouterr())
+
+
+@pytest.mark.spec("RUL-merge_rechecks_gates", test="TST-merge_preflight-bydate_stray_photo_blocks")
 def test_bydate_stray_photo_blocks(tmp_path):
     ws, _ = _make(tmp_path)
     (ws / "5-photos-by-date" / "x.jpg").write_bytes(b"img")
@@ -556,6 +612,23 @@ def test_init_library_in_workspace_with_path_blesses_and_writes_config(tmp_path)
     assert utils.is_library(str(lib))
     written = json.loads((ws / ".photos-ingest" / "photos-00-config.json").read_text())
     assert written["merge"]["library_root"] == str(lib)   # the one narrow config write
+
+
+@pytest.mark.spec("RUL-library_mark_made_by_setup",
+                  test="TST-merge_preflight-init_library_refuses_a_folder_of_the_mark_s_name")
+@pytest.mark.parametrize("where", ["outside", "with_path", "from_config"])
+def test_init_library_refuses_a_folder_of_the_mark_s_name(tmp_path, where):
+    """A folder of the mark's name in the library is no mark: setup refuses, ending as a refusal, makes no mark and
+    records nothing — never reports the library blessed."""
+    ws, lib = _fresh_ws_and_lib(tmp_path)
+    os.mkdir(utils.library_marker_path(str(lib)))
+    cfg_p = ws / ".photos-ingest" / "photos-00-config.json"
+    before = cfg_p.read_bytes()
+    args = {"outside": (str(lib), str(tmp_path / "nowhere")), "with_path": (str(lib), str(ws)),
+            "from_config": (None, str(ws))}[where]
+    assert merge.do_init_library(*args) == 2
+    assert not utils.is_library(str(lib)) and os.path.isdir(utils.library_marker_path(str(lib)))
+    assert cfg_p.read_bytes() == before
 
 
 @pytest.mark.spec("RUL-library_setup_writes_one_setting", "BLD-init_library_writes_library_root",

@@ -675,6 +675,8 @@ def test_db_upsert_absolute_path_rejected(mock_meta, tmp_path, monkeypatch):
         executor.execute(plan1, journal_path)
 
 
+@pytest.mark.spec("BLD-prep_dependencies", "RUL-unchecked_counts_as_changed",
+                  test="TST-idempotency_cache-stale_already_cached_file_aborts")
 @mock.patch('photos_utils.MetadataReader.read_metadata_concurrently', side_effect=mock_read_metadata_concurrently)
 def test_stale_already_cached_file_aborts(mock_meta, tmp_path, monkeypatch):
     ws = setup_workspace(tmp_path)

@@ -64,7 +64,8 @@ from .photos_utils import (ends_unforeseen_error_apart, fingerprint_method_block
     prep_log_path, prep_log_blocker, entries_not_carried, retaken_fingerprints, write_db_snapshot, take_zfs_snapshot,
     control_archive_members, write_control_archive, workspace_id,
     WorkspaceLock, LockFileError, ProgressCoordinator,
-    add_accept_changes_argument, check_workspace, write_workspace_record, note_execution_begun,
+    add_accept_changes_argument, check_workspace, write_workspace_record, note_execution_begun, journal_add_changes,
+    journal_kept_changes,
 )
 from .reporting import get_reporter, emit_next_step, next_steps_muted
 
@@ -3412,6 +3413,7 @@ class GeotagWorkflow:
         jpath = journal_path(ws, plan["plan_id"])
         _j = _read_record(jpath) or {}
         journal, media_after = _j.get("operations") or {}, _j.get("media_after") or {}
+        self._journal_changes = journal_kept_changes(jpath)    # carried over by each write (BLD-workspace_changes_logged)
         # the user's acceptances of changed content are checked as every decision is, before anything is done
         # (BLD-geotag_checks_decisions): an invalid one stops the run, located, the record left as it is
         invalid = self._mismatch_decision_blockers(ws, plan["plan_id"])
@@ -3460,15 +3462,22 @@ class GeotagWorkflow:
         # Noted as begun before the first photo is touched, so a hard kill's work is recognised by the next check from
         # this plan's journal (BLD-interrupted_run_recognised); the record the finally writes clears the note.
         note_execution_begun(ws, "geotag", plan["plan_id"])
+        ended = False
         try:
-            return self._apply_plan(plan, gpx, journal, media_after, jpath, accepted, prior_failures, by_file, results,
-                                    snapshot, jobs, now_iso, execution_id, workspace_changes)
+            summary = self._apply_plan(plan, gpx, journal, media_after, jpath, accepted, prior_failures, by_file,
+                                       results, snapshot, jobs, now_iso, execution_id, workspace_changes)
+            ended = True
+            return summary
         finally:
             # The state this run leaves, whether or not each photo was applied (RUL-execution_records_state): geotag's
             # writes give a photo a new inode, size and time, and its renames a new name — recorded, they are no change
             # to the next check. A photo's fingerprint follows it from the name it was planned under.
             write_workspace_record(ws, carried={r["after"]["relative_path"]: r["relative_path"]
                                                 for r in results if r.get("after")})
+            if not ended:
+                # A run cut short writes no summary (BLD-execution_summary_written): the changes by hand its check
+                # named or accepted go to its plan's journal, in the same step (BLD-workspace_changes_logged).
+                journal_add_changes(ws, plan["plan_id"], workspace_changes)
 
     def _apply_plan(self, plan, gpx, journal, media_after, jpath, accepted, prior_failures, by_file, results, snapshot,
                     jobs, now_iso, execution_id, workspace_changes):
@@ -3509,9 +3518,10 @@ class GeotagWorkflow:
             # A JPEG set aside beside its RAW is renamed after its RAW, and only once the RAW's rename is confirmed: a run
             # never leaves the one renamed and the other not (BLD-set_aside_renamed_with_raw).
             followers = {rel for rel, ops in by_file.items() if any(o.get("follows") for o in ops)}
+            kept = getattr(self, "_journal_changes", None) or []
             self._journal_out = lambda j: write_json_artifact(jpath, {
                 "journal_version": 1, "plan_id": plan["plan_id"], "operations": j, "media_after": media_after,
-                "updated_at": now_iso})
+                "updated_at": now_iso, **({"workspace_changes": kept} if kept else {})})
             self.coordinator.start_phase("applying calibration", len(by_file))
             with concurrent.futures.ThreadPoolExecutor(max_workers=max(1, jobs)) as ex:
                 for wave in (sorted(set(by_file) - followers), sorted(followers)):

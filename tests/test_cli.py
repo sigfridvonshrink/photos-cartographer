@@ -381,6 +381,53 @@ def test_prune_quarantine_preserves_managed_folders(tmp_path, monkeypatch, capsy
     assert (ws / "6-photos-by-dest" / "Trip" / "keep.jpg").read_bytes() == b"keep"
 
 
+@pytest.mark.spec("RUL-prune_only_quarantine", test="TST-cli-a_prune_changes_nothing_but_the_quarantine_and_its_records")
+def test_a_prune_changes_nothing_but_the_quarantine_and_its_records(tmp_path, monkeypatch, capsys):
+    """A deleting prune, every managed folder and the control directory full, changes nothing but the quarantine run
+    it removes, its own record of what it removed (photos-16) and the workspace's record, from which it takes what it
+    removed: every other file and folder of the workspace, and every other table of the database, byte for byte as
+    it was."""
+    import sqlite3
+    ws = _ws(tmp_path)
+    for i, d in enumerate(("0-sources", "1-strays", "2-missing-metadata", "3-redundant-jpgs",
+                           "4-videos-by-date", "5-photos-by-date", "6-photos-by-dest")):
+        (ws / d / "sub").mkdir()
+        (ws / d / "sub" / f"f{i}.jpg").write_bytes(b"photo %d" % i)
+        (ws / d / f"top{i}.txt").write_bytes(b"note %d" % i)
+    (ws / "1-strays" / "20260101T000000Z-aaaaaa").mkdir()            # a strays run, as prep files them
+    (ws / "1-strays" / "20260101T000000Z-aaaaaa" / "notes.txt").write_bytes(b"stray")
+    ctl = ws / ".photos-ingest"
+    for name in ("photos-10-prep-plan.json", "photos-11-handoff.json", "photos-15-prep-log.json"):
+        (ctl / name).write_text(json.dumps({"artifact": name}))
+    qbase = ws / ".photos-ingest-quarantine"
+    for run in ("20260101T000000Z-abc123", "20260202T000000Z-def456"):
+        (qbase / run / "0-sources").mkdir(parents=True)
+        (qbase / run / "0-sources" / "dup.jpg").write_bytes(run.encode())
+        (qbase / run / "manifest.json").write_text("[]")
+    utils.write_workspace_record(str(ws))
+    gone = os.path.join(".photos-ingest-quarantine", "20260101T000000Z-abc123")
+
+    def state():
+        tree = {}
+        for dp, dns, fns in os.walk(ws):
+            for n in dns + fns:
+                rel = os.path.relpath(os.path.join(dp, n), ws)
+                if rel.endswith(".lock") or rel.startswith(os.path.join(".photos-ingest", "photos-16-prune-record")) \
+                        or rel == os.path.relpath(utils.db_path(str(ws)), ws):
+                    continue
+                tree[rel] = open(os.path.join(dp, n), "rb").read() if n in fns else None
+        conn = sqlite3.connect(utils.db_path(str(ws)))
+        tables = {t: sorted(conn.execute(f"SELECT * FROM {t}").fetchall())
+                  for (t,) in conn.execute("SELECT name FROM sqlite_master WHERE type = 'table'")
+                  if t != "workspace_record"}
+        conn.close()
+        return tree, tables
+    tree, tables = state()
+    assert _main(monkeypatch, ws, "prune-quarantine", "--plan-id", "20260101T000000Z-abc123", "--yes") == 0
+    assert os.path.exists(utils.prune_record_path(str(ws)))
+    assert state() == ({k: v for k, v in tree.items() if k != gone and not k.startswith(gone + os.sep)}, tables)
+
+
 # --- error exits -------------------------------------------------------------
 
 def test_locked_workspace_fails_fast(tmp_path, monkeypatch, capsys):
