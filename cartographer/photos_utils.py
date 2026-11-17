@@ -962,6 +962,39 @@ def write_db_snapshot(conn, dest_path: str) -> None:
 def journal_path(ws: str, run_id: str) -> str:
     return os.path.join(ws, CONTROL_DIR, f"journal-{run_id}.json")
 
+# executed/<plan id>/ in the control directory: the decision records each plan geotag executed ran against, kept by its
+# execution before it changes a photo — so the plans geotag executed, whose journals say what it left.
+GEOTAG_EXECUTED_DIR = "executed"
+
+
+def geotag_journals_left(ws: str):
+    """`(entries, unreadable)` (BLD-geotag_journal_carried): every `media_after` entry of the journal of each plan geotag
+    executed (`executed/<plan id>/`), as {path geotag left the photo at: [entry, ...]}, and the journals there that
+    cannot be read as a JSON object — read by none, each recording nothing (RUL-unreadable_geotag_journal_vouches_nothing).
+    A journal not there, or an entry of another shape, records nothing."""
+    entries, unreadable = {}, []
+    try:
+        plan_ids = sorted(os.listdir(os.path.join(ws, CONTROL_DIR, GEOTAG_EXECUTED_DIR)))
+    except OSError:
+        return entries, unreadable
+    for plan_id in plan_ids:
+        path = journal_path(ws, plan_id)
+        if not os.path.exists(path):
+            continue
+        try:
+            with open(path) as f:
+                journal = json.load(f)
+            if not isinstance(journal, dict):
+                raise ValueError("not a JSON object")
+        except (OSError, ValueError):
+            unreadable.append(path)
+            continue
+        after = journal.get("media_after")
+        for rel, entry in (after.items() if isinstance(after, dict) else ()):
+            if isinstance(entry, dict):
+                entries.setdefault(rel, []).append(entry)
+    return entries, unreadable
+
 def journal_kept_changes(path: str) -> list:
     """The changes by hand a plan's journal keeps — those named or accepted by the checks of its executions that were
     cut short, which wrote no summary (BLD-workspace_changes_logged) — [] where it keeps none or does not exist. Each

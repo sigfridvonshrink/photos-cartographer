@@ -470,7 +470,8 @@ A prep execution SHALL leave in the workspace database no row for a file that is
 :uses: DEF-fingerprint, DEF-workspace_database
 
 Prep SHALL fingerprint a media file afresh when the workspace database holds no fingerprint for it at its path, or holds
-one taken when the file had another size or modification time.
+one taken when the file had another size or modification time — a file geotag's execution left as its journal records
+it excepted ({need}`RUL-geotag_left_fingerprint_carried`).
 :::
 
 :::{rul} A fingerprint is reused only from the method in use
@@ -554,6 +555,42 @@ would have been reused at the old path.
 
 Prep SHALL read a moved file again at its new path, as it would have been read at the old, when its row would not have
 been reused there.
+:::
+
+:::{rul} A photo geotag left as its journal records it keeps its fingerprint
+:id: RUL-geotag_left_fingerprint_carried
+:status: ruled
+:criticality: high
+:verify: required
+:refines: RUL-reuse_valid_work
+:uses: DEF-fingerprint, DEF-workspace_database, DEF-geotag
+
+Prep SHALL carry to a media file the fingerprint the workspace database holds for the file geotag's execution found,
+without taking it again, while the journal of that execution records geotag leaving the file — written, the fingerprint
+it took after the write found unchanged, or only renamed — at its path with its size and modification time, that
+fingerprint being the one recorded, and the row being one prep would have reused where geotag found the file.
+:::
+
+:::{rul} A photo whose fingerprint geotag's journal carries has its metadata read again
+:id: RUL-geotag_left_metadata_read
+:status: ruled
+:criticality: med
+:verify: required
+:refines: RUL-geotag_left_fingerprint_carried
+:uses: DEF-workspace_database, DEF-geotag
+
+Prep SHALL read again the metadata of a file whose fingerprint it carries from geotag's journal.
+:::
+
+:::{rul} A geotag journal prep cannot read records nothing
+:id: RUL-unreadable_geotag_journal_vouches_nothing
+:status: ruled
+:criticality: high
+:verify: required
+:refines: RUL-geotag_left_fingerprint_carried
+:uses: DEF-geotag
+
+Prep SHALL take a journal of geotag's that it cannot read for one recording no file, as though it were not there.
 :::
 
 :::{rul} A quarantined file leaves the database

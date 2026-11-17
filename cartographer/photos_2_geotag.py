@@ -49,7 +49,7 @@ import zoneinfo
 from datetime import datetime, timedelta, timezone
 
 from .photos_utils import (ends_unforeseen_error_apart, fingerprint_method_blocker, links_under, replace_durably,
-    exiftool_artifact_base,
+    exiftool_artifact_base, GEOTAG_EXECUTED_DIR,
     country_table, zone_table_record_error,
     zone_table,
     code_fingerprint,
@@ -80,7 +80,7 @@ ARCHIVE_MANIFEST_ARTIFACT = "photos-26-archive-manifest.json"
 ARCHIVE_ARTIFACT = "photos-26-archive.tar.gz"
 # The fields of a day's offset cell that answer a proposed change of the camera's clock (BLD-clock_change_split).
 CLOCK_CHANGE_FIELDS = ("accept_clock_change", "accepted_change_offsets_seconds", "photo_parts")
-EXECUTED_DIR = "executed"            # executed/<plan id>/: the decision records each executed plan ran against
+EXECUTED_DIR = GEOTAG_EXECUTED_DIR   # executed/<plan id>/: the decision records each executed plan ran against
 GPX_WARNINGS_SHOWN = 10     # geotag plan prints at most this many GPX load warnings, then a count
 UNREADABLE_TAGS_SHOWN = 20  # geotag plan names at most this many photos whose offset tag holds no offset, then a count
 
@@ -3248,10 +3248,11 @@ class GeotagWorkflow:
             tags.update(o.get("writes") or {})
         final_abs = os.path.join(os.path.dirname(abs_path), rename_ops[-1]["to"]) if rename_ops else abs_path
 
-        def done(path):
+        def done(path, fingerprint):
+            # The photo as this run left it, with the fingerprint it was confirmed to hold (BLD-media_after_identity).
             st = os.stat(path)
             res["after"] = {"relative_path": os.path.relpath(path, self.workspace_root),
-                            "size": st.st_size, "mtime_ns": st.st_mtime_ns}
+                            "size": st.st_size, "mtime_ns": st.st_mtime_ns, "fingerprint": fingerprint}
             return res
 
         if not os.path.exists(abs_path):
@@ -3266,7 +3267,7 @@ class GeotagWorkflow:
                                       "as planned — re-run `geotag plan`")
                     return res
                 res["skipped"] = res["found"] = [o["operation_id"] for o in ops]   # done before: recorded, not redone
-                return done(final_abs)
+                return done(final_abs, cur_fp)
             # A change of case alone interrupted between its two moves: the photo sits under the temporary name.
             # Once seen to be this photo holding what was planned, the second move completes it (BLD-case_rename_via).
             via = next((o for o in rename_ops if o.get("via")), None)
@@ -3287,12 +3288,13 @@ class GeotagWorkflow:
                     return res
                 res["found"] = [o["operation_id"] for o in ops if o is not via]
                 res["applied"].append(via["operation_id"])
-                return done(final_abs)
+                return done(final_abs, cur_fp)
             res["blocker"] = f"{rel}: file is missing at execute time"
             return res
 
         st = os.stat(abs_path)
         already_written = False
+        held_fp = pre.get("content_fingerprint")   # unchanged since the plan: the photo holds the planned fingerprint
         if (pre.get("size") is not None and st.st_size != pre["size"]) or \
            (pre.get("mtime_ns") is not None and st.st_mtime_ns != pre["mtime_ns"]):
             # The file differs from plan time. A differing decoded-content fingerprint is the image itself
@@ -3310,6 +3312,7 @@ class GeotagWorkflow:
                                   "to plan from what it holds now")
                 return res
             already_written = True                    # geotag's own interrupted write: apply nothing again
+            held_fp = cur_fp
 
         # the metadata ops produce a single batched, idempotent exiftool tag write
         if write_ops and already_written:
@@ -3337,6 +3340,7 @@ class GeotagWorkflow:
             # a fingerprint that cannot be taken proves nothing: the write is not confirmed by it
             if new_fp is not None and (new_fp == pre.get("content_fingerprint") or accepted_mismatches.get(rel) == new_fp):
                 res["applied"].extend(o["operation_id"] for o in write_ops)
+                held_fp = new_fp
             else:
                 res["mismatch"] = {"relative_path": rel, "expected_fingerprint": pre.get("content_fingerprint"),
                                    "actual_fingerprint": new_fp}
@@ -3363,7 +3367,7 @@ class GeotagWorkflow:
                 res["error"] = f"{type(e).__name__}: {e}"
                 res["blocker"] = f"{rel}: rename failed ({e})"
                 return res
-        return done(final_abs)
+        return done(final_abs, held_fp)
 
     @staticmethod
     def _clear_own_leftover(leftover):
@@ -3571,7 +3575,10 @@ class GeotagWorkflow:
                             journal[oid] = "confirmed"
                         if r.get("after"):            # the photo as this run left it: finalize's baseline
                             a = r["after"]
-                            media_after[a["relative_path"]] = {"size": a["size"], "mtime_ns": a["mtime_ns"]}
+                            # where the plan found it and what it holds, for prep's next plan (BLD-media_after_identity)
+                            media_after[a["relative_path"]] = {"size": a["size"], "mtime_ns": a["mtime_ns"],
+                                                               "from": r["relative_path"],
+                                                               "fingerprint": a["fingerprint"]}
                         self._journal_out(journal)
         except KeyboardInterrupt:
             # Ctrl-C: drop pending file writes and stop waiting instead of letting the `with`

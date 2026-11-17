@@ -381,6 +381,23 @@ which prep's log finds the entry of a photo whose fingerprint changed with the m
 prunes; an unmatched row is a ghost, and its file is read as new.
 :::
 
+:::{bld} A row carried on the word of geotag's journal
+:id: BLD-geotag_journal_carried
+:status: ruled
+:realises: RUL-geotag_left_fingerprint_carried, RUL-geotag_left_metadata_read, RUL-unreadable_geotag_journal_vouches_nothing
+:uses: BLD-media_after_identity, BLD-fingerprint_method, BLD-move_match, BLD-carried_row
+
+Prep's plan SHALL, after the move match and before laying the plan memo under the database, read the journal
+`journal-<plan id>.json` of each plan geotag kept the decisions of in `executed/<plan id>/`, and, for each inventoried
+file with no row at its path or one of another size or `mtime_ns`, take an entry of `media_after` at its path with its
+size and `mtime_ns` whose `from` is the file's own path or one gone from the inventory and matched by no recognized move,
+and whose `fingerprint` is the value of the row the workspace database holds at `from` — a row {need}`BLD-carried_row`
+would carry: put that row at the file's path with its size and `mtime_ns`, its metadata left behind. The freshness gate
+then reuses the fingerprint without taking it, the file's folder is read for metadata and its `db_upsert` planned as for
+any file read; a renamed file's old row is left to the ghost prunes. A journal that cannot be opened or parsed as an
+object, or an entry of another shape, carries nothing, with a warning for the journal.
+:::
+
 :::{bld} A planned move carries its row
 :id: BLD-move_row_effects
 :status: ruled
