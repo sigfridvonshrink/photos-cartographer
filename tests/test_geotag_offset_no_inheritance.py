@@ -123,6 +123,26 @@ def test_the_day_s_offset_is_the_camera_s_wherever_its_photos_were_sorted(tmp_pa
     assert _cell(art, f"{BYDEST}/Castle")["effective_time_anchor"] == {"offset_seconds": -7200, "source": "same_day_accepted"}
 
 
+@pytest.mark.spec("RUL-acceptance_holds_for_its_proposal", "BLD-offset_acceptance",
+                  test="TST-geotag_offset_no_inheritance-an_accepted_shared_offset_holds_within_the_tolerance")
+def test_an_accepted_offset_shared_within_the_day_holds_within_the_tolerance(tmp_path):
+    """The castle accepted the offset the camera's GPS gave that day in the museum; that offset now lies some seconds
+    from the one accepted, within the tolerance: the same finding — the acceptance holds, the offset accepted in
+    effect."""
+    wf = _wf(tmp_path)
+    files = PARENT_FRAMES + [_file(f"{BYDEST}/Castle/c.arw", f"{BYDEST}/Castle", naive="2024:07:03 17:00:00")]
+    tol = int(utils.CONFIG["gpx_anchor_decision_tolerance_seconds"])
+    accepted = {"destinations": {f"{BYDEST}/Trip": {"camera_group_time_decisions": {CAM: {"user_decision": {
+        "accept_proposal": True, "accepted_offset_seconds": -7200}}}},
+        f"{BYDEST}/Castle": {"camera_group_time_decisions": {CAM: {"user_decision": {
+            "accept_proposal": True, "accepted_offset_seconds": -7200 + tol // 2}}}}}}
+    art, _ = _build(wf, files, _gpx(TRACK), accepted, multi=False)
+    castle = _cell(art, f"{BYDEST}/Castle")
+    assert castle["proposal"]["proposed_offset_seconds"] == -7200
+    assert castle["effective_time_anchor"] == {"offset_seconds": -7200 + tol // 2, "source": "same_day_accepted"}
+    assert not castle["stale_user_decision"]
+
+
 @pytest.mark.spec("RUL-offset_shared_within_day", "BLD-offset_shared_within_day", "RUL-chosen_group_is_anchored",
                   test="TST-geotag_offset_no_inheritance-a_group_the_user_chose_is_shared_within_the_day")
 def test_a_group_the_user_chose_is_shared_within_the_day(tmp_path):
@@ -363,6 +383,27 @@ def test_an_inherited_timezone_yields_to_the_destination_s_own_photos(tmp_path):
     tz, _ = _zones(wf, files, answered)
     assert tz[f"{root}/Madrid"]["effective_iana_timezone"] == "Europe/Madrid" and "contradicted_by" not in tz[f"{root}/Madrid"]
     assert tz[f"{root}/Madrid/Prado"]["effective_iana_timezone"] == "Europe/Madrid"
+
+
+@pytest.mark.spec("RUL-inherited_zone_stops_within", "RUL-country_gives_its_timezone",
+                  test="TST-geotag_offset_no_inheritance-a_country_s_zone_stops_where_its_own_photos_speak_against_it")
+def test_a_country_s_zone_stops_where_its_own_photos_speak_against_it(tmp_path):
+    """A country of one timezone chosen at a destination gives its zone as an inherited zone does: where that
+    destination's own photos record an offset the zone does not have, it waits for the user's word — and so does
+    what lies within it, which is not given the country's zone past it."""
+    wf = _wf(tmp_path)
+    jp = f"{BYDEST}/Japan"
+    files = [_phone(f"{jp}/a.jpg", jp, "2024:07:03 10:00:00", "+02:00"),
+             _file(f"{jp}/Kyoto/b.arw", f"{jp}/Kyoto", naive="2024:07:04 12:00:00")]
+    tz, _art = _zones(wf, files, {"destinations": {jp: _country("JP")}})
+    assert tz[jp]["effective_iana_timezone"] == "" and tz[jp]["requires_user_input"]
+    kyoto = tz[f"{jp}/Kyoto"]
+    assert kyoto["effective_iana_timezone"] == "" and kyoto.get("decision_mode") != "auto_resolved", kyoto
+    assert kyoto["requires_user_input"]
+    # the photos agreeing, the country gives its zone within as ever
+    files[0] = _phone(f"{jp}/a.jpg", jp, "2024:07:03 10:00:00", "+09:00")
+    tz, _art = _zones(wf, files, {"destinations": {jp: _country("JP")}})
+    assert tz[f"{jp}/Kyoto"]["effective_iana_timezone"] == "Asia/Tokyo"
 
 
 @pytest.mark.spec("RUL-destination_has_one_timezone", "RUL-zone_against_photos_needs_word", "BLD-timezone_cell",

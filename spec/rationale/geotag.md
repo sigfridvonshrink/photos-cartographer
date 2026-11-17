@@ -456,6 +456,20 @@ set once and reach every destination beneath it. Asked for what nothing beneath 
 of saving it; a timezone a destination beneath it waits for is the one question it is the cheaper place to answer.
 :::
 
+:::{rat} A split day has no one offset to pass on, and two to hold against
+:id: RAT-split_day_against_same_day
+:status: ruled
+:forced: no
+:follows_from: RAT-clock_is_the_cameras_for_the_day, RAT-clock_change_seen_by_gps
+:justifies: RUL-split_day_passes_no_offset, RUL-split_day_held_against_same_day
+
+A day split at a change of the clock has two offsets, and which of them another destination's photos of that day were
+taken under is not known — so neither is offered to them. But the camera still has one clock: an offset its positions
+gave that day elsewhere, far from both parts, cannot be right if the parts are, and one of them rests on a wrong match.
+That is the case the agreement check exists for, and holding the offset against each part costs little; one near
+either part is that part's clock, and stands.
+:::
+
 :::{rat} The clock is the camera's for the day, not the folder's
 :id: RAT-clock_is_the_cameras_for_the_day
 :status: ruled

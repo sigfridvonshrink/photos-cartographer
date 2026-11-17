@@ -107,6 +107,24 @@ def test_manual_offset_no_anchor_with_coverage_triggers(tmp_path):
     assert drift["status"] == "requires_user_input"
 
 
+@pytest.mark.spec("RUL-unanchored_offset_confirmed", "BLD-drift_validation",
+                  test="TST-drift_validation-the_drift_check_reaches_as_far_as_placement")
+def test_the_drift_check_reaches_as_far_as_placement(tmp_path, monkeypatch):
+    """The drift window set below placement's reach: the only track lies a quarter of an hour either side of the photo,
+    past the window but within the interpolation gap, so the tracks would place it. The drift check reaches as far:
+    the offset is confirmed before anything is placed by it."""
+    monkeypatch.setitem(utils.CONFIG, "drift_check_track_window_seconds", 600)
+    wf = _wf(tmp_path)
+    files = [_file(f"{DEST}/a.arw", "2024:07:03 14:00:00")]
+    gpx = _gpx([(50.0, 4.0, _utc(13, 45)), (50.001, 4.0, _utc(14, 15))])
+    assert cal.place_gps(_utc(14), gpx, utils.CONFIG) is not None                 # the tracks place it
+    art = _complete_time(wf, files, gpx, {CAM: {"user_decision": {"manual_offset_seconds": 0}}})
+    drift, blk = _drift(wf, files, art, gpx)
+    assert not blk
+    cell = drift["destinations"][DEST]["drift_decisions"][CAM]
+    assert cell["requires_user_input"] is True and len(cell["proposal"]["track_segment"]) == 2
+
+
 def test_frames_listed_earliest_first(tmp_path):
     wf = _wf(tmp_path)
     files = [_file(f"{DEST}/late.arw", "2024:07:03 16:00:00"),

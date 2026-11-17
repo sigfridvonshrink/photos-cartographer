@@ -922,6 +922,35 @@ def test_a_photo_whose_fingerprint_changed_keeps_its_own_values(tmp_path, monkey
     assert _originals(ws) == {"fp-new": pinned}                               # the pin followed the value
 
 
+@pytest.mark.spec("RUL-photo_decision_follows_the_photo", "BLD-review_item_identity",
+                  test="TST-geotag_rerun_markers-a_decision_follows_a_photo_geotag_never_wrote_through_a_retake")
+def test_a_decision_follows_a_photo_geotag_never_wrote_through_a_retake(tmp_path, monkeypatch):
+    """A position the user chose for a photo geotag has not written — so holds no pin — is kept under the photo's
+    fingerprint; prep then takes the fingerprint again with a new ImageMagick. The decision is still the photo's: the
+    next plan finds it by the value before, never dropping it."""
+    ws = _ws(tmp_path, [lambda ws: _rec(ws, f"{T}/a.arw", "2024:07:03 14:20:00")])
+    _plan(monkeypatch, ws)
+    _set_offset(ws, SLOW)
+    _plan(monkeypatch, ws)
+    _confirm_drift(ws, SLOW)
+    _plan(monkeypatch, ws)
+    ctl = ws / ".photos-ingest"
+    gp = ctl / "photos-23-gps-decisions.json"
+    gps = json.loads(gp.read_text())
+    gps["destinations"][T]["gps_decisions"]["review_items"].append(
+        {"relative_path": f"{T}/a.arw", "content_fingerprint": "fp-a.arw", "reason": "chosen_by_user",
+         "user_decision": {"manual_lat": 45.5, "manual_lon": 6.5}})
+    gp.write_text(json.dumps(gps))
+    _plan(monkeypatch, ws)
+    assert _originals(ws) == {}                                              # never written: no pin
+    _retake_fingerprint(ws, "fp-a.arw", "fp-new")
+    _plan(monkeypatch, ws)
+    items = json.loads(gp.read_text())["destinations"][T]["gps_decisions"]["review_items"]
+    assert [(i["reason"], i["user_decision"]) for i in items if i["relative_path"] == f"{T}/a.arw"] == [
+        ("manual_locked", {"manual_lat": 45.5, "manual_lon": 6.5})], items
+    assert _ops(ws)[f"{T}/a.arw"]["writes"]["GPSLatitude"] == pytest.approx(45.5)
+
+
 @pytest.mark.spec("RUL-fingerprint_mapping_one_to_one", "BLD-original_values_follow_fingerprint",
                   test="TST-geotag_rerun_markers-a_fingerprint_mapping_not_one_to_one_stops_geotag")
 def test_a_fingerprint_mapping_not_one_to_one_stops_geotag(tmp_path, monkeypatch):
@@ -929,6 +958,10 @@ def test_a_fingerprint_mapping_not_one_to_one_stops_geotag(tmp_path, monkeypatch
     _retake_fingerprint(ws, "fp-a.arw", "fp-new", also="fp-other")
     blockers, _, _ = cal.GeotagWorkflow(str(ws)).preflight()
     assert any("more than one value" in b and "re-run prep" in b for b in blockers), blockers
+    # neither plan nor execute: execution and finalize stop on it too
+    for needs_exiftool in (True, False):
+        blockers, _, _ = cal.GeotagWorkflow(str(ws)).preflight(for_execute=True, needs_exiftool=needs_exiftool)
+        assert any("more than one value" in b and "re-run prep" in b for b in blockers), blockers
     earlier, problem = utils.retaken_fingerprints({"photos": {"x": {"journey": [
         {"action": "fingerprint_retaken", "from": "a", "to": "b"}, {"action": "fingerprint_retaken", "from": "b", "to": "c"}]}}})
     assert earlier == {"b": "a", "c": "b"} and problem is None                # a chain is one to one

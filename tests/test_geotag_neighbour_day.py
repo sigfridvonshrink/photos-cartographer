@@ -155,6 +155,29 @@ def test_without_tracks_it_is_accepted_in_the_time_decisions(tmp_path):
     assert not blockers and drift["status"] == "complete" and not drift["destinations"]
 
 
+@pytest.mark.spec("RUL-acceptance_holds_for_its_proposal", "BLD-offset_acceptance",
+                  test="TST-geotag_neighbour_day-an_accepted_neighbour_s_offset_holds_within_the_tolerance")
+def test_an_accepted_neighbour_s_offset_holds_within_the_tolerance(tmp_path):
+    """The day before's offset, accepted for the day after; the camera's own GPS then gives the day before an offset
+    some seconds from it, within the tolerance: the same finding — the acceptance holds, and the offset accepted is
+    the one in effect. Farther, it is another proposal, and asks."""
+    _, files = _night()
+    for f, t in zip(files[:2], ("2024-07-03T21:00:00Z", "2024-07-03T21:30:00Z")):
+        f["gps_utc"] = t
+    wf, gpx = _wf(tmp_path), _gpx([])
+    art = _plan(wf, files, gpx)
+    prior = copy.deepcopy(art)
+    tol = utils.CONFIG["gpx_anchor_decision_tolerance_seconds"]
+    _cells(prior)[f"{CAM}@2024-07-04"]["user_decision"].update(accept_proposal=True,
+                                                                accepted_offset_seconds=HOME + int(tol) // 2)
+    cell = _cells(_plan(wf, files, gpx, prior))[f"{CAM}@2024-07-04"]
+    assert cell["effective_time_anchor"] == {"offset_seconds": HOME + int(tol) // 2, "source": "neighbour_day_accepted"}
+    assert not cell["stale_user_decision"]
+    _cells(prior)[f"{CAM}@2024-07-04"]["user_decision"]["accepted_offset_seconds"] = HOME + int(tol) + 1
+    cell = _cells(_plan(wf, files, gpx, prior))[f"{CAM}@2024-07-04"]
+    assert cell["effective_time_anchor"] == "" and cell["stale_user_decision"]
+
+
 @pytest.mark.spec("RUL-neighbour_day_offset_proposed", "RUL-neighbour_day_no_gap_bound", "BLD-neighbour_day_proposal",
                   test="TST-geotag_neighbour_day-the_day_after_and_no_bound_on_the_gap")
 def test_the_day_after_and_no_bound_on_the_gap(tmp_path):

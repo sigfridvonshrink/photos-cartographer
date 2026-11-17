@@ -163,13 +163,13 @@ def test_scans_handle_missing_folder_and_dotfiles(tmp_path):
     assert [r for r, _ in scanned] == ["5-photos-by-date/real.jpg"]
     assert list(wf._scan_media("0-sources")) == []                 # empty dir
     assert list(wf._scan_media("no-such-folder")) == []            # missing dir -> early return
-    assert wf._scan_by_dest("no-such-folder") == ([], [])          # missing dir -> early return
-    # _scan_by_dest: a dotfile is skipped, a non-photo is reported
+    assert wf._scan_by_dest("no-such-folder") == ([], [], [])      # missing dir -> early return
+    # _scan_by_dest: a dotfile is hidden, not a non-photo; a non-photo is reported
     (ws / "6-photos-by-dest" / ".hidden").write_text("x")
     (ws / "6-photos-by-dest" / "note.txt").write_text("x")
-    dev, nonphoto = wf._scan_by_dest("6-photos-by-dest")
+    dev, nonphoto, hidden = wf._scan_by_dest("6-photos-by-dest")
     assert any(p.endswith("note.txt") for p, _ in nonphoto)
-    assert all(not p.endswith(".hidden") for p, _ in nonphoto)
+    assert all(not p.endswith(".hidden") for p, _ in nonphoto) and hidden == ["6-photos-by-dest/.hidden"]
 
 
 def _completable_ws(tmp_path):
@@ -327,6 +327,25 @@ def test_sealed_workspace_with_dump_warns_and_blocks(tmp_path, monkeypatch, caps
     wf = cal.GeotagWorkflow(str(ws))
     blk, warn, _ = wf.preflight()
     assert any("SEALED" in b for b in blk) and not warn
+
+
+@pytest.mark.spec("BLD-phases_check_seal", "RUL-sealed_new_dump_warned",
+                  test="TST-geotag_orchestration-a_sealed_workspace_is_refused_before_its_zone_record_is_read")
+def test_a_sealed_workspace_is_refused_before_its_zone_record_is_read(tmp_path, monkeypatch, capsys):
+    """A sealed workspace on a host with no table of countries, holding a record of it that cannot be read, is
+    refused on its seal — with the new dump pointed out — not on the record, which is never read."""
+    real = utils._zone_database_file
+    monkeypatch.setattr(utils, "_zone_database_file",
+                        lambda name: None if name in ("zone.tab", "iso3166.tab") else real(name))
+    ws, ctl = _init_ws(tmp_path)
+    (ctl / "photos-00-config.json").write_text(json.dumps({k: v for k, v in utils.CONFIG.items() if k != "jobs"}))
+    (ctl / "photos-11-handoff.json").write_text(json.dumps(vouched(ctl.parent, {"filename_timestamp_format": utils.CONFIG["filename_timestamp_format"], "files": [], "depends_on": {"cache": {"fingerprint_algorithm_version": utils.FINGERPRINT_ALGORITHM_VERSION}}})))
+    (ctl / utils.ZONE_TABLE_ARTIFACT).write_text("{torn")
+    open(utils.sealed_marker_path(str(ws)), "w").close()
+    (ws / "loose.jpg").write_bytes(b"x")
+    assert _run(monkeypatch, ws) == 2
+    err = capsys.readouterr().err
+    assert "SEALED" in err and "likely new dump" in err and utils.ZONE_TABLE_ARTIFACT not in err, err
 
 
 @pytest.mark.spec("BLD-geotag_stage_order", test="TST-geotag_orchestration-unknown_group_aborts_before_gpx_ingest")

@@ -243,6 +243,20 @@ def test_tracks_in_two_places_place_nothing():
     assert cal.place_gps(_utc(12, 1, 43), _gpx(alice + near), CFG)["gpx_file"] == "bob.gpx"
 
 
+@pytest.mark.spec("RUL-disagreeing_tracks_place_nothing", "BLD-track_placement",
+                  test="TST-geotag_gps_placement-every_two_tracks_of_one_rank_are_compared")
+def test_every_two_tracks_of_one_rank_are_compared():
+    """Three tracks cover the photo's time: the best between the two others, each of them within reach of it but
+    farther than tracks may differ from each other. Two of them are in two places: the photo is not placed."""
+    a = _run_of(48.0, 11.0, 0, 30, 10, "a.gpx")
+    b = _run_of(48.006, 11.0, 0, 30, 10, "b.gpx")                 # some 670 m north of a
+    c = _run_of(47.994, 11.0, 0, 30, 10, "c.gpx")                 # some 670 m south of a, 1.3 km from b
+    why = {}
+    assert cal.place_gps(_utc(12, 1, 40), _gpx(a + b + c), CFG, why) is None
+    assert why["reason"] == "tracks_disagree" and why["gpx_files"] == ["b.gpx", "c.gpx"]
+    assert cal.place_gps(_utc(12, 1, 40), _gpx(a + b), CFG)["gpx_file"] == "a.gpx"     # two that agree place it
+
+
 @pytest.mark.spec("RUL-track_evidence_order", "BLD-track_placement",
                   test="TST-geotag_gps_placement-a_track_s_end_is_its_own")
 def test_a_track_s_end_is_its_own_whatever_other_tracks_exist():

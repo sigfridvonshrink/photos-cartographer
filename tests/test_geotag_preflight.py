@@ -183,6 +183,17 @@ def test_handoff_of_another_derivation_version_blocks(tmp_path, field):
                for b in blockers), blockers
 
 
+@pytest.mark.spec("RUL-handoff_fields_of_this_build", "RUL-unchecked_counts_as_changed", "BLD-handoff_field_set_checked",
+                  test="TST-geotag_preflight-a_photo_s_record_with_no_metadata_is_of_another_version")
+def test_a_photo_s_record_with_no_metadata_is_of_another_version(tmp_path):
+    """A photo's record in the handoff holding no metadata at all cannot be checked for the version that read it: it
+    counts as another version's, and the plan stops, never taking it for this build's."""
+    rel = "6-photos-by-dest/Trip/a.jpg"
+    blockers, _, _ = _pf(_ws(tmp_path, handoff_files=[
+        {"relative_path": rel, "media_class": "image", "folder_class": "6-photos-by-dest"}]))
+    assert any("another version of cartographer" in b and rel in b for b in blockers), blockers
+
+
 @pytest.mark.spec("RUL-format_fixed_once_named", test="TST-geotag_preflight-filename_format_other_than_prep_s_blocks")
 def test_filename_format_other_than_prep_s_blocks(tmp_path):
     ws = _ws(tmp_path)
@@ -280,14 +291,16 @@ def test_dev_subfolder_blocks_at_execute(tmp_path):
     assert any("Development has already started" in b for b in blockers), blockers
 
 
-def _plan_renaming(ws, rel, to, via=None):
-    """A photos-24 whose one operation renames `rel` to `to` (by `via` for a change of case alone)."""
+def _plan_renaming(ws, rel, to, via=None, write=False):
+    """A photos-24 whose one operation renames `rel` to `to` (by `via` for a change of case alone) — after writing its
+    position, with `write`."""
     op = {"operation_id": "op1", "type": "rename_no_clobber", "relative_path": rel,
           "from": os.path.basename(rel), "to": to}
     if via:
         op["via"] = via
+    ops = ([{"operation_id": "op0", "type": "gps_write", "relative_path": rel}] if write else []) + [op]
     (ws / ".photos-ingest" / "photos-24-executable-plan.json").write_text(
-        json.dumps({"plan_id": "p1", "destinations": {"Trip": {"operations": [op]}}}))
+        json.dumps({"plan_id": "p1", "destinations": {"Trip": {"operations": ops}}}))
 
 
 @pytest.mark.spec("RUL-geotag_gates", "BLD-loop_gates", test="TST-geotag_preflight-execute_and_finalize_check_every_gate")
@@ -308,6 +321,21 @@ def test_execute_and_finalize_check_every_gate(tmp_path, gate):
         assert any(said in b for b in blockers), blockers
 
 
+@pytest.mark.spec("RUL-sort_photos_only", "RUL-geotag_gates",
+                  test="TST-geotag_preflight-a_hidden_file_among_the_photos_stops_geotag")
+def test_a_hidden_file_among_the_photos_stops_geotag(tmp_path):
+    """A hidden file — or folder — in photos by destination is no photo: geotag stops on it at plan, execute and
+    finalize, naming it, as merge would, rather than pass it by for merge to find after the photos were written."""
+    ws = _ws(tmp_path)
+    _plan_renaming(ws, "6-photos-by-dest/Trip/a.jpg", "2024-01-01--10-00-00.jpg")
+    (ws / "6-photos-by-dest" / "Trip" / ".IMG_9.jpg").write_bytes(b"x")
+    (ws / "6-photos-by-dest" / "Trip" / ".thumbs").mkdir()
+    for kw in ({}, {"for_execute": True}, {"for_execute": True, "needs_exiftool": False}):
+        blockers, _, _ = cal.GeotagWorkflow(str(ws)).preflight(**kw)
+        assert any("hidden" in b and "6-photos-by-dest/Trip/.IMG_9.jpg" in b and "6-photos-by-dest/Trip/.thumbs" in b
+                   for b in blockers), blockers
+
+
 @pytest.mark.spec("RUL-geotag_gates", "BLD-loop_gates",
                   test="TST-geotag_preflight-names_the_plan_gives_are_recorded_at_execute")
 def test_names_the_plan_gives_are_recorded_at_execute(tmp_path):
@@ -315,7 +343,7 @@ def test_names_the_plan_gives_are_recorded_at_execute(tmp_path):
     execute's resume or to finalize; the leftover of a planned write beside it is the writer's, not a stray file."""
     ws = _ws(tmp_path)
     bd = ws / "6-photos-by-dest" / "Trip"
-    _plan_renaming(ws, "6-photos-by-dest/Trip/a.jpg", "A.jpg", via="a.jpg.tmp-case.jpg")
+    _plan_renaming(ws, "6-photos-by-dest/Trip/a.jpg", "A.jpg", via="a.jpg.tmp-case.jpg", write=True)
     (bd / "a.jpg").rename(bd / "A.jpg")
     assert cal.GeotagWorkflow(str(ws)).preflight(for_execute=True)[0] == []
     (bd / "A.jpg").rename(bd / "a.jpg.tmp-case.jpg")
@@ -328,6 +356,24 @@ def test_names_the_plan_gives_are_recorded_at_execute(tmp_path):
     (bd / "a.jpg_exiftool_tmp").rename(bd / "b.jpg_exiftool_tmp")
     blockers, _, _ = cal.GeotagWorkflow(str(ws)).preflight(for_execute=True)
     assert any("interrupted metadata write" in b and "b.jpg_exiftool_tmp" in b for b in blockers), blockers
+
+
+@pytest.mark.spec("RUL-write_leftover_stops_geotag_plan", "BLD-own_leftover_cleared", "BLD-loop_gates",
+                  test="TST-geotag_preflight-a_leftover_beside_a_photo_only_renamed_stops_execute")
+def test_a_leftover_beside_a_photo_the_plan_only_renames_stops_execute(tmp_path):
+    """The plan renames the photo and writes nothing to it: a `_exiftool_tmp` beside it, under its name before or
+    after the rename, is no leftover of this plan's — it stops execute and finalize, named, and is left where it is,
+    never orphaned by the rename."""
+    ws = _ws(tmp_path)
+    bd = ws / "6-photos-by-dest" / "Trip"
+    _plan_renaming(ws, "6-photos-by-dest/Trip/a.jpg", "2024-01-01--10-00-00.jpg")
+    for name in ("a.jpg_exiftool_tmp", "2024-01-01--10-00-00.jpg_exiftool_tmp"):
+        (bd / name).write_bytes(b"someone else's")
+        for needs_exiftool in (True, False):
+            blockers, _, _ = cal.GeotagWorkflow(str(ws)).preflight(for_execute=True, needs_exiftool=needs_exiftool)
+            assert any("interrupted metadata write" in b and name in b for b in blockers), blockers
+        assert (bd / name).read_bytes() == b"someone else's"
+        (bd / name).unlink()
 
 
 @pytest.mark.spec("RUL-sort_photos_only", test="TST-geotag_preflight-video_in_by_dest_blocks")

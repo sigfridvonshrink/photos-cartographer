@@ -141,7 +141,7 @@ def test_proposal_two_consistent_supporting():
     frames = [_frame(50.0, 4.0, "2024:07:03 14:00:00", "6-photos-by-dest/B/a.arw"),
               _frame(51.0, 5.0, "2024:07:03 15:00:02", "6-photos-by-dest/B/b.arw")]  # ~same offset
     p = cal.infer_anchor_proposal(frames, gpx, CFG)
-    assert p["anchor_count"] == 2 and p["supporting_count"] == 1 and p["conflicting_count"] == 0
+    assert p["anchor_count"] == 2 and p["conflicting_count"] == 0
     assert p["confidence"] == "high"
 
 
@@ -156,7 +156,7 @@ def test_proposal_conflict_review_required():
 def test_proposal_segment_only_medium_and_none():
     gpx = _gpx([_pt(50.0, 4.0, _utc(12, 0, 0)), _pt(50.0, 4.001, _utc(12, 0, 30))])
     p = cal.infer_anchor_proposal([_frame(50.0001, 4.0005, "2024:07:03 14:00:15")], gpx, CFG)
-    assert p["recommended_gpx_match"]["match_type"] == "gpx_segment_interpolation" and p["confidence"] == "medium"
+    assert p["anchors"][0]["gpx_match"]["match_type"] == "gpx_segment_interpolation" and p["confidence"] == "medium"
     assert cal.infer_anchor_proposal([], gpx, CFG) is None                          # nothing anchors
 
 
@@ -546,7 +546,7 @@ def test_a_place_walked_on_two_days_takes_the_photos_day():
     frames.append(_photo(51.2200, 3.2400, datetime(2024, 7, 4, 11, 0, tzinfo=timezone.utc), 9))
     p = cal.infer_anchor_proposal(frames, gpx, WCFG)
     assert p["proposed_offset_seconds"] == -7200 and p["confidence"] == "high"
-    assert p["tied"] is False and p["conflicting_count"] == 0 and p["supporting_count"] == 3
+    assert p["tied"] is False and p["conflicting_count"] == 0 and p["anchor_count"] == 4
     assert {a["gpx_match"]["gpx_file"] for a in p["anchors"]} == {"day4.gpx"}
     assert [g["count"] for g in p["groups"]] == [4, 3]                      # 4 July: all four; 3 July: three
 

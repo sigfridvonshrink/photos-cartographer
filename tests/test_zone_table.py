@@ -347,7 +347,9 @@ def test_the_console_asks_the_same_question(tmp_path, monkeypatch, server):
 
 @pytest.mark.spec("RUL-unreadable_zone_table_record_stops", "BLD-zone_table_question", "BLD-exit_statuses",
                   test="TST-zone_table-an_unreadable_record_stops_the_run")
-@pytest.mark.parametrize("held", ["{torn", '"accepted"', '{"download": "maybe"}'])
+@pytest.mark.parametrize("held", ["{torn", '"accepted"', '{"download": "maybe"}',
+                                  '{"download": "accepted", "copy": {"zone_tab": "torn", "iso3166_tab": "BE\\tBelgium"}}',
+                                  '{"download": "accepted", "copy": "torn"}'])
 def test_an_unreadable_record_stops_the_run(tmp_path, monkeypatch, no_host_table, server, held):
     """A record of the answer that is there and cannot be read is not no answer: `prep plan` and a geotag command stop
     on it, naming it, nothing planned, asked, downloaded or written over; the console asks nothing."""

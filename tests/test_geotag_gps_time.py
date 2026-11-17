@@ -193,6 +193,24 @@ def test_fixes_far_from_every_other_device_are_withheld(tmp_path):
     assert cell["effective_time_anchor"] == "" and cell["requires_user_input"]
 
 
+@pytest.mark.spec("RUL-neighbour_day_offset_proposed", "BLD-neighbour_day_proposal",
+                  test="TST-geotag_gps_time-a_withheld_fix_offset_is_offered_to_no_neighbour_day")
+def test_a_fix_offset_withheld_as_far_is_offered_to_no_neighbour_day(tmp_path):
+    """The camera's fixes on 3 July say 6 July, far from the phone's photo of the visit: that offset is withdrawn —
+    and the next day, with no anchor of its own, is not offered it, since the same pass withdraws it."""
+    wrong = [_photo("a.arw", "2024:07:03 10:00:00", "2024-07-06T10:00:00Z"),
+             _photo("b.arw", "2024:07:03 11:00:00", "2024-07-06T11:00:00Z")]
+    next_day = [_photo("c.arw", "2024:07:04 10:00:00", None, None, None)]
+    phone = [_photo("p.heic", "2024:07:03 10:30:00", None, "+09:00", None, PHONE)]
+    art, blockers = _wf(tmp_path).build_time_decisions(wrong + next_day + phone, GROUPS, TOKYO, _gpx())
+    assert not blockers, blockers
+    cells = art["destinations"][DEST]["camera_group_time_decisions"]
+    first, second = cells[f"{CAM}@2024-07-03"], cells[f"{CAM}@2024-07-04"]
+    assert first["proposal"]["proposal_source"] == "gps_time" and first["effective_time_anchor"] == ""
+    assert second["proposal"]["proposal_source"] != "neighbour_day", second["proposal"]
+    assert (second.get("effective_time_anchor") or {}).get("source") != "neighbour_day_unconfirmed"
+
+
 @pytest.mark.spec("BLD-gps_time_proposal", "BLD-drift_validation", test="TST-geotag_gps_time-no_drift_check")
 def test_an_offset_from_the_fixes_is_not_drift_checked(tmp_path):
     """Tracks lie by the photos' times but not by their places: the fixes' offset is the camera's own GPS's, and no

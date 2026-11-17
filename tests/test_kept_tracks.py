@@ -216,8 +216,12 @@ def test_the_window_grows_with_the_photos_and_the_settings(monkeypatch):
 @pytest.mark.spec("BLD-track_window", test="TST-kept_tracks-the_drift_check_s_reach_is_its_buckets")
 def test_the_drift_check_s_reach_is_its_buckets(monkeypatch):
     """The drift check sets a bucket's photos, at their corrected times from the first to the last, against the tracks
-    the drift window either side: the window holds all of it, the hours between two photos of the day included."""
+    the drift window either side — or placement's reach, where that is farther: the window holds all of it, the hours
+    between two photos of the day included."""
     monkeypatch.setitem(utils.CONFIG, "drift_check_track_window_seconds", 600)
+    monkeypatch.setitem(utils.CONFIG, "gpx_interpolation_max_gap_seconds", 300)
+    monkeypatch.setitem(utils.CONFIG, "gpx_extrapolation_max_seconds", 200)
+    monkeypatch.setitem(utils.CONFIG, "gpx_extrapolation_heading_seconds", 60)
     files = _files("2024:07:03 08:00:00", "2024:07:03 20:00:00")
     art = {"destinations": {"T": {"camera_group_time_decisions": {"CAM": {
         "camera_group": "CAM", "effective_time_anchor": {"offset_seconds": 0, "source": "timezone_accepted"}}}}}}

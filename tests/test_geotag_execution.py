@@ -498,6 +498,19 @@ def test_target_occupied_recheck(tmp_path):
     assert wf._target_occupied(str(tmp_path), "A.JPG", "A.JPG") is False       # ignores the source itself
 
 
+@pytest.mark.spec("RUL-target_free_at_execute", "RUL-unchecked_counts_as_changed",
+                  test="TST-geotag_execution-a_folder_that_cannot_be_listed_is_no_free_target")
+def test_a_folder_that_cannot_be_listed_is_no_free_target(tmp_path, monkeypatch):
+    """Where the photo's folder cannot be listed, whether its rename target is free cannot be checked: the target
+    counts as taken, and the rename is held back, never made blind."""
+    wf = cal.GeotagWorkflow(str(tmp_path))
+
+    def refuse(_d):
+        raise PermissionError("not listable")
+    monkeypatch.setattr(cal.os, "listdir", refuse)
+    assert wf._target_occupied(str(tmp_path), "b.jpg", "src.arw") is True
+
+
 # --- unit: _exiftool_write seam --------------------------------------------
 
 def _fake_exiftool(calls=None, rc=0, new=b"rewritten", stderr=""):
@@ -744,11 +757,6 @@ def test_a_write_leftover_stops_the_plan_named(tmp_path, monkeypatch):
     assert len(named) == 1 and "interrupted metadata write" in named[0]
     assert not any("non-media" in b for b in blockers)
     assert leftover.read_bytes() == b"partial"
-
-
-def test_target_occupied_bad_directory(tmp_path):
-    wf = cal.GeotagWorkflow(str(tmp_path))
-    assert wf._target_occupied(str(tmp_path / "nope"), "a.jpg", "s.jpg") is False  # listdir OSError -> False
 
 
 # --- unit: _apply_file precondition + resume + rename branches --------------
