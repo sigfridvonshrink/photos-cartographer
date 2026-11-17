@@ -283,6 +283,32 @@ def test_a_dependency_missing_or_unrecorded_stops_execution(tmp_path, monkeypatc
     assert (ws / "0-sources" / "a.jpg").exists()
 
 
+@pytest.mark.spec("RUL-engine_change_is_checked", "BLD-prep_dependencies",
+                  test="TST-fingerprints-a_plan_made_under_another_image_engine_is_refused")
+def test_a_plan_made_under_another_image_engine_is_refused(tmp_path, monkeypatch):
+    """A plan whose fingerprints were taken under one ImageMagick, executed under another, is refused before any
+    change: no handoff names an engine its fingerprints were not taken by. Under the same engine it executes, and the
+    handoff names the engine of the plan."""
+    _mock(monkeypatch)
+    prep.CONFIG["jobs"] = 1
+    ws = _ws(tmp_path)
+    (ws / "0-sources" / "a.jpg").write_bytes(b"AAAA")
+    monkeypatch.setattr(utils, "get_imagemagick_version", lambda: "engine-A")
+    cache = prep.WorkspaceCache(str(ws))
+    plan = prep.WorkspacePrepWorkflow(str(ws), cache).plan()
+    cache.close()
+    assert not plan.blockers, plan.blockers
+    monkeypatch.setattr(utils, "get_imagemagick_version", lambda: "engine-B")
+    with pytest.raises(prep.ExecuteRefused, match="Stale plan"):
+        prep.PlanExecutor(str(ws)).execute(plan)
+    assert (ws / "0-sources" / "a.jpg").exists()
+    assert not os.path.exists(utils.handoff_path(str(ws)))
+    monkeypatch.setattr(utils, "get_imagemagick_version", lambda: "engine-A")
+    prep.PlanExecutor(str(ws)).execute(plan)
+    with open(utils.handoff_path(str(ws))) as f:
+        assert json.load(f)["depends_on"]["cache"]["image_engine_version"] == "engine-A"
+
+
 # --- Phase D: fingerprint/hash terminology (RAT-fingerprint_and_hash_opposite_jobs) ---------------------------
 
 @pytest.mark.spec("RUL-fingerprint_survives_mutation", "BLD-hash", test="TST-fingerprints-media_carries_fingerprint_and_no_byte_hash")

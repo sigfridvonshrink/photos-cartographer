@@ -46,7 +46,11 @@ def vouch_prep_log(ws):
 def recorded(ws):
     """Record the state of the files in `ws` as an execution records it (BLD-workspace_record): what a hand-built
     fixture stands for — a workspace as prep's execution left it — or, in a test of a later check, a hand change taken
-    as the workspace's state, so that the check under test is the one that meets it. Returns `ws`."""
+    as the workspace's state, so that the check under test is the one that meets it. A workspace prep's execution left
+    holds its configuration, seeded by its first run (RUL-config_seeded_once): one the fixture did not write is seeded
+    here, as that run would have. Returns `ws`."""
     import photos_utils
+    if not os.path.exists(photos_utils.config_path(str(ws))):
+        photos_utils.load_or_seed_config(str(ws))
     photos_utils.write_workspace_record(str(ws))
     return ws

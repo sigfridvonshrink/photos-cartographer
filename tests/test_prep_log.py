@@ -467,10 +467,12 @@ def test_an_earlier_runs_duplicates_are_kept(tmp_path, monkeypatch):
     assert dq[1]["origin"] == "0-sources/c.jpg"
 
 
-_UNREADABLE_LOGS = ["{not json", "[]", '{"schema_version": 1, "tool": "photos-1-prep"}', '{"photos": null}']
+_UNREADABLE_LOGS = ["{not json", "[]", '{"schema_version": 1, "tool": "photos-1-prep"}', '{"photos": null}',
+                    '{"photos": {}, "workspace_changes": {}}', '{"photos": {}, "workspace_changes": [1]}']
 
 
-@pytest.mark.parametrize("content", _UNREADABLE_LOGS, ids=["not_json", "a_list", "no_photos", "photos_null"])
+@pytest.mark.parametrize("content", _UNREADABLE_LOGS, ids=["not_json", "a_list", "no_photos", "photos_null",
+                                                           "changes_not_a_list", "a_change_not_an_object"])
 @pytest.mark.spec("RUL-unreadable_prep_log_stops", "BLD-unreadable_prep_log", test="TST-prep_log-an_unreadable_log_blocks_the_plan")
 def test_an_unreadable_log_blocks_the_plan(tmp_path, monkeypatch, content):
     """An earlier log that cannot be read is never taken for an empty one: the plan blocks, naming it, and execute

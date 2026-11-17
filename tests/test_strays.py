@@ -451,3 +451,36 @@ def test_a_failed_metadata_read_never_blocks_a_file_of_no_media_class(tmp_path, 
     plan = _plan(ws)
     assert not [b for b in plan.blockers if "notes.txt" in b], plan.blockers
     assert [b for b in plan.blockers if "photo.jpg" in b], plan.blockers     # media still blocks
+
+
+@pytest.mark.spec("RUL-track_files_block_prep", "RUL-track_file_left_in_place",
+                  test="TST-strays-a_hidden_track_file_blocks_and_stays_put")
+@pytest.mark.parametrize("rel", ["0-sources/.day2.gpx", "0-sources/trip/.gps/day1.gpx"],
+                         ids=["hidden_file", "in_a_hidden_folder"])
+def test_a_hidden_track_file_blocks_and_stays_put(tmp_path, monkeypatch, rel):
+    """A track file hidden in the dump — its own name hidden, or inside a hidden folder — blocks the plan like any
+    track, and is left where it is: never set aside with the dump's hidden files."""
+    _install(monkeypatch)
+    ws = _ws(tmp_path)
+    (ws / rel).parent.mkdir(parents=True, exist_ok=True)
+    (ws / rel).write_text("<gpx/>")
+    (ws / "0-sources" / "photo.jpg").write_bytes(b"img")
+    plan = _plan(ws)
+    assert any(rel in b and "Track file" in b for b in plan.blockers), plan.blockers
+    assert not [op for op in plan.operations if rel in ((op.source or "") + (op.destination or ""))]
+    with pytest.raises(ValueError, match="blockers"):
+        prep.PlanExecutor(str(ws)).execute(plan)
+    assert (ws / rel).exists()
+
+
+@pytest.mark.spec("RUL-no_links", test="TST-strays-a_folder_link_inside_a_hidden_folder_of_a_dump_blocks")
+def test_a_folder_link_inside_a_hidden_folder_of_a_dump_blocks(tmp_path, monkeypatch):
+    """A link to a folder inside a hidden folder of a dump is a link like any other: the plan is blocked, naming it."""
+    _install(monkeypatch)
+    ws = _ws(tmp_path)
+    (tmp_path / "outside").mkdir()
+    (ws / "0-sources" / "trip" / ".thumbnails").mkdir(parents=True)
+    os.symlink(tmp_path / "outside", ws / "0-sources" / "trip" / ".thumbnails" / "linkdir")
+    (ws / "0-sources" / "trip" / "photo.jpg").write_bytes(b"img")
+    plan = _plan(ws)
+    assert any("0-sources/trip/.thumbnails/linkdir" in b for b in plan.blockers), plan.blockers

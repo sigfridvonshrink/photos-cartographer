@@ -152,14 +152,14 @@ def _build_ws(tmp_path, photos, library_files=()):
     cfg["merge"] = dict(cfg.get("merge") or {})
     cfg["merge"]["library_root"] = str(lib)
     (ctl / "photos-00-config.json").write_text(json.dumps(cfg))
-    plan23 = {"status": "ready", "destinations": {"d": {"operations": ops}},
+    plan23 = {"status": "ready", "plan_id": "geotag-plan-1", "destinations": {"d": {"operations": ops}},
               "depends_on": {"handoff": {"dependency_type": "handoff_content",
                                          "artifact_name": "photos-11-handoff.json",
                                          "content_fingerprint": utils.handoff_content_fingerprint(handoff)}}}
     (ctl / "photos-24-executable-plan.json").write_text(json.dumps(plan23))
-    (ctl / "photos-25-execution-summary.json").write_text(json.dumps({"status": "success"}))
+    (ctl / "photos-25-execution-summary.json").write_text(json.dumps({"status": "success", "plan_id": "geotag-plan-1"}))
     (ctl / "photos-26-complete-log.json").write_text(json.dumps({"photos": {}}))
-    (ctl / "photos-26-archive-manifest.json").write_text(json.dumps({"artifact_name": "m"}))
+    (ctl / "photos-26-archive-manifest.json").write_text(json.dumps({"artifact_name": "m", "plan_id": "geotag-plan-1"}))
     _bd = ws / "6-photos-by-dest"          # finalize's record of each by-dest photo as geotag left it
     (ctl / "photos-26-finalized-media.json").write_text(json.dumps({"media": {
         os.path.relpath(os.path.join(r, n), ws): {"size": os.stat(os.path.join(r, n)).st_size,
@@ -591,6 +591,20 @@ def test_another_imagemagick_has_prep_fingerprints_checked(tmp_path, monkeypatch
         assert "engine_mapping" not in f
     assert "1 photo(s) fingerprinted again" in capsys.readouterr().out
     assert plan["depends_on"]["image_engine_version"] == "newer"
+
+
+@pytest.mark.spec("RUL-unchecked_counts_as_changed", "BLD-merge_engine_recheck",
+                  test="TST-merge_plan-an_imagemagick_version_not_read_counts_as_changed")
+def test_an_imagemagick_version_not_read_counts_as_changed(tmp_path, monkeypatch, capsys):
+    """The ImageMagick version in use cannot be read while prep recorded one: merge cannot tell they are the same, so
+    it takes each photo's fingerprint again, as under another version."""
+    ws, lib, fp = _build_ws(tmp_path, [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"}])
+    fp[str(ws / "6-photos-by-dest" / "Trip" / "a.jpg")] = "A"
+    _patch_fp(monkeypatch, fp)
+    monkeypatch.setattr(merge, "get_imagemagick_version", lambda: "unknown")
+    capsys.readouterr()
+    assert merge._run_locked_workflow("plan", str(ws)) == 0
+    assert "1 photo(s) fingerprinted again" in capsys.readouterr().out
 
 
 @pytest.mark.parametrize("now, blocked", [

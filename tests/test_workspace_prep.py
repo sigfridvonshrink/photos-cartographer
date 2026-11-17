@@ -733,6 +733,10 @@ def test_init_move_excludes_managed_folders_and_control_dirs(tmp_path, monkeypat
     it) and a .git dir are NEVER relocated beneath 0-sources. (The reserved-names test covers a dump
     dir NAMED like a managed folder; this covers actually-present managed + control dirs.)"""
     _mock_for_plan(monkeypatch)
+    # Each file its own picture: the dump is no duplicate of the managed folder's photo, so it is moved.
+    monkeypatch.setattr(photos_ingest.ContentHasher, "fingerprint_image",
+                        lambda p: {"status": "valid", "value": open(p, "rb").read().hex(),
+                                   "strategy": "image-content-hash-v2", "engine_version": "t"})
     ws = tmp_path / "ws"; ws.mkdir(); (ws / ".photos-ingest").mkdir()      # uninitialized -> init run
     (ws / "dump.jpg").write_bytes(b"D")                                    # a genuine root dump
     managed = ws / "5-photos-by-date"; managed.mkdir()                     # a present managed folder...

@@ -20,6 +20,7 @@ from unittest import mock
 
 # photos_1_prep is loaded once by conftest.py into sys.modules
 import photos_1_prep
+import photos_utils
 
 def test_photos_1_prep_exists():
     assert os.path.exists('cartographer/photos_1_prep.py')
@@ -61,6 +62,7 @@ def test_by_dest_read_only():
 @pytest.mark.spec("BLD-prep_operation_kinds", "RUL-prep_no_time_or_gps", test="TST-prep_split-execute_rejects_forbidden_operation_types")
 def test_execute_rejects_forbidden_operation_types(tmp_path):
     # If we pass an invalid op.type, execution should raise ValueError
+    photos_utils.load_or_seed_config(str(tmp_path))       # what the plan, seeding it, leaves
     executor = photos_1_prep.PlanExecutor(str(tmp_path))
 
     plan = photos_1_prep.Plan(
@@ -86,6 +88,7 @@ def test_execute_rejects_forbidden_operation_types(tmp_path):
 
 def test_execute_rejects_non_prep_plans(tmp_path):
     # If we pass an invalid op.type, execution should raise ValueError
+    photos_utils.load_or_seed_config(str(tmp_path))       # what the plan, seeding it, leaves
     executor = photos_1_prep.PlanExecutor(str(tmp_path))
 
     plan = photos_1_prep.Plan(
@@ -194,6 +197,7 @@ def test_by_dest_uppercase_extension_does_not_rename(tmp_path):
         assert not (op.destination or "").startswith("6-photos-by-dest/")
 
 def test_dry_run_rejects_metadata_write(tmp_path):
+    photos_utils.load_or_seed_config(str(tmp_path))       # what the plan, seeding it, leaves
     executor = photos_1_prep.PlanExecutor(str(tmp_path))
 
     plan = photos_1_prep.Plan(
@@ -224,6 +228,7 @@ def test_dry_run_rejects_metadata_write(tmp_path):
     ("6-photos-by-dest/Trip/a.jpg", "6-photos-by-dest/Rome/a.jpg"),     # within it
 ])
 def test_execute_rejects_any_operation_in_by_dest(tmp_path, source, destination):
+    photos_utils.load_or_seed_config(str(tmp_path))       # what the plan, seeding it, leaves
     executor = photos_1_prep.PlanExecutor(str(tmp_path))
     plan = photos_1_prep.Plan(
         plan_version=photos_1_prep.PLAN_SCHEMA_VERSION, code_fingerprint=photos_1_prep.code_fingerprint(), plan_id="test", command="prep", created_at="now",

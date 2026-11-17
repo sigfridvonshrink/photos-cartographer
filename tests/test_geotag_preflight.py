@@ -54,6 +54,8 @@ def _ws(tmp_path, *, guard=True, sealed=False, config=True, handoff=True,
         files = handoff_files if handoff_files is not None else \
             [{"relative_path": rel, "media_class": "image"} for rel in bydest]
         (ctl / "photos-11-handoff.json").write_text(json.dumps(vouched(ctl.parent, {"filename_timestamp_format": utils.CONFIG["filename_timestamp_format"], "files": match_disk(ws, files), "depends_on": {"cache": {"fingerprint_algorithm_version": utils.FINGERPRINT_ALGORITHM_VERSION}}})))
+    if not config and (ctl / "photos-00-config.json").exists():
+        (ctl / "photos-00-config.json").unlink()        # gone since prep's run seeded it
     return ws
 
 

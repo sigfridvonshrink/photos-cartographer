@@ -293,6 +293,32 @@ def test_a_database_of_another_schema_stops_prep(workspace):
     cache.close()
 
 
+@pytest.mark.spec("RUL-cache_schema_not_migrated", "BLD-cache_versions",
+                  test="TST-exif_metadata-a_database_of_another_schema_stops_execute")
+def test_a_database_of_another_schema_stops_execute(workspace, monkeypatch):
+    """A database whose recorded schema changes between plan and execute stops execute as a refusal: its version row
+    is left as it was, and nothing is moved."""
+    prep.CONFIG["zfs"] = {"enabled": False}
+    monkeypatch.setattr(prep.ContentHasher, "fingerprint_image", lambda p: {
+        "status": "valid", "strategy": "image-content-hash-v2", "value": "sig", "engine_version": "t"})
+    monkeypatch.setattr(utils.MetadataReader, "read_metadata_concurrently", lambda folders, **k: (
+        {os.path.join(fo, fn): {"DateTimeOriginal": "2023:01:02 03:04:05", "extraction_status": "extracted_ok"}
+         for fo in folders for fn in os.listdir(fo)}, set()))
+    (workspace / "0-sources" / "a.jpg").write_bytes(b"AAAA")
+    cache = prep.WorkspaceCache(str(workspace))
+    cache.set_meta("cache_schema_version", str(utils.CACHE_SCHEMA_VERSION))
+    plan = prep.WorkspacePrepWorkflow(str(workspace), cache).plan()
+    assert not plan.blockers, plan.blockers
+    cache.set_meta("cache_schema_version", "999")
+    cache.close()
+    with pytest.raises(prep.ExecuteRefused, match="schema version 999"):
+        prep.PlanExecutor(str(workspace)).execute(plan)
+    cache = prep.WorkspaceCache(str(workspace), read_only=True)
+    assert cache.get_meta("cache_schema_version") == "999"
+    cache.close()
+    assert (workspace / "0-sources" / "a.jpg").exists()
+
+
 @pytest.mark.spec("BLD-camera_identity_values", "RUL-prep_derives_camera_group", "RUL-unidentified_files_solved_alone",
                   test="TST-exif_metadata-blank_identity_values_name_no_camera")
 def test_blank_identity_values_name_no_camera():
@@ -341,7 +367,7 @@ def test_the_other_time_fields_are_kept_by_their_group():
         "EXIF:CreateDate": "2024:07:03 13:00:00", "EXIF:OffsetTimeDigitized": None, "XMP:DateCreated": None,
         "IPTC:DateCreated": "2024:07:03", "IPTC:TimeCreated": "13:00:00+01:00"}
     assert r["DateCreated"] == "2024:07:03"                               # by the group order, as before
-    assert utils.FIELD_SET_VERSION == 4                                   # a record of the fields before is read again
+    assert utils.FIELD_SET_VERSION == 5                                   # a record of the fields before is read again
     r = parse({"XMP:CreateDate": "2024:07:03 13:00:00", "XMP:DateCreated": "2024:07:03 13:00:00+01:00"})
     assert (r["EXIF:CreateDate"], r["XMP:DateCreated"]) == (None, "2024:07:03 13:00:00+01:00")
 
@@ -377,3 +403,10 @@ def test_a_field_is_taken_from_exif_then_xmp():
     r = parse({"EXIF:GPSLatitude": 33.5, "EXIF:GPSLatitudeRef": "S", "Composite:GPSLatitude": -33.5,
                "EXIF:GPSLongitude": 70.1, "Composite:GPSLongitude": -70.1})
     assert (r["GPSLatitude"], r["GPSLongitude"], r["GPSLatitudeRef"]) == (-33.5, -70.1, "S")
+    # A video holding no EXIF position: exiftool's Composite is then QuickTime's, so XMP's position comes first; a
+    # file holding only QuickTime's keeps it through the Composite.
+    r = parse({"XMP:GPSLatitude": 48.1, "XMP:GPSLongitude": 11.5, "QuickTime:GPSLatitude": 40.0,
+               "Composite:GPSLatitude": 40.0, "Composite:GPSLongitude": -3.7})
+    assert (r["GPSLatitude"], r["GPSLongitude"]) == (48.1, 11.5)
+    r = parse({"Composite:GPSLatitude": 40.0, "Composite:GPSLongitude": -3.7})
+    assert (r["GPSLatitude"], r["GPSLongitude"]) == (40.0, -3.7)

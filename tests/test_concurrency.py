@@ -38,6 +38,7 @@ def workspace(tmp_path):
     os.makedirs(os.path.join(root, ".photos-ingest"), exist_ok=True)
     with open(os.path.join(root, ".photos-ingest", "photos-00-workspace-guard"), "w") as f:
         f.write("")
+    utils.load_or_seed_config(root)          # the configuration prep's first run seeded
 
     # Create some dummy files
     for i in range(10):

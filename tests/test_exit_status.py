@@ -206,7 +206,7 @@ def test_a_refused_prune_ends_as_a_refusal(tmp_path, monkeypatch, argv):
     assert (run / "x.jpg").exists()
 
 
-@pytest.mark.parametrize("phase", ["prep", "geotag", "merge", "cli"])
+@pytest.mark.parametrize("phase", ["prep", "prep_execute", "geotag", "merge", "cli"])
 @pytest.mark.spec("RUL-exit_status_says_how_it_ended", "BLD-exit_statuses",
                   test="TST-exit_status-an_unforeseen_error_ends_with_a_status_of_its_own")
 def test_an_unforeseen_error_ends_with_a_status_of_its_own(tmp_path, monkeypatch, capsys, phase):
@@ -222,6 +222,11 @@ def test_an_unforeseen_error_ends_with_a_status_of_its_own(tmp_path, monkeypatch
         ws = _prep_ws(tmp_path)
         monkeypatch.setattr(prep.WorkspacePrepWorkflow, "plan", boom)
         code = _prep(monkeypatch, ws, "plan")
+    elif phase == "prep_execute":
+        ws = _prep_ws(tmp_path)
+        assert _prep(monkeypatch, ws, "plan") == 0
+        monkeypatch.setattr(prep.PlanExecutor, "execute", boom)
+        code = _prep(monkeypatch, ws, "execute")
     else:
         ws = _ws(tmp_path)
         monkeypatch.chdir(ws)

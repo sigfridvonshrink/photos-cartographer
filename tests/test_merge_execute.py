@@ -116,9 +116,9 @@ def _ws(tmp_path, photos, library_files=(), name="ws", folders=None):
                                     "artifact_name": "photos-11-handoff.json",
                                     "content_fingerprint": utils.handoff_content_fingerprint(handoff)}}}))
     (ctl / "photos-25-execution-summary.json").write_text(json.dumps(
-        {"status": "success", "run_metadata": {"execution_id": "cal-exec-1"}}))
+        {"status": "success", "plan_id": "cal-plan-1", "run_metadata": {"execution_id": "cal-exec-1"}}))
     (ctl / "photos-26-complete-log.json").write_text(json.dumps({"photos": {}}))
-    (ctl / "photos-26-archive-manifest.json").write_text(json.dumps({"artifact_name": "m"}))
+    (ctl / "photos-26-archive-manifest.json").write_text(json.dumps({"artifact_name": "m", "plan_id": "cal-plan-1"}))
     _bd = ws / bd                          # finalize's record of each by-dest photo as geotag left it
     (ctl / "photos-26-finalized-media.json").write_text(json.dumps({"media": {
         os.path.relpath(os.path.join(r, n), ws): {"size": os.stat(os.path.join(r, n)).st_size,
@@ -166,6 +166,21 @@ def test_merge_needs_no_tracks_folder(tmp_path, monkeypatch):
     assert merge._run_locked_workflow("plan", str(ws)) == 0
     assert merge._run_locked_workflow("execute", str(ws)) == 0
     assert _summary(ws)["status"] == "success"
+
+
+@pytest.mark.spec("RUL-target_free_ignores_case", "RUL-target_free_at_execute",
+                  test="TST-merge_execute-a_place_taken_in_another_case_since_the_plan_is_not_placed_beside")
+def test_a_place_taken_in_another_case_since_the_plan_is_not_placed_beside(tmp_path):
+    """A library file of the photo's planned name in another case appears after planning: on any filesystem, merge
+    does not place the photo beside it — the photo is blocked, left in the workspace, the library file untouched."""
+    ws, lib = _ws(tmp_path, [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"}])
+    assert merge._run_locked_workflow("plan", str(ws)) == 0
+    (lib / "Trip").mkdir(exist_ok=True)
+    (lib / "Trip" / "A.JPG").write_bytes(_fp_bytes("OTHER"))
+    assert merge._run_locked_workflow("execute", str(ws)) == 3
+    assert sorted(os.listdir(lib / "Trip")) == ["A.JPG"]
+    assert os.path.exists(_src(ws, "Trip", "a.jpg"))
+    assert _summary(ws)["totals"]["blocked"] == 1
 
 
 # --- the four dispositions ---------------------------------------------------
@@ -1128,6 +1143,48 @@ def test_a_re_plan_after_a_partial_merge_carries_what_was_moved(tmp_path):
     assert log["photos"]["B"]["library_path"] == os.path.join(str(lib), "Trip", "b-001.jpg")
 
 
+@pytest.mark.parametrize("older,later", [(1, 2), (999, 1000)], ids=["oldest_first", "past_999"])
+@pytest.mark.spec("RUL-replan_carries_placed", test="TST-merge_execute-the_latest_earlier_plan_s_place_is_carried")
+def test_the_latest_earlier_plan_s_place_is_carried(tmp_path, older, later):
+    """Two plans set aside each placed one photo, at two places the library both holds it at: the re-plan carries the
+    place of the latest of them — by the number of its suffix, so `-1000` is later than `-999`."""
+    ws, lib = _ws(tmp_path, [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"}],
+                  library_files=[{"fp": "A", "dest": "Trip", "name": "x.jpg"},
+                                 {"fp": "A", "dest": "Trip", "name": "y.jpg"}])
+    os.remove(_src(ws, "Trip", "a.jpg"))                                # placed by an earlier merge
+    stem, ext = os.path.splitext(merge.merge_plan_path(str(ws)))
+    for n, place in ((older, "x.jpg"), (later, "y.jpg")):
+        with open(f"{stem}-{n:03d}{ext}", "w") as f:
+            json.dump({"plan_id": f"p{n}", "destinations": {"Trip": {"files": [
+                {"by_dest_source": "6-photos-by-dest/Trip/a.jpg", "content_fingerprint": "A", "disposition": "placed_new",
+                 "library_target": os.path.join(str(lib), "Trip", place)}]}}}, f)
+    assert merge._run_locked_workflow("plan", str(ws)) == 0
+    plan = json.load(open(merge.merge_plan_path(str(ws))))
+    (rec,) = [r for d in plan["destinations"].values() for r in d["files"]]
+    assert rec["carried_from_plan"] == f"p{later}"
+    assert rec["library_target"] == os.path.join(str(lib), "Trip", "y.jpg")
+
+
+@pytest.mark.spec("BLD-job_records_kept", "RUL-history_retained",
+                  test="TST-merge_execute-an_earlier_merge_summary_is_kept_aside")
+def test_an_earlier_merge_summary_is_kept_aside(tmp_path):
+    """Each execute's summary sets the one before it aside under `-NNN`, as geotag's are: a partial merge's summary,
+    and the hand changes it names, outlive the execute that finishes the merge."""
+    ws, lib = _ws(tmp_path, [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"},
+                             {"fp": "B", "dest": "Trip", "final_name": "b.jpg"}],
+                  library_files=[{"fp": "FAIL", "dest": "Trip", "name": "b.jpg"}])
+    assert merge._run_locked_workflow("plan", str(ws)) == 2
+    assert merge._run_locked_workflow("execute", str(ws)) == 3
+    partial = open(merge.merge_summary_path(str(ws)), "rb").read()
+    with open(os.path.join(str(lib), "Trip", "b.jpg"), "wb") as f:
+        f.write(_fp_bytes("OLD"))                                        # the blocker cleared
+    assert merge._run_locked_workflow("plan", str(ws)) == 0
+    assert merge._run_locked_workflow("execute", str(ws)) == 0
+    stem, ext = os.path.splitext(merge.merge_summary_path(str(ws)))
+    assert open(f"{stem}-001{ext}", "rb").read() == partial
+    assert _summary(ws)["status"] == "success"
+
+
 @pytest.mark.spec("RUL-log_step_names_run",
                   test="TST-merge_execute-a_carried_photos_merge_step_names_the_plan_that_placed_it")
 def test_a_carried_photos_merge_step_names_the_plan_that_placed_it(tmp_path):
@@ -1785,12 +1842,13 @@ def test_failed_placement_is_done_by_the_next_run(tmp_path, monkeypatch):
 @pytest.mark.parametrize("datasets, expected", [(("ws", "lib"), ["ws", "lib"]),     # both, each its own
                                                 (("pool", "pool"), ["pool"]),        # one dataset: one snapshot
                                                 (("ws", None), ["ws"])])             # library not snapshottable
-def test_merge_snapshots_the_workspace_and_the_library(tmp_path, monkeypatch, datasets, expected):
+@pytest.mark.parametrize("required", [False, True], ids=["optional", "required"])
+def test_merge_snapshots_the_workspace_and_the_library(tmp_path, monkeypatch, datasets, expected, required):
     """Merge snapshots the workspace — it removes what it places from there — and the library beside
     it where the library can be snapshotted; a library that cannot be only narrows the snapshot, with a
-    warning, and the merge proceeds."""
+    warning, and the merge proceeds — snapshots required or not."""
     ws, lib = _ws(tmp_path, [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"}])
-    taken = _zfs(monkeypatch, ws, datasets=datasets)
+    taken = _zfs(monkeypatch, ws, datasets=datasets, required=required)
     assert merge._run_locked_workflow("plan", str(ws)) == 0
     assert merge._run_locked_workflow("execute", str(ws)) == 0
     assert taken == expected
