@@ -102,8 +102,19 @@ counts. The owner asked whether this was overdoing it given the script's role, a
 - **Walk less:** later walks take the high-criticality rules and the code that changed, not every item against every
   line.
 
-**Open:** the owner's ruling on the shape; then a list of the items each step removes or moves, for review before
-anything is cut.
+**Ruled 2026-11-17 (the shape):**
+- **The build layer keeps the safety mechanisms and the records' formats** — every record a person reads or edits, or
+  another phase reads (photos-21 to -35, the handoff, the journal, the workspace record, the settings) — and lets the
+  code, its comments and its tests record the rest: perhaps half the build items go. A test naming a cut item names
+  the rule it realised instead.
+- **Display moves out**: a rule about what is shown or reported, that changes nothing that counts, becomes one of the
+  owner's preferences.
+- **Forced reasons that only restate their rule are folded** into the reason they follow from.
+- **Walks stay whole**: "walk less" was not taken.
+- **A list first**: the items each step removes, moves or folds are listed for the owner's review before anything is
+  cut, then cut in one batch.
+
+**Open:** the lists; then the cut.
 
 ---
 
