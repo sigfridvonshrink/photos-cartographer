@@ -127,3 +127,24 @@ test("placedPosition: a placed photo's row copies where it is placed, in the for
     assert.ok(Math.abs(back.lat - c.lat) < 1e-6 && Math.abs(back.lon - c.lon) < 1e-6, text);
   }
 });
+
+test("seedCenter: a placed photo opens on the map where it is placed, pinned there, until a position is set for it", () => {
+  const t = `${D}/t.arw`, f = `${D}/f.arw`;
+  const placed = [{ relative_path: t, content_fingerprint: "fp-t", placed_by: "tracks", position: { lat: 50.525434, lon: 4.269781 } },
+                  { relative_path: f, content_fingerprint: "fp-f", placed_by: "folder_fallback", position: { lat: 1, lon: 2 } }];
+  const loaded = app.withChosenCells({ gps: { destinations: { [D]: {
+    folder_fallback: fallback({ fallback_lat: 35.6, fallback_lon: 139.6 }),
+    gps_decisions: { review_items: [], placed_photos: placed } } } } });
+  app.state.base = loaded; app.state.work = JSON.parse(JSON.stringify(loaded));
+  app.state.coordClipboard = { lat: 10, lon: 20 };                              // a copied position does not win
+  const tr = { file: "gps", dest: D, kind: "chosen", path: t }, fr = { file: "gps", dest: D, kind: "chosen", path: f };
+  assert.deepEqual(app.seedCenter(tr), { lat: 50.525434, lon: 4.269781 });
+  assert.deepEqual(app.seedCenter(fr), { lat: 35.6, lon: 139.6 });              // the fallback in effect now
+  const pins = app.gpsRefMarkers(tr);
+  assert.equal(pins[0].label, "placed here by the tracks");
+  assert.deepEqual([pins[0].lat, pins[0].lon], [50.525434, 4.269781]);
+  assert.equal(app.gpsRefMarkers(fr).length, 1);                                // the fallback pinned once
+  app.state.work.gps.destinations[D].gps_decisions.placed_photos[0].user_decision = { manual_lat: 48.1, manual_lon: 11.5 };
+  assert.deepEqual(app.seedCenter(tr), { lat: 48.1, lon: 11.5 });               // a position set here comes first
+  app.state.coordClipboard = null;
+});

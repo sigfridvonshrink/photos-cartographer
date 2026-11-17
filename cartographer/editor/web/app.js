@@ -1101,8 +1101,13 @@ function gpsPhotoRow(dest, x, order) {
     el("span", { class: "label" }, leaf(path)), x.label ? chip("reason", x.label) : null);
   // a placed photo's row copies where it is placed, to paste into another photo or a map (output affordance;
   // app_placement.test.mjs "placedPosition")
+  // and opens it on the map, where its position can be set by hand (BLD-chosen_position)
   const at = !ref || ref.kind !== "review" ? placedPosition(dest, x) : null;
-  if (at) { r.classList.add("copyable"); r.title = `click to copy ${fmtCoord(at)}`; r.onclick = () => copyCoord(at); }
+  if (at) {
+    r.classList.add("copyable");
+    r.title = `click to copy ${fmtCoord(at)}${ref ? " and show it on the map" : ""}`;
+    r.onclick = () => { if (ref) state.selected = ref; copyCoord(at); };
+  } else if (ref && ref.kind === "chosen") r.onclick = () => { state.selected = ref; render(); };
   if (!ref) return r;
   if (ref.kind === "review") {
     r.onclick = (ev) => (x.bucket === "unplaced" ? selectReview(ev, dest, path, order) : (state.selected = ref, render()));
@@ -1733,14 +1738,25 @@ function destFallbackCoord(dest) {
   const e = previewFallback(dest);
   return e && isNum(e.lat) && isNum(e.lon) ? { lat: e.lat, lon: e.lon } : null;
 }
+// Where a placed photo (a `chosen` cell) is placed before any position is set for it here: the fallback in effect now,
+// or where geotag placed it (photos-23's `position`); null where none is known.
+function placedAt(ref) {
+  if (!ref || ref.kind !== "chosen") return null;
+  const c = workCell(ref) || {};
+  if (c.placed_by === "folder_fallback") return destFallbackCoord(ref.dest);
+  return c.position && isNum(c.position.lat) && isNum(c.position.lon) ? { lat: c.position.lat, lon: c.position.lon } : null;
+}
 function gpsRefMarkers(ref) {
   const out = [];
+  const at = placedAt(ref);
+  if (at) out.push({ ...at, label: (workCell(ref) || {}).placed_by === "folder_fallback" ? "placed here by the fallback"
+    : "placed here by the tracks", color: "#5ec27a" });
   if (ref.kind === "fallback") {
     const own = fbOwnDecision(ref.dest), above = inheritedFallback(ref.dest);
     if (own && isNum(own.lat) && isNum(own.lon)) out.push({ lat: own.lat, lon: own.lon, label: "this destination's own", color: "#4f9cf9" });
     if (above && isNum(above.lat) && isNum(above.lon))
       out.push({ lat: above.lat, lon: above.lon, label: `inherited (${above.from})`, color: "#e0a85e" });
-  } else {
+  } else if (!(ref.kind === "chosen" && (workCell(ref) || {}).placed_by === "folder_fallback")) {
     const fb = destFallbackCoord(ref.dest);
     if (fb) out.push({ ...fb, label: "folder fallback", color: "#e0a85e" });
   }
@@ -1749,7 +1765,8 @@ function gpsRefMarkers(ref) {
 // Seed the map view for a freshly-selected GPS cell: its own decision first, else the LAST coordinate
 // the operator placed (so the next un-located photo opens centred where the previous one was set — they
 // are usually near each other), else a reference pin. The clipboard is set on every pick/paste below.
-const seedCenter = (ref) => currentCoord(ref) || state.coordClipboard || gpsRefMarkers(ref)[0] || null;
+// A placed photo opens where it is placed (output affordance; app_placement.test.mjs "seedCenter").
+const seedCenter = (ref) => currentCoord(ref) || placedAt(ref) || state.coordClipboard || gpsRefMarkers(ref)[0] || null;
 // Copy/paste a coordinate between cells so the operator need not re-navigate to a place already found.
 // "copy" stashes this cell's decision (or its best reference) on the clipboard; "paste" applies it here.
 function copyPasteBar(ref) {
@@ -1780,7 +1797,7 @@ function mapBlock(ref) {
   if (_mapKey !== key) {
     teardownMap();
     const [la, lo] = coordFields(ref);
-    _map = mapPicker({ center: seedCenter(ref), markers: gpsRefMarkers(ref),
+    _map = mapPicker({ center: seedCenter(ref), zoom: ref.kind === "chosen" ? 17 : 13, markers: gpsRefMarkers(ref),
       onPick: (lat, lon) => { state.coordClipboard = { lat, lon }; editMany(ref, { [la]: lat, [lo]: lon }); },
       // Pan mirrors the crosshair into the pinned coord field (skipped while it's being typed in).
       onMove: (lat, lon) => { if (_coordInp && document.activeElement !== _coordInp) _coordInp.value = `${lat}, ${lon}`; } });
@@ -2559,6 +2576,6 @@ export {
   cameraDayLabel, tracksNearThatDay, offsetSections, offsetAnswered, offsetSettledByPhotos, fallbackNote, inheritedFallback,
   ambiguousTimeNote, gpsTimeAsideNote, zoneOffer, validReading, keepHolds, keepFields, keepOffered, phoneNote,
   trueInstant, parseUtcOff, mismatchAccepted, ZONE_TABLE_ANSWERS, recordAbsentText, DEVICE_CLASSES, changedHolds, changedFields, changedKeepLabel, keptTagNote, unidentifiedHolds, unidentifiedFields, loadRefusal, hasUnsavedEdits, utcOff,
-  dateFallbackDay, validDateFallback, previewDate, showsDate, placedPosition, fmtCoord,
+  dateFallbackDay, validDateFallback, previewDate, showsDate, placedPosition, fmtCoord, placedAt, seedCenter, gpsRefMarkers,
   fmtSpan, utcToZonedWallMs, zonedWallToUtcMs, offsetFromTrueTime, trueTimeOf,
 };
