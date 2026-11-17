@@ -470,8 +470,7 @@ A prep execution SHALL leave in the workspace database no row for a file that is
 :uses: DEF-fingerprint, DEF-workspace_database
 
 Prep SHALL fingerprint a media file afresh when the workspace database holds no fingerprint for it at its path, or holds
-one taken when the file had another size or modification time — a file geotag's execution left as its journal records
-it excepted ({need}`RUL-geotag_left_fingerprint_carried`).
+one taken when the file had another size or modification time.
 :::
 
 :::{rul} A fingerprint is reused only from the method in use
@@ -563,6 +562,7 @@ been reused there.
 :criticality: high
 :verify: required
 :refines: RUL-reuse_valid_work
+:excepts: RUL-fingerprint_taken_afresh
 :uses: DEF-fingerprint, DEF-workspace_database, DEF-geotag
 
 Prep SHALL carry to a media file the fingerprint the workspace database holds for the file geotag's execution found,

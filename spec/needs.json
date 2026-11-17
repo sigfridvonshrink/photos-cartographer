@@ -64227,7 +64227,7 @@
       "RAT-no_migration"
      ],
      "layout": null,
-     "lineno": 510,
+     "lineno": 509,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -81606,7 +81606,7 @@
       "RAT-fingerprint_same_method"
      ],
      "layout": null,
-     "lineno": 477,
+     "lineno": 476,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -81693,7 +81693,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 488,
+     "lineno": 487,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -81841,13 +81841,15 @@
      "constraints_error": null,
      "constraints_passed": true,
      "constraints_results": {},
-     "content": "Prep SHALL fingerprint a media file afresh when the workspace database holds no fingerprint for it at its path, or holds\none taken when the file had another size or modification time — a file geotag's execution left as its journal records\nit excepted ({need}`RUL-geotag_left_fingerprint_carried`).",
+     "content": "Prep SHALL fingerprint a media file afresh when the workspace database holds no fingerprint for it at its path, or holds\none taken when the file had another size or modification time.",
      "criticality": "high",
      "docname": "intent/prep",
      "doctype": ".md",
      "duration": null,
      "excepts": [],
-     "excepts_back": [],
+     "excepts_back": [
+      "RUL-geotag_left_fingerprint_carried"
+     ],
      "external_css": "external_link",
      "external_url": null,
      "follows_from": [],
@@ -83140,7 +83142,9 @@
      "docname": "intent/prep",
      "doctype": ".md",
      "duration": null,
-     "excepts": [],
+     "excepts": [
+      "RUL-fingerprint_taken_afresh"
+     ],
      "excepts_back": [],
      "external_css": "external_link",
      "external_url": null,
@@ -83161,7 +83165,7 @@
       "RAT-geotag_journal_proves_fingerprint"
      ],
      "layout": null,
-     "lineno": 560,
+     "lineno": 559,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -98103,7 +98107,7 @@
       "RAT-sort_costs_no_reading"
      ],
      "layout": null,
-     "lineno": 524,
+     "lineno": 523,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -98276,7 +98280,7 @@
       "RAT-move_launders_nothing"
      ],
      "layout": null,
-     "lineno": 536,
+     "lineno": 535,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -98363,7 +98367,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 548,
+     "lineno": 547,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -110051,7 +110055,7 @@
       "RAT-reread_on_purpose"
      ],
      "layout": null,
-     "lineno": 499,
+     "lineno": 498,
      "links": [],
      "links_back": [],
      "modifications": 0,
