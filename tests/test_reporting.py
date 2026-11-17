@@ -220,6 +220,55 @@ def test_websink_emits_finished_log_on_progress_finish():
                for e in w.snapshot()["log"])
 
 
+def _drain(q):
+    msgs = []
+    try:
+        while True:
+            msgs.append(q.get_nowait())
+    except _queue.Empty:
+        return msgs
+
+
+@pytest.mark.spec("RUL-prep_run_summarised", test="TST-reporting-the_console_shows_the_prep_run_summary")
+def test_the_console_shows_the_prep_run_summary(capsys):
+    """Prep's end-of-run summary reaches the console as the log lines the terminal prints, in the one rendering
+    (`report_lines`) — to a live page and to one that joins late — not only as an event the page ignores."""
+    from cartographer.reporting import report_lines
+    report = {"media_operations": 7, "recognized_moves": 2, "quarantine_footprint": {"total_files": 1}}
+    plan_summary = {"performance_and_cache": {"dependency_validation_status": "success"}}
+    w = WebSink()
+    q, _ = w.subscribe()
+    w.handle(SummaryEvent(report=report, plan_summary=plan_summary))
+    lines = [line for line in report_lines(report, plan_summary) if line]
+    assert any("Prep run summary" in line for line in lines) and any(": 7" in line for line in lines)
+    assert [m["msg"] for m in _drain(q) if m["kind"] == "log"] == lines
+    assert [e["msg"] for e in w.snapshot()["log"]] == lines
+    TtySink(stream=_FakeStream(tty=False), quiet=True).handle(SummaryEvent(report=report, plan_summary=plan_summary))
+    assert capsys.readouterr().err.splitlines() == report_lines(report, plan_summary)   # the terminal prints the same
+    w2 = WebSink()
+    w2.handle(SummaryEvent(report=None, counters={"x": 1}))   # no report: nothing to show
+    assert w2.snapshot()["log"] == []
+
+
+def test_an_aborted_progress_task_is_not_shown_finished():
+    """A progress task its body left by an exception is said to have stopped, unfinished — on the terminal and in the
+    console's log — never "Finished" like one that completed (a comment at `finished_line` says why)."""
+    from cartographer.reporting import finished_line
+    assert finished_line("hashing", 1.5).startswith("Finished hashing in 1.50s")
+    assert finished_line("hashing", 1.5, "aborted").startswith("Stopped hashing after 1.50s")
+    w = WebSink()
+    q, _ = w.subscribe()
+    w.handle(ProgressEvent("t1", "hashing", START, 0, 4))
+    w.handle(ProgressEvent("t1", "hashing", FINISH, 1, 4, status="aborted", duration=1.5))
+    logs = [m["msg"] for m in _drain(q) if m["kind"] == "log"]
+    assert len(logs) == 1 and logs[0].startswith("Stopped hashing") and "unfinished" in logs[0], logs
+    stream = _FakeStream(tty=False)
+    sink = TtySink(stream=stream, quiet=False)
+    sink.handle(ProgressEvent("t2", "scan", START, 0, 3))
+    sink.handle(ProgressEvent("t2", "scan", FINISH, 1, 3, status="aborted", duration=0.2))
+    assert "Stopped scan after" in stream.getvalue() and "Finished scan" not in stream.getvalue()
+
+
 def test_websink_clear_progress_does_not_emit_finished_log():
     # Abandoned tasks finished by the run-end safety net must NOT get a (misleading) duration log.
     w = WebSink()

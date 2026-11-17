@@ -1743,6 +1743,26 @@ once each destination of its `asked_for` is so settled, or it is given a zone it
 Settled so, a cell whose photos then speak against the zone asks again on the next run.
 :::
 
+:::{bld} The editor's date fallback questions, as the working decisions settle them
+:id: BLD-editor_date_asking
+:status: ruled
+:realises: RUL-editor_answer_ends_date_asking
+
+The editor SHALL show a date fallback cell that requires input as settled once the decisions being edited give it a
+date — its own `date`, or that of the nearest destination above it that has one ({need}`BLD-date_fallback_cell`).
+:::
+
+:::{bld} The editor's folder fallback questions, as the working decisions settle them
+:id: BLD-editor_fallback_asking
+:status: ruled
+:realises: RUL-editor_answer_ends_fallback_asking
+
+The editor SHALL show a folder fallback cell that requires input, and the review item of a photo with no reliable GPS
+source (`no_reliable_gps_source`), as settled once the decisions being edited put a folder fallback in effect at its
+destination — written there, or inherited from the nearest destination above that has one
+({need}`BLD-folder_fallback_cell`).
+:::
+
 :::{bld} The editor lists the camera groups geotag stops on
 :id: BLD-editor_lists_new_camera_groups
 :status: ruled

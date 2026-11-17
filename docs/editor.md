@@ -325,7 +325,7 @@ A destination holding photos that record **no time** — scanned prints, above a
 the date, as much as you know: a year (`1985`), a month (`1985-06`) or a day (`1985-06-14`); a month or day left
 out is the first. The date given on the nearest folder up covers a photo, its own folder included — it applies itself,
 nothing to accept (an **inherited ⟵** badge says from where); one written lower down overrides it. **clear** takes it
-back.
+back. As for a timezone, the date rows a date covers turn **resolved** as soon as you write it, before any re-run.
 
 It times only the photos with no recorded time; a photo with a time keeps it. Each takes the day's midnight, local to
 its destination, written into it and named by it — several of one date in the order of their current file names, the
@@ -416,11 +416,12 @@ point, badged **own** or **inherited ⟵ <destination>** — and under it its ph
 
 - **Fallback** — the photos the folder fallback placed, grouped by why the tracks missed them (away from the
   tracks, in a gap, where the track jumps, tracks disagree, no tracks, a time from a date fallback);
-- **Placed** — the rest, grouped by how they were placed: **camera GPS** (their own position), **track
-  point**, **between points**, **past track end**, **set by hand**.
+- **Placed** — the rest, grouped by how they were placed: **camera GPS** (their own position), **camera GPS
+  its offset doubts**, **track point**, **between points**, **past track end**, **set by hand**.
 
 Where no fallback is in effect here or above, the photos nothing places are listed as **Unplaced** instead
-of Fallback — open and first, since geotag waits on them. The settled buckets are folded. A bucket or group
+of Fallback — open and first, since geotag waits on them. Write a fallback, here or above, and they — and the
+fallback rows below it — turn **resolved** at once, before any re-run. The settled buckets are folded. A bucket or group
 of one kind says it in its title (**Placed (212) · between points**), and a group of one photo is no group:
 the photo is listed with its kind beside it.
 

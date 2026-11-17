@@ -101,3 +101,19 @@ test("Time view: cameras the photos settle fold away; cameras that ask or were a
   const t = app.offsetSections(days);
   assert.deepEqual([t.shown.length, t.settled.length, t.oneCamera], [1, 0, true]);
 });
+
+test("Time view: a destination's own decisions come before its per-camera rows, single photos last (rule 4)", () => {
+  // "Files naming no camera" is one question per destination: listed with its timezone and date fallback, before the
+  // offset rows of its cameras (docs/design/decisions.md, grouping rule 4).
+  const dest = { destination_timezone: { user_decision: {} },
+    date_fallback: { user_decision: { date: "" }, untimed_photos: [`${D}/u.jpg`], requires_user_input: true },
+    unidentified_files: { files: 2, user_decision: {} },
+    camera_group_time_decisions: { [CAM]: { camera_group: CAM, user_decision: {} } },
+    changed_times: { [`${D}/c.jpg`]: { held_time: "2024:07:03 10:00:00", user_decision: {} } },
+    local_time_readings: { [`${D}/r.jpg`]: { user_decision: {} } } };
+  app.state.base = { time: { destinations: { [D]: dest } } };
+  app.state.work = JSON.parse(JSON.stringify(app.state.base));
+  const seq = app.timeRowSequence(D, dest);
+  assert.deepEqual(seq.map((p) => p.kind), ["timezone", "date", "unidentified", "offsets", "changed", "reading"]);
+  assert.deepEqual(seq[4].ref, { file: "time", dest: D, kind: "changed", key: `${D}/c.jpg` });
+});

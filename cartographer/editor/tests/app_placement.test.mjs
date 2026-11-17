@@ -80,3 +80,21 @@ test("a position the user set, emptied, previews the photo placed as before, nev
   work.gps.destinations[D].folder_fallback.user_decision = { fallback_lat: 35.6, fallback_lon: 139.6 };
   assert.match(app.previewEffective(ref), /placed as before/);                     // the tracks may place it before the fallback
 });
+
+test("a position chosen and saved, read back before a plan, is the placed photo's decision, listed once", () => {
+  // BLD-chosen_position: the `chosen_by_user` entry is the photo's decision. Read back before the next plan, the photo
+  // is still among `placed_photos`: listed once, on its placed row, holding the entry's position — never a second row
+  // saying "placed by the tracks" with an empty field.
+  const rel = `${D}/x.arw`;
+  const art = { gps: { destinations: { [D]: { folder_fallback: fallback({}), gps_decisions: {
+    placed_photos: [{ relative_path: rel, placed_by: "tracks", method: "interpolated" }],
+    review_items: [{ relative_path: rel, reason: "chosen_by_user", requires_user_input: false, stale_user_decision: false,
+      user_decision: { manual_lat: 50, manual_lon: 4 } }] } } } } };
+  app.withChosenCells(art);
+  app.state.base = JSON.parse(JSON.stringify(art)); app.state.work = JSON.parse(JSON.stringify(art));
+  const listed = app.gpsBuckets(D, art.gps.destinations[D]).flatMap((b) => [...b.photos, ...b.groups.flatMap((g) => g.photos)]);
+  assert.deepEqual(listed.map((p) => [p.entry.relative_path, p.ref && p.ref.kind]), [[rel, "chosen"]]);
+  const ref = { file: "gps", dest: D, kind: "chosen", path: rel };
+  assert.match(app.previewEffective(ref), /^50, 4 \(manual\)/);
+  assert.equal(app.isDirty(ref), false);
+});

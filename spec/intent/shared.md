@@ -4289,6 +4289,30 @@ The decision editor SHALL stop asking for a timezone, as soon as one is answered
 answer reaches and at every container destination asking for no other.
 :::
 
+:::{rul} A date fallback answered in the editor ends the asking below it
+:id: RUL-editor_answer_ends_date_asking
+:status: ruled
+:criticality: med
+:verify: required
+:refines: RUL-date_fallback_from_nearest
+:uses: DEF-decision, DEF-date_fallback
+
+The decision editor SHALL stop asking for a date fallback, as soon as one is answered in it, at every destination that
+date covers.
+:::
+
+:::{rul} A folder fallback answered in the editor ends the asking it settles
+:id: RUL-editor_answer_ends_fallback_asking
+:status: ruled
+:criticality: med
+:verify: required
+:refines: RUL-inherited_fallback_applies
+:uses: DEF-decision
+
+The decision editor SHALL stop asking for a folder fallback, and for a position of a photo nothing else places, as soon
+as a folder fallback is answered in it at that photo's or folder's destination or at one above it.
+:::
+
 :::{rul} The decision editor records a camera group's class, and nothing else
 :id: RUL-editor_classes_camera_group
 :status: ruled

@@ -273,12 +273,14 @@ def _camera_question(workspace, raw_config):
     its photos' count, the first three of them and the identity prep found, and a `user_decision.device_class` the
     editor answers — `phones` or `fixed_clock_cameras`, the array of `device_groups` it is written into. Found from the
     handoff's photos under photos by destination as geotag finds them (`unclassified_camera_groups`). {_error} when the
-    configuration or the handoff cannot be read; no groups without a handoff."""
+    configuration or the handoff cannot be read, or the configuration fails the checks `load_config` makes — its
+    questions are built from it, and an authored value is checked before it is used (INV-authored_values_checked); no
+    groups without a handoff."""
     if raw_config is None:
         return {"groups": {}}
-    cfg = _parse_record(raw_config, CONFIG_NAME)
-    if not isinstance(cfg, dict) or "_error" in cfg:
-        return cfg if isinstance(cfg, dict) else {"_error": f"{CONFIG_NAME} must be a JSON object"}
+    cfg = _checked_config(workspace, raw_config)
+    if "_error" in cfg:
+        return cfg
     try:
         handoff = _parse_record(_read_record(os.path.join(workspace, CONTROL, HANDOFF_NAME)), HANDOFF_NAME)
     except OSError as e:
@@ -301,6 +303,34 @@ def _camera_question(workspace, raw_config):
                        "user_decision": {"several_bodies": key in several}, "requires_user_input": False,
                        "stale_user_decision": False}
     return {"groups": groups, "bodies": bodies}
+
+
+def _checked_config(workspace, raw_config):
+    """The workspace's configuration from its bytes, checked as `load_config` checks it (`check_config`), or
+    {_error: why} — one that does not parse, is not an object, or fails a check."""
+    cfg = _parse_record(raw_config, CONFIG_NAME)
+    if not isinstance(cfg, dict):
+        return {"_error": f"{CONFIG_NAME} must be a JSON object"}
+    if "_error" in cfg:
+        return cfg
+    try:
+        photos_utils.check_config(cfg, workspace)
+    except ValueError as e:
+        return {"_error": str(e)}
+    return cfg
+
+
+def _anchor_spread(workspace, raw_config):
+    """`gpx_anchor_offset_spread_max_seconds` of the workspace's checked configuration — how near one of a GPS
+    proposal's groups an offset the user sets must lie for the next plan to count it anchored by the camera's own GPS
+    (RUL-chosen_group_is_anchored), which the editor's preview says — or None where the configuration is missing or
+    fails its checks. The demo's is the built-in default's."""
+    if not workspace:
+        return photos_utils.DEFAULT_CONFIG["gpx_anchor_offset_spread_max_seconds"]
+    if raw_config is None:
+        return None
+    cfg = _checked_config(workspace, raw_config)
+    return None if "_error" in cfg else cfg["gpx_anchor_offset_spread_max_seconds"]
 
 
 def _zone_table_cell(workspace):
@@ -335,10 +365,13 @@ def _load_artifacts(workspace):
             raw = _read_record(os.path.join(cd, CONFIG_NAME))
         except OSError as e:
             out["cameras"], out["hashes"]["cameras"] = {"_error": f"could not read {CONFIG_NAME}: {e}"}, None
+            out["anchor_spread_seconds"] = None
             return out
         out["cameras"], out["hashes"]["cameras"] = _camera_question(workspace, raw), _record_hash(raw)
+        out["anchor_spread_seconds"] = _anchor_spread(workspace, raw)
         return out
     return {"workspace": None, "demo": True, "hashes": {}, "zones": _host_zones(),
+            "anchor_spread_seconds": _anchor_spread(None, None),
             "time": _example_json("photos-21-time-decisions.requires-input.json"),
             "drift": _example_json("photos-22-gps-drift-validation.requires-input.json"),
             "gps": _example_json("photos-23-gps-decisions.requires-input.json"),
@@ -447,6 +480,8 @@ def _classed_config(workspace, raw, edits):
     if not isinstance(dg, dict) or not all(isinstance(dg.get(a), list) for a in DEVICE_CLASSES):
         return None, f"{CONFIG_NAME} holds no device_groups with its two lists; nothing was saved"
     question = _camera_question(workspace, raw)
+    if "_error" in question:                    # the configuration as loaded fails its checks: nothing is built on it
+        return None, f"{question['_error']} — nothing was saved"
     unclassed, cameras = set(question.get("groups") or {}), set(question.get("bodies") or {})
     pol = cfg.get("camera_time_and_timezone_policy")
     for e in (e for e in edits if e.get("kind") == "bodies"):

@@ -500,6 +500,25 @@ def test_save_classes_a_new_camera_group_into_the_configuration(tmp_path):
     assert res3["ok"] is False and serve.CONFIG_NAME in res3["error"]
 
 
+@pytest.mark.spec("INV-authored_values_checked", "BLD-editor_lists_new_camera_groups",
+                  test="TST-serve-camera_questions_are_built_only_from_a_checked_configuration")
+def test_camera_questions_are_built_only_from_a_checked_configuration(tmp_path):
+    """The editor builds its camera questions from the configuration only once it passes the checks `load_config`
+    makes: one that fails them is shown as its error, naming what is wrong, in place of the questions — and its spread
+    for the preview of a picked GPS group is not taken from it."""
+    ws, cfg = _camera_workspace(tmp_path)
+    loaded = serve._load_artifacts(ws)
+    assert list(loaded["cameras"]["groups"]) == ["Apple|iPhone 15"]
+    assert loaded["anchor_spread_seconds"] == cfg["gpx_anchor_offset_spread_max_seconds"]
+    cfg["camera_time_and_timezone_policy"]["device_groups"]["phones"] = "abc"
+    serve._write_json(os.path.join(ws, serve.CONTROL, serve.CONFIG_NAME), cfg)
+    loaded = serve._load_artifacts(ws)
+    assert "groups" not in loaded["cameras"] and "phones" in loaded["cameras"]["_error"], loaded["cameras"]
+    assert loaded["anchor_spread_seconds"] is None
+    assert serve._load_artifacts(None)["anchor_spread_seconds"] == \
+        serve.photos_utils.DEFAULT_CONFIG["gpx_anchor_offset_spread_max_seconds"]
+
+
 def _no_host_table(monkeypatch, fetched):
     """A host whose zone database has no table of countries; the download answered from memory, never the network."""
     from cartographer import photos_utils as utils
