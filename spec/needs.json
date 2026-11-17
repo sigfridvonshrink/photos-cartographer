@@ -17885,7 +17885,7 @@
      "constraints_error": null,
      "constraints_passed": true,
      "constraints_results": {},
-     "content": "A differing re-plan SHALL first copy the existing artifact to the shared incremental `-NNN` suffix ({need}`BLD-name_suffix`) —\n`photos-10-prep-plan-001.json`, say, the copy landing under that name only whole — then replace the artifact atomically,\nand announce where. Prep's plan carries a fresh plan id each run, so\nre-planning it always sets the prior one aside; geotag's and merge's plan ids derive from their content. The per-run journals keep their `journal-<run_id>.json` naming; this\nconvention governs the plan and decision artifacts.",
+     "content": "A differing re-plan SHALL first copy the existing artifact to the shared incremental `-NNN` suffix ({need}`BLD-name_suffix`) —\n`photos-10-prep-plan-001.json`, say, the copy landing under that name only whole — then replace the artifact atomically,\nand announce where. Prep's plan carries a fresh plan id each run, so\nre-planning it always sets the prior one aside; geotag's and merge's plan ids derive from their content. The journals keep their `journal-<plan id>.json` naming; this\nconvention governs the plan and decision artifacts.",
      "criticality": null,
      "docname": "build/shared",
      "doctype": ".md",
