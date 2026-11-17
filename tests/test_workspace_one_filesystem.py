@@ -49,11 +49,13 @@ def _ws(tmp_path):
 def test_breaks_found_anywhere_without_descending(tmp_path, monkeypatch):
     ws = _ws(tmp_path)
     (ws / "0-sources" / "trip" / "deep").mkdir()
+    (ws / "5-photos-by-date" / "2024" / "07").mkdir(parents=True)
     assert utils.workspace_volume_breaks(str(ws)) == []
     assert utils.workspace_volume_error(str(ws)) is None
-    _other_volume(monkeypatch, ws / "0-sources" / "trip", ws / ".photos-ingest")
-    # the nested mount and the control directory are both found; nothing below a mount is listed
-    assert utils.workspace_volume_breaks(str(ws)) == [".photos-ingest", os.path.join("0-sources", "trip")]
+    _other_volume(monkeypatch, ws / "0-sources" / "trip", ws / ".photos-ingest", ws / "5-photos-by-date" / "2024" / "07")
+    # the nested mount, one three levels down and the control directory are all found; nothing below a mount is listed
+    assert utils.workspace_volume_breaks(str(ws)) == [".photos-ingest", os.path.join("0-sources", "trip"),
+                                                      os.path.join("5-photos-by-date", "2024", "07")]
     err = utils.workspace_volume_error(str(ws))
     assert "more than one filesystem" in err and os.path.join("0-sources", "trip") + "/" in err
 
