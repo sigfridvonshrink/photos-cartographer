@@ -54,7 +54,7 @@ def _run(monkeypatch, ws):
 
 # --- main(): lock + config/handoff error paths ------------------------------
 
-@pytest.mark.spec("RUL-lock_fail_fast", "RUL-lock_refusal_says_locked",
+@pytest.mark.spec("RUL-lock_fail_fast", "RUL-lock_refusal_says_locked", "INV-one_run_at_a_time",
                   test="TST-geotag_orchestration-lock_contention_exits_1")
 def test_lock_contention_exits_1(tmp_path, monkeypatch, capsys):
     ws, ctl = _init_ws(tmp_path)

@@ -135,8 +135,9 @@ def _src(ws, dest, name):
     return os.path.join(str(ws), "6-photos-by-dest", dest, name)
 
 
-def _tree(root):
-    """{relpath: bytes} for every file under `root` — a byte-level snapshot for mutation checks.
+def _tree(root, times=False):
+    """{relpath: bytes} for every file under `root` — a byte-level snapshot for mutation checks; with `times`,
+    {relpath: (bytes, size, mtime_ns)}, a file's modification time being part of it.
     Lock files (`*.lock`) are transient lock-acquire artifacts, not data, so they are excluded."""
     out = {}
     for dp, _dn, fns in os.walk(root):
@@ -144,7 +145,11 @@ def _tree(root):
             if fn.endswith(".lock"):
                 continue
             ap = os.path.join(dp, fn)
-            out[os.path.relpath(ap, root)] = open(ap, "rb").read()
+            data = open(ap, "rb").read()
+            if times:
+                st = os.lstat(ap)
+                data = (data, st.st_size, st.st_mtime_ns)
+            out[os.path.relpath(ap, root)] = data
     return out
 
 
@@ -581,7 +586,7 @@ def test_a_photo_touched_after_the_plan_is_not_removed_as_already_present(tmp_pa
     assert s["totals"]["blocked"] == 1 and any("Trip/a.jpg" in f for f in s["failures"]), s
 
 
-@pytest.mark.spec("RUL-merge_outcome_recorded", "BLD-merge_failed_placement",
+@pytest.mark.spec("RUL-merge_outcome_recorded", "BLD-merge_failed_placement", "RUL-failure_recorded",
                   test="TST-merge_execute-an_error_placing_one_photo_blocks_it_alone")
 def test_an_error_placing_one_photo_blocks_it_alone(tmp_path, monkeypatch):
     """An error anywhere in one photo's placement — here its removal from by-dest after the library's copy
@@ -947,13 +952,13 @@ def test_execute_rejects_stale_plan(tmp_path):
 @pytest.mark.spec("RUL-planning_changes_no_media", "RUL-planning_writes_only_its_records",
                   test="TST-merge_execute-plan_mutates_nothing_no_terminal_artifacts")
 def test_plan_mutates_nothing_no_terminal_artifacts(tmp_path):
-    """Planning never mutates: after `plan`, by-dest + library are byte-identical and NONE of the
-    execute-only artifacts (photos-31 summary, photos-35 log/db/manifest, journal, seal) exist."""
+    """Planning never mutates: after `plan`, by-dest + library are identical — bytes, size and modification time —
+    and NONE of the execute-only artifacts (photos-31 summary, photos-35 log/db/manifest, journal, seal) exist."""
     ws, lib = _ws(tmp_path, [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"}])
-    before_bd, before_lib = _tree(str(ws / "6-photos-by-dest")), _tree(str(lib))
+    before_bd, before_lib = _tree(str(ws / "6-photos-by-dest"), times=True), _tree(str(lib), times=True)
     assert merge._run_locked_workflow("plan", str(ws)) == 0
-    assert _tree(str(ws / "6-photos-by-dest")) == before_bd      # staging untouched
-    assert _tree(str(lib)) == before_lib                         # library untouched
+    assert _tree(str(ws / "6-photos-by-dest"), times=True) == before_bd      # staging untouched, times too
+    assert _tree(str(lib), times=True) == before_lib                         # library untouched
     ctl = ws / ".photos-ingest"
     assert not os.path.exists(merge.merge_summary_path(str(ws)))  # no photos-31
     assert not utils.is_sealed(str(ws))                          # no seal
@@ -1009,7 +1014,8 @@ def test_execute_applies_saved_plan_verbatim_no_rederive(tmp_path):
     assert not os.path.exists(os.path.join(str(lib), "Trip", "a.jpg"))       # NOT re-derived
 
 
-@pytest.mark.spec("BLD-merge_journal_resume")
+@pytest.mark.spec("BLD-merge_journal_resume", "RUL-failure_never_done",
+                  test="TST-merge_execute-partial_run_journal_holds_only_confirmed_moves")
 def test_partial_run_journal_holds_only_confirmed_moves(tmp_path):
     """After a partial run (one placed, one blocked), the merge journal records ONLY the confirmed
     move — the blocked file is absent, so the next run resumes from the true diff (BLD-merge_journal_resume)."""
@@ -1057,7 +1063,8 @@ def test_full_success_writes_terminal_artifacts_and_seals(tmp_path):
 
 
 @pytest.mark.spec("BLD-log_format", "RUL-record_whole_each_phase", "BLD-phase_logs", "RUL-phase_writes_own_records",
-                  "RUL-log_step_names_run", test="TST-merge_execute-merge_log_copies_the_complete_log_forward_and_appends")
+                  "RUL-log_step_names_run", "RUL-carry_forward_by_copy",
+                  test="TST-merge_execute-merge_log_copies_the_complete_log_forward_and_appends")
 def test_merge_log_copies_photos25_forward_and_appends(tmp_path):
     ws, lib = _ws(tmp_path, [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"}])
     # Seed photos-25 with a prior geotag journey for fingerprint A.

@@ -1457,25 +1457,33 @@ def workspace_entries(ws: str, cfg=None) -> dict:
     return out
 
 
+class WorkspaceRecordUnreadable(ValueError):
+    """The record of the state the last execution left is there and cannot be read: never taken for none, which would
+    let a check compare nothing (RUL-workspace_checked_first)."""
+
+
 def read_workspace_record(ws: str):
     """`(record_id, {path: {size, mtime_ns, inode, fingerprint}})` — the state the last execution left
-    (BLD-workspace_record) — or `(None, {})` where none was written. Read only."""
+    (BLD-workspace_record) — or `(None, {})` where none was written. Read only. A database that cannot be opened or
+    read raises WorkspaceRecordUnreadable naming it: a record that cannot be read is not the absence of one."""
     p = db_path(ws)
     if not os.path.exists(p):
         return None, {}
     try:
         conn = sqlite3.connect(f"file:{p}?mode=ro", uri=True)
-    except sqlite3.Error:
-        return None, {}
-    try:
-        row = conn.execute("SELECT value FROM meta WHERE key = 'workspace_record_id'").fetchone()
-        if not row:
-            return None, {}
-        rows = conn.execute("SELECT relative_path, size, mtime_ns, inode, fingerprint FROM workspace_record").fetchall()
-    except sqlite3.Error:
-        return None, {}
-    finally:
-        conn.close()
+        try:
+            if not conn.execute("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'meta'").fetchone():
+                return None, {}                     # a database no execution has recorded in
+            row = conn.execute("SELECT value FROM meta WHERE key = 'workspace_record_id'").fetchone()
+            if not row:
+                return None, {}
+            rows = conn.execute("SELECT relative_path, size, mtime_ns, inode, fingerprint FROM workspace_record").fetchall()
+        finally:
+            conn.close()
+    except sqlite3.Error as e:
+        raise WorkspaceRecordUnreadable(
+            f"The record of the state the last execution left cannot be read from {os.path.join(CONTROL_DIR, os.path.basename(p))} "
+            f"({e}), so what has changed since cannot be told.")
     return row[0], {r[0]: {"size": r[1], "mtime_ns": r[2], "inode": r[3], "fingerprint": r[4]} for r in rows}
 
 
@@ -1895,7 +1903,12 @@ def check_workspace(ws: str, phase: str, command: str, accept_code=None, record_
     nothing; geotag and merge stop."""
     from .reporting import get_reporter, emit_next_step, ChangesEvent
     reporter = get_reporter()
-    record_id, record = read_workspace_record(ws)
+    try:
+        record_id, record = read_workspace_record(ws)
+    except WorkspaceRecordUnreadable as e:
+        # never taken for no record, where prep would compare nothing (RUL-workspace_checked_first)
+        reporter.error(f"\n{e} Nothing was planned or changed. Restore the database from a snapshot or a backup.")
+        return None, 2
     if record_id is None:
         if not record_required:
             return [], None             # prep's first run, which writes the first record (RUL-first_prep_compares_nothing)
@@ -1955,8 +1968,12 @@ def check_workspace(ws: str, phase: str, command: str, accept_code=None, record_
     elif accept_code:
         reporter.log(f"Nothing to accept with the code {accept_code}: no change awaits acceptance.")
     if earlier:
+        # Named, not only counted, by every checking command — a plan, a dry run and finalize included, whose record
+        # names none (the owner's preference, docs/design/decisions.md).
         reporter.log(f"{len(earlier)} change(s) accepted earlier since the last execution "
-                     f"({ACCEPTED_CHANGES_ARTIFACT}).")
+                     f"({ACCEPTED_CHANGES_ARTIFACT}):")
+        for line in format_changes(earlier):
+            reporter.log(line)
     if logged:
         reporter.log("Changed by hand since the last execution, as a workspace allows:")
         for line in format_changes(logged):
@@ -2238,10 +2255,12 @@ def validate_config(cfg: dict, workspace_root: str = None):
             for i, ext in enumerate(lst):
                 if not isinstance(ext, str) or not ext:
                     raise ValueError(f"config: media_extensions.{cls}[{i}] must be a non-empty string.")
-                if (ext != ext.lower() or ext.startswith(".") or "/" in ext or "\x00" in ext
+                # a bare extension holds no dot at all, leading or inner (BLD-config_values_checked): a file's
+                # extension is what follows its last dot, so `tar.gz` would match nothing
+                if (ext != ext.lower() or "." in ext or "/" in ext or "\x00" in ext
                         or any(c.isspace() for c in ext)):
                     raise ValueError(f"config: media_extensions.{cls}[{i}] {ext!r} must be a canonical "
-                                     f"bare extension (lowercase, no leading dot, no '/'/NUL/whitespace).")
+                                     f"bare extension (lowercase, no dot, no '/'/NUL/whitespace).")
                 if ext in ext_seen:
                     raise ValueError(f"config: media_extensions.{cls} and media_extensions.{ext_seen[ext]} "
                                      f"both list {ext!r} (an extension maps to exactly one class).")
@@ -2269,10 +2288,20 @@ def validate_config(cfg: dict, workspace_root: str = None):
         # which does. A field that reads the two differently — `%z`, `%Z` — names one moment two ways
         # (RUL-filename_format_zone_free).
         zoned = datetime(2001, 2, 3, 4, 5, 6, tzinfo=timezone(timedelta(hours=5, minutes=30)))
-        if zoned.strftime(fmt) != out1:
+        # `%s`, the seconds since the epoch, renders a time without a zone through the host's zone, and renders the
+        # same with one or without: the comparison below cannot see it, so it is refused by name.
+        if zoned.strftime(fmt) != out1 or "s" in re.findall(r"%[-_0^#]*\d*(.)", fmt):
             raise ValueError(f"config: filename_timestamp_format {fmt!r} holds a field that reads a timezone, such as "
-                             "%z or %Z: prep names files from a time without one and geotag from a time with one, "
+                             "%z, %Z or %s: prep names files from a time without one and geotag from a time with one, "
                              "so the two would name one moment differently. Use only fields of the date and time.")
+        # A name ending in `-` and three or more digits reads as a name carrying a differentiating suffix
+        # (`_DEDUP_SUFFIX_RE`): merge would take the time's last digits for a suffix and number its names from them
+        # (RUL-merge_suffix_above_highest). Rendered at times whose every field is wide, so an unpadded field is seen.
+        if any(_DEDUP_SUFFIX_RE.search(t.strftime(fmt))
+               for t in (datetime(2001, 2, 3, 4, 5, 6), datetime(2012, 11, 22, 13, 44, 55))):
+            raise ValueError(f"config: filename_timestamp_format {fmt!r} makes names ending in '-' and three or more "
+                             "digits, which is how a name's differentiating suffix looks, so the time would be read as "
+                             "a suffix. End the format otherwise.")
 
     if "gpx_root" in cfg:
         _check_path("gpx_root", cfg["gpx_root"])
@@ -2364,6 +2393,16 @@ def _check_gpx_root_outside(cfg, workspace_root):
         if os.path.commonpath([gpx, folder]) in (gpx, folder):
             raise ValueError(f"config: gpx_root {root!r} must lie outside the managed folders; "
                              f"it overlaps {name}/.")
+    # Nor at or under any other entry of the workspace's top level that is not hidden: such an entry is a misplaced
+    # dump (RUL-top_level_only_managed), whose place is the inbox, where tracks block prep. The control directory
+    # and the other hidden entries stay open to it.
+    ws = os.path.realpath(workspace_root)
+    rel = os.path.relpath(gpx, ws)
+    first = rel.split(os.sep, 1)[0]
+    if rel != "." and first != os.pardir and not first.startswith("."):
+        raise ValueError(f"config: gpx_root {root!r} must lie outside the workspace's folders; it lies in "
+                         f"{first}/, an entry of the workspace's top level, where only the managed folders and "
+                         "hidden entries belong. Put the tracks outside the workspace, or under .photos-ingest/.")
 
 
 def validate_merge_config(cfg: dict, ws: str):
@@ -2887,6 +2926,10 @@ class ContentHasher:
                 last_error = str(e)
                 if attempt == 1:
                     print(f"Warning: ffmpeg failed on {filepath}: {e.stderr}")
+            except OSError as e:
+                # ffmpeg could not be run (out of processes, not executable, …): a failed attempt, and after two the
+                # file's failed fingerprint (RUL-tool_failure_never_valid) — never an error escaping the scan
+                last_error = str(e)
         return {"status": "failed", "strategy": VIDEO_FINGERPRINT_STRATEGY, "value": None, "error": last_error}
 
 
@@ -3001,9 +3044,10 @@ class PersistentExifToolWorker:
                  if src:
                      results[src] = MetadataReader._parse_exiftool_item(data)
             return results
-        except json.JSONDecodeError:
-            pass
-        return {}
+        except json.JSONDecodeError as e:
+            # A reply that does not parse is a failed attempt, retried on a restarted worker (RUL-tool_failure_retried,
+            # BLD-tool_workers) — never an empty folder, whose every file would count failed on one bad answer.
+            raise ProcessCrashedError(f"exiftool's reply could not be read: {e}")
 
 
 atexit.register(PersistentExifToolWorker.cleanup_all)
@@ -3680,14 +3724,20 @@ def _dev_of(path: str) -> int:
     return os.lstat(path).st_dev
 
 
-def workspace_volume_breaks(workspace_root: str) -> list:
+def workspace_volume_breaks(workspace_root: str, unlisted: list = None) -> list:
     """Workspace-relative folders that lie on another filesystem than the workspace root
     (BLD-workspace_one_filesystem): a workspace must lie on one filesystem, so every move within it is one rename. Walks
     every folder — the control directory and the quarantine included — without following links, and
-    does not descend into a folder found elsewhere. Sorted; empty when the workspace is whole."""
+    does not descend into a folder found elsewhere. Sorted; empty when the workspace is whole. A folder the walk cannot
+    list is added to `unlisted` (workspace-relative): what lies below it is unchecked, never taken for one filesystem
+    (RUL-workspace_one_filesystem, RUL-unchecked_counts_as_changed)."""
     root_dev = _dev_of(workspace_root)
     breaks = []
-    for dirpath, dirnames, _files in os.walk(workspace_root):
+
+    def cannot_list(e):
+        if not isinstance(e, FileNotFoundError) and unlisted is not None:   # vanished mid-walk: nothing lies there
+            unlisted.append(os.path.relpath(e.filename, workspace_root) if e.filename else ".")
+    for dirpath, dirnames, _files in os.walk(workspace_root, onerror=cannot_list):
         keep = []
         for d in sorted(dirnames):
             p = os.path.join(dirpath, d)
@@ -3704,8 +3754,15 @@ def workspace_volume_breaks(workspace_root: str) -> list:
 
 
 def workspace_volume_error(workspace_root: str):
-    """The message stopping a run on a workspace that spans filesystems, or None when it lies on one."""
-    breaks = workspace_volume_breaks(workspace_root)
+    """The message stopping a run on a workspace that spans filesystems, or holding a folder that cannot be listed — so
+    whether it does cannot be told —, or None when it lies on one."""
+    unlisted = []
+    breaks = workspace_volume_breaks(workspace_root, unlisted)
+    if unlisted:
+        shown = ", ".join(f"{u}/" for u in sorted(unlisted)[:5]) + \
+            (f" and {len(unlisted) - 5} more" if len(unlisted) > 5 else "")
+        return (f"The workspace holds a folder that cannot be listed: {shown}. Whether it lies on one filesystem "
+                "cannot be told; make the folder readable and re-run. Nothing was touched.")
     if not breaks:
         return None
     shown = ", ".join(f"{b}/" for b in breaks[:5]) + (f" and {len(breaks) - 5} more" if len(breaks) > 5 else "")
@@ -4287,6 +4344,11 @@ class WorkspaceCache:
         self.conn.close()
 
 
+class LockFileError(Exception):
+    """The lock file cannot be opened — a refusal naming the file (RUL-exit_status_says_how_it_ended), never read as
+    a lock another run holds."""
+
+
 class _FlockLock:
     """Non-blocking exclusive flock keyed to an explicit lock-file path, recording this run's owner
     identity {pid, started_at, host}. Opened O_RDWR|O_CREAT (no truncate) so a *failed* acquire never
@@ -4299,12 +4361,16 @@ class _FlockLock:
         self.owner = None  # on a failed acquire, the identity of the current holder (if readable)
 
     def acquire(self) -> bool:
+        """True once held; False when another run holds it. A lock file that cannot be opened raises LockFileError
+        naming it: that is no run's lock, and saying "locked" would send the user to wait for none."""
         try:
             fd = os.open(self.lock_path, os.O_RDWR | os.O_CREAT, 0o644)
             self._lock_fd = os.fdopen(fd, 'r+')
-        except OSError:
+        except OSError as e:
             self._lock_fd = None
-            return False
+            raise LockFileError(f"The lock file {self.lock_path} cannot be opened ({e.strerror or e}), so the run "
+                                "cannot hold the lock; nothing was read or changed. Make the file readable and "
+                                "writable, or remove it.") from e
         try:
             fcntl.flock(self._lock_fd.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
         except (IOError, OSError):

@@ -1053,7 +1053,7 @@ def test_execute_records_zfs_snapshot(tmp_path, monkeypatch):
     assert s["snapshot"]["ok"] and s["snapshot"]["snapshot_name"] == f"pool/ws@px-geotag-{s['plan_id']}"
 
 
-@pytest.mark.spec("BLD-geotag_execution")
+@pytest.mark.spec("BLD-geotag_execution", "RUL-required_snapshot_or_nothing")
 def test_execute_aborts_when_required_snapshot_fails(tmp_path, monkeypatch):
     zfs = {"enabled": True, "snapshots_required": True, "snapshot_prefix": "px-",
            "datasets": {"workspace": "auto", "library": "auto"}}
@@ -1069,7 +1069,7 @@ def test_execute_aborts_when_required_snapshot_fails(tmp_path, monkeypatch):
 
 
 @pytest.mark.spec("BLD-geotag_execution", "BLD-withdrawn_track_points", "RUL-withdrawn_track_points_kept",
-                  test="TST-geotag_execution-a_run_the_snapshot_ends_records_no_tracks")
+                  "RUL-required_snapshot_or_nothing", test="TST-geotag_execution-a_run_the_snapshot_ends_records_no_tracks")
 def test_a_run_a_required_snapshot_ends_keeps_nothing_of_the_plan(tmp_path, monkeypatch):
     """A required snapshot that fails ends the run before anything is executed: the tracks its plan rests on are not
     recorded as used, nor its decisions kept as executed. The same plan run once the snapshot is taken records
@@ -1095,7 +1095,7 @@ def test_a_run_a_required_snapshot_ends_keeps_nothing_of_the_plan(tmp_path, monk
 
 
 @pytest.mark.spec("BLD-execution_summary_written", "RUL-content_acceptance_stays_open", "RUL-geotag_summary_only_for_execution",
-                  test="TST-geotag_execution-summary_written_only_by_a_run_that_executes")
+                  "RUL-required_snapshot_or_nothing", test="TST-geotag_execution-summary_written_only_by_a_run_that_executes")
 def test_summary_written_only_by_a_run_that_executes(tmp_path, monkeypatch):
     """photos-25 is written by a run that applied the plan, or whose required snapshot failed — that one carrying
     the mismatches still open, acceptances and all. A preflight refusal, a stale plan or an interrupt writes none:
@@ -1467,7 +1467,7 @@ def test_an_acceptance_of_changed_content_is_of_the_content_shown(tmp_path, monk
     assert not r["applied"] and (r["mismatch"] or r["blocker"])
 
 
-@pytest.mark.spec("RUL-engine_checked_before_writes", "BLD-geotag_dependencies",
+@pytest.mark.spec("RUL-engine_checked_before_writes", "BLD-geotag_dependencies", "RUL-engine_change_is_checked",
                   test="TST-geotag_execution-another_image_engine_stops_execute_before_any_write")
 def test_another_image_engine_stops_execute_before_any_write(tmp_path, monkeypatch):
     """Every write is checked by taking the photo's fingerprint again. With another image engine than the one

@@ -44,7 +44,7 @@ from .photos_utils import (add_accept_changes_argument, ends_unforeseen_error_ap
                           forget_in_workspace_record, note_execution_begun)
 from .reporting import get_reporter, emit_next_step
 from .photos_utils import (replace_durably, _move_no_clobber, _move_link_unlink, _get_renameat2,
-                          WorkspaceCache, WorkspaceLock, ContentHasher, PlanFingerprintMemo,
+                          WorkspaceCache, WorkspaceLock, LockFileError, ContentHasher, PlanFingerprintMemo,
                           CACHE_SCHEMA_VERSION, FINGERPRINT_ALGORITHM_VERSION,
                           allocate_suffix)
 
@@ -1204,8 +1204,9 @@ class PlanExecutor:
                     os.makedirs(os.path.dirname(guard), exist_ok=True)
                     gfd, gtmp = tempfile.mkstemp(dir=os.path.dirname(guard), prefix=".tmp-guard-")
                     with os.fdopen(gfd, 'w') as gf:
+                        # written like every numbered JSON record (BLD-json_written_alike)
                         gf.write(json.dumps({"initialized": True, "tool": "photos-1-prep",
-                                             "initialized_by_run": plan.plan_id}))
+                                             "initialized_by_run": plan.plan_id}, indent=2, sort_keys=True))
                     replace_durably(gtmp, guard)
 
             self.coordinator.print_summary(plan_summary=plan.summary)
@@ -3349,7 +3350,12 @@ def run(args):
     # Whole-run workspace lock (RUL-lock_before_reading, RUL-lock_fail_fast): acquired once here, before any
     # scan/plan/dry-run/execute, held for the entire run, released on exit. Fail-fast.
     run_lock = WorkspaceLock(workspace_root)
-    if not run_lock.acquire():
+    try:
+        locked = run_lock.acquire()
+    except LockFileError as e:      # a refusal, not "locked" (RUL-exit_status_says_how_it_ended)
+        reporter.error(str(e))
+        sys.exit(2)
+    if not locked:
         owner = run_lock.read_owner() or {}
         detail = f" (pid {owner.get('pid')}, since {owner.get('started_at')})" if owner else ""
         reporter.error(f"Workspace is locked by an in-progress run{detail}; try again when it finishes.")

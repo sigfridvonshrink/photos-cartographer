@@ -459,7 +459,7 @@ answering for themselves.
 :refines: RUL-country_gives_its_timezone
 :uses: DEF-geotag, DEF-decision
 
-A timezone answered for a destination in a country of several timezones SHALL be one of that country's timezones.
+A timezone answered for a destination within a country SHALL be one of that country's timezones.
 :::
 
 :::{rul} In a country of several timezones, the photos' offsets propose the one that fits

@@ -49,11 +49,13 @@ def _ws(tmp_path):
 def test_breaks_found_anywhere_without_descending(tmp_path, monkeypatch):
     ws = _ws(tmp_path)
     (ws / "0-sources" / "trip" / "deep").mkdir()
+    (ws / "5-photos-by-date" / "2024" / "07").mkdir(parents=True)
     assert utils.workspace_volume_breaks(str(ws)) == []
     assert utils.workspace_volume_error(str(ws)) is None
-    _other_volume(monkeypatch, ws / "0-sources" / "trip", ws / ".photos-ingest")
-    # the nested mount and the control directory are both found; nothing below a mount is listed
-    assert utils.workspace_volume_breaks(str(ws)) == [".photos-ingest", os.path.join("0-sources", "trip")]
+    _other_volume(monkeypatch, ws / "0-sources" / "trip", ws / ".photos-ingest", ws / "5-photos-by-date" / "2024" / "07")
+    # the nested mount, one three levels down and the control directory are all found; nothing below a mount is listed
+    assert utils.workspace_volume_breaks(str(ws)) == [".photos-ingest", os.path.join("0-sources", "trip"),
+                                                      os.path.join("5-photos-by-date", "2024", "07")]
     err = utils.workspace_volume_error(str(ws))
     assert "more than one filesystem" in err and os.path.join("0-sources", "trip") + "/" in err
 
@@ -72,6 +74,30 @@ def test_prep_refuses_a_workspace_on_two_volumes(tmp_path, monkeypatch, capsys, 
     assert ei.value.code == 2 and "more than one filesystem" in capsys.readouterr().err
     assert (ws / "dump" / "a.jpg").read_bytes() == b"x"        # nothing moved
     assert not (ws / "0-sources").exists()                     # nothing initialized
+    assert not os.path.exists(utils.prep_plan_path(str(ws)))   # no plan written
+
+
+@pytest.mark.skipif(os.geteuid() == 0, reason="root lists a folder whatever its permissions")
+@pytest.mark.spec("RUL-workspace_one_filesystem", "RUL-unchecked_counts_as_changed",
+                  test="TST-workspace_one_filesystem-a_folder_that_cannot_be_listed_stops_the_run")
+def test_a_folder_that_cannot_be_listed_stops_the_run(tmp_path, monkeypatch, capsys):
+    """A folder the walk cannot list is never taken for one on the workspace's filesystem: the run stops, 2, naming
+    it, nothing touched."""
+    ws = tmp_path / "ws"; ws.mkdir()
+    (ws / "dump" / "locked").mkdir(parents=True)
+    (ws / "dump" / "a.jpg").write_bytes(b"x")                  # an uninitialized workspace with a dump
+    (ws / "dump" / "locked").chmod(0)
+    monkeypatch.chdir(ws)
+    try:
+        with pytest.raises(SystemExit) as ei:
+            prep.run(types.SimpleNamespace(command="plan", jobs=1, delete=False, plan_id=None))
+        assert utils.workspace_volume_breaks(str(ws)) == []    # the walk alone finds no other volume
+    finally:
+        (ws / "dump" / "locked").chmod(0o755)
+    err = capsys.readouterr().err
+    assert ei.value.code == 2 and os.path.join("dump", "locked") + "/" in err
+    assert (ws / "dump" / "a.jpg").read_bytes() == b"x"        # nothing moved
+    assert not (ws / "0-sources").exists()
     assert not os.path.exists(utils.prep_plan_path(str(ws)))   # no plan written
 
 

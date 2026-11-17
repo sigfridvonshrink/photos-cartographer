@@ -264,7 +264,9 @@ def test_a_correction_not_whole_seconds_blocks(tmp_path):
 @pytest.mark.spec("BLD-drift_validation", "RUL-checked_clock_offsets",
                   test="TST-drift_validation-an_offset_written_is_checked_confirmed_or_not")
 @pytest.mark.parametrize("field, value", [("corrected_offset_seconds", "noon"), ("corrected_offset_seconds", 12.5),
-                                          ("confirmed_offset_seconds", "x"), ("confirmed_offset_seconds", True)])
+                                          ("corrected_offset_seconds", "3600"),
+                                          ("confirmed_offset_seconds", "x"), ("confirmed_offset_seconds", True),
+                                          ("confirmed_offset_seconds", "3600")])
 def test_an_offset_written_is_checked_confirmed_or_not(tmp_path, field, value):
     """An offset written in a drift cell is checked as written: one that is no whole number of seconds is named while
     the cell is still unconfirmed, not only once a confirmation would make it count."""

@@ -199,7 +199,7 @@ def test_determinism_unchanged_rerun_is_byte_identical(tmp_path, monkeypatch):
 
 @pytest.mark.spec("RUL-invalid_decision_kept", "RUL-invalid_value_located", "INV-authored_values_checked",
                   "RUL-checked_timezones", "RUL-invalid_value_never_repaired", "RUL-invalid_decision_reported",
-                  test="TST-geotag_time_decisions-bad_timezone_blocks_and_leaves_artifact")
+                  "RUL-invalid_value_stops", test="TST-geotag_time_decisions-bad_timezone_blocks_and_leaves_artifact")
 def test_bad_timezone_blocks_and_leaves_artifact(tmp_path, monkeypatch, capsys):
     ws = _ws(tmp_path, files=[_hfile("6-photos-by-dest/Brussels/a.jpg")],
              device_groups={"fixed_clock_cameras": [CAM], "phones": []})
@@ -214,12 +214,13 @@ def test_bad_timezone_blocks_and_leaves_artifact(tmp_path, monkeypatch, capsys):
 
 @pytest.mark.spec("RUL-config_validated_before_use", "RUL-invalid_value_located", "RUL-checked_clock_offsets",
                   test="TST-geotag_time_decisions-bad_offset_blocks")
-def test_bad_offset_blocks(tmp_path, monkeypatch, capsys):
+@pytest.mark.parametrize("value", ["not-a-number", "3600"])     # a number written as text is not one either
+def test_bad_offset_blocks(tmp_path, monkeypatch, capsys, value):
     ws = _ws(tmp_path, files=[_hfile("6-photos-by-dest/Brussels/a.jpg")],
              device_groups={"fixed_clock_cameras": [CAM], "phones": []})
     _run(monkeypatch, ws)
     _edit(ws, lambda a: a["destinations"]["6-photos-by-dest/Brussels"]["camera_group_time_decisions"]
-          [CAM]["user_decision"].__setitem__("manual_offset_seconds", "not-a-number"))
+          [CAM]["user_decision"].__setitem__("manual_offset_seconds", value))
     assert _run(monkeypatch, ws) == 2
     assert "manual_offset_seconds" in capsys.readouterr().err
 

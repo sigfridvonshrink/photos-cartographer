@@ -48,7 +48,7 @@ from .photos_utils import (ends_unforeseen_error_apart, links_under, fingerprint
     verify_json_dependency, json_dependency, write_json_artifact, write_versioned_json, is_library, write_library_marker,
     library_marker_path, allocate_suffix, suffix_root, max_suffix, ContentHasher, WorkspaceCache,
     journal_path, take_zfs_snapshot, zfs_dataset, _move_no_clobber, get_imagemagick_version, write_db_snapshot, reseal_archival_package,
-    write_sealed_marker, likely_new_dump, entries_not_carried, prep_log_path, prep_log_blocker, WorkspaceLock, LibraryLock, XDEV_TMP_PREFIX, XDEV_TMP_SUFFIX,
+    write_sealed_marker, likely_new_dump, entries_not_carried, prep_log_path, prep_log_blocker, WorkspaceLock, LibraryLock, LockFileError, XDEV_TMP_PREFIX, XDEV_TMP_SUFFIX,
     workspace_volume_error, workspace_filesystem_error, library_filesystem_error, add_accept_changes_argument, check_workspace, write_workspace_record, note_execution_begun,
     photos_without_position,
 )
@@ -1779,15 +1779,21 @@ def _filesystem_refusal(ws, reporter):
 
 
 def _acquire_workspace_lock(ws, reporter):
-    """Take the workspace lock for init-library, or say who holds it and return None. Called only in a
+    """Take the workspace lock for init-library: `(lock, None)`, or `(None, exit status)` having said why — who
+    holds it (1), or that its file cannot be opened (2, RUL-exit_status_says_how_it_ended). Called only in a
     workspace (its guard present), so the control directory exists and is never created here."""
     lock = WorkspaceLock(ws, create=False)
-    if not lock.acquire():
+    try:
+        locked = lock.acquire()
+    except LockFileError as e:
+        reporter.error(str(e))
+        return None, 2
+    if not locked:
         owner = lock.read_owner() or {}
         detail = f" (pid {owner.get('pid')}, since {owner.get('started_at')})" if owner else ""
         reporter.log(f"Workspace is locked by an in-progress run{detail}; try again when it finishes.")
-        return None
-    return lock
+        return None, 1
+    return lock, None
 
 
 def _read_checked_config(ws, reporter):
@@ -1867,9 +1873,9 @@ def do_init_library(path_arg, ws):
         if _filesystem_refusal(ws, reporter):
             return 2
         # Reading the workspace's config is reading the workspace: under its lock, like every command.
-        lock = _acquire_workspace_lock(ws, reporter)
+        lock, stop = _acquire_workspace_lock(ws, reporter)
         if lock is None:
-            return 1
+            return stop
         try:
             vol_err = workspace_volume_error(ws)     # RUL-workspace_one_filesystem: a workspace lies on one filesystem
             if vol_err:
@@ -1909,9 +1915,9 @@ def do_init_library(path_arg, ws):
         return 2
     if _filesystem_refusal(ws, reporter):
         return 2
-    lock = _acquire_workspace_lock(ws, reporter)
+    lock, stop = _acquire_workspace_lock(ws, reporter)
     if lock is None:
-        return 1
+        return stop
     try:
         vol_err = None if is_sealed(ws) else workspace_volume_error(ws)         # RUL-workspace_one_filesystem: a workspace lies on one filesystem
         if vol_err:
@@ -1964,7 +1970,12 @@ def _run_locked_workflow(command, ws, jobs=None, accept_changes=None):
     if _filesystem_refusal(ws, reporter):
         return 2
     run_lock = WorkspaceLock(ws, create=False)
-    if not run_lock.acquire():
+    try:
+        locked = run_lock.acquire()
+    except LockFileError as e:      # a refusal, not "locked" (RUL-exit_status_says_how_it_ended)
+        reporter.error(str(e))
+        return 2
+    if not locked:
         owner = run_lock.read_owner() or {}
         detail = f" (pid {owner.get('pid')}, since {owner.get('started_at')})" if owner else ""
         reporter.log(f"Workspace is locked by an in-progress run{detail}; try again when it finishes.")
@@ -2009,7 +2020,12 @@ def _run_locked_workflow(command, ws, jobs=None, accept_changes=None):
             reporter.error(lib_err)
             return 2
         lib_lock = LibraryLock(library_root)
-        if not lib_lock.acquire():
+        try:
+            locked = lib_lock.acquire()
+        except LockFileError as e:  # a refusal, not "locked" (RUL-exit_status_says_how_it_ended)
+            reporter.error(str(e))
+            return 2
+        if not locked:
             owner = lib_lock.read_owner() or {}
             detail = f" (pid {owner.get('pid')}, since {owner.get('started_at')})" if owner else ""
             reporter.log(f"Library {library_root} is locked by another merge{detail}; try again when it "

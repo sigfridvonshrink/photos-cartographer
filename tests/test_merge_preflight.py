@@ -428,7 +428,7 @@ def test_a_refresh_describing_only_a_prep_run_does_not_block_merge(tmp_path):
 
 
 @pytest.mark.parametrize("touch", ["edited", "removed", "unvouched"])
-@pytest.mark.spec("BLD-prep_log_checked", "RUL-merge_takes_finalized_current",
+@pytest.mark.spec("BLD-prep_log_checked", "RUL-merge_takes_finalized_current", "RUL-unchecked_counts_as_changed",
                   test="TST-merge_preflight-a_prep_log_the_handoff_does_not_vouch_for_blocks")
 def test_a_prep_log_the_handoff_does_not_vouch_for_blocks(tmp_path, touch):
     """Prep's log touched after finalize — edited, removed, or a handoff recording no hash of it — stops merge,
@@ -767,7 +767,8 @@ def test_locked_workflow_exits_1_if_workspace_locked(tmp_path):
         held.release()
 
 
-@pytest.mark.spec("RUL-library_confirmed_before_lock", "RUL-library_lock_fail_fast", test="TST-merge_preflight-locked_workflow_exits_1_if_library_locked")
+@pytest.mark.spec("RUL-library_confirmed_before_lock", "RUL-library_lock_fail_fast", "RUL-library_lock",
+                  test="TST-merge_preflight-locked_workflow_exits_1_if_library_locked")
 def test_locked_workflow_exits_1_if_library_locked(tmp_path):
     ws, lib = _make(tmp_path)
     held = utils.LibraryLock(str(lib))                # another workspace's merge holds the library
@@ -921,7 +922,7 @@ def test_sealed_new_dump_left_in_place_and_library_untouched(tmp_path):
     assert list(lib.iterdir()) == [lib / ".photos-library"]    # library untouched
 
 
-@pytest.mark.spec("RUL-lock_fail_fast", "RUL-lock_through_the_run",
+@pytest.mark.spec("RUL-lock_fail_fast", "RUL-lock_through_the_run", "INV-one_run_at_a_time",
                   test="TST-merge_preflight-lock_contention_covers_execute_not_just_plan")
 def test_lock_contention_covers_execute_not_just_plan(tmp_path):
     """The whole-run lock covers EXECUTE, not only plan: with the workspace lock held by another run,

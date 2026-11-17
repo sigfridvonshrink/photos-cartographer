@@ -339,7 +339,7 @@ def test_finalize_refuses_plan_id_mismatch(tmp_path, monkeypatch):
 
 @pytest.mark.spec("RUL-finalize_explicit", "RUL-finalize_non_destructive", "RUL-carry_forward_by_copy",
                   "RUL-package_contents", "RUL-package_self_describing", "RUL-package_lists_contents",
-                  "RUL-database_archived",
+                  "RUL-database_archived", "RUL-phase_writes_own_records",
                   test="TST-geotag_finalize-finalize_assembles_package_and_is_nondestructive")
 def test_finalize_assembles_package_and_is_nondestructive(tmp_path, monkeypatch):
     ws, ctl = _ready_ws(tmp_path, monkeypatch)
@@ -1182,6 +1182,7 @@ def test_finalize_seals_without_the_tracks_folder(tmp_path, monkeypatch):
 
 
 @pytest.mark.spec("RUL-tracks_elsewhere_restale_nothing", "RUL-tracks_in_dependencies", "BLD-track_window", "BLD-gpx_root_missing",
+                  "RUL-unchecked_counts_as_changed",
                   test="TST-geotag_finalize-execute_checks_the_tracks_over_the_plan_s_window")
 def test_execute_checks_the_tracks_over_the_plan_s_window(tmp_path, monkeypatch):
     """The plan records the window its tracks' fingerprint is of; execute takes the tracks again over it: a track of

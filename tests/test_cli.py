@@ -75,7 +75,7 @@ def test_plan_saves_canonical_and_locks(tmp_path, monkeypatch, capsys):
 
 @pytest.mark.parametrize("command", ["plan", "dry-run", "execute"])
 @pytest.mark.parametrize("defect", ["misplaced", "link", "missing"])
-@pytest.mark.spec("RUL-shape_checked_first", "INV-undisturbed_shape",
+@pytest.mark.spec("RUL-shape_checked_first", "INV-undisturbed_shape", "RUL-missing_folder_never_recreated",
                   test="TST-cli-prep_stops_on_a_disturbed_shape_before_it_scans")
 def test_prep_stops_on_a_disturbed_shape_before_it_scans(tmp_path, monkeypatch, capsys, command, defect):
     """An initialized workspace whose top level was disturbed: every prep command stops at once, naming what is
@@ -219,7 +219,8 @@ def test_prep_takes_no_snapshot_before_the_plan_is_validated(tmp_path, monkeypat
     assert not (ws / "0-sources" / "note.txt").exists()        # and the plan was carried out
 
 
-@pytest.mark.spec("RUL-snapshot_under_lock", test="TST-cli-prep_snapshot_is_taken_while_the_lock_is_held")
+@pytest.mark.spec("RUL-snapshot_under_lock", "RUL-lock_through_the_run",
+                  test="TST-cli-prep_snapshot_is_taken_while_the_lock_is_held")
 def test_prep_snapshot_is_taken_while_the_lock_is_held(tmp_path, monkeypatch, capsys):
     """Prep's snapshot is taken while the workspace lock is held: probed, from a file descriptor of its own, at the
     moment the snapshot is asked for."""
@@ -442,7 +443,7 @@ _EVERY_COMMAND = [("prep", "plan"), ("prep", "dry-run"), ("prep", "execute"),
 
 @pytest.mark.parametrize("command", _EVERY_COMMAND, ids=[" ".join(c[:2]) + (" <path>" if "<library>" in c else "")
                                                          for c in _EVERY_COMMAND])
-@pytest.mark.spec("RUL-every_command_locks", "RUL-one_workspace_lock",
+@pytest.mark.spec("RUL-every_command_locks", "RUL-one_workspace_lock", "RUL-lock_refusal_says_locked",
                   test="TST-cli-every_command_waits_for_the_one_workspace_lock")
 def test_every_command_waits_for_the_one_workspace_lock(tmp_path, monkeypatch, capsys, command):
     """Every command of every phase, and the editor's save, takes the workspace's lock — the one lock, the same for

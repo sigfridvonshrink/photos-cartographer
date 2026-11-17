@@ -200,8 +200,9 @@ the file.
 :status: ruled
 :realises: RUL-costly_results_survive_unrelated_edits, RUL-times_survive_unrelated_config_edits
 
-The costly caches SHALL be keyed on their own areas instead of the whole-file fingerprint: resolved UTC on the
-time-policy subset ({need}`BLD-resolved_utc_fingerprint`), the renames on the filename-format fingerprint.
+The costly cache SHALL be keyed on its own area instead of the whole-file fingerprint: resolved UTC on the
+time-policy subset ({need}`BLD-resolved_utc_fingerprint`); the renames, which keep no cache, are worked out again by
+every plan.
 :::
 
 :::{bld} Prep guards execution with the whole-file hash
@@ -247,10 +248,12 @@ two. `CAMERA_GROUP_KEY_VERSION` is a code constant, never a configuration field.
 
 Validating the configuration (`validate_config`) SHALL check that a path is not blank and holds no NUL; that the ZFS
 snapshot prefix is a syntactically valid snapshot component; that `filename_timestamp_format` is a format that yields a
-non-empty name varying with the time, with no `/` or NUL and no field that reads a timezone; that every threshold is a
+non-empty name varying with the time, with no `/` or NUL, no field that reads a timezone, and no ending of `-` and
+three or more digits, the shape of a differentiating suffix; that every threshold is a
 number, none below zero, and the drift window above zero; that each `folders` name is a single non-empty path component,
 not dot-prefixed, distinct from the others and from the control directories; that each `media_extensions` entry is a
-bare lowercase extension, with no dot, in one list only; that each value of a fixed set — a device class, a flag — is one
+bare lowercase extension, with no dot, in one list only; that `destination_distribution_subfolders` is a non-empty
+list of single path components; that each value of a fixed set — a device class, a flag — is one
 of its set; and that a timezone is an IANA zone.
 :::
 
@@ -261,7 +264,8 @@ of its set; and that a timezone is an IANA zone.
 :uses: BLD-authored_checks_by_phase
 
 `validate_config` SHALL refuse a `filename_timestamp_format` that formats one time differently without a zone and with
-a UTC offset of +05:30 — one holding `%z`, `%:z` or `%Z` — saying that prep names files from a time without a zone and
+a UTC offset of +05:30 — one holding `%z`, `%:z` or `%Z` —, or holding `%s`, which renders a time without a zone
+through the host's, saying that prep names files from a time without a zone and
 geotag from one with a zone; every phase reads the configuration through it before anything else.
 :::
 
@@ -354,7 +358,8 @@ atomic rename (`write_json_artifact`, `write_versioned_json`).
 :status: ruled
 :realises: RUL-not_inventoried, RUL-control_records_never_media, RUL-config_never_media, DEF-strays_folder, RUL-strays_never_processed
 
-Prep SHALL skip `.photos-ingest/`, `.photos-ingest-quarantine/` and `.git` as whole subtrees, every dot-prefixed file,
+Prep SHALL skip `.photos-ingest/`, `.photos-ingest-quarantine/` and `.git` at the workspace's top level as whole
+subtrees, every dot-prefixed file,
 and the strays folder `1-strays/` with all its `<plan-id>` subfolders ({need}`BLD-strays_per_run`), the strays of a run
 going to `1-strays/<plan-id>/`.
 :::
@@ -585,7 +590,8 @@ their detail is {need}`BLD-track_points` and {need}`BLD-anchor_matching`.
 :realises: RUL-tracks_outside_managed_folders
 
 Configuration validation, in every phase, SHALL resolve `gpx_root` against the workspace, through links, and refuse it
-when it is a managed folder, lies inside one, or contains one — the workspace root among them.
+when it is a managed folder, lies inside one, or contains one — the workspace root among them —, or lies at or under
+any other entry of the workspace's top level that is not hidden ({need}`RUL-top_level_only_managed`).
 :::
 
 :::{bld} A track file
@@ -615,7 +621,7 @@ Prep SHALL raise one blocker for each track file it inventories, naming it, and 
 The GPX fingerprint SHALL be a SHA-256 over a version tag, the ranking of the tracks, and every point in the tracks'
 window ({need}`BLD-track_window`), in time order, each with its time, position, file under `gpx_root`, index, track and
 segment — so a track file's bytes outside the window, and the root's own path, enter it not at all. An empty
-`gpx_root`, a `gpx_root` that is not a directory, and one with a folder that cannot be listed, each give a fixed value
+`gpx_root`, a `gpx_root` that is not a directory, and one with a folder that cannot be listed, each give a value
 of their own, the last two with a warning. It is recorded as `gpx_fingerprint` in the
 `depends_on` of `photos-21-time-decisions.json`, `photos-22-gps-drift-validation.json`, `photos-23-gps-decisions.json`
 and `photos-24-executable-plan.json`, and checked before each is used.
@@ -629,8 +635,10 @@ and `photos-24-executable-plan.json`, and checked before each is used.
 :realises: INV-no_stale_use, RUL-dependencies_recorded_in_record, RUL-dependencies_validated_before_deriving
 
 Each phase SHALL record a record's dependencies in its `depends_on` block and check them before use, as its own spec
-states in full: prep in {need}`BLD-prep_dependencies`; geotag in {need}`BLD-geotag_dependencies`; merge in {need}`BLD-merge_plan`. The cascade consumes media by content fingerprints, records by byte
-hashes, and the field-scoped configuration fingerprints ({need}`DEF-config_areas`) that keep staleness surgical.
+states in full: prep in {need}`BLD-prep_dependencies`; geotag in {need}`BLD-geotag_dependencies`; merge in {need}`BLD-merge_plan`. The cascade consumes media by content fingerprints, records by their
+hashes — the handoff by its content fingerprint ({need}`BLD-handoff_content_fingerprint`) —, the field-scoped
+configuration fingerprints ({need}`DEF-config_areas`) that keep staleness surgical, and the code and tool versions that
+made them.
 :::
 
 :::{bld} How a fingerprint is computed
@@ -694,7 +702,7 @@ The gates SHALL be checked as follows: `geotag plan`, `execute` and `finalize` c
 it, prep's other checks of its record ({need}`BLD-reprep_pending`) being the plan's own dependencies there, and a
 `<photo>_exiftool_tmp` beside a photo the plan writes being left to the writer ({need}`BLD-metadata_safe_write`);
 merge's preflight checks the inbox, the
-development gate and that photos by destination holds only photos ({need}`BLD-merge_preflight`). A development subfolder
+development gate, that photos by date holds no photo, and that photos by destination holds only photos ({need}`BLD-merge_preflight`). A development subfolder
 is one named in `destination_distribution_subfolders`. Geotag's preflight stops as well on a photo in `6-photos-by-dest` whose handoff record holds no fingerprint, named.
 :::
 
@@ -874,13 +882,14 @@ record is missing.
 
 Each phase SHALL reuse what is still valid: prep, the cached fingerprint and metadata of a file whose size and
 modification time are unchanged, carrying a moved file's identity forward without reading it ({need}`RUL-moved_file_carried`), a plan never executed leaving its fingerprints and metadata for the next plan to reuse
-({need}`RUL-plan_memo_kept`); geotag reads no photo,
+({need}`RUL-plan_memo_kept`); geotag decides from no photo it reads,
 taking every photo's metadata from prep, works out its results again on each run — a result that comes out the same
 leaving everything that depends on it as it is — keeps each decision whose target is unchanged
 ({need}`RUL-decision_kept`), and reads only a track file new or changed since the catalogue recorded it, or one the
 tracks' window has grown into, taking the rest from the points the catalogue keeps ({need}`BLD-track_catalogue`); merge, a library file's fingerprint while its size and
-modification time are unchanged ({need}`BLD-library_file_fingerprinted`). Fingerprinting (ImageMagick `identify`,
-`ffmpeg`), metadata extraction (`exiftool`) and GPX parsing thus run only for new or changed inputs. Each phase's own
+modification time are unchanged ({need}`BLD-library_file_fingerprinted`). Planning thus fingerprints (ImageMagick
+`identify`, `ffmpeg`), extracts metadata (`exiftool`) and parses GPX only for new or changed inputs — the checks
+execution makes before it changes a file aside. Each phase's own
 consequences are in its spec:
 {need}`RUL-no_op_run`, {need}`RUL-geotag_execution_resumable` and {need}`RUL-merge_resumable`.
 :::
@@ -1005,7 +1014,9 @@ another value or none stale at dry run and execute alike.
 :uses: BLD-artifact_numbering, BLD-init_library_writes_library_root
 
 A phase SHALL write only records in its own number band of the numbering scheme: prep `photos-1X`, geotag `photos-2X`,
-merge `photos-3X`, and on success the seal, `photos-00-sealed.json`, which merge alone writes. The configuration and
+merge `photos-3X`, and on success the seal, `photos-00-sealed.json`, which merge alone writes; prep writes the guard
+`photos-00-workspace-guard`; each phase writes its own plan's journal `journal-<plan id>.json`; geotag's execute writes
+`executed/<plan id>/` copies of the decision records. The configuration and
 the database are phase-neutral, each with its own writers' rule: prep seeds
 the configuration, which `init-library` may later extend by `library_root` alone
 ({need}`BLD-init_library_writes_library_root`) and the decision editor by a camera group's class and its naming as
@@ -1025,7 +1036,8 @@ the archival package reads them, and is no write.
 :realises: RUL-finalize_non_destructive, RUL-package_contents, RUL-package_self_describing, RUL-package_lists_contents, RUL-config_archived, RUL-database_archived, RUL-scratch_database_not_archived
 
 `geotag finalize` SHALL write `photos-26-complete-log.json` and the database image `photos-26-geotag-ingest.db`, then
-list every file of the control directory but the transient ones — locks, `.tmp-` files, SQLite's `-journal` files, the
+list every file of the control directory but the transient ones — locks, `.tmp-` files and the editor's `<record>.tmp`
+write temporaries, SQLite's `-journal` files, the
 plan memo `photos-00-plan-memo.db`, and any `*-archive.tar.gz` or its `-NNN` copy — and but the tracks' folder where
 `gpx_root` lies inside it, or the track files where `gpx_root` is the control directory itself ({need}`BLD-gpx_root`) —
 with its SHA-256 and path in
@@ -1059,7 +1071,8 @@ Each log SHALL be pretty-printed JSON with sorted keys, every step naming its `r
 (`content_fingerprint`), each entry carrying where each phase left the photo — `prep_path`, written by prep and updated
 by every prep run; `geotag_path`, by finalize, its by-dest folder under the name its last final rename gave it;
 `library_path`, by merge — and a `journey` of steps, each step naming its `phase` and `action`, a move or rename its
-`from` and `to` — the first step's `from` being the photo's path in the dump — and, where a decision caused it, a
+`from` and `to` — merge's placement its `from` and `library_path` ({need}`BLD-merge_log_steps`), the first step's
+`from` being the photo's path in the dump — and, where a decision caused it, a
 `because` naming the decision exactly: a clock offset its `photos-21` cell, with its day where the camera's photos there
 span days (`camera_group_time_decisions.<group>@<date>`), or the `photos-22` drift confirmation whose validated offset
 replaced it; a time kept as the true time its entry of the destination's `changed_times`
@@ -1151,7 +1164,9 @@ plan memo, `photos-00-plan-memo.db` ({need}`BLD-plan_memo`).
 The images SHALL be `photos-15-prep-ingest.db`, written when prep writes its handoff and log;
 `photos-26-geotag-ingest.db`, written by finalize with the complete log; and `photos-35-merge-ingest.db`, written when
 merge succeeds, before it re-seals — each captured under the workspace lock by `VACUUM INTO` a `.tmp-` name in the
-control directory, checked with `PRAGMA quick_check`, then renamed over the phase's earlier image.
+control directory, checked with `PRAGMA quick_check`, then renamed over the phase's earlier image. The run succeeds,
+for the image ({need}`RUL-image_untouched_by_failed_run`), once the image is captured: a finalize or a merge whose
+package fails after it leaves the new image in place, for the next success to capture again.
 :::
 
 ## 13. Merge: the library kept, the workspace sealed
@@ -1215,7 +1230,7 @@ A library SHALL be marked by an empty `.photos-library` file in `library_root`, 
 :status: ruled
 :realises: RUL-library_place_checked, RUL-library_outside_every_workspace
 
-`validate_merge_config` SHALL require `merge.library_root` to be non-empty and to resolve to an existing directory that is neither the workspace nor inside it; `library_workspace_error`, called by merge's preflight and by every `init-library` that blesses, refuses one that is a workspace, lies inside one — any folder above it holding a `.photos-ingest` directory, initialized or not — or holds one among its immediate folders.
+`validate_merge_config` SHALL require `merge.library_root` to be non-empty and to resolve to an existing directory that is neither the workspace nor inside it nor holds it; `library_workspace_error`, called by merge's preflight and by every `init-library` that blesses, refuses one that is a workspace, lies inside one — any folder above it holding a `.photos-ingest` directory, initialized or not — or holds one among its immediate folders.
 :::
 
 :::{bld} Merge makes a destination's folder as it places a photo
@@ -1254,6 +1269,7 @@ by destination.
 :status: ruled
 :refines: BLD-merge_move
 :realises: RUL-target_free_at_execute, RUL-collision_same_content
+:excepts: RUL-execution_only_the_plan
 
 A place found taken at execute SHALL make the photo already present where it holds the planned content, and block the
 photo where it holds other content — the plan's alternative name used only where the plan recorded one.
@@ -1307,7 +1323,9 @@ placed new, renamed, already present and blocked, the removed the sum of the fir
 `partial`, `failed` (every photo blocked) or `rejected` (a required snapshot not taken or the library short of room,
 nothing changed); the merge run and plan ids, `library_root`, the geotag plan and execution ids, the photos it newly
 moved and those an earlier run had, and the SHA-256 of `photos-24-executable-plan.json`,
-`photos-25-execution-summary.json` and `photos-11-handoff.json`; and, apart, the run's times and job count.
+`photos-25-execution-summary.json` and `photos-11-handoff.json`; and, apart, the run's times and job count. A run whose
+terminal writes ({need}`BLD-merge_success_sequence`) fail after its summary leaves the summary `success` and no seal,
+which the next run completes.
 :::
 
 :::{bld} What a whole merge writes, and the seal last
@@ -1335,7 +1353,8 @@ prep writes — recording `sealed`, the merge run id (`merged_run_id`) and `libr
 :realises: RUL-sealed_refuses, RUL-sealed_new_dump_warned, RUL-sealed_new_dump_left
 
 Prep's `plan`, `dry-run` and `execute`, every geotag command, and merge's `plan`, `dry-run` and `execute` SHALL check
-the seal under the workspace lock before reading anything else, and stop with exit status 2 if it is there, adding the
+the seal under the workspace lock before reading anything else but the filesystem checks
+({need}`BLD-local_filesystem_types`), and stop with exit status 2 if it is there, adding the
 likely-new-dump warning when `likely_new_dump` finds an entry at the workspace's top level other than its managed
 folders and hidden entries, or anything in the inbox.
 :::
@@ -1363,7 +1382,7 @@ from outside any workspace, it writes nothing in the workspace and does not chec
 :status: ruled
 :realises: RUL-sealed_prune_allowed
 
-`prune-quarantine` SHALL not check the seal.
+`prune-quarantine` SHALL not be refused by the seal.
 :::
 
 ## 14. Every value the user writes is checked
@@ -1384,11 +1403,12 @@ existing folder neither inside the workspace nor holding it.
 :status: ruled
 :realises: RUL-checked_shapes, RUL-checked_positions_and_times, RUL-checked_timezones, RUL-invalid_value_stops, RUL-invalid_value_located, RUL-invalid_decision_kept, RUL-invalid_value_never_repaired, RUL-checked_every_run, RUL-unknown_decision_field_refused, RUL-checked_decision_structure, RUL-checked_clock_offsets, RUL-invalid_decision_reported
 
-Geotag SHALL check the decisions in `photos-21`, `photos-22` and `photos-23` as it reads them: each blocker names the
+Geotag SHALL check the decisions in `photos-21`, `photos-22` and `photos-23`, and the content acceptances of
+`photos-25` (`fingerprint_mismatches[*].user_decision`), as it reads them: each blocker names the
 artifact, the destination, the cell or the file, and the field, and an artifact holding one is left as
 it is, its plan not written. A decision artifact that cannot be read, does not parse as JSON or is not a JSON object is
 such a blocker, located to where parsing failed — never taken as absent. So is a `user_decision` of
-`photos-21`, `photos-22` or `photos-23` holding a field its decision does not have — those `DECISION_FIELDS` lists
+`photos-21`, `photos-22`, `photos-23` or `photos-25` holding a field its decision does not have — those `DECISION_FIELDS` lists
 for its block or cell, a review item's `manual_lat` and `manual_lon` among them (`unknown_decision_fields`) — one
 blocker per field, naming it.
 :::
@@ -1476,7 +1496,9 @@ Merge's `execute` SHALL, after revalidating its plan and taking its snapshot and
 :status: ruled
 :realises: RUL-failed_operation_clean, RUL-failure_recorded, RUL-failure_never_done
 
-Prep SHALL journal an operation that raised as `failed`, and stop.
+Prep SHALL journal an operation that raised as `failed`, and stop — an operation being its move and its database
+effects after it, so that one whose effects raise is journalled `failed` with the file at its destination, for the next
+plan to find.
 :::
 
 :::{bld} Geotag's failed write
@@ -1594,7 +1616,8 @@ The check SHALL print the changes it passes, `sorted` aside, and those accepted,
 prep's execute adds them, each with its `run`, to `workspace_changes` of `photos-15-prep-log.json`, after the earlier
 runs' — an execute that ends short of writing its log adds them there, the rest of the log as it was, before it records
 the state it leaves; geotag's execute writes them as `workspace_changes` of `photos-25-execution-summary.json`, merge's as
-`workspace_changes` of `photos-31-merge-summary.json`. A plan, a dry run and finalize print them.
+`workspace_changes` of `photos-31-merge-summary.json`, each — an execute that ends short too — in the same step that
+records the state it leaves. A plan, a dry run and finalize print them.
 :::
 
 ## 18. The workspace's filesystem
@@ -1636,7 +1659,8 @@ and try in it, in order, each requirement asked: an exclusive non-blocking `floc
 a taken name; `_rename_no_clobber_same_fs` refusing a taken name, both files left as they were, and moving to a free
 one; `fsync` of a file; `fsync` of the folder — returning the first that fails or raises, then removing its folder and
 putting back the given folder's modification time. The workspace's are all five, tried in the control directory, or in
-the workspace itself on a first prep run, before the control directory is made.
+the workspace itself on a first prep run, before the control directory is made; a folder the trial cannot make its own
+folder in is reported as lacking the making of a file.
 :::
 
 ## 19. The decision editor
@@ -1680,8 +1704,9 @@ writing none of the records otherwise, and return the hashes of what it leaves.
 :uses: BLD-editor_save_locks
 
 The decision editor's save SHALL write, of the records it changes, `photos-21-time-decisions.json`,
-`photos-22-gps-drift-validation.json`, `photos-23-gps-decisions.json`, `photos-25-execution-summary.json` and then
-`photos-00-config.json`, in that order, each replaced atomically and synced to disk before the next is begun; a write
+`photos-22-gps-drift-validation.json`, `photos-23-gps-decisions.json`, `photos-25-execution-summary.json`, then
+`photos-00-config.json`, and then `photos-02-zone-table.json`, the answer about the table of countries, which stands on
+none, in that order, each replaced atomically and synced to disk before the next is begun; a write
 that fails ends the save there, the records before it written and those after it as they were.
 :::
 
@@ -1737,8 +1762,10 @@ and on a phone's day kept as it records itself, any other answer ends the keepin
 :realises: RUL-editor_answer_ends_zone_asking
 
 The editor SHALL show a timezone cell that requires input as settled once the decisions being edited give it a zone —
-a `manual_iana_timezone` written there, a country of one timezone in effect there, or a zone reaching it from the
-folders above as geotag passes one down ({need}`BLD-timezone_cell`, {need}`BLD-country_choice`) — and a container's,
+a `manual_iana_timezone` written there, a country of one timezone in effect there, the zone a country's photos fit, as
+geotag gives one ({need}`BLD-zone_from_photos_in_country`), or a zone reaching it from the folders above as geotag
+passes one down ({need}`BLD-timezone_cell`, {need}`BLD-country_choice`), unless the last run found its photos speak
+against that zone and it is not confirmed despite them — and a container's,
 once each destination of its `asked_for` is so settled, or it is given a zone itself.
 Settled so, a cell whose photos then speak against the zone asks again on the next run.
 :::

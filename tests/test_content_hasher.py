@@ -101,6 +101,22 @@ def test_fingerprint_image_worker_crash_fails_after_retry(monkeypatch):
     assert len(restarts) == 2                                  # restarted on each of the 2 attempts
 
 
+@pytest.mark.spec("RUL-tool_failure_retried", "RUL-tool_failure_never_valid",
+                  test="TST-content_hasher-ffmpeg_that_cannot_be_run_fails_the_fingerprint")
+def test_ffmpeg_that_cannot_be_run_fails_the_fingerprint(monkeypatch):
+    """ffmpeg that cannot be run — an OSError other than its absence — is tried twice, then recorded as the file's
+    failed fingerprint; the error never escapes the scan."""
+    calls = []
+
+    def run(*a, **k):
+        calls.append(1)
+        raise PermissionError(13, "Permission denied")
+    monkeypatch.setattr(utils.subprocess, "run", run)
+    res = utils.ContentHasher.fingerprint_video("/clip.mp4")
+    assert res["status"] == "failed" and res["value"] is None and "Permission denied" in res["error"]
+    assert len(calls) == 2
+
+
 def test_fingerprint_image_falls_back_to_per_file_identify(monkeypatch):
     """No `magick` script mode on this system -> the legacy per-file `identify` path."""
     monkeypatch.setattr(utils, "get_magick_command", lambda: [])

@@ -527,6 +527,21 @@ def test_progress_summary_fields(mock_read_metadata_concurrently, mock_hash_imag
         assert "jobs_requested" not in handoff_data
 
 
+@pytest.mark.spec("BLD-tool_workers", "RUL-tool_failure_retried",
+                  test="TST-concurrency-an_exiftool_reply_that_does_not_parse_is_retried")
+def test_an_exiftool_reply_that_does_not_parse_is_retried():
+    """A reply from exiftool that does not parse is a failed attempt, not an empty folder: the worker is restarted and
+    the folder read again, its files kept from the second reply."""
+    process = MagicMock()
+    process.stdout.readline.side_effect = ["not json at all\n", "{ready}\n",
+                                           '[{"SourceFile": "f.jpg", "EXIF:Make": "Canon"}]\n', "{ready}\n"]
+    with patch("subprocess.Popen", return_value=process) as popen, patch("photos_utils.require_tools"):
+        with utils.ExifToolWorkerPool(size=1) as pool:
+            got = pool.execute("folder", utils.ProgressCoordinator(quiet=True))
+        assert popen.call_count == 2                              # the worker restarted between the attempts
+    assert set(got) == {"f.jpg"}
+
+
 @patch("subprocess.Popen")
 @pytest.mark.spec("BLD-tool_workers", "RUL-tool_failure_retried", test="TST-concurrency-exiftool_gets_two_attempts_a_dead_worker_restarted")
 def test_exiftool_gets_two_attempts_a_dead_worker_restarted(mock_popen):

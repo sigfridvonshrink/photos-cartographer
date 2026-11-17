@@ -387,7 +387,7 @@ A container destination's timezone cell with no `effective_iana_timezone`, where
 :status: ruled
 :realises: RUL-country_gives_its_timezone, RUL-country_chosen_once, RUL-country_of_several_gives_none, RUL-zone_among_countrys_only, RUL-country_removal_told
 
-A destination's `destination_timezone.user_decision.country` — the country it is in — SHALL hold an ISO 3166 code of `country_table` ({need}`BLD-country_table`) or be empty; another value is a blocker. The topmost country chosen above or at a destination is in effect there, recorded as `country`, with `country_from` where it was chosen above and `country_zones`. One chosen within it is written back empty, the cell holding `country_removed` (`country`, `because`, `country_there`) for that run, and `geotag plan` warns of each. A country of one timezone proposes it as `proposal_source: "country"`, taking effect like an inherited zone, over any zone from above. A country of several gives its own destination's zone to nothing within it and lets none through from above; within it a `manual_iana_timezone` that is none of `country_zones` is a blocker, and the configured default is proposed only where it is one. `photos-21-time-decisions.json` holds the table read as `countries`.
+A destination's `destination_timezone.user_decision.country` — the country it is in — SHALL hold an ISO 3166 code of `country_table` ({need}`BLD-country_table`) or be empty; another value is a blocker. The topmost country chosen above or at a destination is in effect there, recorded as `country`, with `country_from` where it was chosen above and `country_zones`. One chosen within it is written back empty, the cell holding `country_removed` (`country`, `because`, `country_there`) for that run, and `geotag plan` warns of each. A country of one timezone proposes it as `proposal_source: "country"`, taking effect like an inherited zone, over any zone from above. A country of several gives its own destination's zone to nothing within it and lets none through from above, and the configured default is proposed only where it is one of its zones. Within any country a `manual_iana_timezone` that is none of `country_zones` is a blocker. `photos-21-time-decisions.json` holds the table read as `countries`.
 :::
 
 :::{bld} The table of countries read
@@ -897,13 +897,16 @@ it, case folded.
 :id: BLD-case_rename_via
 :status: ruled
 :realises: RUL-geotag_extension_lowercase, RUL-suffix_no_clobber, RUL-target_free_at_execute
+:excepts: RUL-split_move_never_lost, RUL-failed_operation_clean
 
 A rename `plan_renames` plans whose new name differs from the current one only in case SHALL carry `via`: a
 temporary name — the new name's stem with `.carto-case` before its extension, suffixed by `allocate_suffix` — free
 among the destination's names and those planned. Execution moves the photo to it and then to the new name, each by a
 no-clobber move and each name checked free first, so that a filesystem that ignores case, which holds the new name as
 the photo's own, never refuses it nor overwrites anything; a photo found under `via` with its new name free is this
-photo interrupted between the two, completed once it is seen to be the photo as planned.
+photo interrupted between the two, completed once it is seen to be the photo as planned. So an interruption, or a
+failure of the second move, leaves the photo whole under `via`, the tool's own temporary name — neither its old name nor
+its new one — for the next run to complete.
 :::
 
 
@@ -1073,6 +1076,7 @@ with no acceptance, then run `prep plan`, `prep execute` and `geotag plan` again
 :id: BLD-own_leftover_cleared
 :status: ruled
 :realises: RUL-geotag_clears_own_leftover, RUL-other_write_leftover_holds_photo, RUL-write_leftover_stops_geotag_plan
+:excepts: RUL-execution_only_the_plan
 
 `geotag execute` SHALL note a photo's metadata write operations `begun` in the plan's journal, and persist it under
 the lock the confirmations are written under, before it writes that photo's tags; it removes a `<file>_exiftool_tmp`

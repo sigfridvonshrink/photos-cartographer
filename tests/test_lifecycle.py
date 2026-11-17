@@ -123,6 +123,19 @@ def test_the_guard_names_the_run_that_initialized_the_workspace(tmp_path, monkey
     assert utils.workspace_id(str(ws)) == plan.plan_id
 
 
+@pytest.mark.spec("BLD-json_written_alike", test="TST-lifecycle-the_guard_is_written_like_every_numbered_record")
+def test_the_guard_is_written_like_every_numbered_record(tmp_path, monkeypatch):
+    """The guard is a numbered JSON record: its bytes are the sorted, indented dump of what it holds."""
+    _install(monkeypatch)
+    ws = _bare(tmp_path)
+    (ws / "photo.jpg").write_bytes(b"img")
+    plan = _plan(ws)
+    prep.PlanExecutor(str(ws)).execute(plan)
+    with open(_guard(ws)) as f:
+        text = f.read()
+    assert text == json.dumps(json.loads(text), indent=2, sort_keys=True)
+
+
 @pytest.mark.spec("RUL-init_taken_place_suffixed", "BLD-init_move_suffix", test="TST-lifecycle-init_move_to_a_taken_inbox_path_is_suffixed")
 def test_init_move_to_a_taken_inbox_path_is_suffixed(tmp_path, monkeypatch):
     # The inbox already holds MyDump/a.jpg (an interrupted first run moved it), and the dump holds another file

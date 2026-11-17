@@ -463,8 +463,12 @@ def test_initialized_root_dotfile_is_left_alone(tmp_path, monkeypatch):
 
 
 def _snapshot_tree(root):
-    """{relative path: bytes} of every file under root."""
-    return {os.path.relpath(os.path.join(r, f), root): open(os.path.join(r, f), "rb").read()
+    """{relative path: (bytes, size, mtime_ns)} of every file under root — a file's modification time is part of it."""
+    def entry(p):
+        st = os.lstat(p)
+        with open(p, "rb") as f:
+            return f.read(), st.st_size, st.st_mtime_ns
+    return {os.path.relpath(os.path.join(r, f), root): entry(os.path.join(r, f))
             for r, _dn, fns in os.walk(root) for f in fns}
 
 
@@ -472,7 +476,8 @@ def _snapshot_tree(root):
                   test="TST-workspace_prep-plan_is_non_mutating")
 def test_plan_is_non_mutating(tmp_path, monkeypatch):
     """Planning changes nothing: with work to do, every file of a workspace past its first run — media and
-    records, the workspace database among them — is byte-identical afterwards; the only file it adds is the
+    records, the workspace database among them — is as it was, byte for byte and in its size and modification time,
+    afterwards; the only file it adds is the
     fingerprint memo it keeps for later runs. (This writes no plan: the command saves it, not the planner.)"""
     import photos_utils as utils
     monkeypatch.setattr(utils.MetadataReader, "read_metadata_concurrently", mock_read_metadata_concurrently)

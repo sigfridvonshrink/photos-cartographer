@@ -986,10 +986,18 @@ def _seal(ws):
      .write('{"sealed": true, "merged_run_id": "r1"}'))
 
 
+def _never_serve(monkeypatch):
+    """An editor that would open the workspace after all fails at once, instead of serving until it is stopped."""
+    def bind(*_a, **_k):
+        raise AssertionError("the editor went on to serve a sealed workspace")
+    monkeypatch.setattr(serve, "_bind", bind)
+
+
 @pytest.mark.spec("RUL-editor_refuses_sealed", test="TST-serve-serve_refuses_a_sealed_workspace")
-def test_serve_refuses_a_sealed_workspace(tmp_path):
+def test_serve_refuses_a_sealed_workspace(tmp_path, monkeypatch):
     # A merged workspace is final: the editor will not open it, so its decisions cannot change.
     ws = _workspace_with_fixtures(tmp_path)
+    _never_serve(monkeypatch)
     open(os.path.join(ws, serve.CONTROL, serve.GUARD_NAME), "w").close()
     _seal(ws)
     with pytest.raises(SystemExit) as e:
@@ -999,9 +1007,10 @@ def test_serve_refuses_a_sealed_workspace(tmp_path):
 
 
 @pytest.mark.spec("RUL-sealed_new_dump_warned", "RUL-sealed_new_dump_left", test="TST-serve-serve_points_out_a_dump_in_a_sealed_workspace")
-def test_serve_points_out_a_dump_in_a_sealed_workspace(tmp_path, capsys):
+def test_serve_points_out_a_dump_in_a_sealed_workspace(tmp_path, capsys, monkeypatch):
     # Refusing a sealed workspace, the editor says a dump dropped in its inbox is likely new, and leaves it.
     ws = _workspace_with_fixtures(tmp_path)
+    _never_serve(monkeypatch)
     open(os.path.join(ws, serve.CONTROL, serve.GUARD_NAME), "w").close()
     _seal(ws)
     inbox = os.path.join(ws, "0-sources")
@@ -1015,11 +1024,12 @@ def test_serve_points_out_a_dump_in_a_sealed_workspace(tmp_path, capsys):
 
 
 @pytest.mark.spec("RUL-sealed_new_dump_warned", test="TST-serve-sealed_dump_check_goes_by_the_workspaces_folder_names")
-def test_sealed_dump_check_goes_by_the_workspaces_folder_names(tmp_path, capsys):
+def test_sealed_dump_check_goes_by_the_workspaces_folder_names(tmp_path, capsys, monkeypatch):
     # The editor never loads the workspace's configuration, so the check reads the folder names from its
     # file: a workspace with renamed folders holding only them has no new dump, and one dropped into its
     # renamed inbox is pointed out by that name.
     ws = _workspace_with_fixtures(tmp_path)
+    _never_serve(monkeypatch)
     folders = {r: f"x-{n}" for r, n in serve.photos_utils.DEFAULT_FOLDERS.items()}
     with open(os.path.join(ws, serve.CONTROL, "photos-00-config.json"), "w") as f:
         json.dump({"folders": folders}, f)
