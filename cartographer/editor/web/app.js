@@ -94,7 +94,8 @@ function cellAt(arts, ref) {
     return (arts.execution?.fingerprint_mismatches || []).find((m) => m && m.relative_path === ref.path) || null;
   const d = arts.gps?.destinations?.[ref.dest]; if (!d) return null;
   if (ref.kind === "fallback") return d.folder_fallback;
-  if (ref.kind === "chosen")                   // a photo the tracks or the fallback place, given a position of its own
+  // a photo the tracks or the fallback place, given a position of its own; or one its own position places, only shown
+  if (ref.kind === "chosen" || ref.kind === "own")
     return (d.gps_decisions?.placed_photos || []).find((r) => r.relative_path === ref.path);
   return (d.gps_decisions?.review_items || []).find((r) => r.relative_path === ref.path);
 }
@@ -379,7 +380,7 @@ const touchChange = (ref) => {
 // are bucket keys) or a multi-selected run of GPS review photos (peers are relative paths). An edit fans
 // out identically to all of them so one action resolves the whole set. The identifying field differs by
 // kind: review cells are addressed by `path`, everything else by `key`. A ref with no peers edits itself.
-const peerField = (ref) => (ref.kind === "review" || ref.kind === "chosen" ? "path" : "key");
+const peerField = (ref) => (["review", "chosen", "own"].includes(ref.kind) ? "path" : "key");
 const peerKeys = (ref) => (ref.peers && ref.peers.length ? ref.peers : [ref[peerField(ref)]]);
 const peerRefs = (ref) => peerKeys(ref).map((id) => ({ ...ref, [peerField(ref)]: id, peers: undefined }));
 const eachPeer = (ref, fn) => { for (const r of peerRefs(ref)) { const c = cellAt(state.work, r); if (c) fn(c, r); } };
@@ -1103,11 +1104,14 @@ function gpsPhotoRow(dest, x, order) {
   // app_placement.test.mjs "placedPosition")
   // and opens it on the map, where its position can be set by hand (BLD-chosen_position)
   const at = !ref || ref.kind !== "review" ? placedPosition(dest, x) : null;
+  // a photo its own position places is shown on the map, never changed there (RUL-own_position_kept)
+  const shown = ref || (x.entry.placed_by === "own_position" ? { file: "gps", dest, kind: "own", path } : null);
+  if (shown && !ref && isSel(shown)) r.classList.add("sel");
   if (at) {
     r.classList.add("copyable");
-    r.title = `click to copy ${fmtCoord(at)}${ref ? " and show it on the map" : ""}`;
-    r.onclick = () => { if (ref) state.selected = ref; copyCoord(at); };
-  } else if (ref && ref.kind === "chosen") r.onclick = () => { state.selected = ref; render(); };
+    r.title = `click to copy ${fmtCoord(at)}${shown ? " and show it on the map" : ""}`;
+    r.onclick = () => { if (shown) state.selected = shown; copyCoord(at); };
+  } else if (shown && shown.kind !== "review") r.onclick = () => { state.selected = shown; render(); };
   if (!ref) return r;
   if (ref.kind === "review") {
     r.onclick = (ev) => (x.bucket === "unplaced" ? selectReview(ev, dest, path, order) : (state.selected = ref, render()));
@@ -1554,6 +1558,12 @@ function controls(ref) {
         wrap.append(el("div", { class: "hint" }, "or a position for this photo alone:"));
       } else wrap.append(coordField(ref));
     }
+    // a position set by hand, saved or not, is withdrawn as plainly as it was given (RUL-withdrawal_undoes)
+    if (u.manual_lat !== "" && u.manual_lat != null)
+      wrap.append(el("button", { class: "mini", onclick: () => editMany(ref, { manual_lat: "", manual_lon: "" }) },
+        "remove this position"), el("span", { class: "hint" }, c.reason === "manual_locked"
+        ? " the tracks or its folder's fallback place it again, else it waits for you"
+        : " it waits again for its folder's fallback or a position"));
   }
   return wrap;
 }
@@ -1867,7 +1877,7 @@ function driftMap(ref, frame, fi) {
 // for non-photo cells; for a multi-photo run, `ref.path` is the first photo.
 function decisionThumb(ref) {
   const photo = ref.kind === "reading" || ref.kind === "changed" ? ref.key : ["camera", "bodies"].includes(ref.kind) ? (workCell(ref)?.examples || [])[0] : ref.path;
-  if (state.base.demo || !["review", "chosen", "reading", "fingerprint", "camera", "bodies", "changed"].includes(ref.kind) || !photo) return null;
+  if (state.base.demo || !["review", "chosen", "own", "reading", "fingerprint", "camera", "bodies", "changed"].includes(ref.kind) || !photo) return null;
   const img = el("img", { class: "decision-thumb", alt: photo, title: photo.split("/").pop(),
     src: "/api/photo?path=" + encodeURIComponent(photo) });
   img.addEventListener("error", () => img.remove());
@@ -2400,6 +2410,7 @@ function renderPanel() {
   const cellKey = mapKeyFor(ref);
   if (cellKey !== _driftCellKey) { _driftFrame = 0; _driftTab = "photo"; _driftCellKey = cellKey; }  // reset frame + tab per cell
   if (!ref || !c) return p.append(el("div", { class: "empty" }, "Select a decision to edit it."));
+  if (ref.kind === "own") return p.append(ownPositionPanel(ref, c));
   const multi = ref.peers && ref.peers.length > 1;
   const title = ref.kind === "offset" ? `Offset · ${c.camera_group || ref.key}${c.phone ? " (phone)" : ""}`
     : ref.kind === "reading" ? "Time at a daylight-saving change"
@@ -2446,6 +2457,23 @@ function renderPanel() {
   if (c.proposal && ref.kind !== "drift" && ref.kind !== "fallback" && ref.kind !== "reading" && ref.kind !== "fingerprint" && ref.kind !== "camera" && ref.kind !== "bodies" && ref.kind !== "zone_table")
     scroll.append(ref.kind === "offset" ? offsetProposalBlock(ref, c.proposal) : jsonBlock("Proposal", c.proposal));
   p.replaceChildren(top, scroll);
+}
+
+// A photo its own position places: that position, shown on the map and copyable — never changed here, since geotag
+// keeps a photo's own position (RUL-own_position_kept). Rebuilt on each render: nothing here is edited.
+function ownPositionPanel(ref, c) {
+  const at = c.position && isNum(c.position.lat) && isNum(c.position.lon) ? { lat: c.position.lat, lon: c.position.lon } : null;
+  const box = el("div", { class: "panel-top" }, el("h2", {}, "Its own position"), el("div", { class: "path" }, ref.path),
+    el("div", { class: "pblock" }, decisionThumb(ref),
+      el("div", { class: "hint" }, "This photo carries a position of its own, which geotag keeps as it is: shown here, not changed."),
+      at ? el("div", { class: "ctl-row" }, el("span", { class: "eff-val" }, fmtCoord(at)),
+        el("button", { class: "btn", onclick: () => copyCoord(at) }, "copy location"))
+        : el("div", { class: "hint" }, "Its position is not in this photos-23 yet: re-run `geotag plan` and reload to see it.")));
+  if (!at) return box;
+  _map = mapPicker({ center: at, zoom: 17, markers: [{ ...at, label: "its own position", color: "#5ec27a" }] });
+  _mapKey = mapKeyFor(ref);
+  setTimeout(() => _map && _map.refresh(), 0);
+  return el("div", {}, box, el("div", { class: "pblock" }, el("h3", {}, "On the map"), _map.el));
 }
 
 // --- header / save -----------------------------------------------------------
@@ -2576,6 +2604,6 @@ export {
   cameraDayLabel, tracksNearThatDay, offsetSections, offsetAnswered, offsetSettledByPhotos, fallbackNote, inheritedFallback,
   ambiguousTimeNote, gpsTimeAsideNote, zoneOffer, validReading, keepHolds, keepFields, keepOffered, phoneNote,
   trueInstant, parseUtcOff, mismatchAccepted, ZONE_TABLE_ANSWERS, recordAbsentText, DEVICE_CLASSES, changedHolds, changedFields, changedKeepLabel, keptTagNote, unidentifiedHolds, unidentifiedFields, loadRefusal, hasUnsavedEdits, utcOff,
-  dateFallbackDay, validDateFallback, previewDate, showsDate, placedPosition, fmtCoord, placedAt, seedCenter, gpsRefMarkers,
+  dateFallbackDay, validDateFallback, previewDate, showsDate, placedPosition, fmtCoord, placedAt, seedCenter, gpsRefMarkers, isSel,
   fmtSpan, utcToZonedWallMs, zonedWallToUtcMs, offsetFromTrueTime, trueTimeOf,
 };

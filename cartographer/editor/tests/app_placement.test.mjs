@@ -148,3 +148,19 @@ test("seedCenter: a placed photo opens on the map where it is placed, pinned the
   assert.deepEqual(app.seedCenter(tr), { lat: 48.1, lon: 11.5 });               // a position set here comes first
   app.state.coordClipboard = null;
 });
+
+test("a photo its own position places is shown, one at a time, and asks nothing", () => {
+  const a = `${D}/a.arw`, b = `${D}/b.arw`;
+  const placed = [{ relative_path: a, content_fingerprint: "fp-a", placed_by: "own_position", position: { lat: 1.5, lon: 2.5 } },
+                  { relative_path: b, content_fingerprint: "fp-b", placed_by: "own_position", position: { lat: 3, lon: 4 } }];
+  const loaded = app.withChosenCells({ gps: { destinations: { [D]: { folder_fallback: fallback({}),
+    gps_decisions: { review_items: [], placed_photos: placed } } } } });
+  app.state.base = loaded; app.state.work = JSON.parse(JSON.stringify(loaded));
+  const own = (p) => ({ file: "gps", dest: D, kind: "own", path: p });
+  assert.deepEqual(app.cellAt(app.state.work, own(a)).position, { lat: 1.5, lon: 2.5 });
+  app.state.selected = own(a);
+  assert.equal(app.isSel(own(a)), true);
+  assert.equal(app.isSel(own(b)), false);                                       // by its path, not every own photo
+  assert.equal(app.isDirty({ file: "gps", dest: D, kind: "chosen", path: a }), false);
+  app.state.selected = null;
+});

@@ -490,7 +490,11 @@ name in the worklist for a larger preview):
   centred where you last placed one.
 - **Click a placed photo's row** (in **Fallback** or **Placed**) to copy where it is placed, the same way: then
   "paste", or paste it into the coordinate field of another photo. A photo the tracks or the fallback place also
-  opens on the map, at that place and pinned, where you can set its position by hand.
+  opens on the map, at that place and pinned, where you can set its position by hand. A photo with a position of
+  its own opens on the map too, to look at only: geotag keeps a photo's own position.
+- **Undo a position you set**: **reset** before you save; after, **back to the tracks** / **back to the fallback** on
+  a placed photo, **remove this position** on one you placed by hand, **keep its own position** on a contradicted
+  one. Save and re-run `geotag plan`: the photo is placed again as if you had never set it.
 
 **A photo the tracks or the fallback already place** can be given a position of its own: in the
 **Fallback** and **Placed** buckets each such photo has **set position**. A coordinate set there is that
