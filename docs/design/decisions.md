@@ -291,7 +291,8 @@ what matters. Such choices are build choices and should be ruled under a separat
   invalid in the editor.
 - **The console shows every refusal the server sends** — of a run, of `init-library`, of a prune, of Stop, of the
   execute gate — in its log pane, never dropping it; a gate that closes on blockers says why.
-- **A progress task that was aborted is not shown as finished**, on the terminal or in the console.
+- **A progress task that was aborted is shown as stopped, unfinished, after the time it ran** — never as finished —
+  on the terminal and in the console alike.
 
 ---
 
