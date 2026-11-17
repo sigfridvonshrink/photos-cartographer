@@ -293,6 +293,17 @@ what matters. Such choices are build choices and should be ruled under a separat
   execute gate — in its log pane, never dropping it; a gate that closes on blockers says why.
 - **A progress task that was aborted is shown as stopped, unfinished, after the time it ran** — never as finished —
   on the terminal and in the console alike.
+- **Clicking a placed photo's row in the editor's GPS view copies where it is placed**, as `lat, lon` to six decimals —
+  the form the coordinate field takes — to the system clipboard and for the editor's own paste: a position set for it
+  there, else the fallback in effect now, else where geotag placed it (photos-23's `position`, `BLD-placed_photos`).
+- **A photo the tracks or the fallback place opens on the map where it is placed**, pinned there, and can be given a
+  position by hand there (`BLD-chosen_position`). **A photo its own position places opens on the map too, to look at
+  only**: nothing there changes it, since geotag keeps it (`RUL-own_position_kept`).
+- **Every position set by hand has a visible way back** in the editor — reset before saving; after, back to the
+  tracks or the fallback, remove this position, keep its own position, clear the fallback. The spec keeps that
+  withdrawing an answer undoes it (`RUL-withdrawal_undoes`).
+- **An absent decision record says what writes it** — `geotag plan` for photos-21 to -23, `prep plan` for the
+  configuration — rather than only that it is absent.
 
 ---
 
