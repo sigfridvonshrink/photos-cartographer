@@ -2,6 +2,26 @@
 
 *What was decided and why, newest first. A record: never corrected forward. Per-commit detail is `git log`.*
 
+## 2026-11-17 — tried on live data before 3.1
+
+The build was run on a real workspace, prep to merge, before the release. What that showed was fixed.
+
+- **Prep no longer fingerprints again what geotag has just proved.** A `geotag plan` after `geotag execute` re-preps,
+  and prep decoded every photo geotag had written or renamed — two minutes for 150 RAWs. Geotag's journal now records,
+  for each photo it left, the path it found it at and the fingerprint it confirmed after the write; prep keeps a
+  photo's fingerprint while the photo is as that journal says. A photo changed since, a write not confirmed, a journal
+  that cannot be read or another image engine still means a fresh decode; the metadata geotag wrote is read again. The
+  owner chose that prep read geotag's record over geotag writing prep's cache: each phase writes only its own.
+- **The editor shows where a placed photo is.** photos-23 now records each placed photo's position. Clicking its row
+  copies the position in the form the coordinate field takes, and opens the photo on the map there, where a position
+  can be set by hand; a photo's own position opens on the map to look at only, geotag keeping it. Every position set
+  by hand has a visible way back.
+- **Messages that misled now say what they mean**: the stop when prep's plan would quarantine or move media names it
+  in plain words, and a decision record not yet written says which command writes it.
+- **What the third walk left open was closed**: execute refuses a managed folder lost since its plan, rather than make
+  it again by a move into it; a hidden track file at the root of a first dump is tested; a test mark without an id —
+  78 of them, silently dropped from the corpus — now fails the build.
+
 ## 2026-11-17 — a third walk: the code held to the corpus as it now stands
 
 The whole code was walked against the corpus as settled, in both directions — every rule and build item against the
