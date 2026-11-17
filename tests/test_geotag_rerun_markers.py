@@ -478,7 +478,7 @@ def test_geotag_position_off_the_track_waits_then_gives_way(tmp_path, monkeypatc
 
 
 @pytest.mark.spec("RUL-decision_revisable", "RUL-wrong_choice_needs_no_hand_repair", "BLD-original_values_pinned",
-                  test="TST-geotag_rerun_markers-changed_offset_after_execute_reaches_the_photo")
+                  "RUL-geotag_rerun_keeps_settled", test="TST-geotag_rerun_markers-changed_offset_after_execute_reaches_the_photo")
 def test_changed_offset_after_execute_reaches_the_photo(tmp_path, monkeypatch):
     """A wrong offset, once executed, is fixed in the record: the re-run works from the photo's own
     camera time and corrects it once, under the new offset."""
@@ -682,7 +682,8 @@ def test_a_marked_photo_is_not_pinned(tmp_path, monkeypatch):
     assert _originals(ws) == {}
 
 
-@pytest.mark.spec("BLD-original_values_pinned", test="TST-geotag_rerun_markers-own_gps_camera_anchors_again_after_execute")
+@pytest.mark.spec("BLD-original_values_pinned", "RUL-geotag_rerun_keeps_settled",
+                  test="TST-geotag_rerun_markers-own_gps_camera_anchors_again_after_execute")
 def test_own_gps_camera_anchors_again_after_execute(tmp_path, monkeypatch):
     """With their own values pinned, a GPS camera's photos give the offset again on a re-run, as on the
     first: nothing is kept from earlier, and nothing is written."""
