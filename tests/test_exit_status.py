@@ -245,3 +245,35 @@ def test_an_unforeseen_error_ends_with_a_status_of_its_own(tmp_path, monkeypatch
     lock = utils.WorkspaceLock(str(ws), create=False)
     assert lock.acquire() is True
     lock.release()
+
+
+@pytest.mark.skipif(os.geteuid() == 0, reason="root opens a file whatever its permissions")
+@pytest.mark.parametrize("phase", ["prep", "geotag", "merge"])
+@pytest.mark.spec("RUL-exit_status_says_how_it_ended", "BLD-exit_statuses",
+                  test="TST-exit_status-a_lock_file_that_cannot_be_opened_is_a_refusal")
+def test_a_lock_file_that_cannot_be_opened_is_a_refusal(tmp_path, monkeypatch, capsys, phase):
+    """A workspace lock file the run may not open ends prep, geotag and merge with 2, a refusal naming the file — never
+    1, which would say another run holds the lock."""
+    import photos_3_merge as merge
+    ws = _prep_ws(tmp_path) if phase == "prep" else _ws(tmp_path)
+    lock = Path(utils.lock_path(str(ws)))
+    lock.touch()
+    lock.chmod(0)
+    try:
+        if phase == "prep":
+            code = _prep(monkeypatch, ws, "plan")
+        else:
+            monkeypatch.chdir(ws)
+            try:
+                if phase == "geotag":
+                    cal.run(types.SimpleNamespace(command="execute", jobs=1))
+                else:
+                    merge.run(types.SimpleNamespace(command="plan", jobs=None, accept_changes=None))
+                code = 0
+            except SystemExit as e:
+                code = e.code
+    finally:
+        lock.chmod(0o644)
+    assert code == 2
+    err = capsys.readouterr().err
+    assert str(lock) in err and "locked by an in-progress run" not in err

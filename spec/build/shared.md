@@ -248,7 +248,8 @@ two. `CAMERA_GROUP_KEY_VERSION` is a code constant, never a configuration field.
 
 Validating the configuration (`validate_config`) SHALL check that a path is not blank and holds no NUL; that the ZFS
 snapshot prefix is a syntactically valid snapshot component; that `filename_timestamp_format` is a format that yields a
-non-empty name varying with the time, with no `/` or NUL and no field that reads a timezone; that every threshold is a
+non-empty name varying with the time, with no `/` or NUL, no field that reads a timezone, and no ending of `-` and
+three or more digits, the shape of a differentiating suffix; that every threshold is a
 number, none below zero, and the drift window above zero; that each `folders` name is a single non-empty path component,
 not dot-prefixed, distinct from the others and from the control directories; that each `media_extensions` entry is a
 bare lowercase extension, with no dot, in one list only; that `destination_distribution_subfolders` is a non-empty
@@ -263,7 +264,8 @@ of its set; and that a timezone is an IANA zone.
 :uses: BLD-authored_checks_by_phase
 
 `validate_config` SHALL refuse a `filename_timestamp_format` that formats one time differently without a zone and with
-a UTC offset of +05:30 — one holding `%z`, `%:z` or `%Z` — saying that prep names files from a time without a zone and
+a UTC offset of +05:30 — one holding `%z`, `%:z` or `%Z` —, or holding `%s`, which renders a time without a zone
+through the host's, saying that prep names files from a time without a zone and
 geotag from one with a zone; every phase reads the configuration through it before anything else.
 :::
 
@@ -588,7 +590,8 @@ their detail is {need}`BLD-track_points` and {need}`BLD-anchor_matching`.
 :realises: RUL-tracks_outside_managed_folders
 
 Configuration validation, in every phase, SHALL resolve `gpx_root` against the workspace, through links, and refuse it
-when it is a managed folder, lies inside one, or contains one — the workspace root among them.
+when it is a managed folder, lies inside one, or contains one — the workspace root among them —, or lies at or under
+any other entry of the workspace's top level that is not hidden ({need}`RUL-top_level_only_managed`).
 :::
 
 :::{bld} A track file

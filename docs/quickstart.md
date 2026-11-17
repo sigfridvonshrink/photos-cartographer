@@ -166,7 +166,8 @@ file as **authoritative for this workspace**. The defaults are *my* choices and 
 - **`gpx_root`** — the folder geotag reads your tracks from (`*.gpx` files, searched beneath it). The
   default, `/srv/pictures/gpslogs/gpx`, is mine: if that folder doesn't exist on your machine,
   `geotag plan` stops. Point it at your tracks, or set it to `""` to geotag without tracks. It must lie
-  outside the managed `0`–`6` folders (inside `.photos-ingest/` is fine). Keep track files (`.gpx`,
+  outside the workspace's folders — the managed `0`–`6` ones and any other at its top level — though
+  inside `.photos-ingest/` is fine. Keep track files (`.gpx`,
   `.kml`, `.kmz`, `.igc`, …) out of the dump: prep stops on one.
 - **`camera_time_and_timezone_policy.default_folder_timezone`** — empty by default. Set it to your home
   zone (e.g. `"Europe/Brussels"`) and the editor offers it as a one-click answer; it is never applied on

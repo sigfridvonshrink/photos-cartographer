@@ -526,7 +526,11 @@ def _save(workspace, payload):
     if fs_err:
         return {"ok": False, "error": fs_err}
     lock = photos_utils.WorkspaceLock(workspace, create=False)
-    if not lock.acquire():
+    try:
+        locked = lock.acquire()
+    except photos_utils.LockFileError as e:     # not "a run is in progress": no run holds it
+        return {"ok": False, "error": f"{e} Nothing was saved."}
+    if not locked:
         return {"ok": False, "error": "a run is in progress on this workspace — save again when it finishes"}
     try:
         if photos_utils.is_sealed(workspace):   # read under the lock; the console reaches here without serve()'s check

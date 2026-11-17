@@ -571,6 +571,29 @@ def test_prep_with_no_record_compares_nothing(tmp_path, monkeypatch):
     assert utils.read_workspace_record(str(ws))[0] is not None
 
 
+@pytest.mark.no_hand_built_record
+@pytest.mark.parametrize("damage", ["table", "file"])
+@pytest.mark.spec("RUL-workspace_checked_first", "RUL-first_prep_compares_nothing",
+                  test="TST-workspace_check-a_record_that_cannot_be_read_stops_the_check")
+def test_a_record_that_cannot_be_read_stops_the_check(tmp_path, monkeypatch, damage):
+    """A record of the last execution's state that is there and cannot be read is not the absence of one: prep's
+    check stops, 2, naming the database, instead of comparing nothing as on a first run."""
+    import sqlite3
+    ws = _fresh(monkeypatch, tmp_path)
+    db = utils.db_path(str(ws))
+    if damage == "table":
+        conn = sqlite3.connect(db)
+        conn.execute("DROP TABLE workspace_record")              # its id kept, its rows gone
+        conn.commit()
+        conn.close()
+    else:
+        with open(db, "r+b") as f:
+            f.write(b"not a database" * 8)                        # the header written over
+    rc, said, _ = _prep(monkeypatch, ws, "plan")
+    assert rc == 2, said
+    assert os.path.join(".photos-ingest", "photos-00-ingest.db") in said and "cannot be read" in said
+
+
 @pytest.mark.spec("RUL-maintenance_unchecked", "RUL-quarantine_changed_only_by_prune", "BLD-workspace_record",
                   test="TST-workspace_check-maintenance_commands_do_not_check")
 def test_maintenance_commands_do_not_check(tmp_path, monkeypatch):

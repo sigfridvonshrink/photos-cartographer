@@ -63,7 +63,7 @@ from .photos_utils import (ends_unforeseen_error_apart, fingerprint_method_block
     journal_path, ContentHasher, _move_no_clobber, get_imagemagick_version,
     prep_log_path, prep_log_blocker, entries_not_carried, retaken_fingerprints, write_db_snapshot, take_zfs_snapshot,
     control_archive_members, write_control_archive, workspace_id,
-    WorkspaceLock, ProgressCoordinator,
+    WorkspaceLock, LockFileError, ProgressCoordinator,
     add_accept_changes_argument, check_workspace, write_workspace_record, note_execution_begun,
 )
 from .reporting import get_reporter, emit_next_step, next_steps_muted
@@ -4027,7 +4027,12 @@ def run(args):
     # Whole-run workspace lock (RUL-one_workspace_lock, RUL-lock_before_reading): one lock across every phase, taken
     # before anything in the workspace is read; fail-fast.
     run_lock = WorkspaceLock(workspace_root, create=False)
-    if not run_lock.acquire():
+    try:
+        locked = run_lock.acquire()
+    except LockFileError as e:      # a refusal, not "locked" (RUL-exit_status_says_how_it_ended)
+        reporter.error(str(e))
+        sys.exit(2)
+    if not locked:
         owner = run_lock.read_owner() or {}
         detail = f" (pid {owner.get('pid')}, since {owner.get('started_at')})" if owner else ""
         reporter.log(f"Workspace is locked by an in-progress run{detail}; try again when it finishes.")

@@ -571,9 +571,10 @@ Areas that matter for the concepts above:
 - **`gpx_track_precedence`** — the folders under `gpx_root` your devices' tracks are filed in, best
   first ([placing each photo](#placing-each-photo)); empty ranks every track alike.
 - **`filename_timestamp_format`** — fixed once the workspace's files carry it: changing it afterwards
-  stops every phase. Fields of the date and time only: a field that reads a timezone (`%z`, `%Z`) is
+  stops every phase. Fields of the date and time only: a field that reads a timezone (`%z`, `%Z`, `%s`) is
   refused, since prep names files from the camera's time, which has none, and geotag from the corrected
-  time, which has one — the two would name one moment differently.
+  time, which has one — the two would name one moment differently. A format whose names end in `-` and
+  three or more digits is refused too: that is how a name's differentiating suffix looks.
 
 Config is **fingerprinted**: any edit makes every saved plan stale, so you re-plan before executing; but
 the costly results — fingerprints, parsed tracks, resolved times — are redone only where the area they
