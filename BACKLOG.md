@@ -4,407 +4,13 @@
 
 - **What this is:** [`README.md`](README.md). **The record:** [`HISTORY.md`](HISTORY.md).
 
-*Open items: **37** — 2, 6 to 7, 11, 13 to 16, 18 to 32, 35 to 40, 42 to 49.* 🛑 Numbers are never reused; the next is **50**.
+*Open items: **6** — 30 to 32, 49, 53, 57.* 🛑 Numbers are never reused; the next is **58**.
 
 ---
 
 ## Open
 
-### 2. The gap audit — the build against its spec
-
-**Why:** The owner: *"I am sure the build has some stuff not specced, and there may be stuff specced not built or
-incorrectly built."*
-
-**What:** walk the code and the corpus against each other: code behaviour with no
-build item (**unspecified**), an intent or build item with no code or no test (**specified, not built**), code that
-contradicts its item (**built wrong**). Each finding becomes its own backlog item. 🛑 **A gap is raised, ruled and
-written into the spec first, then coded** — the code is never taken as the answer.
-
-**Where it stands:** the conversion (done 2026-11-14) checked every section against the code as it went, so the
-direction "specified, not built / built wrong" has had one full pass, its findings fixed. Left: the other direction —
-walking the code for behaviour no item states.
-
-**Found and ruled (2026-11-14):** eight behaviours the code had and no item stated, met while citations were
-rewritten to item ids. Six are items now, each with its test — `RUL-write_leftovers_quarantined`,
-`RUL-write_leftovers_by_dest_warned`, `BLD-database_effects_one_transaction`, `RUL-log_step_names_run` (merge's
-steps did not name their run; they do), `RUL-records_written_alike`, `RUL-handoff_read_back`,
-`RUL-inbox_non_media_never_blocks`; `RUL-prep_run_summarised` speaks of the plan as well as the execution; the
-editor's note of frames left out of a proposal is in `docs/design/decisions.md`.
-
-**The walk (2026-11-14):** every function of the three phases, the calculation layer and the shared library was read
-against the corpus, some ninety-five findings. Done since, needing no ruling: the fourteen places where the code
-contradicted a ruled rule are fixed, each with a test (a failed execute rolls its database effects back; merge never
-moves or removes a photo changed after the plan, and one photo's error blocks it alone; the console judges a plan
-by the workspace's own configuration and its editor tab holds to the editor's rules; exiftool gets its two attempts;
-a plan's existing snapshot counts as taken; the seal is checked before the workspace is walked), and the dead code
-is removed.
-
-**Ruled and built (2026-11-15) — safety:** the thirteen matters of safety the walk found are rules now, each
-built and tested: a photo with no fingerprint stops geotag and merge; a fingerprint covers every frame and every
-stream, and one of another method is never compared; the same picture in a library file of other bytes blocks,
-neither removed (*"if library copy is same pixels, stop and let user sort"*); the user's own `_original` backup is
-a stray; a hidden folder holding files stops prep, and any hidden entry among the photos stops merge; each `<trk>`
-is a track and a `<trkseg>` break is never bridged; a time a daylight-saving change skips or repeats is never
-guessed; geotag runs prep itself only where prep's plan touches no media; pruning by age takes a day or more; a
-library lies outside every workspace; an earlier place counts only inside the library now configured; the editor
-saves only over what it loaded; tracks none of which can be read stop geotag.
-
-**Awaiting ruling — the rest**, each a behaviour to state as it is, change, or drop:
-- *decisions:* a photo moved to another destination loses its own position decision; exiftool's absence stops
-  finalize, which never runs it; a handoff of another field-set version is refused; a development subfolder is
-  matched with case; an unvouched prep log is passed over at plan; the `+carto-time` mark is written to a photo
-  whose time was already right; a merge of no photos seals; ImageMagick's absence is a warning for merge;
-  `init-library <path>` rewrites the whole configuration file; a media file whose metadata read failed blocks, in
-  photos by destination too; the first run renames a dump file whose inbox path is taken; the console's editor tab
-  holds the editor lock until the console stops.
-- *records:* when geotag's summary and merge's are not written (a refusal, an interrupt); an unreadable journal or
-  earlier pass is taken as empty; photos-25 and the photos-26 package are replaced in place; prep takes an
-  unreadable log for none and writes over an unreadable quarantine manifest it could not set aside; a prune is
-  recorded nowhere; a log entry of a photo gone from the workspace is carried as it was; every quarantine move is
-  counted a duplicate; strays' paths are in the plan though `RUL-strays_leave_no_trace` says nowhere; merge's
-  journal is per plan, not per run; and fields no item names — the anchor proposal's `anchors` and `anchor_count`,
-  photos-23's `depends_on`, the merge log's step, the photos-35 manifest's, the handoff's `inode` (which enters its
-  fingerprint), fields nothing reads (`proposal_confidence`, `camera_groups_present`, `rank`,
-  `fingerprint_algorithm_version`).
-- *limits:* the tolerance in recognising geotag's own interrupted write; how anchor offsets are clustered and a tie
-  falls; a projection with no heading point lands on the track's end; coordinates rounded to six places; track
-  times parsed as the host's Python parses them; a decode killed after ten seconds; blank camera-identity values;
-  what counts as a photo's own position (item 24); one library file compared per photo; the suffix above the
-  highest of library and batch (`BLD-collision_suffix` says "next free"); case-only collisions refused on every
-  filesystem; a redundant JPEG paired with case; an uppercase extension left in photos by destination; and the
-  exit statuses (1 locked, 2 refused, 3 partial or failed, 130 interrupted; merge's plan and dry run exit 0 with
-  blockers).
-
-**Found while the user guides were redone (2026-11-15), to be ruled or fixed:**
-- the editor checks a timezone with the browser's zone list and geotag with the host's: a name one knows and the
-  other does not (`US/Eastern` on a host without the legacy names) is saved by the editor and refused by the plan;
-- a drift cell's `corrected_offset_seconds` that is not a number is named only once the cell is confirmed, and a
-  `confirmed_offset_seconds` beside `confirmed: false` is never checked;
-- `confirmed_despite_recorded_offsets: null` is a blocker, where `null` reads as "no answer" in every other field;
-- when `geotag plan` runs prep itself, prep's own closing "Next:" lines print as well as geotag's — three of them,
-  disagreeing, where geotag then stops;
-- `BLD-offset_shared_within_day` names an offset the user chose from a group among those shared within a day, and
-  also requires that no offset was written by hand — the code never shares such a one;
-- `phone_gpx_agreement_tolerance_seconds`, `phone_gpx_conflict_threshold_seconds`, `phone_gpx_max_distance_meters`
-  and `dst_conflict_tolerance_seconds` are still settings nothing reads, kept for item 6.
-
 ---
-
-### 6. Check a phone's time against the tracks
-
-**Why:** geotag trusts a phone's clock — a phone takes its time from the network — and resolves each phone photo from
-its own offset tag, or failing that from the destination's timezone, with nothing checking it. A phone set to the wrong
-zone, a photo whose offset tag is missing while the phone sat in another zone, or a phone's clock that did drift, would
-pass unseen and misplace every such photo on the track. The owner wants the check built.
-
-**What exists:** four settings in the default configuration that nothing reads: `phone_gpx_agreement_tolerance_seconds`
-(60), `phone_gpx_conflict_threshold_seconds` (300), `phone_gpx_max_distance_meters` (250) and
-`dst_conflict_tolerance_seconds` (120). Configuration loading checks they are numbers; no spec names them. Their names
-suggest the shape: where a phone photo carries its own position and a track covers it, compare the photo's time with
-the track's time at that position.
-
-**Open:** what the check does on disagreement — inside the agreement tolerance pass silently, beyond the conflict
-threshold block or ask, between them warn? — and what the daylight-saving setting guards. To be settled with the owner
-before it is specified.
-
-### 7. One obligation per item, checked by reading
-
-**Why:** every corpus item states one obligation, and `tools/spec-build` refuses an item with more than one SHALL. But
-the count cannot see a second obligation folded into one sentence: in the pass that made every item one SHALL, about 90
-items had a restating second SHALL reworded into the first, and some of them still carry two obligations under one
-SHALL — `RUL-lock_fail_fast`, for one, stops at once, says the workspace is locked and produces nothing;
-`RUL-replanning_keeps_the_prior` sets the saved plan aside and tells the user where; `RUL-no_plan_no_run` stops and
-tells the user to plan first. From §4's structure: `RUL-structure_built_once`, `RUL-top_level_only_managed`,
-`RUL-first_dump_at_top_level`, `RUL-link_named`, `RUL-geotag_merge_check_links`, `RUL-missing_folder_blocks`,
-`RUL-missing_folder_named`, and `RUL-no_links` with its four cases. From §5's camera groups:
-`RUL-prep_derives_camera_group` (derive the group, record it in two places) and `RUL-camera_group_derivation_versioned`
-(carry a version, have it checked). From §6's filename format: `RUL-one_filename_format` (one format, set by the
-configuration, hard-coded by neither phase), `RUL-suffix_no_clobber` (zero-padded, deterministic, compared without
-regard to case, checked against the names on disk and those planned), `RUL-prep_name_provisional` (the raw timestamp,
-for ordering only, never corrected) and `RUL-geotag_name_final` (work out the final name, rename to it). From §7's tracks: `RUL-tracks_geotag_only` (what
-geotag alone does with the tracks, and what prep never does). From §9's loop: `RUL-sort_photos_only` (only photos, and
-geotag refuses otherwise), `RUL-rerun_does_what_changed` (exactly what changed requires, and asks only about what is
-affected), `RUL-merge_is_terminal` (merge comes last, new media goes to a fresh workspace) and
-`RUL-more_dumps_until_merge` (a dump is accepted, the loop resumes from prep). The owner caught
-the pattern in a proposed `RUL-failed_operation_clean` and wants the rest found.
-
-**What to do:** read every item against a stricter test — one property per item, which a single test could find broken
-in only one way — and split each real second obligation into an item refining the first, the tests' marks following, as
-`RUL-failed_operation_clean` was split into it, `RUL-failure_recorded` and `RUL-failure_never_done`.
-
-The same reading should settle what the rationale-link pass (2026-11-14) noticed:
-- rationales that justify rules of different kinds, some forced and some a judgement, so one `forced` verdict fits them
-  badly — candidates for splitting: `RAT-library_is_ground_truth`, `RAT-library_reads_cost`, `RAT-move_not_copy`,
-  `RAT-sealed_is_final`, `RAT-superseded_plans_recoverable`;
-- `RAT-offset_per_day_and_place` largely repeats the philosophy's `RAT-offset_per_camera_destination_day`;
-- `RUL-merge_run_reported` (and `RAT-merge_report_at_the_end`) may be output — an affordance — rather than behaviour;
-- `RUL-jobs_change_nothing` refines `RUL-no_op_run`, a loose parent for "the job count changes nothing".
-
-**Where it stands (2026-11-14): done for rules and invariants.** All 377 were read against that test; 124 carried
-more than one obligation. Split: 110 of them, into 115 new items, each refining (or, for an invariant's mechanism,
-upholding) its parent, the tests' marks moved to the part each asserts. Where a second clause only repeated another
-item it was dropped and nothing made. Left whole, by ruling: "stops, having changed nothing" (one obligation; saying
-why is a second); a second clause that is the scope or manner of the first; an enumeration of one record's contents.
-Parents and new items were ruled 2026-11-14, three reworded and twenty given the test they lacked. Build items are not read this way (ruled). The proposals, as data, and
-the script that applied them are kept outside the repository. The rationale questions below are untouched.
-
-**When:** the conversion is done (2026-11-14); this is the once-over-the-whole-corpus pass the owner asked for — *"maybe
-we can do this at the very end after the full conversion to sphinx-needs?"* (the sections were renumbered after it, 2026-11-14).
-
-### 11. Records keyed by a fingerprint that changed with ImageMagick
-
-**Why:** a new ImageMagick may decode a photo to a new fingerprint value (`RUL-engine_change_is_checked`). Prep
-follows the value in its own records — the database and prep's log move to it, across a user's move too — and geotag's
-pinned own values follow it through prep's log (`RUL-own_values_follow_new_fingerprint`, `BLD-original_values_pinned`). Geotag's other
-records keyed by the old value do not: its complete log and the finalized-media record. So merge, finding a photo whose
-fingerprint changed, can only leave it unmerged (`RUL-merge_rechecks_under_new_engine`), and the only remedy today is
-the ImageMagick version that prepped the workspace. Found while converting merge's scope section.
-
-**What to do:** list every record keyed by a fingerprint's value, and decide how it follows a value that changed — a step
-that re-keys them, planned and journaled like any change, its records rewritten whole and what depends on them restaled
-— or leave the block as the answer. Stop where the old-to-new mapping is not one to one, which would change prep's
-duplicate decisions.
-
-**When:** any time — the conversion is done; geotag's pinned values are done (`BLD-original_values_pinned`).
-
----
-
-### 13. Keep the track points geotag used in the workspace, sealed with it
-
-**Why:** every `geotag plan` reads every track file under `gpx_root` whole, to hash it, and keeps the parsed points
-only in the scratch track memo, which is neither archived nor sealed. The sealed workspace records the GPX fingerprint
-and, per photo, the name of the track that placed it — not the points — so once `gpx_root` changes or is gone, the
-evidence behind a placement or a clock offset can no longer be seen. The owner: *"I will have always the gps data used
-during the process, in the form used during the decisioning, which would make the workspace truly self-contained."*
-
-**What to do:**
-
-- A geotag region of `photos-00-ingest.db` — the one record database, snapshotted into the archive at finalize and
-  merge, so sealed with the workspace — holding a catalogue of every track file under `gpx_root` (path, size,
-  modification time, SHA-256, first and last point time) and the points that fall in the window, as decided on (UTC
-  time, latitude, longitude, file, index). It replaces the scratch track memo.
-- Refresh on every run by size and modification time, as prep's plan memo does: an unchanged file is not read; a new
-  or changed one is read and parsed; one gone is dropped **with a warning naming it** — the one reason to take a track
-  out is that it records someone else's trip at the same time, and the user should see that it went.
-- The window: the union of a window around each photo day — of the photos in photos by destination with a recorded
-  time — with a margin of at least `gpx_anchor_max_clock_error_seconds` (2 days by default) each side, since offset
-  inference looks that far from a camera's time; and, once `photos-21` is complete, a window around each photo's
-  corrected time too, since placement uses it and a manual real time can lie far from the camera's. Sorting photos in,
-  or new tracks under `gpx_root`, grows it.
-- The GPX fingerprint becomes the hash of the points in the window, so tracks added for another time restale nothing.
-- Rule it: this reverses the ruled "every track file is read whole on every run" (`BLD-idempotency`).
-
-**When:** any time — the conversion is done.
-
-### 14. Propose a destination's timezone from its photos' positions
-
-**Why:** a destination's timezone is proposed only from the destination it lies in, or from the configured default
-(`RUL-timezone_from_nearest`). The photos' own positions — native GPS, or placed from the tracks — say where they were
-taken, and so which timezone; the original geotag spec described this as the first of the proposals, never built. A trip's root
-would then need no zone set by hand, and a destination that crosses into another zone than its parent's would be
-caught.
-
-**What to do:** derive a zone from the positions of a destination's photos — through a timezone-boundary database, a
-new dependency — and propose it ahead of the inherited one, with a `proposal_source` of its own; decide whether such a
-proposal applies itself like the inherited one, or waits for acceptance, since unlike the tree it can disagree with
-the parent's zone.
-
-**When:** any time — the conversion is done.
-
-### 15. Split a day's clock offset where the camera's clock changed
-
-**Why:** geotag keeps one clock offset per camera, destination and day (`RUL-offset_per_camera_destination_day`). A
-camera whose clock is changed during the day at one destination — reset, or set to local time at lunch — has two
-offsets that day, and no single one fits: its anchored photos split into two groups, one of them reported as agreeing
-with none (`conflicting_files`). Today the editor tells the user to read the pattern and, for this one, move the photos
-after the change into a sub-folder and re-run prep — changing the folder tree, and so the library, only to work around
-the limit. That advice is a stopgap; this item replaces it.
-
-**What to do:** when the photos disagreeing with the agreed offset form one run in time at the start or end of the
-day, propose splitting that day's cell at the change: two offsets, each anchored from its own photos. The photos
-without GPS between the last of one run and the first of the other are the one ambiguity; the editor asks which was
-the first after the change. Rule the change to the per-day model first.
-
-**When:** any time — the conversion is done.
-
-### 16. Photos whose own position the agreed clock offset contradicts
-
-**Why:** a photo with a native GPS position that agrees with none of its camera's anchor groups (`conflicting_files`),
-scattered among photos that agree, most likely carries a wrong position of its own — GPS jitter, a fix from minutes
-before, a position another program wrote. Geotag never changes a photo's own position, so accepting the agreed offset
-corrects its time and leaves the wrong place in it; the editor can only tell the user to read the pattern and fix it
-by hand elsewhere. Together with item 15, the user would no longer interpret the disagreeing photos at all.
-
-**What to do:** have geotag tell the two cases apart itself — a run at one end of the day is item 15's clock change,
-scattered photos are suspect positions — and for each suspect one, compare its own position with the track's at its
-corrected time; where they differ beyond the anchor distance, raise it as a GPS review item in photos-23, the track's
-position proposed, the photo's own kept unless the user takes the proposal. Rule first that a photo's own position may
-be replaced this way, on the user's answer only — today it never is (`RUL-own_position_kept`) — and drop the editor's
-interim advice once both items are built.
-
-**When:** any time — the conversion is done; with or after item 15.
-
-### 18. Merge: check the free space before moving into another filesystem
-
-**Why:** a merge into a library on another filesystem copies each photo before removing it from the workspace. Safety
-holds — a full disk fails the one photo, which stays in the workspace, and the run ends `partial` — but nothing warns
-before the run that the library cannot hold the batch, so the shortage shows late, one photo at a time. (Found in a
-risk review of 2026-06-21; the other half of that finding — temporary copies a hard crash leaves in the library — is
-done: merge clears them as its execution starts.)
-
-**What to do:** decide whether merge's plan, or its execute before any move, checks the library's free space against
-the batch's size and stops or warns; rule it into the spec, then code it.
-
-**When:** any time; low priority.
-
-### 19. Record the conversion's changes and cut the next release
-
-**Why:** since v2.0.0, the conversion finished geotag and retired the original specs, and changed behaviour on the way
-— offsets matched to the right day of a revisited place, a phone's time read by the offset of its own field, files
-naming no camera solved alone, a drift confirmation bound to its offset, edits since the plan never written over, the
-configured default zone only offered, a fingerprint's new value keeping its pinned values, among others — and removed
-two decision fields (`accept_proposed_timezone`, `manual_real_utc`). The review of 2026-11-14 added one,
-`accepted_offset_seconds` (an `accept_proposal` without it is now a blocker), made a missing `gpx_root` stop the plan,
-reads each track file as a track of its own, and changed the journal (`media_after`) and the plan (`placement`,
-`left_unlocated`). None of it is in `HISTORY.md`, and the work is on
-the branch `spec-corpus-sphinx-needs`, not on `main`.
-
-**What to do:** write the `HISTORY.md` entry, refresh `COVERAGE.md`, open the pull request to `main` and, once merged,
-tag and publish the release — its version decided then (a workspace decided under the removed fields carries values
-nothing reads now).
-
-**When:** once the owner chooses to release.
-
-### 20. Zone-resolved times of phones and camera-less files are assumed, never asked
-
-**Settled in part (2026-11-15):** a local time the zone skips or repeats at a daylight-saving change is never
-resolved by the zone (`RUL-ambiguous_local_time_never_guessed`): the photo stops geotag, named with both readings,
-and a camera's timezone-derived proposal at such a time is not made — the cell asks for the offset.
-
-**Why, for what remains:** a camera's "clock was on local time" is a proposal the user must accept, and is then
-checked against the tracks. The same assumption is applied silently to a phone photo with no offset tag, to a file
-naming no camera, and to a corrected photo whose offset tag is gone — and those photos are then placed on the tracks
-by it. Close to item 6, which checks a phone's time against the tracks where it has its own position.
-
-**Open:** whether such photos get a decision of their own (per destination and group: "these N photos carry no
-offset — read them as local time?"), ride the drift check, or stay as they are with a warning; and whether a photo
-at a skipped or repeated time can be answered in the decision files rather than fixed outside them. An offset tag
-that is present and is not an offset is read as none, and the photo then falls to the zone like one with no tag,
-indistinguishable in the plan; the log's `time_written` step names the rule (`destination_timezone`), which is where
-the assumption can be seen after the fact. The camera's proposal is checked at its cell's earliest time only.
-
-### 21. Let the user leave one photo unlocated in a folder that has a fallback
-
-**Why:** the placement order puts a destination's fallback above a photo's own `accept_unlocated`, and a photo the
-fallback or a track places has no review item — so "leave this one without a position" cannot be said for it, and an
-answer given earlier is dropped once a fallback or track covers the photo. The rationale ranks sources by how specific
-they are, and the photo's own answer is the most specific there is.
-
-**Open:** whether a per-photo answer outranks the folder's fallback (and a track?), and how the editor offers it for a
-photo that is not on the worklist.
-
-### 22. A photo with no recorded time has no way through geotag
-
-**Why:** one untimed photo in photos by destination stops geotag for the whole workspace, and the only cure is to
-edit its metadata outside the tool. The promise is every photo on the map, "rough or manual" — a scan could be given
-a position by hand or by its folder's fallback and keep its name. The rationale says only that no phase invents a
-time, not why a position cannot be set without one.
-
-**Open:** let such a photo be placed by the user or the fallback and left unrenamed; or give it a time decision; or
-keep the stop. To be ruled.
-
-### 23. A day's shoot split by the camera's own midnight
-
-**Why:** a cell is a camera's day by its own clock. A camera left on home time abroad, or a night shoot, has its
-midnight mid-shoot: the outing becomes two cells, the half without an anchor asks for its offset and then for a
-drift confirmation, though the other half of the same outing settled both. Close to item 15 (a clock changed
-mid-day), from the other side.
-
-**Open:** whether adjacent days of one camera in one destination with a small gap between their photos are offered
-the neighbour's offset — a proposal, to accept — or decided as one. To be ruled.
-
-### 24. A device position that is not a fix
-
-**Why:** a photo counts as having its own position when it has a latitude and a longitude. One at (0, 0), or far
-from everything else the camera did that day, is kept as the photo's own, never offered for placement, counted as
-placed, and used as an anchor. Item 16 covers positions the agreed offset contradicts; this is the position that is
-wrong on its face.
-
-**Open:** what marks a position as no fix (null island; out of range is refused already), and what then — treat the
-photo as having none, or ask.
-
-### 25. A photo that cannot be written holds the whole workspace
-
-**Why:** a photo exiftool will not write (a damaged file, a format it reads and cannot write) fails every run; the
-execution stays `partial`, and finalize is refused for every other photo. Nothing names the way out — moving the
-photo out of photos by destination and running prep and the plan again.
-
-**What to do:** have execute's output and the summary say so for a photo that fails twice the same way; decide
-whether the user can instead accept it as it is, which would be a new decision to record.
-
-### 26. What geotag leaves in the other time fields
-
-**Why:** geotag writes `DateTimeOriginal` and `OffsetTimeOriginal`. `CreateDate`, `ModifyDate` and their offsets
-keep the camera's uncorrected time, so a corrected photo holds times that disagree, and a program that reads
-`CreateDate` shows the old one. No item decides it.
-
-**Open:** write them all to the corrected time, leave them (they are the camera's record), or clear the offsets that
-no longer hold. digiKam's reading order decides how much it matters.
-
-**Added by the time review of 2026-11-14:** a real write leaves `XMP:DateCreated` and `IPTC:DateCreated` with the
-old time and old offset, and `SubSecTimeOriginal` attached to the new second, so the composite sub-second time reads
-as the new second with the old fraction.
-
-### 27. A torn plan, and the editor's save of three records
-
-**Why:** every rewrite is now synced to disk before it replaces the earlier file (`BLD-rewrite_synced_before_rename`,
-2026-11-14), which settles the power cut. Two things remain of this item: a `photos-24` that cannot be read is an
-unhandled error rather than a message; and the editor's save of the three decision records is not all-or-nothing
-across the three, and keeps no copy of what it replaces.
-
-**What to do:** make an unreadable plan a plain "re-run `geotag plan`"; decide whether the editor's save sets the
-earlier records aside as a re-plan does, and whether the three are saved as one.
-
-### 28. Finding anchors and placing photos against years of tracks
-
-**Why:** every anchor candidate search walks every track point inside the two-day clock-error window, and the
-skipped-photo reason walks them all. Measured in the review: about half a second per GPS photo at 500 000 points.
-Placement was made a bisection per track; anchoring was not. Not a correctness matter. Item 13 (the track points
-kept in the workspace, limited to the photos' dates) would cut it at the source.
-
-**What to do:** index points by a coarse grid or by time window per track, behind the same functions and tests.
-
-### 29. Which track is trusted first, by the device that recorded it
-
-**Why:** The owner records each trip twice — a standalone receiver and the phone — and the phone turns out the more
-accurate. *"I want the device track to be used when phone track unavailable."* Today no track outranks another: where
-both cover a photo's time the one whose nearest point is closer in time wins, whichever device it came from, and
-where they lie farther apart than `gpx_tracks_agree_max_distance_meters` the photo is not placed at all. So the less
-accurate track places photos the better one covers, and two tracks of one person can be read as two people.
-
-**What to do:** let a track carry its provenance and the configuration rank provenances; where tracks overlap, the
-highest-ranked that places the photo wins, and a lower one is used only where no higher one places it. The same
-ranking would settle which track anchors a clock offset. The placement already records the track file used; it would
-record the provenance and that a higher-ranked track was absent.
-
-**Open:**
-- How a track's provenance is known: the GPX `creator` attribute, a subfolder of `gpx_root`, a filename pattern, or
-  a list in the configuration. The file's own `creator` needs no filing discipline but is whatever the app wrote.
-- What "unavailable" means for the preferred track: no file for the time, or a file that cannot place the photo — a
-  gap, a jump, only a projection past its end. Whether a lower-ranked track's point at the photo's time beats a
-  higher-ranked track's interpolation or projection.
-- Whether ranked tracks that disagree still place nothing (one of them is wrong, and the rank says which to
-  believe), or whether disagreement stops a photo only between tracks of equal rank — keeping the guard for a
-  second person's trip.
-- Whether a disagreement between the two own devices is reported, as a measure of the lower one's error.
-- What the user does when tracks disagree, until then and after. Today (`RUL-disagreeing_tracks_place_nothing`, held
-  at seed for this item) the photo waits as a review item naming the two files, and the ways out are to take a track
-  out of `gpx_root`, to place the photo by hand or to leave it unplaced. Taking out one's own track is what the owner
-  does only for someone else's trip, the other two are per photo, and a track removed leaves no record of why. Ruled
-  2026-11-14: settled here, by precedence — with it, two own devices that disagree are no question; whether a
-  recorded "trust this track" answer is still wanted for tracks of equal rank is part of this item.
-- Whether a preference is a decision of the workspace (recorded with the plan, restaling photos-21 to 23 when
-  changed) — it should be, like every other setting that changes what is written.
 
 ### 30. Measuring the human input a trip costs
 
@@ -475,149 +81,52 @@ are kept, so a change to a threshold or to the inference is read as a difference
 *Items 35 to 46 come from the adversarial review of time handling, 2026-11-14 (33, 34 and 41, from the same review, are ruled and built). Each is a choice between behaviours:
 none is coded until ruled. What the review found that was plainly wrong was fixed with it.*
 
-### 35. The time a camera's own GPS recorded is not used as evidence of its clock
+### 57. A leaner corpus: keep what counts, let the code record the rest
 
-**Why:** a native-GPS photo carries the fix's UTC (`GPSDateStamp`, `GPSTimeStamp`); prep reads them, geotag does
-not. With no track covering it the cell falls to the zone guess and a question, though the photo states its own
-offset. The same evidence would settle phone photos with no offset tag (item 20) and give item 6 its check.
+**Why:** the corpus is about three quarters the size of the code by words — 760 rules, 378 reasons, 305 build items
+against some 16,800 lines of logic — and every change now touches a rule, a reason, a build item and a test, then the
+audits that reconcile them. The rules earn their keep: the walks of 2026-11-16 and -17 found real harm to originals
+and the library through them. But most of what the last two walks reconciled was the build layer restating the code
+(field names, file names, step orders), which drifts the moment the code moves, and detail that changes nothing that
+counts. The owner asked whether this was overdoing it given the script's role, and asked for this item (2026-11-17).
 
-**Open:** a stale fix (a camera reusing its last fix) gives a wrong time — what bounds it; whether such an offset
-applies itself as one agreed by several anchors does.
+**Proposed (not ruled):**
+- **Keep** the rules, the definitions, the reasons that carry an owner ruling or a real judgement, every rule's tests
+  and the mutation checks of the high-criticality rules.
+- **Cut the build layer** to the mechanisms that carry safety — fingerprints, pins, journals, the lock, atomic moves,
+  the no-clobber checks, the records' dependencies — and let the code, its comments and its tests be the record of
+  the rest: perhaps two thirds of the build items go.
+- **Move** what is display or affordance out of the rules into the owner's preferences or docs/design/decisions.md,
+  as the console's summary and the report's counts already went.
+- **Fold** forced reasons that only restate their rule into the rule's parent reason.
+- **Walk less:** later walks take the high-criticality rules and the code that changed, not every item against every
+  line.
 
-### 36. A camera photo's own recorded offset is ignored
-
-**Why:** a recent body left on home time writes `OffsetTimeOriginal` +01:00 in Japan. The timezone-derived proposal
-is built from Japan's zone, eight hours wrong, and offered as the default answer; the tag that says which zone the
-clock was on is read only for phones. `TimeZone` is carried into the file model and read by nothing.
-
-**Open:** derive the unanchored proposal from the recorded offset where the camera's photos carry one; what when they
-disagree with each other or with a GPS anchor.
-
-### 37. A drift confirmation outlives the tracks it was made against
-
-**Why:** an offset that applied itself rests on its tracks (`RUL-kept_offset_rests_on_its_tracks`); one the user
-confirmed by scrubbing a photo along a track does not. That track removed as a companion's and another added, the
-confirmation still stands and the day is placed on a track nobody looked at.
-
-**What to do:** the confirmation names the tracks it was made against, as it names its offset — written by the
-editor with the confirmation — and holds only while each is there unchanged. Not a choice of behaviour; it needs the
-editor to write it, which is why it was not done with the review.
-
-### 38. A time read from the modification or digitisation field is taken for the camera's clock
-
-**Why:** an export whose `DateTimeOriginal` is gone keeps its make and model and a `ModifyDate` written by the
-editing computer. It joins the camera's group, its edit date opens a day of its own — a new question — and the
-camera's offset is applied to a computer's clock.
-
-**Open:** solve such a photo on its own, never by the camera's offset nor counted in its days; or treat it as
-untimed (item 22).
-
-### 39. Two bodies in one camera group
-
-**Why:** two bodies of one model that write no serial are one group. Both with GPS: their anchors disagree for good
-and no one offset is right. Only one with GPS that day: its agreed offset applies itself to the other body's photos.
-Item 16's planned reading of scattered photos as suspect positions would then propose replacing the second body's
-correct ones.
-
-**Open:** a group whose key carries no serial never has an offset from its GPS apply itself; or the user declares a
-group split.
-
-### 40. A destination has one timezone — and where a trip's is asked
-
-**Why:** the corrected time is written, and the file named, in the destination's local time (`RUL-corrected_time_written_local`),
-for the reason that a morning market should read as morning. A phone photo taken at the home airport and filed
-under Japan has a correct local time replaced by Japan's: the rule defeats its own reason. No item says a
-destination has exactly one zone, or what a folder for a drive across a zone line does. Separately: a container
-never waits, so `Japan/{Kyoto, Tokyo, Nara}` asks three times unless the user knows to answer on the folder that asks
-nothing — against *"one answer per trip, at the trip's folder"* (`RAT-home_zone_offered`).
-
-**Ruled 2026-11-14:** one zone per destination, whatever a photo records (`RUL-destination_has_one_timezone`); a photo
-recording another offset stops the zone until the user moves it, picks its zone or confirms the destination's.
-
-**Open:** ask a missing zone once, at the topmost destination that neither has nor inherits one.
-
-### 42. A clock reset to its factory date is proposed like any other
-
-**Why:** battery out, camera at 2000-01-01. No anchor is possible; the cell proposes the timezone-derived offset,
-acceptable in one answer, which writes the year 2000 into the originals as corrected. The drift check now asks where
-tracks lie by the camera's recorded times, which a reset clock's do not. The right answer is a count of seconds over
-26 years, worked out by hand.
-
-**Open:** a proposed offset leaving a cell's photos farther than the largest clock error from every track and every
-other device's photo of the destination does not take effect on acceptance alone; let the user give the true time of
-one photo instead of an offset.
-
-### 43. Videos and set-aside JPEGs keep the uncorrected clock in their names
-
-**Why:** geotag changes photos by destination only, never a video (`RUL-geotag_changes_only_by_dest`). A camera on
-home time: its photos are named in destination-local time, its videos of the same minutes eight hours away, and a
-RAW no longer shares its name with its set-aside JPEG. No item says the provisional name is final for them.
-
-**Open:** say so, or correct those names from the camera-day's settled offset — a rename, no tag written.
-
-### 44. A time corrected by hand after geotag wrote it is planned back
-
-**Why:** geotag decides from the values pinned before its first write. A user who then fixes the photo's time in
-another tool finds, after the next plan, a write putting geotag's value back — now logged with what it replaces, but
-neither asked nor refused.
-
-**Open:** a held time that is neither the pinned original nor what geotag wrote blocks, naming the photo; or is taken
-as the photo's new recorded time.
-
-### 45. Order and pairs among photos of one second
-
-**Why:** suffixes are given in path order, and `-` sorts before `.`: `T.jpg, T-001.jpg, T-002.jpg` become
-`T'-002.jpg, T'.jpg, T'-001.jpg` on geotag's rename, a burst's order rotating, and a RAW can land beside another
-frame's JPEG. Sub-second times are read by prep and used nowhere. Two smaller things of the same kind: a filename
-format holding `%z` reads differently in prep and geotag, and names in the hour a zone repeats sort against true time.
-
-**Open:** order by sub-second then the suffix already held, one suffix across the extensions of a stem; refuse a
-format whose fields read differently with and without a zone.
-
-### 46. Corrected means resolved, so every original is written
-
-**Why:** a phone photo already holding the right local time and its own position gets no time written — and still
-gets geotag's mark in `GPSProcessingMethod`, because a time counts as corrected once resolved. Every original is
-touched; "corrected" is defined nowhere.
-
-**Open:** define it as resolved (state it), or mark only a photo whose time geotag changed and recognise the others
-on a re-run by their unchanged values.
-
-### 47. What the country choice leaves open
-
-**Built 2026-11-14:** a destination holding photos has one timezone (`RUL-destination_has_one_timezone`); a folder
-is said to be in a country by the user, by code, from the zone database's own list (`RUL-country_gives_its_timezone`):
-one timezone — given to everything inside; several — none given, none let through from above, every zone written
-inside held to the country's. A country is chosen once, at the top of its tree; one chosen inside another is taken
-out with a warning (`RUL-country_chosen_once`). Recognising a country by its folder's name was rejected: names are
-spelt as their owner spells them, in any language.
-
-**Open:**
-- A destination under a country of several timezones could be *proposed* its zone where its photos say: the one
-  zone of that country that fits the offsets its phone photos record. Today it only asks.
-- A tree with no country chosen anywhere behaves as before: a zone answered on a container passes down unchecked to
-  destinations of camera photos alone. Whether a zone answered on a container should itself ask "is this a country"
-  where the zone belongs to a country of several.
-- The wording of ruled items that speak of a trip's folder — `RAT-home_zone_offered` ("one answer per trip, at the
-  trip's folder"), `RAT-decisions_cascade` ("set once at a trip's root") — and the docs' `year/country/city/location`,
-  to be put in terms of places and countries.
-- Regions that are not countries and span zones (an island group, a cross-border park): nothing to pick them from.
-- A host whose zone database ships without `zone.tab` (some minimal images): the choice is refused there; whether
-  the table should travel inside the executable.
+**Open:** the owner's ruling on the shape; then a list of the items each step removes or moves, for review before
+anything is cut.
 
 ---
 
-### 48. Say at the start that a filesystem cannot hold a workspace or a library
+### 53. Videos sorted into destinations, and geotagged
 
-**Why:** `RUL-filesystem_agnostic` names what cartographer requires of a filesystem: file locks, an atomic rename, a
-move that fails where its target exists, syncing a file and a folder to disk. A filesystem without them — a FAT or
-exFAT card, some network shares — is not checked for: a run there fails at its first lock or move, with that call's
-error and no word of why. The owner, 2026-11-14: backlog it.
+**Why:** videos stay in videos by date, never sorted, so geotag gives them no place and no corrected time: their
+names keep the camera's clock (stated as final by BACKLOG 43), they carry no position, and merge leaves them out of
+the library. A trip's videos are as much the trip as its photos. The owner wants them sorted into destinations and
+geotagged as photos are (2026-11-16).
 
-**What:** at a run's start, on the workspace's filesystem and, for merge, the library's: try each requirement on a
-scratch file in the control directory and stop, naming the one that is missing, before anything else is done. To be
-ruled with it: whether a network filesystem, where the lock guards one machine only
-(`RUL-stale_takeover_conservative`), is refused, warned of, or left to the user.
+**Ruled 2026-11-16 (the shape; to be built with the London trip's videos as test data):**
+- Sorted beside the photos, in the same destination folder: `RUL-sort_photos_only` is reversed.
+- MOV and MP4 only, written through exiftool's QuickTime tags; an MTS or AVI sorted into a destination stops geotag,
+  its way out being to move it back to videos by date.
+- A video's clock is its body's: the photos' camera group when the model and serial match, a group of its own
+  otherwise.
+- Its time is QuickTime CreateDate, read as UTC as the format says, with a per-camera setting for bodies that write
+  local time.
+- Its position is its start, as one point.
+- Merge takes it into the library beside the photos.
+
+**Open:** split into buildable items once the London trip's videos are in hand — what each step changes in prep's
+sorting check, geotag's write path and merge.
 
 ---
 
@@ -633,4 +142,3 @@ each shot in the other guides that shows something changed; then take the note o
 natural run to take them from.
 
 **When:** after item 17's text, so the pictures are taken once.
-

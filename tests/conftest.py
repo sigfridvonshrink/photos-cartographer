@@ -57,6 +57,37 @@ def _restore_config():
         photos_utils._refresh_media_class_map()   # a test that loaded a workspace's lists leaves none behind
 
 
+@pytest.fixture(autouse=True)
+def _no_network(monkeypatch):
+    """No test reaches the network: the one download the tool makes, of the table of countries
+    (BLD-zone_table_download), is refused unless a test replaces it."""
+    def refuse(url, timeout):
+        raise OSError("tests do not reach the network")
+    monkeypatch.setattr(photos_utils, "_download_zone_archive", refuse)
+    yield
+
+
+@pytest.fixture(autouse=True)
+def _hand_built_workspace_recorded(request, monkeypatch):
+    """A workspace a test builds by hand stands for one as prep's execution left it — its handoff, log and files
+    written as prep's would be (tests/_handoff.py) — so the state an execution records (BLD-workspace_record) is
+    recorded for it as well, the first time a command checks it. A workspace with a record of its own, written by an
+    execution in the test, is checked against that one. A test of the check itself, or of a workspace with no record,
+    opts out with `@pytest.mark.no_hand_built_record`."""
+    if request.node.get_closest_marker("no_hand_built_record"):
+        yield
+        return
+    real = photos_utils.check_workspace
+
+    def check(ws, *args, **kwargs):
+        if photos_utils.read_workspace_record(ws)[0] is None and os.path.exists(photos_utils.guard_path(ws)):
+            photos_utils.write_workspace_record(ws)
+        return real(ws, *args, **kwargs)
+    for mod in (photos_1_prep, photos_2_geotag, photos_3_merge):
+        monkeypatch.setattr(mod, "check_workspace", check)
+    yield
+
+
 @pytest.fixture
 def seed_from_live_config(monkeypatch):
     """Make `load_or_seed_config` seed a fresh workspace from the IN-MEMORY `CONFIG` instead of the

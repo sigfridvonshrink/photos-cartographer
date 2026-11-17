@@ -85,7 +85,7 @@ def test_hash_image_valid_on_real_fullsize_jpeg_and_raw():
 
 
 @requires_magick
-@pytest.mark.spec("BLD-fingerprint")
+@pytest.mark.spec("BLD-fingerprint", test="TST-content_hash-hash_image_valid_and_version_bound")
 def test_hash_image_valid_and_version_bound():
     r = prep.ContentHasher.fingerprint_image(CAM_SMALL)
     assert r["status"] == "valid" and r["value"]

@@ -38,6 +38,7 @@ def workspace(tmp_path):
     os.makedirs(os.path.join(root, ".photos-ingest"), exist_ok=True)
     with open(os.path.join(root, ".photos-ingest", "photos-00-workspace-guard"), "w") as f:
         f.write("")
+    utils.load_or_seed_config(root)          # the configuration prep's first run seeded
 
     # Create some dummy files
     for i in range(10):
@@ -107,7 +108,6 @@ def test_deterministic_plan_with_jobs(mock_read, mock_popen, workspace):
         "created_at",
         "operation_id",
         "last_seen_ns",
-        "absolute_path",
         "duration_seconds",
         "progress",
         # NOTE: jobs is deliberately NOT scrubbed here — it is no longer recorded in the plan, so the
@@ -206,7 +206,6 @@ def test_quiet_plan_executor_execution(mock_validate, mock_popen, workspace):
         plan_version=prep.PLAN_SCHEMA_VERSION, code_fingerprint=prep.code_fingerprint(),
         command="prep",
         created_at="now",
-        workspace_root=workspace,
         config_fingerprint=prep.Fingerprint("sha256", "val"),
         summary={"metadata_plan_status": {}},
         blockers=[],
@@ -324,7 +323,8 @@ def test_cli_jobs_argparse(workspace):
 
 @patch("subprocess.Popen")
 @patch("photos_utils.PersistentExifToolWorker.read_metadata")
-@pytest.mark.spec("RUL-tool_failure_never_valid", test="TST-concurrency-exiftool_pool_failure_blocks_plan")
+@pytest.mark.spec("RUL-metadata_failure_blocks", "BLD-metadata_failure_blocker",
+                  "RUL-tool_failure_never_valid", test="TST-concurrency-exiftool_pool_failure_blocks_plan")
 def test_exiftool_pool_failure_blocks_plan(mock_read_metadata, mock_popen, workspace):
     mock_popen.return_value = MagicMock()
     # If the process errors out constantly
@@ -381,6 +381,8 @@ def test_exiftool_pool_failure_blocks_handoff(mock_read_metadata, mock_popen, wo
     handoff_path = os.path.join(workspace, ".photos-ingest", "photos-11-handoff.json")
     assert not os.path.exists(handoff_path)
 
+@pytest.mark.spec("RUL-metadata_failure_blocks", "BLD-metadata_failure_blocker",
+                  test="TST-concurrency-failed_folder_mapping")
 @patch("subprocess.Popen")
 @patch("photos_utils.MetadataReader.read_metadata_concurrently")
 def test_failed_folder_mapping(mock_read_metadata_concurrently, mock_popen, workspace):
@@ -430,9 +432,10 @@ def test_stale_dependency_under_concurrency_blocks_execution(mock_read_metadata_
         return res, set()
     mock_read_metadata_concurrently.side_effect = _mock_read_concurrently
 
-    # We should have one file triggering a metadata fetch
-    os.makedirs(os.path.join(workspace, "2-missing-metadata"), exist_ok=True)
-    file_path = os.path.join(workspace, "2-missing-metadata", "UNKN_dummy.jpg")
+    # We should have one file triggering a metadata fetch — a conforming by-date photo, which the plan leaves
+    # where it is (a passive dependency)
+    os.makedirs(os.path.join(workspace, "5-photos-by-date", "2023-01-01"), exist_ok=True)
+    file_path = os.path.join(workspace, "5-photos-by-date", "2023-01-01", "2023-01-01--12-00-00.jpg")
     with open(file_path, "w") as f:
         f.write("dummy")
 
@@ -467,7 +470,7 @@ def test_stale_dependency_under_concurrency_blocks_execution(mock_read_metadata_
 @patch("subprocess.Popen")
 @patch("photos_1_prep.ContentHasher.fingerprint_image")
 @patch("photos_utils.MetadataReader.read_metadata_concurrently")
-@pytest.mark.spec("RUL-prep_run_summarised")
+@pytest.mark.spec("RUL-prep_run_summarised", test="TST-concurrency-progress_summary_fields")
 def test_progress_summary_fields(mock_read_metadata_concurrently, mock_hash_image, mock_popen, workspace):
     mock_hash_image.return_value = {"status": "valid", "strategy": "image-content-hash", "value": "dummyhash"}
     mock_popen.return_value = MagicMock()
@@ -526,6 +529,21 @@ def test_progress_summary_fields(mock_read_metadata_concurrently, mock_hash_imag
         handoff_data = json.load(f)
         assert "performance_and_cache" not in handoff_data
         assert "jobs_requested" not in handoff_data
+
+
+@pytest.mark.spec("BLD-tool_workers", "RUL-tool_failure_retried",
+                  test="TST-concurrency-an_exiftool_reply_that_does_not_parse_is_retried")
+def test_an_exiftool_reply_that_does_not_parse_is_retried():
+    """A reply from exiftool that does not parse is a failed attempt, not an empty folder: the worker is restarted and
+    the folder read again, its files kept from the second reply."""
+    process = MagicMock()
+    process.stdout.readline.side_effect = ["not json at all\n", "{ready}\n",
+                                           '[{"SourceFile": "f.jpg", "EXIF:Make": "Canon"}]\n', "{ready}\n"]
+    with patch("subprocess.Popen", return_value=process) as popen, patch("photos_utils.require_tools"):
+        with utils.ExifToolWorkerPool(size=1) as pool:
+            got = pool.execute("folder", utils.ProgressCoordinator(quiet=True))
+        assert popen.call_count == 2                              # the worker restarted between the attempts
+    assert set(got) == {"f.jpg"}
 
 
 @patch("subprocess.Popen")

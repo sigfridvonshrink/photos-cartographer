@@ -21,6 +21,7 @@ import errno
 import importlib.resources as _res
 import json
 import os
+import re
 import socket
 import sys
 import threading
@@ -108,6 +109,8 @@ def _make_target(phase, command, extra=None, pre=None):
     args = parser.parse_args([*(pre or []), command, *(extra or [])])
 
     def target():
+        # A stop's list of changes is offered for acceptance only until the next run starts (BLD-accept_changes).
+        WEB.clear_changes()
         try:
             mod.run(args)
         finally:
@@ -117,23 +120,32 @@ def _make_target(phase, command, extra=None, pre=None):
     return target
 
 
-def _read_plan(path):
+def _read_plan(path, replan):
+    """(the saved plan, None), or (None, the summary of a plan absent or unreadable). A plan there that cannot be read —
+    torn, not JSON, not an object — is shown as one with a blocker naming `replan`, the command that makes it anew,
+    never executable (the owner's preferences, docs/design/decisions.md) — for prep and geotag, whose planning sets such a plan aside; merge's
+    planning stops on one, so its summary reads the plan as merge does (`_merge_summary`)."""
     if not os.path.exists(path):
         return None, {"exists": False}
     try:
         with open(path) as f:
-            return json.load(f), None
+            plan = json.load(f)
+        if not isinstance(plan, dict):
+            raise ValueError("not a JSON object")
     except (OSError, ValueError) as e:
-        return None, {"exists": True, "error": f"could not read plan: {e}", "blockers": ["unreadable plan"]}
+        why = f"{os.path.basename(path)} cannot be read ({e}) — run `{replan}` again"
+        return None, {"exists": True, "error": why, "blockers": [why]}
+    return plan, None
 
 
 def _json_status(path):
     """The `status` field of a JSON artifact, or None if absent/unreadable — a cheap visible-state read."""
     try:
         with open(path) as f:
-            return (json.load(f) or {}).get("status")
+            obj = json.load(f)
     except (OSError, ValueError):
         return None
+    return obj.get("status") if isinstance(obj, dict) else None
 
 
 def _current_fingerprints(workspace):
@@ -186,7 +198,7 @@ def _staleness(workspace, plan, cur):
 
 
 def _prep_summary(workspace, cur=None):
-    plan, miss = _read_plan(U.prep_plan_path(workspace))
+    plan, miss = _read_plan(U.prep_plan_path(workspace), "prep plan")
     if plan is None:
         return miss
     ops = plan.get("operations", []) or []
@@ -207,7 +219,7 @@ def _prep_summary(workspace, cur=None):
 
 def _geotag_summary(workspace, cur=None):
     from ..photos_2_geotag import executable_plan_path
-    plan, miss = _read_plan(executable_plan_path(workspace))
+    plan, miss = _read_plan(executable_plan_path(workspace), "geotag plan")
     if plan is None:
         return miss
     dests = plan.get("destinations", {}) or {}
@@ -222,10 +234,18 @@ def _geotag_summary(workspace, cur=None):
 
 
 def _merge_summary(workspace, cur=None):
-    from ..photos_3_merge import merge_plan_path
-    plan, miss = _read_plan(merge_plan_path(workspace))
-    if plan is None:
-        return miss
+    from ..photos_3_merge import merge_plan_path, read_merge_plan, UnreadableRecord
+    path = merge_plan_path(workspace)
+    if not os.path.exists(path):
+        return {"exists": False}
+    # Read as merge reads it: a plan merge cannot read is one `merge plan` stops on too, so the way on is to repair
+    # it or restore a `-NNN` copy, never to plan again (the owner's preferences, docs/design/decisions.md).
+    try:
+        plan = read_merge_plan(path)
+    except UnreadableRecord as e:
+        why = (f"{os.path.basename(path)} cannot be read ({e.error}) — repair it, or restore it from a `-NNN` copy "
+               "beside it; `merge plan` stops on it too")
+        return {"exists": True, "error": why, "blockers": [why]}
     t = plan.get("totals", {}) or {}
     blockers = list(plan.get("blockers", []) or [])
     placed = t.get("placed_new", 0)
@@ -253,7 +273,9 @@ def _plan_summary(workspace, phase="prep", cur=None):
 def _execute_guard(workspace, phase, payload):
     """Server-side enforcement of the 2-step gate for any phase's execute. Returns an error string to
     refuse, or None to allow. Refused unless the client explicitly confirmed, a saved plan exists with
-    no blockers, is not stale (cheap dep check), and (if supplied) the reviewed plan_id still matches.
+    no blockers, is not stale (cheap dep check), and the plan_id the gate showed — sent with the
+    confirmation, and required — is still the saved plan's: a confirmation naming no plan is one for
+    a summary nobody can say was seen, so it is refused rather than taken for the current plan.
     The phase's own execute still re-validates everything besides (full fingerprint incl. GPX,
     no-clobber, the whole-run lock) — this is the deliberate gate on top, not a replacement."""
     if not payload.get("confirm"):
@@ -268,7 +290,9 @@ def _execute_guard(workspace, phase, payload):
     if s.get("stale"):
         return f"plan is stale ({s['stale'][0]}) — re-plan"
     pid = payload.get("plan_id")
-    if pid and pid != s.get("plan_id"):
+    if not pid:
+        return "no reviewed plan named — open the execute gate and confirm there"
+    if pid != s.get("plan_id"):
         return "the plan changed since you reviewed it — re-open the gate"
     return None
 
@@ -332,6 +356,24 @@ def _prune_guard(payload):
     return None
 
 
+_CHANGE_CODE_RE = re.compile(r"[0-9a-f]{%d}" % U.CHANGE_CODE_LENGTH)
+
+
+def _accept_extra(phase, command, payload):
+    """`(argv, error)`: `['--accept-changes', code]` for a run the client sends with the code a stop printed — the
+    console's Accept button sends the same code through the same command, the phase's own check then accepting
+    exactly the list it gave for (BLD-accept_changes; the affordance is in docs/design/decisions.md). No code, `[]`; a
+    command that does not check, or a value that is not such a code, is refused."""
+    code = payload.get("accept_changes")
+    if code is None:
+        return [], None
+    if command not in U.CHECKING_COMMANDS.get(phase, ()):
+        return None, f"{phase} {command} does not check the workspace, so it accepts no changes"
+    if not isinstance(code, str) or not _CHANGE_CODE_RE.fullmatch(code):
+        return None, "not a code a stop printed"
+    return ["--accept-changes", code], None
+
+
 def _library_blessed(workspace):
     """True if the workspace's configured `merge.library_root` is a blessed library (carries the
     `.photos-library` marker). Merge plan hard-requires it, so the console gates on it too — and an
@@ -342,6 +384,22 @@ def _library_blessed(workspace):
     except (OSError, ValueError):
         return False
     return bool(lib) and U.is_library(lib)
+
+
+def _finalized_execution(workspace):
+    """True when the archival package (photos-26-archive-manifest.json) names the execution the last execution summary
+    (photos-25) records: the package was made after that execution. A record missing or unreadable: False."""
+    from ..photos_2_geotag import archive_manifest_path, execution_summary_path
+    ids = []
+    for path, get in ((execution_summary_path(workspace), lambda o: (o.get("run_metadata") or {}).get("execution_id")),
+                      (archive_manifest_path(workspace), lambda o: o.get("execution_id"))):
+        try:
+            with open(path) as f:
+                obj = json.load(f)
+            ids.append(get(obj) if isinstance(obj, dict) else None)
+        except (OSError, ValueError, AttributeError):
+            return False
+    return bool(ids[0]) and ids[0] == ids[1]
 
 
 def _runnable_actions(workspace, phases, sealed, busy, initialized=True):
@@ -381,6 +439,10 @@ def _runnable_actions(workspace, phases, sealed, busy, initialized=True):
     prep_done = os.path.exists(U.handoff_path(workspace))         # prep executed → handoff written
     geotag_done = os.path.exists(complete_log_path(workspace))    # geotag finalized → complete log
     geotag_executed = _json_status(execution_summary_path(workspace)) == "success"  # ready to finalize
+    # Finalize "may be run again" (BLD-geotag_records_versioned), and must be after a geotag execution the package
+    # does not cover — merge refuses until it is. So it is offered after every successful execution its package does
+    # not name, not only the first: offered once only, it would leave the console's user stuck where the CLI's goes on.
+    finalized_current = geotag_executed and _finalized_execution(workspace)
 
     g("prep/plan", True)
     g("prep/dry-run", pe["plan_exists"], "run prep plan first")
@@ -388,8 +450,8 @@ def _runnable_actions(workspace, phases, sealed, busy, initialized=True):
     g("prep/prune-quarantine", True)     # maintenance, runnable anytime (the destructive delete is gated)
     g("geotag/plan", prep_done, "run prep execute first")
     g("geotag/execute", ge["executable"], "needs a clean, fresh geotag plan")
-    g("geotag/finalize", geotag_executed and not geotag_done,
-      "finalized already" if geotag_done else "geotag execute must succeed first")
+    g("geotag/finalize", geotag_executed and not finalized_current,
+      "finalized already" if finalized_current else "geotag execute must succeed first")
     g("merge/init-library", True)        # one-time setup, runnable anytime (unless sealed/busy)
     # merge plan needs BOTH geotag finalized AND a blessed library (the phase hard-blocks without the
     # library — RUL-library_mark_required), so gate on both and name whichever is missing. This makes init-library a
@@ -417,10 +479,20 @@ def _editor_refusal(workspace):
     if not os.path.exists(U.guard_path(workspace)):
         return "not an initialized workspace — run prep first"
     if U.is_sealed(workspace):
-        return "workspace is sealed (already merged): the decision editor will not open it"
+        why = "workspace is sealed (already merged): the decision editor will not open it"
+        if U.likely_new_dump(workspace):                       # as serve() warns (RUL-sealed_new_dump_warned)
+            why += (f". A likely new dump is present (at the workspace root or in "
+                    f"{U.workspace_folders(workspace)['sources']}/) — move it into a fresh workspace by hand; "
+                    "the editor left it exactly where it is")
+        return why
     key = os.path.abspath(workspace)
     with _EDITOR_LOCKS_GUARD:
         if key not in _EDITOR_LOCKS:
+            # The workspace's filesystem, before the editor's lock is taken, as serve() checks it
+            # (RUL-local_filesystem_checked_first, BLD-local_filesystem_types); once held, every save checks it again.
+            fs_err = U.workspace_filesystem_error(workspace)
+            if fs_err:
+                return fs_err
             lock, owner = _editor._acquire_editor_lock(workspace)
             if lock is None:
                 d = owner or {}
@@ -477,7 +549,31 @@ def _state(workspace):
         "runnable": sorted("/".join(p) for p in _RUNNABLE),
         "actions": _runnable_actions(workspace, phases, sealed, busy, initialized),
         "phases": phases,
+        "zone_table": _zone_table_state(workspace, sealed),
     }
+
+
+def _zone_table_state(workspace, sealed):
+    """The question of downloading the table of countries, while the workspace has it unanswered: {"question": the
+    words `prep plan` asks it in} — the Plan button then asks it and sends the answer with the run, as the CLI's
+    `--download-zone-table` (BLD-zone_table_question; docs/design/decisions.md). None where the host has its own table,
+    the answer is recorded, or the workspace is sealed."""
+    if sealed or not U.zone_table_question_pending(workspace):
+        return None
+    return {"question": U.zone_table_question(U.bundled_zone_table()["tzdata_version"])}
+
+
+def _zone_table_extra(phase, command, payload):
+    """`(argv, error)`: `['--download-zone-table', answer]` for a `prep plan` the client sends with the user's answer
+    to the question of the table of countries; `[]` with none. Any other command, or another value, is refused."""
+    answer = payload.get("zone_table")
+    if answer is None:
+        return [], None
+    if (phase, command) != ("prep", "plan"):
+        return None, f"{phase} {command} does not ask about the table of countries"
+    if answer not in ("yes", "no"):
+        return None, "the answer about the table of countries is yes or no"
+    return ["--download-zone-table", answer], None
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -617,6 +713,13 @@ class Handler(BaseHTTPRequestHandler):
             if err:
                 return self._send(409, {"ok": False, "error": err})
             extra = _prune_extra(payload)
+        accept, err = _accept_extra(phase, command, payload)
+        if err:
+            return self._send(400, {"ok": False, "error": err})
+        zone, err = _zone_table_extra(phase, command, payload)
+        if err:
+            return self._send(400, {"ok": False, "error": err})
+        extra = extra + accept + zone
         # Parallelism: -j lives on each phase's PARENT parser, so it must precede the subcommand — pass
         # it as `pre`, not in `extra`. Sent whenever the client supplies a valid count (clamped); phases
         # that don't parallelize accept-and-ignore it.

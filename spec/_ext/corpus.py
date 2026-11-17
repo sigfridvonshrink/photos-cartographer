@@ -19,6 +19,7 @@
   marked test, `verifies` the items it names.
 - **The checks**, each a warning, which fails the build:
   - a mark naming an id that is no item;
+  - a mark with no test id, which would never reach the corpus;
   - an item whose `verify` is `required` that no test verifies;
   - an item whose `verify` is `by_rules` that is not an invariant, or that no rule upholds or refines, or one of
     whose upholding or refining rules is not itself `required`: no one test can assert an invariant, so it is
@@ -93,6 +94,9 @@ def _write_tests_page(app):
             LOG.warning(f"{m['nodeid']} declares more than one test id: {', '.join(m['tests'])}",
                         type="corpus", subtype="tests")
         if not m.get("test"):
+            # a mark with no test id never reaches the corpus: what it names would go unchecked and uncounted
+            LOG.warning(f"{m['nodeid']} has a spec mark with no test id (test=\"TST-…\")",
+                        type="corpus", subtype="tests")
             continue
         # a parametrized test is several pytest items under one test id: one item, every node listed
         prior = by_test.get(m["test"])

@@ -140,7 +140,8 @@ def test_prep_idempotency_and_by_dest_accounting(mock_meta, tmp_path, monkeypatc
 
 
 @mock.patch('photos_utils.MetadataReader.read_metadata_concurrently', side_effect=mock_read_metadata_concurrently)
-@pytest.mark.spec("BLD-move_row_effects")
+@pytest.mark.spec("BLD-move_row_effects",
+                  test="TST-idempotency_cache-cache_rows_written_during_execution_not_planning")
 def test_cache_rows_written_during_execution_not_planning(mock_meta, tmp_path, monkeypatch):
     """BLD-move_row_effects: cache updates derive from the validated plan and apply during EXECUTION, never
     speculatively during planning. With a fresh (empty) cache, planning derives db_upsert operations
@@ -423,12 +424,11 @@ def test_restored_quarantine_file_reflows_as_a_normal_dump(mock_meta, tmp_path, 
                for op in plan2.operations), [(o.type, o.source) for o in plan2.operations]
 
 
-@pytest.mark.spec("RUL-missing_metadata_stays", test="TST-idempotency_cache-no_special_reimport_path_from_missing_metadata")
+@pytest.mark.spec("RUL-filed_file_stays", "RUL-photos_by_date", test="TST-idempotency_cache-no_special_reimport_path_from_missing_metadata")
 def test_no_special_reimport_path_from_missing_metadata(tmp_path, monkeypatch):
-    """2-missing-metadata is a holding bay, not a re-entry point: prep never reprocesses a file sitting
-    there in place. A file still missing a date stays put (no op); the way to re-import is to move it to
-    0-sources, where it routes like any ordinary dump — here, to 5-photos-by-date by its (now present)
-    date. No 2-missing-metadata-specific rescue path."""
+    """A file in 2-missing-metadata still missing a date stays put (no op); one moved from there into
+    0-sources routes like any ordinary dump — here, to 5-photos-by-date by its (now present) date. (One
+    given a time where it lies is filed on from there: test_time_given_filed_on.)"""
     ws = tmp_path / "ws"; ws.mkdir()
     (ws / ".photos-ingest").mkdir(); (ws / ".photos-ingest" / "photos-00-workspace-guard").touch()
     for d in ("0-sources", "1-strays", "2-missing-metadata", "3-redundant-jpgs",
@@ -466,7 +466,8 @@ def test_no_special_reimport_path_from_missing_metadata(tmp_path, monkeypatch):
 
 
 @mock.patch('photos_utils.MetadataReader.read_metadata_concurrently', side_effect=mock_read_metadata_concurrently)
-@pytest.mark.spec("BLD-workspace_database")
+@pytest.mark.spec("BLD-workspace_database",
+                  test="TST-idempotency_cache-prep_execute_cache_writes_only_from_main_thread")
 def test_prep_execute_cache_writes_only_from_main_thread(mock_meta, tmp_path, monkeypatch):
     """Single-writer cache: prep applies its plan in one sequential op loop, so every DB write lands on
     the main thread even with jobs=4 (the concurrency in prep is read-only metadata extraction during
@@ -676,6 +677,8 @@ def test_db_upsert_absolute_path_rejected(mock_meta, tmp_path, monkeypatch):
         executor.execute(plan1, journal_path)
 
 
+@pytest.mark.spec("BLD-prep_dependencies", "RUL-unchecked_counts_as_changed",
+                  test="TST-idempotency_cache-stale_already_cached_file_aborts")
 @mock.patch('photos_utils.MetadataReader.read_metadata_concurrently', side_effect=mock_read_metadata_concurrently)
 def test_stale_already_cached_file_aborts(mock_meta, tmp_path, monkeypatch):
     ws = setup_workspace(tmp_path)
@@ -734,7 +737,6 @@ def test_stale_ghost_prune_reappeared_file_aborts_before_cache_remove(mock_meta,
     # Create cache row for a missing file
     cache = photos_ingest.WorkspaceCache(str(ws), in_memory=False)
     cache.upsert_file({
-        "absolute_path": str(ws / "5-photos-by-date" / "reappeared.jpg"),
         "relative_path": "5-photos-by-date/reappeared.jpg",
         "size": 100,
         "mtime_ns": 1000,
@@ -804,9 +806,12 @@ def test_a_failed_execute_leaves_the_database_as_it_was(mock_meta, tmp_path, mon
         photos_ingest.PlanExecutor(str(ws)).execute(plan)
 
     def _db():
+        # The record of the workspace's state is no effect of the plan's: every execution rewrites it with the state it
+        # leaves, a failed one too (RUL-execution_records_state) — left out.
         conn = sqlite3.connect(str(ws / ".photos-ingest" / "photos-00-ingest.db"))
         try:
-            return [sorted(conn.execute(f"SELECT * FROM {t}").fetchall())
+            return [sorted(conn.execute(f"SELECT * FROM {t}" + (" WHERE key != 'workspace_record_id'"
+                                                                 if t == "meta" else "")).fetchall())
                     for t in ("file_cache", "metadata_cache", "meta")]
         finally:
             conn.close()

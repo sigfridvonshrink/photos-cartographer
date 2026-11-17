@@ -21,7 +21,7 @@ import math
 import re
 import shutil
 import tempfile
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 import sqlite3
 import ctypes
 import errno
@@ -91,6 +91,10 @@ CONFIG = {
     # Two tracks that cover a photo's time and put it farther apart than this are two devices in two
     # places: nothing says which carried the camera, so the photo is not placed.
     "gpx_tracks_agree_max_distance_meters": 1000.0,
+    # Folders directly under gpx_root, best device first: a track ranks as the folder it is filed in, a track
+    # in none of them below all of them. Where tracks of different rank cover a photo's time the highest places
+    # it and anchors the clock; tracks of one rank that disagree place nothing. Empty: every track ranks alike.
+    "gpx_track_precedence": [],
     # Position-based thresholds for the calibration time-anchor inference (BLD-anchor_matching):
     # how close a native-GPS frame must be to a GPX point/segment to anchor its real time, and how
     # far supporting anchors' offsets may spread before they conflict. Consumed by geotag.
@@ -98,6 +102,9 @@ CONFIG = {
     # canyons, forested parks, castle courtyards — so clock-offset inference still finds enough anchors.
     "gpx_anchor_max_point_distance_meters": 50.0,
     "gpx_anchor_max_segment_distance_meters": 50.0,
+    # How far from a photo's own position the tracks may place it, at the time its camera's agreed offset gives it,
+    # before that position counts as contradicted and is offered for review (BLD-contradicted_position).
+    "gpx_own_position_contradicted_distance_meters": 50.0,
     "gpx_anchor_offset_spread_max_seconds": 120.0,
     # The longest gap between two track points whose segment may anchor a frame lying beside it.
     "gpx_anchor_max_segment_gap_seconds": 1800.0,
@@ -143,12 +150,12 @@ CONFIG = {
             "phones": [],
             "fixed_clock_cameras": []
         },
+        # Fixed-clock camera groups that are several bodies — two of one model writing no serial
+        # (BLD-several_bodies_groups). An offset its GPS gives never applies itself, and its photos that
+        # disagree with it are never read as wrong positions. Empty: every group is one camera.
+        "several_bodies_groups": [],
         "single_anchor_auto_apply": False,
-        "multi_anchor_auto_apply": True,
-        "phone_gpx_agreement_tolerance_seconds": 60,
-        "phone_gpx_conflict_threshold_seconds": 300,
-        "dst_conflict_tolerance_seconds": 120,
-        "phone_gpx_max_distance_meters": 250
+        "multi_anchor_auto_apply": True
     },
     "filename_timestamp_format": "%Y-%m-%d--%H-%M-%S",
     # Format-distribution subfolder names that mark the later development/processing phase
@@ -160,7 +167,10 @@ CONFIG = {
     # validation — library_root must be an existing directory that is neither the workspace nor
     # inside it (BLD-library_root_validated). Prep only type-validates.
     "merge": {
-        "library_root": "/srv/pictures/5-finished"            # permanent library dir
+        "library_root": "/srv/pictures/5-finished",           # permanent library dir
+        # Room asked of a library on another filesystem beyond the photos' own size, in percent of it
+        # (BLD-library_space): a filesystem near full slows and fragments, and digiKam writes beside them.
+        "library_space_margin_percent": 5
     }
 }
 
@@ -224,9 +234,6 @@ def valid_iana_timezone(tz) -> bool:
         return False
 
 
-_COUNTRY_TABLE = None
-
-
 def _zone_database_file(name):
     """The text of one of the zone database's tables (`zone.tab`, `iso3166.tab`), from where this Python
     reads its zones — the system's database, else the `tzdata` package — or None where neither has it."""
@@ -244,25 +251,280 @@ def _zone_database_file(name):
         return None
 
 
-def country_table() -> dict:
-    """{ISO 3166 code: {"name": English name, "zones": [its timezones, sorted]}} from the zone database's
-    own tables — every country a timezone belongs to, and so every country of more than one. {} where the
-    host's zone database ships without them. Read once."""
-    global _COUNTRY_TABLE
-    if _COUNTRY_TABLE is None:
-        zones, names = {}, {}
-        for line in (_zone_database_file("zone.tab") or "").splitlines():
-            cols = line.split("\t")
-            if line.startswith("#") or len(cols) < 3:
+# The table of countries (BLD-country_table): the host's zone database's own, else the copy the user let prep
+# download for the workspace (BLD-zone_table_download), else the copy carried inside the package.
+ZONE_TABLE_ARTIFACT = "photos-02-zone-table.json"
+ZONE_TABLE_URL = "https://data.iana.org/time-zones/tzdata-latest.tar.gz"
+ZONE_TABLE_TIMEOUT_S = 20
+ZONE_TABLE_MAX_BYTES = 8 * 1024 * 1024
+# The request names the tool and nothing else: no workspace, host or user (RUL-zone_table_request_bare).
+ZONE_TABLE_USER_AGENT = "photos-cartographer"
+_ZONE_TAB_ROW = re.compile(r"[A-Z]{2}\t[+-]\d{4}(?:\d{2})?[+-]\d{5}(?:\d{2})?\t[A-Za-z0-9_+-]+(?:/[A-Za-z0-9_+-]+)*"
+                           r"(?:\t[^\t]*)?")
+_ISO3166_ROW = re.compile(r"[A-Z]{2}\t[^\t]*\S[^\t]*")
+_ZONE_TABLES = {}                       # sha256 of the texts -> the table parsed from them
+
+
+def zone_table_path(ws: str) -> str:
+    """The workspace's record of the question of the table of countries, and of a copy downloaded (BLD-zone_table_question)."""
+    return os.path.join(ws, CONTROL_DIR, ZONE_TABLE_ARTIFACT)
+
+
+def host_has_zone_table() -> bool:
+    """Whether the host's zone database, as this Python reads it, has its table of countries (`zone.tab`)."""
+    return _zone_database_file("zone.tab") is not None
+
+
+def bundled_zone_table() -> dict:
+    """The copy of `zone.tab` and `iso3166.tab` carried inside the package, with the tzdata release it is from."""
+    from importlib import resources
+    root = resources.files("cartographer").joinpath("zone_table")
+    return {"zone_tab": root.joinpath("zone.tab").read_text(encoding="utf-8"),
+            "iso3166_tab": root.joinpath("iso3166.tab").read_text(encoding="utf-8"),
+            "tzdata_version": root.joinpath("version").read_text(encoding="utf-8").strip()}
+
+
+def check_zone_table_text(zone_tab, iso3166_tab) -> None:
+    """Raise ValueError unless both texts are well-formed tables of the zone database: every line a comment or a row
+    of its form, and at least one row each (RUL-zone_table_checked)."""
+    for name, text, row in (("zone.tab", zone_tab, _ZONE_TAB_ROW), ("iso3166.tab", iso3166_tab, _ISO3166_ROW)):
+        if not isinstance(text, str):
+            raise ValueError(f"{name} is missing")
+        rows = 0
+        for n, line in enumerate(text.splitlines(), 1):
+            if not line.strip() or line.startswith("#"):
                 continue
-            if valid_iana_timezone(cols[2]):
-                zones.setdefault(cols[0], set()).add(cols[2])
-        for line in (_zone_database_file("iso3166.tab") or "").splitlines():
-            cols = line.split("\t")
-            if not line.startswith("#") and len(cols) >= 2:
-                names[cols[0]] = cols[1].strip()
-        _COUNTRY_TABLE = {c: {"name": names.get(c, c), "zones": sorted(z)} for c, z in sorted(zones.items())}
-    return _COUNTRY_TABLE
+            if not row.fullmatch(line):
+                raise ValueError(f"{name} line {n} is not a row of the table: {line[:60]!r}")
+            rows += 1
+        if not rows:
+            raise ValueError(f"{name} holds no row")
+
+
+def _https_only_opener():
+    """An opener of the standard library that follows a redirect only to another `https` address, refusing any other
+    (BLD-zone_table_download): the download stays over HTTPS wherever the server sends it."""
+    import urllib.error
+    import urllib.parse
+    import urllib.request
+
+    class HttpsOnlyRedirect(urllib.request.HTTPRedirectHandler):
+        def redirect_request(self, req, fp, code, msg, headers, newurl):
+            if urllib.parse.urlsplit(newurl).scheme.lower() != "https":
+                raise urllib.error.HTTPError(newurl, code, f"redirected to {newurl}, which is not HTTPS; refused",
+                                             headers, fp)
+            return super().redirect_request(req, fp, code, msg, headers, newurl)
+    return urllib.request.build_opener(HttpsOnlyRedirect)
+
+
+def _download_zone_archive(url, timeout) -> bytes:
+    """The bytes at `url`, at most ZONE_TABLE_MAX_BYTES of them — the one network access of the tool, over HTTPS
+    only, a redirect elsewhere refused. The seam the tests replace: no test reaches the network."""
+    import urllib.parse
+    import urllib.request
+    if urllib.parse.urlsplit(url).scheme.lower() != "https":
+        raise ValueError(f"{url} is not an HTTPS address; refused")
+    req = urllib.request.Request(url, headers={"User-Agent": ZONE_TABLE_USER_AGENT})
+    with _https_only_opener().open(req, timeout=timeout) as r:
+        data = r.read(ZONE_TABLE_MAX_BYTES + 1)
+    if len(data) > ZONE_TABLE_MAX_BYTES:
+        raise ValueError(f"the archive is larger than {ZONE_TABLE_MAX_BYTES} bytes")
+    return data
+
+
+def fetch_zone_table(url=ZONE_TABLE_URL) -> dict:
+    """Download the zone database's latest release and take `zone.tab`, `iso3166.tab` and `version` out of it in
+    memory — nothing of the archive is written to disk — checked strictly (BLD-zone_table_download). Raises on any
+    failure: unreachable, too slow, not an archive, a table missing or malformed."""
+    import io
+    import tarfile
+    data = _download_zone_archive(url, ZONE_TABLE_TIMEOUT_S)
+    try:
+        with tarfile.open(fileobj=io.BytesIO(data), mode="r:gz") as tf:
+            def member(name, required=True):
+                try:
+                    m = tf.getmember(name)
+                except KeyError:
+                    if required:
+                        raise ValueError(f"the archive holds no {name}")
+                    return None
+                if not m.isfile():
+                    raise ValueError(f"{name} in the archive is not a file")
+                return tf.extractfile(m).read().decode("utf-8")
+            zone_tab, iso3166_tab, version = member("zone.tab"), member("iso3166.tab"), member("version", False)
+    except (tarfile.TarError, EOFError, OSError, UnicodeDecodeError) as e:
+        raise ValueError(f"not a readable archive of the zone database ({e})")
+    check_zone_table_text(zone_tab, iso3166_tab)
+    version = (version or "").strip()
+    return {"source_url": url, "tzdata_version": version if re.fullmatch(r"\d{4}[a-z]+", version) else None,
+            "zone_tab": zone_tab, "iso3166_tab": iso3166_tab}
+
+
+def read_zone_table_record(ws) -> dict:
+    """The workspace's answer to the question of the table and the copy it downloaded, or None where none is
+    recorded. One that is there and cannot be read as one raises ValueError naming it: it is never taken for no answer
+    (RUL-unreadable_zone_table_record_stops)."""
+    if not ws:
+        return None
+    p = zone_table_path(ws)
+    if not os.path.lexists(p):
+        return None
+    try:
+        with open(p, encoding="utf-8") as f:
+            rec = json.load(f)
+        if not isinstance(rec, dict) or rec.get("download") not in ("accepted", "declined"):
+            raise ValueError("it holds no answer, accepted or declined")
+        if "copy" in rec:
+            # a copy downloaded and no longer a well-formed table is not passed over for the carried one in silence
+            if not isinstance(rec["copy"], dict):
+                raise ValueError("the copy it holds is no table")
+            check_zone_table_text(rec["copy"].get("zone_tab"), rec["copy"].get("iso3166_tab"))
+    except (OSError, ValueError) as e:
+        raise ValueError(f"{ZONE_TABLE_ARTIFACT} cannot be read ({e}); the answer to whether to download the table "
+                         "of countries, and the copy downloaded, would be taken for none. Restore it, or move it out "
+                         f"of {CONTROL_DIR}/ to be asked again.")
+    return rec
+
+
+def zone_table_record_error(ws):
+    """Why the workspace's record of the table of countries cannot be read, naming it — None where it can, where there
+    is none, or where the host has its own table and so it is not read (RUL-unreadable_zone_table_record_stops,
+    BLD-zone_table_question)."""
+    if host_has_zone_table():
+        return None
+    try:
+        read_zone_table_record(ws)
+    except ValueError as e:
+        return str(e)
+    return None
+
+
+def _workspace_zone_copy(ws):
+    """The copy downloaded for the workspace, or None — well-formed, or its record cannot be read
+    (read_zone_table_record)."""
+    return (read_zone_table_record(ws) or {}).get("copy")
+
+
+def _parse_country_table(zone_tab, iso3166_tab) -> dict:
+    """{ISO 3166 code: {"name", "zones"}} from the two texts; a zone the host's zone database does not know is no
+    country's (RUL-zone_table_zone_known)."""
+    zones, names = {}, {}
+    for line in (zone_tab or "").splitlines():
+        cols = line.split("\t")
+        if line.startswith("#") or len(cols) < 3:
+            continue
+        if valid_iana_timezone(cols[2]):
+            zones.setdefault(cols[0], set()).add(cols[2])
+    for line in (iso3166_tab or "").splitlines():
+        cols = line.split("\t")
+        if not line.startswith("#") and len(cols) >= 2:
+            names[cols[0]] = cols[1].strip()
+    return {c: {"name": names.get(c, c), "zones": sorted(z)} for c, z in sorted(zones.items())}
+
+
+def zone_table(ws=None) -> dict:
+    """The table of countries a run reads (BLD-country_table): {"source": "host" | "web" | "bundled", "sha256": of the
+    table as read, "countries": {ISO 3166 code: {"name": English name, "zones": [its timezones, sorted]}}} — every
+    country a timezone belongs to, and so every country of more than one. The host's own table where its zone
+    database has one; else the copy downloaded for the workspace `ws`; else the copy carried in the package."""
+    zone_tab = _zone_database_file("zone.tab")
+    if zone_tab is not None:
+        source, iso3166_tab = "host", _zone_database_file("iso3166.tab")
+    else:
+        copy = _workspace_zone_copy(ws)
+        source, copy = ("web", copy) if copy else ("bundled", bundled_zone_table())
+        zone_tab, iso3166_tab = copy["zone_tab"], copy["iso3166_tab"]
+    key = sha256_text(json.dumps([zone_tab, iso3166_tab]))
+    if key not in _ZONE_TABLES:
+        countries = _parse_country_table(zone_tab, iso3166_tab)
+        _ZONE_TABLES[key] = (countries, sha256_text(json.dumps(countries, sort_keys=True)))
+    countries, sha = _ZONE_TABLES[key]
+    return {"source": source, "sha256": sha, "countries": countries}
+
+
+def country_table(ws=None) -> dict:
+    """{ISO 3166 code: {"name", "zones"}}: the countries of `zone_table(ws)`."""
+    return zone_table(ws)["countries"]
+
+
+def zone_table_question_pending(ws) -> bool:
+    """Whether the question of downloading the table of countries is still to be asked of this workspace: the host has
+    no table of its own and no answer is recorded (RUL-zone_table_asked_once). A record there that cannot be read is
+    not none: the run that reads it stops on it (RUL-unreadable_zone_table_record_stops), nothing asked."""
+    if host_has_zone_table():
+        return False
+    try:
+        return read_zone_table_record(ws) is None
+    except ValueError:
+        return False
+
+
+def add_zone_table_argument(parser) -> None:
+    """`--download-zone-table yes|no` on `prep plan` (BLD-zone_table_question): the answer to the question of
+    downloading the table of countries, where the host's zone database has none."""
+    parser.add_argument("--download-zone-table", dest="download_zone_table", choices=("yes", "no"),
+                        help="where this host's zone database has no table of countries (zone.tab): yes downloads "
+                             "the current one from IANA once, into the workspace; no uses the copy carried inside "
+                             "photos-cartographer, which may be stale")
+
+
+def zone_table_question(bundled_version) -> str:
+    """The question put to the user before any download (RUL-zone_table_refusal_told)."""
+    return ("This host's zone database has no table of countries (zone.tab), which geotag needs to offer a "
+            f"country's timezones. Download the current one from IANA ({ZONE_TABLE_URL}) once, now, and keep it in "
+            "this workspace? If you refuse, the copy carried inside photos-cartographer (tzdata "
+            f"{bundled_version}) is used — it may be stale.")
+
+
+def settle_zone_table(ws, answer, reporter) -> None:
+    """Act on the answer to the question of the table of countries, on a `prep plan` (BLD-zone_table_question):
+    `answer` is "yes", "no" or None — not answered. Where the host has its own table nothing is asked or recorded.
+    "no" records the refusal; "yes" downloads the table once, now, and records it — or, where the download fails,
+    records the answer and warns, the carried copy (or a copy downloaded earlier) staying in use. Unanswered with
+    nothing recorded says how to answer: prep is never stopped by the question (RUL-zone_table_never_stops_prep). A
+    record holding `"download": "accepted"` alone — written by hand — is acted on as "yes". The decision editor calls
+    this with its answer as `prep plan` does (BLD-editor_answers_zone_table)."""
+    version = bundled_zone_table()["tzdata_version"]
+    if host_has_zone_table():
+        if answer is not None:
+            reporter.log("This host's zone database has its own table of countries: nothing to download.")
+        return
+    prior = read_zone_table_record(ws)
+    if answer is None and prior is not None and prior.get("download") == "accepted" \
+            and "copy" not in prior and "failure" not in prior:
+        # a permission written into the record by hand (BLD-zone_table_answered_by_hand): the table is downloaded now,
+        # as for one given to this run
+        answer = "yes"
+    if answer is None:
+        if prior is None:
+            reporter.warn(f"Note: this host's zone database has no table of countries (zone.tab); geotag uses the "
+                          f"copy carried inside photos-cartographer (tzdata {version}), which may be stale. To "
+                          f"download the current one from IANA once, into this workspace, run `prep plan "
+                          f"--download-zone-table yes` — or `--download-zone-table no` to keep the carried copy.")
+        return
+    record = {"artifact_name": ZONE_TABLE_ARTIFACT, "schema_version": 1,
+              "download": "accepted" if answer == "yes" else "declined"}
+    if answer == "no":
+        write_versioned_json(zone_table_path(ws), record)
+        reporter.log(f"The table of countries will be the copy carried inside photos-cartographer (tzdata {version}), "
+                     f"which may be stale; the answer is kept in {ZONE_TABLE_ARTIFACT}.")
+        return
+    try:
+        record["copy"] = dict(fetch_zone_table(), fetched_at=datetime.now(timezone.utc).isoformat())
+    except Exception as e:
+        kept = _workspace_zone_copy(ws)
+        reporter.warn(f"Warning: the table of countries could not be downloaded ({e}); "
+                      + ("the copy downloaded earlier stays in use." if kept else
+                         f"the copy carried inside photos-cartographer (tzdata {version}), which may be stale, is "
+                         "used instead."))
+        if kept:
+            return                                  # nothing else changes: the earlier copy and its record stand
+        record["failure"] = str(e)
+        write_versioned_json(zone_table_path(ws), record)
+        return
+    write_versioned_json(zone_table_path(ws), record)
+    reporter.log(f"Downloaded the table of countries from IANA (tzdata {record['copy']['tzdata_version'] or '?'}); "
+                 f"kept in {ZONE_TABLE_ARTIFACT}.")
 
 
 def selected_gpx_root() -> str:
@@ -328,8 +590,8 @@ def exiftool_mime_type(path: str):
 # The intermediate of a write to a media file: `<media>_exiftool_tmp`, the new file geotag has exiftool write
 # beside the photo and then renames over it (BLD-metadata_safe_write). A hard kill (SIGKILL/OOM/power loss) can
 # orphan one in a managed folder; prep recognizes and quarantines these (the live original is always intact —
-# the rename is atomic). Geotag's writer also unlinks a stale `_exiftool_tmp` for a file right before it
-# rewrites it. `<media>_original` is NOT one: no write of the pipeline leaves it, so that name is the backup
+# the rename is atomic). Geotag's writer clears one beside a photo only where its own journal shows its write to that
+# photo begun and never confirmed (BLD-own_leftover_cleared); any other stops geotag, left where it is. `<media>_original` is NOT one: no write of the pipeline leaves it, so that name is the backup
 # exiftool keeps of a USER's own edit — the camera's original — and is treated as any file of no media class
 # (RUL-user_backup_is_a_stray).
 _EXIFTOOL_ARTIFACT_SUFFIXES = ("_exiftool_tmp",)
@@ -476,12 +738,6 @@ def plan_memo_db_path(ws: str) -> str:
     it was saving."""
     return os.path.join(ws, CONTROL_DIR, "photos-00-plan-memo.db")
 
-def track_memo_db_path(ws: str) -> str:
-    """Geotag's parse memo for the tracks (BLD-idempotency): each track file's parsed points, keyed by the
-    SHA-256 of its bytes, so a track unchanged since the last run is not parsed again. Scratch: no
-    decision, no history, safe to delete at any time, neither journalled nor archived."""
-    return os.path.join(ws, CONTROL_DIR, "photos-00-track-memo.db")
-
 PREP_PLAN_ARTIFACT = "photos-10-prep-plan.json"
 
 def prep_plan_path(ws: str) -> str:
@@ -554,6 +810,10 @@ def prep_log_path(ws: str) -> str:
     """End-of-prep transformation log (BLD-phase_logs)."""
     return os.path.join(ws, CONTROL_DIR, "photos-15-prep-log.json")
 
+def prune_record_path(ws: str) -> str:
+    """The record of the latest quarantine prune that deleted (BLD-prune_record); an earlier one is kept under `-NNN`."""
+    return os.path.join(ws, CONTROL_DIR, "photos-16-prune-record.json")
+
 def prep_log_blocker(ws: str, handoff: dict):
     """None when prep's log is the one the handoff vouches for — its bytes hash to the sha256 the handoff's
     `depends_on.prep_log` records — else why not. A log missing, unreadable or changed, or a handoff
@@ -621,21 +881,36 @@ def workspace_id(ws: str):
 
 def _not_archived(name: str) -> bool:
     """A control-directory file the archival package does not carry: transient (a lock, a temp file,
-    SQLite's rollback journal), the plan and track memos (scratch), or an archive itself."""
+    SQLite's rollback journal), the plan memo (scratch), or an archive itself."""
     return (name.endswith(".lock") or name.startswith(".tmp-") or name.endswith(".tmp") or name.endswith("-journal")
-            or name in (os.path.basename(plan_memo_db_path("")), os.path.basename(track_memo_db_path("")))
-            or name.endswith("-archive.tar.gz"))
+            or name == os.path.basename(plan_memo_db_path(""))
+            or _ARCHIVE_NAME_RE.search(name) is not None)
+
+
+# An archive, or an earlier one set aside under its -NNN (BLD-geotag_records_versioned): never archived again.
+_ARCHIVE_NAME_RE = re.compile(r"-archive(-\d{3,})?\.tar\.gz$")
 
 
 def control_archive_members(ws: str, exclude=()) -> list:
     """The control directory's files the archival package carries (BLD-archive_manifest), as workspace-relative
-    paths in sorted order: every file but the transient ones and those in `exclude`."""
+    paths in sorted order: every file but the transient ones and those in `exclude` — and none of the tracks'
+    folder where `gpx_root` lies inside the control directory: the package keeps the track points the decisions
+    rest on, in the database, never every point of every track (RUL-unused_points_not_kept). With `gpx_root` the
+    control directory itself, its track files alone are left out."""
     root = os.path.join(ws, CONTROL_DIR)
+    real_root = os.path.realpath(root)
+    tracks = os.path.realpath(os.path.join(ws, CONFIG["gpx_root"])) if CONFIG.get("gpx_root") else None
+    if tracks and tracks != real_root and not tracks.startswith(real_root + os.sep):
+        tracks = None
     out = []
     for dp, dns, fns in os.walk(root):
+        if tracks and tracks != real_root:
+            dns[:] = [d for d in dns if os.path.realpath(os.path.join(dp, d)) != tracks]
         dns.sort()
         for fn in fns:
             if _not_archived(fn) or fn in exclude:
+                continue
+            if tracks == real_root and os.path.realpath(dp) == real_root and is_track_file(fn):
                 continue
             out.append(os.path.relpath(os.path.join(dp, fn), ws))
     return sorted(out)
@@ -686,6 +961,71 @@ def write_db_snapshot(conn, dest_path: str) -> None:
 
 def journal_path(ws: str, run_id: str) -> str:
     return os.path.join(ws, CONTROL_DIR, f"journal-{run_id}.json")
+
+# executed/<plan id>/ in the control directory: the decision records each plan geotag executed ran against, kept by its
+# execution before it changes a photo — so the plans geotag executed, whose journals say what it left.
+GEOTAG_EXECUTED_DIR = "executed"
+
+
+def geotag_journals_left(ws: str):
+    """`(entries, unreadable)` (BLD-geotag_journal_carried): every `media_after` entry of the journal of each plan geotag
+    executed (`executed/<plan id>/`), as {path geotag left the photo at: [entry, ...]}, and the journals there that
+    cannot be read as a JSON object — read by none, each recording nothing (RUL-unreadable_geotag_journal_vouches_nothing).
+    A journal not there, or an entry of another shape, records nothing."""
+    entries, unreadable = {}, []
+    try:
+        plan_ids = sorted(os.listdir(os.path.join(ws, CONTROL_DIR, GEOTAG_EXECUTED_DIR)))
+    except OSError:
+        return entries, unreadable
+    for plan_id in plan_ids:
+        path = journal_path(ws, plan_id)
+        if not os.path.exists(path):
+            continue
+        try:
+            with open(path) as f:
+                journal = json.load(f)
+            if not isinstance(journal, dict):
+                raise ValueError("not a JSON object")
+        except (OSError, ValueError):
+            unreadable.append(path)
+            continue
+        after = journal.get("media_after")
+        for rel, entry in (after.items() if isinstance(after, dict) else ()):
+            if isinstance(entry, dict):
+                entries.setdefault(rel, []).append(entry)
+    return entries, unreadable
+
+def journal_kept_changes(path: str) -> list:
+    """The changes by hand a plan's journal keeps — those named or accepted by the checks of its executions that were
+    cut short, which wrote no summary (BLD-workspace_changes_logged) — [] where it keeps none or does not exist. Each
+    writer of the journal carries them over."""
+    try:
+        with open(path) as f:
+            kept = json.load(f).get("workspace_changes")
+    except (OSError, ValueError, AttributeError):
+        return []
+    return kept if isinstance(kept, list) else []
+
+def journal_add_changes(ws: str, plan_id: str, changes) -> None:
+    """Add the changes by hand an execution cut short had its check name or accept to its plan's journal, in the step
+    that records the state it leaves (BLD-workspace_changes_logged): its summary is never written
+    (RUL-geotag_summary_only_for_execution, RUL-merge_summary_only_for_execution), and they are then in no other
+    record. A journal it cannot read is left as it is."""
+    changes = list(changes or [])
+    if not changes:
+        return
+    path = journal_path(ws, plan_id)
+    journal = {"journal_version": 1, "plan_id": plan_id, "operations": {}}
+    if os.path.exists(path):
+        try:
+            with open(path) as f:
+                journal = json.load(f)
+        except (OSError, ValueError):
+            return
+        if not isinstance(journal, dict):
+            return
+    journal["workspace_changes"] = journal_kept_changes(path) + changes
+    write_json_artifact(path, journal)
 
 def sha256_file(path: str) -> str:
     """SHA-256 over a file's exact bytes — the byte-hash used to verify JSON-artifact
@@ -827,9 +1167,12 @@ def backup_existing_artifact(path: str):
     if not os.path.lexists(path):
         return None
     d = os.path.dirname(path) or "."
-    stem, ext = os.path.splitext(os.path.basename(path))
+    base = os.path.basename(path)
+    # an archive keeps its whole `.tar.gz` after the suffix: photos-26-archive-001.tar.gz
+    stem, ext = (base[:-len(".tar.gz")], "tar.gz") if base.endswith(".tar.gz") else \
+        (os.path.splitext(base)[0], os.path.splitext(base)[1].lstrip("."))
     existing = {n.lower() for n in os.listdir(d)}
-    name = allocate_suffix(stem, ext.lstrip("."), existing, start_idx=1, bare_first=False)
+    name = allocate_suffix(stem, ext, existing, start_idx=1, bare_first=False)
     backup = os.path.join(d, name)
     tmp = os.path.join(d, ".tmp-" + name)
     shutil.copy2(path, tmp)
@@ -885,12 +1228,16 @@ def is_library(library_root: str) -> bool:
 def write_library_marker(library_root: str) -> str:
     """Bless library_root as a library by creating the .photos-library marker. No-clobber and
     idempotent: a no-op success if the marker already exists. Written only by `merge init-library`;
-    plan/dry-run/execute only ever read it. Returns the marker path."""
+    plan/dry-run/execute only ever read it. Returns the marker path. An entry of the mark's name that is not a file —
+    a folder, a link — is no mark and is never taken for one: ValueError, nothing made (RUL-library_mark_made_by_setup).
+    """
     p = library_marker_path(library_root)
     try:
         os.close(os.open(p, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o644))
     except FileExistsError:
-        pass
+        if os.path.islink(p) or not os.path.isfile(p):
+            raise ValueError(f"{p} exists and is not a file, so it cannot be the library's mark; remove it, then "
+                             "run init-library again. Nothing was blessed.")
     return p
 
 def library_lock_path(library_root: str) -> str:
@@ -959,19 +1306,24 @@ def allocate_suffix(base: str, ext: str, index: set, start_idx: int = 1, bare_fi
     paths, which are only ever reached once the bare name is already taken), the bare name is skipped and
     allocation goes straight to `<base>-NNN`. `-{idx:03d}` is the shared form; `start_idx` lets merge
     begin past the highest existing suffix (append-only library) rather than gap-fill from 1."""
-    if bare_first:
-        bare = f"{base}.{ext}" if ext else base
-        if bare.lower() not in index:
-            index.add(bare.lower())
-            return bare
-    idx = start_idx
+    stem = allocate_stem(base, [ext], index, start_idx, bare_first)
+    return f"{stem}.{ext}" if ext else stem
+
+
+def allocate_stem(base: str, exts, index: set, start_idx: int = 1, bare_first: bool = False) -> str:
+    """`allocate_suffix`'s rule over the names of several extensions at once: the first stem, `<base>` or
+    `<base>-NNN`, under which the name of every one of `exts` (no leading dot; `""` for the stem alone) is free in
+    `index` (case folded), those names added to it. Geotag gives it the stems a destination's photos hold, so that
+    photos sharing a name, extension aside, take one stem free under every extension (RUL-pair_named_as_one)."""
+    def names(stem):
+        return [(f"{stem}.{e}" if e else stem).lower() for e in exts]
+    idx = None if bare_first else start_idx
     while True:
-        suffix = f"-{idx:03d}"
-        name = f"{base}{suffix}.{ext}" if ext else f"{base}{suffix}"
-        if name.lower() not in index:
-            index.add(name.lower())
-            return name
-        idx += 1
+        stem = base if idx is None else f"{base}-{idx:03d}"
+        if not any(n in index for n in names(stem)):
+            index.update(names(stem))
+            return stem
+        idx = start_idx if idx is None else idx + 1
 
 def suffix_root(stem: str) -> str:
     """The root name of an extension-less stem: strip a trailing dedup suffix `-NNN` (3+ digits — the
@@ -1071,6 +1423,653 @@ def quarantine_footprint(ws: str) -> dict:
         "newest_plan_id": plan_ids[-1] if plan_ids else None,
     }
 
+
+# --- The workspace as the last execution left it (RUL-workspace_checked_first, BLD-workspace_record) ------------
+# Every phase command but the maintenance ones compares the workspace's files with the state the last execution
+# recorded, by their file system entries alone — path, size, modification time and inode, no file read — and stops on
+# a change no command made and none a person is expected to make, naming each (RUL-unexpected_change_stops).
+
+# Every managed folder but the inbox, which is the user's to fill (RUL-check_covers_media_folders); the quarantine is
+# walked besides.
+WORKSPACE_RECORD_ROLES = ("strays", "missing_metadata", "redundant_jpgs", "videos_by_date", "photos_by_date",
+                          "photos_by_dest")
+ACCEPTED_CHANGES_ARTIFACT = "photos-01-accepted-changes.json"
+CHANGE_CODE_LENGTH = 12
+# The commands that check (RUL-workspace_checked_first) — the maintenance ones do not (RUL-maintenance_unchecked).
+CHECKING_COMMANDS = {"prep": ("plan", "dry-run", "execute"), "geotag": ("plan", "execute", "finalize"),
+                     "merge": ("plan", "dry-run", "execute")}
+# What a person may delete by hand — culling (RUL-culling_passes); anywhere else a file gone stops.
+_CULLED_ROLES = ("photos_by_date", "photos_by_dest", "videos_by_date", "redundant_jpgs")
+# The moves a person makes while sorting (RUL-sorting_passes); a photo moved back is RUL-moved_back_passes.
+_SORTING_MOVES = {("photos_by_date", "photos_by_dest"), ("photos_by_dest", "photos_by_dest")}
+# Kinds of change: allowed and named in the run's log, allowed silently, and those that stop the command.
+_LOGGED_KINDS = ("deleted", "moved_back", "time_given", "copied")
+_UNEXPECTED_KINDS = ("changed", "appeared", "removed", "moved")
+_CHANGE_TITLES = {"changed": "changed in place", "appeared": "appeared", "removed": "removed", "moved": "moved",
+                  "deleted": "deleted", "moved_back": "moved back", "time_given": "changed by hand",
+                  "copied": "the same size and time under a new inode (a copy)",
+                  "interrupted_run": "left by the interrupted execution"}
+
+
+# An error the build did not foresee ends a command with an exit status of its own (BLD-exit_statuses): never 1,
+# which says the workspace or the library is locked, so a crash is never read as a run to try again.
+UNFORESEEN_ERROR_EXIT = 4
+
+
+def ends_unforeseen_error_apart(run):
+    """Wrap a command's `run(args)` so that an error it did not foresee ends it with `UNFORESEEN_ERROR_EXIT`, named
+    with where it arose (RUL-exit_status_says_how_it_ended). An exit the command chose, and an interrupt, pass as
+    they are; its own `finally` clauses have released its locks by the time this reports."""
+    import functools
+    import traceback
+
+    @functools.wraps(run)
+    def wrapped(args):
+        try:
+            return run(args)
+        except Exception as err:
+            from .reporting import get_reporter
+            reporter = get_reporter()
+            reporter.error(f"Error: {err}")
+            reporter.log(traceback.format_exc().rstrip())
+            sys.exit(UNFORESEEN_ERROR_EXIT)
+    return wrapped
+
+
+def add_accept_changes_argument(parser) -> None:
+    """`--accept-changes <code>` on every checking command (BLD-accept_changes): accept once the unexpected changes
+    the check listed, the code printed with them."""
+    parser.add_argument("--accept-changes", dest="accept_changes", metavar="CODE",
+                        help="accept once the changes to the workspace a stop listed, by the code it printed")
+
+
+def accepted_changes_path(ws: str) -> str:
+    """The kept record of the changes the user accepted (BLD-accept_changes); an earlier one is kept under `-NNN`."""
+    return os.path.join(ws, CONTROL_DIR, ACCEPTED_CHANGES_ARTIFACT)
+
+
+def workspace_entries(ws: str, cfg=None) -> dict:
+    """{relative path: (size, mtime_ns, inode)} of every file the check covers (BLD-workspace_record): each managed
+    folder but the inbox, hidden entries left out as prep leaves them, and the whole quarantine but the temporary
+    files of its manifest's rewrite. A link is an entry of its own, never followed. Entries only — no file is read."""
+    out = {}
+
+    def add(path):
+        try:
+            st = os.lstat(path)
+        except OSError:
+            return
+        out[os.path.relpath(path, ws).replace(os.sep, "/")] = (st.st_size, st.st_mtime_ns, st.st_ino)
+
+    def walk(base, hidden_too):
+        for root, dirs, files in os.walk(base):
+            keep = []
+            for d in sorted(dirs):
+                p = os.path.join(root, d)
+                if d.startswith('.') and not hidden_too:
+                    continue
+                if os.path.islink(p):
+                    add(p)
+                else:
+                    keep.append(d)
+            dirs[:] = keep
+            for f in files:
+                if f.startswith('.tmp-') or (f.startswith('.') and not hidden_too):
+                    continue
+                add(os.path.join(root, f))
+
+    for role in WORKSPACE_RECORD_ROLES:
+        base = os.path.join(ws, folder_name(role, cfg))
+        if os.path.isdir(base) and not os.path.islink(base):
+            walk(base, False)
+    q = os.path.join(ws, QUARANTINE_DIR)
+    if os.path.isdir(q) and not os.path.islink(q):
+        walk(q, True)
+    return out
+
+
+class WorkspaceRecordUnreadable(ValueError):
+    """The record of the state the last execution left is there and cannot be read: never taken for none, which would
+    let a check compare nothing (RUL-workspace_checked_first)."""
+
+
+def read_workspace_record(ws: str):
+    """`(record_id, {path: {size, mtime_ns, inode, fingerprint}})` — the state the last execution left
+    (BLD-workspace_record) — or `(None, {})` where none was written. Read only. A database that cannot be opened or
+    read raises WorkspaceRecordUnreadable naming it: a record that cannot be read is not the absence of one."""
+    p = db_path(ws)
+    if not os.path.exists(p):
+        return None, {}
+    try:
+        conn = sqlite3.connect(f"file:{p}?mode=ro", uri=True)
+        try:
+            if not conn.execute("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'meta'").fetchone():
+                return None, {}                     # a database no execution has recorded in
+            row = conn.execute("SELECT value FROM meta WHERE key = 'workspace_record_id'").fetchone()
+            if not row:
+                return None, {}
+            rows = conn.execute("SELECT relative_path, size, mtime_ns, inode, fingerprint FROM workspace_record").fetchall()
+        finally:
+            conn.close()
+    except sqlite3.Error as e:
+        raise WorkspaceRecordUnreadable(
+            f"The record of the state the last execution left cannot be read from {os.path.join(CONTROL_DIR, os.path.basename(p))} "
+            f"({e}), so what has changed since cannot be told.")
+    return row[0], {r[0]: {"size": r[1], "mtime_ns": r[2], "inode": r[3], "fingerprint": r[4]} for r in rows}
+
+
+def write_workspace_record(ws: str, cache_rows=None, carried=None) -> str:
+    """Rewrite the record with the state the workspace's files are in now (BLD-workspace_record) — every execution's
+    last step, prep's, geotag's and merge's alike, whether or not each of its operations succeeded: it is the state
+    the run leaves (RUL-execution_records_state). Each file's fingerprint is prep's database row for it where that row
+    still describes it (`cache_rows`), else the earlier record's for the same file: at the path it was recorded at
+    (`carried` maps a path to the one a run of the tool's own moved or rewrote it from), at the one an interrupted
+    execution's work took it to (BLD-interrupted_run_recognised), or anywhere under the same size, time and inode.
+    One transaction, which also clears the executions noted as begun. Returns the new record's id."""
+    import uuid
+    prior_id, prior = read_workspace_record(ws)
+    entries = workspace_entries(ws)
+    prior = {**prior, **recognise_interrupted_work(ws, prior_id, prior, entries)[0]}
+    by_stat = {(r["size"], r["mtime_ns"], r["inode"]): r for r in prior.values()}
+    carried = carried or {}
+    rows = []
+    for rel, (size, mtime, ino) in sorted(entries.items()):
+        fp = None
+        crow = (cache_rows or {}).get(rel)
+        if crow is not None and (crow.get("size"), crow.get("mtime_ns")) == (size, mtime):
+            fp = crow.get("content_hash")
+        if fp is None:
+            src = prior.get(carried.get(rel, rel))
+            if src is not None and (rel in carried or (src["size"], src["mtime_ns"], src["inode"]) == (size, mtime, ino)):
+                fp = src["fingerprint"]
+            elif (size, mtime, ino) in by_stat:
+                fp = by_stat[(size, mtime, ino)]["fingerprint"]
+        rows.append((rel, size, mtime, ino, fp))
+    record_id = uuid.uuid4().hex
+    WorkspaceCache(ws).close()          # the workspace database, its tables made where it has none yet
+    conn = sqlite3.connect(db_path(ws))
+    try:
+        with conn:
+            conn.execute("DELETE FROM workspace_record")
+            conn.executemany("INSERT INTO workspace_record (relative_path, size, mtime_ns, inode, fingerprint) "
+                             "VALUES (?, ?, ?, ?, ?)", rows)
+            conn.execute("INSERT OR REPLACE INTO meta (key, value) VALUES ('workspace_record_id', ?)", (record_id,))
+            conn.execute("DELETE FROM meta WHERE key = ?", (_BEGUN_KEY,))
+    finally:
+        conn.close()
+    return record_id
+
+
+# --- An execution interrupted before it recorded its state (RUL-interrupted_work_passes, BLD-interrupted_run_recognised)
+# An execution notes itself as begun before its first change; the record its end writes clears the note. A hard kill
+# (power loss, a killed process) leaves the note behind, newer than the record by construction — the one way the check
+# knows whose work the changes since may be, then recognised from what that run left in writing: its plan and journal.
+_BEGUN_KEY = "executions_unrecorded"
+_PHASE_PLAN_ARTIFACTS = {"prep": PREP_PLAN_ARTIFACT, "geotag": "photos-24-executable-plan.json",
+                         "merge": "photos-30-merge-plan.json"}
+_PREP_MOVES = ("move_no_clobber", "rename_no_clobber", "quarantine_move")
+
+
+def note_execution_begun(ws: str, phase: str, plan_id: str) -> None:
+    """Note, before an execution's first change, that it began on the current record (BLD-interrupted_run_recognised):
+    `{phase, plan_id, record_id}` added to the list `meta.executions_unrecorded`, which the record its end writes
+    clears. Where no record was written yet — prep's first run — there is nothing for a later check to compare with,
+    so nothing is noted."""
+    record_id, _ = read_workspace_record(ws)
+    if record_id is None:
+        return
+    conn = sqlite3.connect(db_path(ws))
+    try:
+        with conn:
+            begun = _begun_list(conn)
+            begun.append({"phase": phase, "plan_id": plan_id, "record_id": record_id})
+            conn.execute("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)", (_BEGUN_KEY, json.dumps(begun)))
+    finally:
+        conn.close()
+
+
+def _begun_list(conn) -> list:
+    row = conn.execute("SELECT value FROM meta WHERE key = ?", (_BEGUN_KEY,)).fetchone()
+    try:
+        begun = json.loads(row[0]) if row else []
+    except ValueError:
+        return []
+    return [b for b in begun if isinstance(b, dict)] if isinstance(begun, list) else []
+
+
+def executions_begun(ws: str, record_id) -> list:
+    """The executions noted as begun on the record `record_id` and never recorded — interrupted — each
+    `{phase, plan_id, record_id}`, in the order they began; [] where there is none. Read only."""
+    p = db_path(ws)
+    if record_id is None or not os.path.exists(p):
+        return []
+    try:
+        conn = sqlite3.connect(f"file:{p}?mode=ro", uri=True)
+    except sqlite3.Error:
+        return []
+    try:
+        return [b for b in _begun_list(conn) if b.get("record_id") == record_id]
+    except sqlite3.Error:
+        return []
+    finally:
+        conn.close()
+
+
+def _read_json_quietly(path):
+    try:
+        with open(path) as f:
+            return json.load(f)
+    except (OSError, ValueError):
+        return None
+
+
+def _plan_of_run(ws: str, phase: str, plan_id: str):
+    """The plan `plan_id` of `phase`: its canonical file, or the version of it a re-plan kept under `-NNN`; None where
+    none is it."""
+    import glob as _glob
+    path = os.path.join(ws, CONTROL_DIR, _PHASE_PLAN_ARTIFACTS[phase])
+    stem, ext = os.path.splitext(path)
+    for p in [path] + sorted(_glob.glob(_glob.escape(stem) + "-[0-9][0-9][0-9]*" + ext), reverse=True):
+        plan = _read_json_quietly(p)
+        if isinstance(plan, dict) and plan.get("plan_id") == plan_id:
+            return plan
+    return None
+
+
+def _settle(candidates, apply):
+    """Apply each candidate `apply` accepts, again over those left while any is accepted — a place one frees may be
+    the one another goes to — and return the accepted ones in the order they were."""
+    done, left = [], list(candidates)
+    while left:
+        kept = []
+        for c in left:
+            (done if apply(c) else kept).append(c)
+        if len(kept) == len(left):
+            break
+        left = kept
+    return done
+
+
+def _prep_own_work(ws, plan, journal, work, cur):
+    """Prep's work an interrupted run left (BLD-interrupted_run_recognised): each file its plan moves, followed through
+    the plan's moves in order, found at exactly one place they take it with its entry — the recorded file's size, time
+    and inode, or, from the inbox, the size and time the plan found it with — and gone from where it was; and the
+    quarantine manifest of the plan's run, holding entries of its own quarantine moves only."""
+    chains, at = [], {}
+    for o in plan.get("operations") or []:
+        if o.get("type") not in _PREP_MOVES or not o.get("source") or not o.get("destination"):
+            continue
+        src, dst = o["source"], o["destination"]
+        ch = at.pop(src, None)
+        if ch is None:
+            r, pre = work.get(src), o.get("preconditions") or {}
+            if r is not None:
+                exp = (r["size"], r["mtime_ns"], r["inode"])
+            elif _change_role(src) == "sources" and pre.get("size") is not None and pre.get("mtime_ns") is not None:
+                exp = (pre["size"], pre["mtime_ns"], None)
+            else:
+                continue
+            ch = {"from": src, "exp": exp, "places": []}
+            chains.append(ch)
+        fp = next((fx["data"].get("content_hash") for fx in o.get("database_effects_after_verification") or []
+                   if fx.get("action") == "upsert" and (fx.get("data") or {}).get("relative_path") == dst), None)
+        ch["places"].append((dst, fp))
+        at[dst] = ch
+
+    def apply(ch):
+        src, exp = ch["from"], ch["exp"]
+        if src in cur or (exp[2] is None and os.path.lexists(os.path.join(ws, src))):
+            return False                                  # still where it was, or another file there now — in the
+                                                          # inbox, which the entries leave out, seen on disk
+        hits = [(p, fp) for p, fp in ch["places"] if p in cur and p not in work and cur[p][:2] == exp[:2]
+                and (exp[2] is None or cur[p][2] == exp[2])]
+        if len(hits) != 1 or (exp[2] is not None and src not in work):
+            return False
+        p, fp = hits[0]
+        was = work.pop(src, None)
+        work[p] = {"size": cur[p][0], "mtime_ns": cur[p][1], "inode": cur[p][2],
+                   "fingerprint": was["fingerprint"] if was else (fp if isinstance(fp, str) else None)}
+        ch["moved"] = {"path": p, "from": src}
+        return True
+    out = [ch["moved"] for ch in _settle(chains, apply)]
+
+    manifests = {}
+    for o in plan.get("operations") or []:
+        if o.get("type") == "quarantine_move" and (o.get("verification") or {}).get("plan_id"):
+            m = f"{QUARANTINE_DIR}/{o['verification']['plan_id']}/manifest.json"
+            manifests.setdefault(m, set()).add(o.get("operation_id"))
+    for m, ids in sorted(manifests.items()):
+        r = work.get(m)
+        if m not in cur or (r is not None and (r["size"], r["mtime_ns"], r["inode"]) == cur[m]):
+            continue
+        held = _read_json_quietly(os.path.join(ws, m))
+        if isinstance(held, list) and held and all(isinstance(e, dict) and e.get("operation_id") in ids for e in held):
+            work[m] = {"size": cur[m][0], "mtime_ns": cur[m][1], "inode": cur[m][2], "fingerprint": None}
+            out.append({"path": m})
+    return out
+
+
+def _geotag_own_work(ws, plan, journal, work, cur):
+    """Geotag's work an interrupted run left (BLD-interrupted_run_recognised): each photo of its plan whose journal notes
+    the state the run left it in (`media_after`, by the path it left it at — the plan's rename target, or its own) and
+    found there with exactly that size and time, gone from the path it was recorded at where it was renamed."""
+    after = journal.get("media_after") or {}
+    final = {}
+    for dd in (plan.get("destinations") or {}).values():
+        for o in dd.get("operations") or []:
+            rel = o["relative_path"]
+            final.setdefault(rel, rel)
+            if o["type"] == "rename_no_clobber":
+                final[rel] = rel.rsplit("/", 1)[0] + "/" + o["to"] if "/" in rel else o["to"]
+
+    def apply(item):
+        rel, to = item
+        a = after.get(to)
+        if not isinstance(a, dict) or rel not in work or to not in cur:
+            return False
+        if cur[to][:2] != (a.get("size"), a.get("mtime_ns")):
+            return False
+        if to != rel and (rel in cur or to in work):
+            return False
+        r = work[rel]
+        if to == rel and (r["size"], r["mtime_ns"], r["inode"]) == cur[to]:
+            return False                                  # as recorded: nothing to recognise
+        work.pop(rel)
+        work[to] = {"size": cur[to][0], "mtime_ns": cur[to][1], "inode": cur[to][2], "fingerprint": r["fingerprint"]}
+        return True
+    return [{"path": to, **({"from": rel} if to != rel else {})}
+            for rel, to in _settle(sorted(final.items()), apply)]
+
+
+def _merge_own_work(ws, plan, journal, work, cur):
+    """Merge's work an interrupted run left (BLD-interrupted_run_recognised): each photo of its plan gone from photos by
+    destination that its journal confirms moved, or whose library place holds a file of its recorded size and time."""
+    done = journal.get("operations") or {}
+    out = []
+    for d in (plan.get("destinations") or {}).values():
+        for f in d.get("files") or []:
+            src, target = f.get("by_dest_source"), f.get("library_target")
+            if src not in work or src in cur:
+                continue
+            ok = done.get(src) == "confirmed"
+            if not ok and target:
+                try:
+                    st = os.lstat(target)
+                    ok = (st.st_size, st.st_mtime_ns) == (work[src]["size"], work[src]["mtime_ns"])
+                except OSError:
+                    ok = False
+            if ok:
+                work.pop(src)
+                out.append({"path": src})
+    return out
+
+
+_OWN_WORK = {"prep": _prep_own_work, "geotag": _geotag_own_work, "merge": _merge_own_work}
+
+
+def recognise_interrupted_work(ws: str, record_id, record: dict, current: dict):
+    """`(record, recognised)`: the record as the executions begun on it and interrupted before recording left the
+    workspace's files (BLD-interrupted_run_recognised) — each change that is exactly what an operation of such a run's
+    plan, by its journal, would leave taken into it — and those changes, each `{path, from?, phase, plan_id}`. A run
+    whose plan cannot be found or read is recognised in nothing; anything not recognised stays a change."""
+    work = {p: dict(r) for p, r in record.items()}
+    found, seen = [], set()
+    for run in executions_begun(ws, record_id):
+        key = (run.get("phase"), run.get("plan_id"))
+        if key in seen or key[0] not in _OWN_WORK or not key[1]:
+            continue
+        seen.add(key)
+        plan = _plan_of_run(ws, *key)
+        if plan is None:
+            continue
+        journal = _read_json_quietly(journal_path(ws, key[1]))
+        trial = {p: dict(r) for p, r in work.items()}
+        try:
+            own = _OWN_WORK[key[0]](ws, plan, journal if isinstance(journal, dict) else {}, trial, current)
+        except (KeyError, TypeError, AttributeError, ValueError):
+            continue                                       # a plan or journal of another shape tells nothing
+        work = trial
+        found.extend(dict(c, phase=key[0], plan_id=key[1]) for c in own)
+    return work, found
+
+
+def forget_in_workspace_record(ws: str, prefixes) -> None:
+    """Take out of the record every file under each folder in `prefixes` (workspace-relative) that is no longer on disk
+    — what a quarantine prune removed, all of the folder or, cut short, part of it — so the next check does not take it
+    for a change (RUL-quarantine_changed_only_by_prune). No record, no-op."""
+    if read_workspace_record(ws)[0] is None:
+        return
+    conn = sqlite3.connect(db_path(ws))
+    try:
+        with conn:
+            for pre in prefixes:
+                pre = pre.rstrip("/") + "/"
+                rels = [r for (r,) in conn.execute("SELECT relative_path FROM workspace_record "
+                                                   "WHERE substr(relative_path, 1, ?) = ?", (len(pre), pre))]
+                conn.executemany("DELETE FROM workspace_record WHERE relative_path = ?",
+                                 [(r,) for r in rels if not os.path.lexists(os.path.join(ws, r))])
+    finally:
+        conn.close()
+
+
+def _change_role(rel: str, cfg=None):
+    top = rel.split('/', 1)[0]
+    return "quarantine" if top == QUARANTINE_DIR else folder_role(top, cfg)
+
+
+def compare_workspace(record: dict, current: dict, cfg=None) -> list:
+    """The changes between `record` (the state the last execution left) and `current` (`workspace_entries`), by their
+    entries alone (BLD-workspace_check), each `{kind, path, from?, now}` — `now` the entry as it is ([size, mtime_ns,
+    inode]), None for a file gone. A file where it was, as it was, is no change; one of the same size, time and inode at
+    a new path moved there; at its own path with its size or time changed, changed in place; one of the same size and
+    time under a new inode the same file (a copy, a restore), at its path or moved with its name; anything left over
+    is gone, or appeared. The kind says which of them a person is expected to make (`_LOGGED_KINDS`, `sorted`) and
+    which stop the command (`_UNEXPECTED_KINDS`)."""
+    import collections
+    rec = {p: (r["size"], r["mtime_ns"], r["inode"]) for p, r in record.items()}
+    cur = dict(current)
+    changes = []
+    for p in [p for p in cur if rec.get(p) == cur[p]]:
+        del rec[p], cur[p]
+
+    def moved(old, new, new_inode):
+        pair = (_change_role(old, cfg), _change_role(new, cfg))
+        if pair in _SORTING_MOVES:
+            kind = "copied" if new_inode else "sorted"
+        elif pair == ("photos_by_dest", "photos_by_date"):
+            kind = "moved_back"
+        else:
+            kind = "moved"
+        changes.append({"kind": kind, "path": new, "from": old, "now": list(cur.pop(new))})
+        del rec[old]
+
+    by_stat = collections.defaultdict(list)
+    for p in sorted(rec):
+        by_stat[rec[p]].append(p)
+    for p in sorted(cur):
+        olds = [o for o in by_stat.get(cur[p], []) if o in rec]
+        if olds:
+            moved(olds[0], p, False)
+    for p in sorted(set(rec) & set(cur)):
+        r, c = rec.pop(p), cur.pop(p)
+        if r[:2] == c[:2]:
+            kind = "copied"
+        elif _change_role(p, cfg) == "missing_metadata":
+            kind = "time_given"
+        else:
+            kind = "changed"
+        changes.append({"kind": kind, "path": p, "now": list(c)})
+    olds_by, news_by = collections.defaultdict(list), collections.defaultdict(list)
+    for p, s in rec.items():
+        olds_by[(s[0], s[1], p.rsplit('/', 1)[-1])].append(p)
+    for p, s in cur.items():
+        news_by[(s[0], s[1], p.rsplit('/', 1)[-1])].append(p)
+    for key, news in sorted(news_by.items()):
+        olds = olds_by.get(key, [])
+        if len(news) == 1 and len(olds) == 1:
+            moved(olds[0], news[0], True)
+    for p in sorted(rec):
+        changes.append({"kind": "deleted" if _change_role(p, cfg) in _CULLED_ROLES else "removed", "path": p,
+                        "now": None})
+    for p in sorted(cur):
+        changes.append({"kind": "appeared", "path": p, "now": list(cur[p])})
+    return sorted(changes, key=lambda c: (c["path"], c["kind"]))
+
+
+def format_changes(changes) -> list:
+    """The changes as printed: grouped by kind and by the folder they are in (or went from and to), each file named —
+    the lines a stop lists, and the code is made from (BLD-accept_changes)."""
+    def top(rel):
+        return rel.split('/', 1)[0]
+    groups = {}
+    for c in changes:
+        if c.get("from"):
+            where = (f"within {top(c['path'])}" if top(c["from"]) == top(c["path"])
+                     else f"from {top(c['from'])} to {top(c['path'])}")
+            entry = f"{c['from']} -> {c['path']}"
+        else:
+            where, entry = f"in {top(c['path'])}", c["path"]
+        groups.setdefault((_CHANGE_TITLES.get(c["kind"], c["kind"]), where), []).append(entry)
+    lines = []
+    for (title, where) in sorted(groups):
+        lines.append(f"  {title}, {where}:")
+        lines.extend(f"    {e}" for e in sorted(groups[(title, where)]))
+    return lines
+
+
+def change_code(lines) -> str:
+    """The code that accepts a list of changes: a short hash of the list exactly as printed (BLD-accept_changes)."""
+    return sha256_text("\n".join(lines))[:CHANGE_CODE_LENGTH]
+
+
+def _change_key(c) -> str:
+    return json.dumps({k: c.get(k) for k in ("kind", "path", "from", "now")}, sort_keys=True)
+
+
+def read_accepted_changes(ws: str) -> list:
+    """The acceptances `photos-01-accepted-changes.json` keeps, [] where there is none yet. One that exists and cannot
+    be read raises ValueError naming it: it is never taken for none, nor written over (BLD-accept_changes)."""
+    p = accepted_changes_path(ws)
+    if not os.path.exists(p):
+        return []
+    try:
+        with open(p) as f:
+            acc = json.load(f).get("acceptances")
+        if not isinstance(acc, list):
+            raise ValueError("it holds no list of acceptances")
+    except (OSError, ValueError, AttributeError) as e:
+        raise ValueError(f"{ACCEPTED_CHANGES_ARTIFACT} cannot be read ({e}); the changes accepted earlier would be "
+                         "asked again and the record of them written over. Restore it, or move it out of "
+                         f"{CONTROL_DIR}/ to start it afresh.")
+    return [a for a in acc if isinstance(a, dict)]
+
+
+def check_workspace(ws: str, phase: str, command: str, accept_code=None, record_required=True):
+    """The check every checking command makes first (RUL-workspace_checked_first, BLD-workspace_check), the workspace's
+    configuration already loaded. Compares the files with the record the last execution left, takes out what was
+    accepted against that record before, and, where changes remain that no person is expected to make, stops — unless
+    `accept_code` is the code of exactly the list it prints, which accepts them once, recorded (BLD-accept_changes).
+    Returns `(entries for the run's log, None)` to go on — the allowed changes the run names and the accepted ones
+    (BLD-workspace_changes_logged) — or `(None, 2)` once it has said why it stops. With no record, prep compares
+    nothing; geotag and merge stop."""
+    from .reporting import get_reporter, emit_next_step, ChangesEvent
+    reporter = get_reporter()
+    try:
+        record_id, record = read_workspace_record(ws)
+    except WorkspaceRecordUnreadable as e:
+        # never taken for no record, where prep would compare nothing (RUL-workspace_checked_first)
+        reporter.error(f"\n{e} Nothing was planned or changed. Restore the database from a snapshot or a backup.")
+        return None, 2
+    if record_id is None:
+        if not record_required:
+            return [], None             # prep's first run, which writes the first record (RUL-first_prep_compares_nothing)
+        reporter.error("\nThe workspace holds no record of the state its last execution left it in, so what has "
+                       "changed since cannot be told. Nothing was planned or changed.")
+        emit_next_step(reporter, "`prep plan` and `prep execute` — each execution records the state it leaves — "
+                                 f"then re-run `{phase} {command}`.")
+        return None, 2
+    current = workspace_entries(ws)
+    # The work of an execution interrupted before it recorded the state it left is that run's, not a change by hand:
+    # taken into the record compared with, and named (RUL-interrupted_work_passes, BLD-interrupted_run_recognised).
+    as_left, own = recognise_interrupted_work(ws, record_id, record, current)
+    changes = compare_workspace(as_left, current)
+    try:
+        acceptances = read_accepted_changes(ws)
+    except ValueError as e:
+        reporter.error(f"\n{e} Nothing was planned or changed.")
+        return None, 2
+    accepted_before = {}
+    for a in acceptances:
+        if a.get("record_id") == record_id:
+            for c in a.get("changes") or []:
+                accepted_before[_change_key(c)] = a.get("code")
+    unexpected = [c for c in changes if c["kind"] in _UNEXPECTED_KINDS and _change_key(c) not in accepted_before]
+    earlier = [dict(c, accepted=accepted_before[_change_key(c)]) for c in changes if _change_key(c) in accepted_before]
+    logged = [c for c in changes if c["kind"] in _LOGGED_KINDS and _change_key(c) not in accepted_before]
+    accepted_now = []
+    if unexpected:
+        lines = format_changes(unexpected)
+        code = change_code(lines)
+        if accept_code != code:
+            reporter.error(f"\nThe workspace is not as the last execution left it: {len(unexpected)} change(s) that "
+                           "no command made, and none a person is expected to make:")
+            for line in lines:
+                reporter.error(line)
+            if accept_code:
+                reporter.log(f"The code {accept_code} accepts another list: the changes are not those it was given "
+                             "for. They are listed anew above.")
+            reporter.log("Nothing was planned or changed. Undo them; or, if they are wanted, accept them once — the "
+                         f"acceptance is kept in {ACCEPTED_CHANGES_ARTIFACT}:")
+            reporter.log(f"  photos-cartographer {phase} {command} --accept-changes {code}")
+            reporter.emit(ChangesEvent(phase=phase, command=command, code=code, lines=lines))
+            emit_next_step(reporter, f"undo the change(s) above, or re-run `{phase} {command} --accept-changes "
+                                     f"{code}` to accept them.")
+            return None, 2
+        now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        entry = {"code": code, "phase": phase, "command": command, "accepted_at": now, "record_id": record_id,
+                 "changes": [{k: c[k] for k in ("kind", "path", "from", "now") if k in c} for c in unexpected]}
+        ensure_control_dir(ws)
+        _sha, _bak = write_versioned_json(accepted_changes_path(ws), {
+            "artifact_name": ACCEPTED_CHANGES_ARTIFACT, "schema_version": 1,
+            "acceptances": acceptances + [entry]})
+        reporter.warn(f"Accepted {len(unexpected)} change(s) (code {code}), recorded in {ACCEPTED_CHANGES_ARTIFACT}:")
+        for line in lines:
+            reporter.warn(line)
+        accepted_now = [dict(c, accepted=code) for c in unexpected]
+    elif accept_code:
+        reporter.log(f"Nothing to accept with the code {accept_code}: no change awaits acceptance.")
+    if earlier:
+        # Named, not only counted, by every checking command — a plan, a dry run and finalize included, whose record
+        # names none (the owner's preference, docs/design/decisions.md).
+        reporter.log(f"{len(earlier)} change(s) accepted earlier since the last execution "
+                     f"({ACCEPTED_CHANGES_ARTIFACT}):")
+        for line in format_changes(earlier):
+            reporter.log(line)
+    if logged:
+        reporter.log("Changed by hand since the last execution, as a workspace allows:")
+        for line in format_changes(logged):
+            reporter.log(line)
+    runs = sorted({(c["phase"], c["plan_id"]) for c in own})
+    for phase_of, plan_id in runs:
+        mine = [dict(c, kind="interrupted_run") for c in own if (c["phase"], c["plan_id"]) == (phase_of, plan_id)]
+        reporter.log(f"Left by {phase_of}'s execution of plan {plan_id}, interrupted before it recorded the state it "
+                     f"left, and recognised as its own work ({len(mine)} file(s)):")
+        for line in format_changes(mine):
+            reporter.log(line)
+    out = []
+    for c in logged + earlier + accepted_now + [dict(c, kind="interrupted_run") for c in own]:
+        e = {k: c[k] for k in ("kind", "path", "from", "accepted", "phase", "plan_id") if c.get(k) is not None}
+        fp = (record.get(c.get("from") or c["path"]) or as_left.get(c["path"]) or {}).get("fingerprint")
+        try:
+            fpv = json.loads(fp).get("value") if fp else None
+        except (ValueError, AttributeError):
+            fpv = None
+        if fpv:
+            e["content_fingerprint"] = fpv
+        out.append(e)
+    return sorted(out, key=lambda e: (e["path"], e["kind"])), None
+
+
 def code_fingerprint() -> str:
     """SHA-256 of the cartographer package as loaded — from a zipapp or a checkout: every file the zipapp
     ships, its path and bytes, in path order. Every phase's plan records it, and dry run and execute
@@ -1147,6 +2146,26 @@ def unknown_config_settings(cfg: dict, template: dict = None, prefix: str = "") 
     return out
 
 
+def check_config(loaded, workspace_root: str = None, path: str = None):
+    """Refuse, raising ValueError naming the file and what is wrong, a configuration that `load_config` would refuse:
+    one that is not an object, lacks a setting of the built-in template or holds one it lacks, or does not validate
+    (BLD-config_loader). Shared by `load_config` and by the decision editor's write of a camera group's class
+    (BLD-editor_writes_device_groups), which checks the file it would write without making it this run's."""
+    path = path or (config_path(workspace_root) if workspace_root else "photos-00-config.json")
+    if not isinstance(loaded, dict):
+        raise ValueError(f"Workspace config {path} must be a JSON object.")
+    missing = missing_config_settings(loaded)
+    if missing:
+        listed = "; ".join(f"{k} (the default is {json.dumps(v)})" for k, v in missing)
+        raise ValueError(f"Workspace config {path} is missing setting(s): {listed}. Add each to the file — "
+                         "a workspace's configuration names every setting itself.")
+    unknown = unknown_config_settings(loaded)
+    if unknown:
+        raise ValueError(f"Workspace config {path} holds setting(s) cartographer does not know: "
+                         f"{', '.join(unknown)}. Correct or remove each — an unknown setting would be ignored.")
+    validate_config(loaded, workspace_root)  # human-authored input is validated before it is accepted
+
+
 def load_config(workspace_root: str) -> str:
     """Read the workspace's `photos-00-config.json` as the one configuration of this run — every phase
     reads it through here (BLD-config_loader). It must exist (only prep seeds it, `load_or_seed_config`),
@@ -1162,18 +2181,7 @@ def load_config(workspace_root: str) -> str:
         loaded = json.loads(raw.decode("utf-8"))
     except Exception as e:
         raise ValueError(f"Workspace config {path} is not valid JSON: {e}")
-    if not isinstance(loaded, dict):
-        raise ValueError(f"Workspace config {path} must be a JSON object.")
-    missing = missing_config_settings(loaded)
-    if missing:
-        listed = "; ".join(f"{k} (the default is {json.dumps(v)})" for k, v in missing)
-        raise ValueError(f"Workspace config {path} is missing setting(s): {listed}. Add each to the file — "
-                         "a workspace's configuration names every setting itself.")
-    unknown = unknown_config_settings(loaded)
-    if unknown:
-        raise ValueError(f"Workspace config {path} holds setting(s) cartographer does not know: "
-                         f"{', '.join(unknown)}. Correct or remove each — an unknown setting would be ignored.")
-    validate_config(loaded, workspace_root)  # human-authored input is validated before it is accepted
+    check_config(loaded, workspace_root, path)
     jobs = CONFIG.get("jobs")
     CONFIG.clear()
     CONFIG.update(loaded)
@@ -1255,7 +2263,7 @@ _GPX_NUMERIC_KEYS = (
     "gpx_tracks_agree_max_distance_meters", "gpx_anchor_max_segment_gap_seconds",
     "gpx_anchor_same_pass_max_seconds", "gpx_anchor_stay_max_seconds", "gpx_anchor_stay_distance_meters",
     "gpx_anchor_decision_tolerance_seconds", "drift_check_track_window_seconds",
-    "clock_offset_same_day_max_difference_seconds",
+    "clock_offset_same_day_max_difference_seconds", "gpx_own_position_contradicted_distance_meters",
 )
 
 def validate_config(cfg: dict, workspace_root: str = None):
@@ -1292,6 +2300,17 @@ def validate_config(cfg: dict, workspace_root: str = None):
                                  f"{name!r} (folder names must be unique).")
             seen[name] = role
 
+    tp = cfg.get("gpx_track_precedence")
+    if tp is not None:
+        if not isinstance(tp, list):
+            raise ValueError("config: gpx_track_precedence must be a list of folder names.")
+        for name in tp:
+            if not isinstance(name, str) or not name or "/" in name or "\x00" in name or name.startswith("."):
+                raise ValueError(f"config: gpx_track_precedence entry {name!r} must be a folder directly under "
+                                 f"gpx_root (a single path component: no '/', no NUL, no leading '.').")
+        if len(set(tp)) != len(tp):
+            raise ValueError("config: gpx_track_precedence names a folder twice.")
+
     mx = cfg.get("media_extensions")
     if mx is not None:
         if not isinstance(mx, dict):
@@ -1307,10 +2326,12 @@ def validate_config(cfg: dict, workspace_root: str = None):
             for i, ext in enumerate(lst):
                 if not isinstance(ext, str) or not ext:
                     raise ValueError(f"config: media_extensions.{cls}[{i}] must be a non-empty string.")
-                if (ext != ext.lower() or ext.startswith(".") or "/" in ext or "\x00" in ext
+                # a bare extension holds no dot at all, leading or inner (BLD-config_values_checked): a file's
+                # extension is what follows its last dot, so `tar.gz` would match nothing
+                if (ext != ext.lower() or "." in ext or "/" in ext or "\x00" in ext
                         or any(c.isspace() for c in ext)):
                     raise ValueError(f"config: media_extensions.{cls}[{i}] {ext!r} must be a canonical "
-                                     f"bare extension (lowercase, no leading dot, no '/'/NUL/whitespace).")
+                                     f"bare extension (lowercase, no dot, no '/'/NUL/whitespace).")
                 if ext in ext_seen:
                     raise ValueError(f"config: media_extensions.{cls} and media_extensions.{ext_seen[ext]} "
                                      f"both list {ext!r} (an extension maps to exactly one class).")
@@ -1334,6 +2355,24 @@ def validate_config(cfg: dict, workspace_root: str = None):
             raise ValueError(f"config: filename_timestamp_format {fmt!r} does not vary with the timestamp.")
         if "/" in out1 or "\x00" in out1:
             raise ValueError(f"config: filename_timestamp_format {fmt!r} produces an illegal path character.")
+        # Prep names a file from the time its camera recorded, which carries no zone; geotag from the corrected time,
+        # which does. A field that reads the two differently — `%z`, `%Z` — names one moment two ways
+        # (RUL-filename_format_zone_free).
+        zoned = datetime(2001, 2, 3, 4, 5, 6, tzinfo=timezone(timedelta(hours=5, minutes=30)))
+        # `%s`, the seconds since the epoch, renders a time without a zone through the host's zone, and renders the
+        # same with one or without: the comparison below cannot see it, so it is refused by name.
+        if zoned.strftime(fmt) != out1 or "s" in re.findall(r"%[-_0^#]*\d*(.)", fmt):
+            raise ValueError(f"config: filename_timestamp_format {fmt!r} holds a field that reads a timezone, such as "
+                             "%z, %Z or %s: prep names files from a time without one and geotag from a time with one, "
+                             "so the two would name one moment differently. Use only fields of the date and time.")
+        # A name ending in `-` and three or more digits reads as a name carrying a differentiating suffix
+        # (`_DEDUP_SUFFIX_RE`): merge would take the time's last digits for a suffix and number its names from them
+        # (RUL-merge_suffix_above_highest). Rendered at times whose every field is wide, so an unpadded field is seen.
+        if any(_DEDUP_SUFFIX_RE.search(t.strftime(fmt))
+               for t in (datetime(2001, 2, 3, 4, 5, 6), datetime(2012, 11, 22, 13, 44, 55))):
+            raise ValueError(f"config: filename_timestamp_format {fmt!r} makes names ending in '-' and three or more "
+                             "digits, which is how a name's differentiating suffix looks, so the time would be read as "
+                             "a suffix. End the format otherwise.")
 
     if "gpx_root" in cfg:
         _check_path("gpx_root", cfg["gpx_root"])
@@ -1356,6 +2395,8 @@ def validate_config(cfg: dict, workspace_root: str = None):
         # before it consumes it (BLD-authored_checks_by_phase).
         if not isinstance(mg, dict):
             raise ValueError("config: merge must be an object.")
+        if "library_space_margin_percent" in mg:
+            _check_number("merge.library_space_margin_percent", mg["library_space_margin_percent"], minimum=0)
         if "library_root" in mg:
             _check_path("merge.library_root", mg["library_root"])
 
@@ -1374,10 +2415,6 @@ def validate_config(cfg: dict, workspace_root: str = None):
         for bk in ("single_anchor_auto_apply", "multi_anchor_auto_apply"):
             if bk in pol:
                 _check_bool(f"camera_time_and_timezone_policy.{bk}", pol[bk])
-        for nk in ("phone_gpx_agreement_tolerance_seconds", "phone_gpx_conflict_threshold_seconds",
-                   "dst_conflict_tolerance_seconds", "phone_gpx_max_distance_meters"):
-            if nk in pol:
-                _check_number(f"camera_time_and_timezone_policy.{nk}", pol[nk], minimum=0)
         if "default_folder_timezone" in pol:
             tz = pol["default_folder_timezone"]
             _check_string("camera_time_and_timezone_policy.default_folder_timezone", tz)
@@ -1399,6 +2436,20 @@ def validate_config(cfg: dict, workspace_root: str = None):
                     if not isinstance(lst, list) or not all(isinstance(x, str) for x in lst):
                         raise ValueError(f"config: camera_time_and_timezone_policy.device_groups.{gk} "
                                          f"must be a list of strings.")
+        if "several_bodies_groups" in pol:
+            # the camera groups that are several bodies (BLD-several_bodies_groups): each a fixed-clock camera
+            # group, named once — a phone is solved photo by photo, and has no day's offset for bodies to share
+            sb = pol["several_bodies_groups"]
+            where = "config: camera_time_and_timezone_policy.several_bodies_groups"
+            if not isinstance(sb, list) or not all(isinstance(x, str) and x for x in sb):
+                raise ValueError(f"{where} must be a list of camera group keys.")
+            if len(set(sb)) < len(sb):
+                raise ValueError(f"{where} names a camera group twice.")
+            fixed = set((dg or {}).get("fixed_clock_cameras") or []) if isinstance(dg, dict) else set()
+            stray = [k for k in sb if k not in fixed]
+            if stray:
+                raise ValueError(f"{where} names {stray[0]!r}, which device_groups.fixed_clock_cameras does not "
+                                 "list: only a camera with a clock set by hand can be several bodies.")
 
 
 def _check_gpx_root_outside(cfg, workspace_root):
@@ -1413,6 +2464,16 @@ def _check_gpx_root_outside(cfg, workspace_root):
         if os.path.commonpath([gpx, folder]) in (gpx, folder):
             raise ValueError(f"config: gpx_root {root!r} must lie outside the managed folders; "
                              f"it overlaps {name}/.")
+    # Nor at or under any other entry of the workspace's top level that is not hidden: such an entry is a misplaced
+    # dump (RUL-top_level_only_managed), whose place is the inbox, where tracks block prep. The control directory
+    # and the other hidden entries stay open to it.
+    ws = os.path.realpath(workspace_root)
+    rel = os.path.relpath(gpx, ws)
+    first = rel.split(os.sep, 1)[0]
+    if rel != "." and first != os.pardir and not first.startswith("."):
+        raise ValueError(f"config: gpx_root {root!r} must lie outside the workspace's folders; it lies in "
+                         f"{first}/, an entry of the workspace's top level, where only the managed folders and "
+                         "hidden entries belong. Put the tracks outside the workspace, or under .photos-ingest/.")
 
 
 def validate_merge_config(cfg: dict, ws: str):
@@ -1516,8 +2577,8 @@ def take_zfs_snapshot(ws: str, snapshot_id: str, label: str, *, target_path=None
     Returns None when ZFS is disabled; otherwise a record
     `{required, snapshot_name (None if no dataset was found), command, exit_code, stdout, stderr, ok}`,
     plus `already_existed: True` when the snapshot was there before this call.
-    It NEVER raises — the caller records the result in its own journal/summary and, if `required` and
-    not `ok`, aborts before mutating (keeping the audit record + abort decision in the phase).
+    It NEVER raises — geotag and merge record the result in their summaries — and the caller, if `required`
+    and not `ok`, aborts before mutating (keeping the abort decision in the phase).
 
     A snapshot names its plan (RUL-snapshot_per_plan), so executing the same plan again (a geotag
     resume, a merge re-run) asks for a name that exists: that snapshot already precedes this plan's
@@ -1549,7 +2610,7 @@ def take_zfs_snapshot(ws: str, snapshot_id: str, label: str, *, target_path=None
             rec["already_existed"] = True
     # Surface a log line whenever a snapshot is actually taken, naming it — one place so EVERY phase
     # (prep/geotag/merge) that snapshots before mutating reports it. Failures are left to the caller
-    # (it warns or aborts per `required`); the durable record still goes to the journal/summary.
+    # (it warns or aborts per `required`); geotag's and merge's durable record goes to their summaries.
     if rec["ok"]:
         try:
             from .reporting import get_reporter
@@ -1572,10 +2633,15 @@ def _zfs_snapshot_exists(snap: str) -> bool:
 
 # 2: every field taken from an explicit group order (METADATA_GROUP_ORDER), the group-qualified
 #    XMP:/QuickTime: date fields gone (they were never filled), no raw payload kept.
-FIELD_SET_VERSION = 2
+# 3: the other time fields geotag rewrites kept as well, each from its own group (OTHER_TIME_FIELDS).
+# 4: the sub-second fields beside CreateDate and ModifyDate read from EXIF (SubSecTimeDigitized, SubSecTime), not
+#    the Composite ones, which no group of the order holds.
+# 5: the Composite position taken first only where EXIF holds the position, else after XMP's (POSITION_FIELDS).
+FIELD_SET_VERSION = 5
 # 2: a file's recorded time is the first field holding a valid time, not the first present.
 METADATA_SCHEMA_VERSION = 2
-CAMERA_GROUP_KEY_VERSION = 1
+# 2: a key of empty parts alone (every identity field held blank) is NO_IDENTITY_KEY, a file naming no camera.
+CAMERA_GROUP_KEY_VERSION = 2
 
 # -G0 names each value's group, so prep — not exiftool's own priority — chooses which group a field is
 # taken from; -a keeps a tag present in several groups once per group.
@@ -1590,6 +2656,12 @@ def get_exiftool_version() -> str:
         return "unknown"
 
 _IMAGEMAGICK_VERSION = None
+def known_engine_version(version) -> bool:
+    """Whether `version` names an ImageMagick version — not None, nor the `"unknown"` `get_imagemagick_version` gives
+    where it cannot read one. A fingerprint taken under no known version is never reused, nor is such a version ever
+    the same as another (RUL-unchecked_counts_as_changed)."""
+    return version not in (None, "unknown")
+
 def get_imagemagick_version() -> str:
     """Resolve the ImageMagick version string once per process.
 
@@ -1932,6 +3004,10 @@ class ContentHasher:
                 last_error = str(e)
                 if attempt == 1:
                     print(f"Warning: ffmpeg failed on {filepath}: {e.stderr}")
+            except OSError as e:
+                # ffmpeg could not be run (out of processes, not executable, …): a failed attempt, and after two the
+                # file's failed fingerprint (RUL-tool_failure_never_valid) — never an error escaping the scan
+                last_error = str(e)
         return {"status": "failed", "strategy": VIDEO_FINGERPRINT_STRATEGY, "value": None, "error": last_error}
 
 
@@ -2046,9 +3122,10 @@ class PersistentExifToolWorker:
                  if src:
                      results[src] = MetadataReader._parse_exiftool_item(data)
             return results
-        except json.JSONDecodeError:
-            pass
-        return {}
+        except json.JSONDecodeError as e:
+            # A reply that does not parse is a failed attempt, retried on a restarted worker (RUL-tool_failure_retried,
+            # BLD-tool_workers) — never an empty folder, whose every file would count failed on one bad answer.
+            raise ProcessCrashedError(f"exiftool's reply could not be read: {e}")
 
 
 atexit.register(PersistentExifToolWorker.cleanup_all)
@@ -2177,14 +3254,17 @@ def parse_naive_time(s):
 # (for a time field, the first holding a valid time). EXIF is the camera's own record; XMP is where other
 # tools mirror it, and where a file without EXIF keeps its times; the rest hold what neither does.
 METADATA_GROUP_ORDER = ("EXIF", "XMP", "MakerNotes", "IPTC", "QuickTime", "File")
-# The GPS position is taken first from exiftool's Composite group, which signs it by its hemisphere
-# reference; EXIF holds it unsigned beside a separate reference tag.
-POSITION_FIELDS = ("GPSLatitude", "GPSLongitude", "GPSAltitude", "GPSDateTime")
+# The GPS position is taken first from exiftool's Composite group where EXIF holds it, the Composite value being EXIF's
+# signed by its hemisphere reference (EXIF holds it unsigned beside a separate reference tag). Elsewhere exiftool also
+# derives a Composite position from QuickTime's, so without EXIF's the Composite comes after XMP's, never before
+# (RUL-metadata_group_order). Each position field names the EXIF tag its Composite value is made from.
+POSITION_FIELDS = {"GPSLatitude": "GPSLatitude", "GPSLongitude": "GPSLongitude", "GPSAltitude": "GPSAltitude",
+                   "GPSDateTime": "GPSDateStamp"}
 
 METADATA_FIELDS = (
     # times, uncorrected
     "DateTimeOriginal", "CreateDate", "ModifyDate",
-    "SubSecTimeOriginal", "SubSecCreateDate", "SubSecModifyDate",
+    "SubSecTimeOriginal", "SubSecTimeDigitized", "SubSecTime",
     "OffsetTime", "OffsetTimeOriginal", "OffsetTimeDigitized", "TimeZone",
     "DateCreated", "TrackCreateDate", "TrackModifyDate", "MediaCreateDate", "MediaModifyDate",
     # camera identity
@@ -2197,18 +3277,93 @@ METADATA_FIELDS = (
     "ImageWidth", "ImageHeight", "Orientation", "Rotation", "Duration",
 )
 
+# The other fields a photo records its making in, each kept from its own group as exiftool -G0 names it — not by
+# the group order — so geotag knows which of them a photo holds, and rewrites to the corrected time exactly those
+# (BLD-other_time_fields_read, BLD-other_time_fields_written). `-n` gives each as written: EXIF `YYYY:MM:DD HH:MM:SS`,
+# XMP `YYYY:MM:DD HH:MM:SS[.ff]+HH:MM` (ISO in the file), IPTC's date `YYYY:MM:DD` and time `HH:MM:SS+HH:MM`.
+OTHER_TIME_FIELDS = ("EXIF:CreateDate", "EXIF:OffsetTimeDigitized", "XMP:DateCreated", "IPTC:DateCreated",
+                     "IPTC:TimeCreated")
+
 
 def metadata_field(item, field, valid=None):
     """`(group, value)` of `field` in a group-qualified exiftool record: from the first group of its order
     holding it — with `valid`, the first whose value passes it, else the first holding any — or
     `(None, None)`."""
-    groups = (("Composite",) if field in POSITION_FIELDS else ()) + METADATA_GROUP_ORDER
+    groups = METADATA_GROUP_ORDER
+    if field in POSITION_FIELDS:
+        groups = (("Composite",) + groups if item.get(f"EXIF:{POSITION_FIELDS[field]}") is not None
+                  else groups[:2] + ("Composite",) + groups[2:])
     held = [(g, item[f"{g}:{field}"]) for g in groups if item.get(f"{g}:{field}") is not None]
     if valid is not None:
         for g, v in held:
             if valid(v):
                 return g, v
     return held[0] if held else (None, None)
+
+
+def has_own_position(lat, lon):
+    """Whether a latitude and longitude, as `exiftool -n` reads them, are a position of the photo's own
+    (BLD-own_position_test): both present, and not both exactly 0 — what a device writes with no fix
+    (RUL-null_island_is_no_position). Only exact zero: a value merely near it may be a real place."""
+    if lat is None or lon is None:
+        return False
+    try:
+        return not (float(lat) == 0 and float(lon) == 0)
+    except (TypeError, ValueError):
+        return True             # not a number, yet held: only the zero point is no fix
+
+
+def photos_without_position(handoff, plan):
+    """The photos under photos by destination that hold no position once geotag's `plan` is executed
+    (BLD-no_photo_unplaced): each photo's position is the one the plan writes it (`metadata_gps_write`), none where the
+    plan clears it (a `gps_marker_write` emptying `GPSLatitude`), else the one its handoff record holds — prep's reading
+    of the photo — judged by the one own-position test (BLD-own_position_test), so latitude 0 and longitude 0 is none.
+    A record is joined to the plan's operations by its content fingerprint, which a metadata write and geotag's rename
+    leave as it was — by the path the plan was built on where it holds none, or where another record holds the same one
+    (a photo copied into two destinations, which prep keeps both of). Read from the records, never by a tool run on a
+    photo: finalize runs none (RUL-finalize_needs_no_metadata_tool). Their paths as the handoff records them, sorted."""
+    by_dest = folder_name('photos_by_dest')
+    records = []
+    for rec in (handoff or {}).get("files") or []:
+        if rec.get("folder_class") != by_dest or rec.get("media_class") not in ("image", "raw"):
+            continue
+        try:
+            fp = json.loads(rec.get("content_hash")).get("value")
+        except Exception:
+            fp = None
+        records.append((rec, fp))
+    held = {}
+    for _rec, fp in records:
+        held[fp] = held.get(fp, 0) + 1
+    written = {}                                # ("fp", fingerprint) or ("path", path) -> (lat, lon) left, or None
+    for dd in ((plan or {}).get("destinations") or {}).values():
+        for op in dd.get("operations") or []:
+            w = op.get("writes") or {}
+            if op.get("type") == "metadata_gps_write":
+                pos = (w.get("GPSLatitude"), w.get("GPSLongitude"))
+            elif op.get("type") == "gps_marker_write" and w.get("GPSLatitude") == "":
+                pos = None
+            else:
+                continue
+            fp = (op.get("preconditions") or {}).get("content_fingerprint")
+            for key in ((("fp", fp),) if fp else ()) + (("path", op.get("relative_path")),):
+                if pos is not None or key not in written:     # a position written outranks a clear
+                    written[key] = pos
+    out = []
+    for rec, fp in records:
+        rel = rec.get("relative_path")
+        key = ("fp", fp) if fp and held[fp] == 1 else ("path", rel)
+        if key in written:
+            pos = written[key]
+        else:
+            try:
+                parsed = json.loads((rec.get("metadata_status") or {}).get("parsed_json") or "{}")
+            except ValueError:
+                parsed = {}
+            pos = (parsed.get("GPSLatitude"), parsed.get("GPSLongitude")) if isinstance(parsed, dict) else None
+        if pos is None or not has_own_position(*pos):
+            out.append(rel)
+    return sorted(out)
 
 
 def recorded_time(parsed):
@@ -2248,6 +3403,8 @@ class MetadataReader:
         for field in METADATA_FIELDS:
             valid = (lambda v: parse_naive_time(v) is not None) if field in RECORDED_TIME_TAGS else None
             groups[field], parsed[field] = metadata_field(item, field, valid)
+        for field in OTHER_TIME_FIELDS:
+            parsed[field] = item.get(field)
 
         # Build group_key for camera identity grouping based on standard elements
         ident_parts = []
@@ -2255,7 +3412,9 @@ class MetadataReader:
             v = parsed.get(k)
             if v is not None:
                 ident_parts.append(str(v).strip())
-        parsed["camera_group_key"] = "|".join(ident_parts) if ident_parts else NO_IDENTITY_KEY
+        # A key of empty parts alone — every identity field the file holds blank — names no camera, as a file
+        # holding none of them does (BLD-camera_identity_values).
+        parsed["camera_group_key"] = "|".join(ident_parts) if any(ident_parts) else NO_IDENTITY_KEY
 
         # Passive boolean helper checks
 
@@ -2265,7 +3424,7 @@ class MetadataReader:
         else:
             parsed["extraction_status"] = "extracted_empty"
 
-        parsed["has_native_gps"] = bool(parsed.get("GPSLatitude") is not None and parsed.get("GPSLongitude") is not None)
+        parsed["has_native_gps"] = has_own_position(parsed.get("GPSLatitude"), parsed.get("GPSLongitude"))
         parsed["has_timestamp"] = recorded_time(parsed)[0] is not None
 
         # Timestamp provenance: the first field holding a valid time, not merely the first present, named
@@ -2435,7 +3594,8 @@ class ProgressCoordinator:
 # table, the journal, and the handoff depends_on so a stale/foreign cache or journal is
 # detectable downstream (BLD-cache_versions). The per-hash engine binding (e.g. ImageMagick
 # version) is carried separately in each content hash's engine_version.
-CACHE_SCHEMA_VERSION = 3   # 2: file_cache without the byte-hash column; 3: metadata_cache without the raw payload
+CACHE_SCHEMA_VERSION = 4   # 2: file_cache without the byte-hash column; 3: metadata_cache without the raw payload;
+                           # 4: file_cache without absolute_path
 FINGERPRINT_ALGORITHM_VERSION = "2"   # 2: every frame of an image, every stream of a video
 
 
@@ -2459,8 +3619,8 @@ def fingerprint_valid(content_hash_json) -> bool:
 
 def fingerprint_reusable(content_hash_json, media_class, current_magick_version) -> bool:
     """Whether a cached fingerprint can be reused: a valid one, taken by the method this build uses for
-    its class — the same strategy, and for a photo the same ImageMagick version. A fingerprint that
-    records no ImageMagick version is not reusable, and a failed one never is: the failure may have
+    its class — the same strategy, and for a photo the same, known ImageMagick version. A fingerprint that
+    records no ImageMagick version, or one that could not be read, is not reusable, and a failed one never is: the failure may have
     been the machine's (a tool missing, a decode crashing), so every run takes it again
     (RUL-failed_fingerprint_retried)."""
     if not fingerprint_valid(content_hash_json):
@@ -2468,7 +3628,7 @@ def fingerprint_reusable(content_hash_json, media_class, current_magick_version)
     ch = json.loads(content_hash_json)
     if media_class in ("image", "raw"):
         return (ch.get("strategy") == IMAGE_FINGERPRINT_STRATEGY
-                and ch.get("engine_version") is not None and ch.get("engine_version") == current_magick_version)
+                and known_engine_version(ch.get("engine_version")) and ch.get("engine_version") == current_magick_version)
     if media_class == "video":
         return ch.get("strategy") == VIDEO_FINGERPRINT_STRATEGY
     return True
@@ -2626,6 +3786,32 @@ def _move_cross_fs_no_clobber(src: str, dest: str):
     _fsync_dir(dest_dir)                                # the rename on disk before the source goes
     os.unlink(src)                                      # remove the source LAST (crash-safe)
 
+def name_taken_ignoring_case(dest: str, src: str = None):
+    """The path of an entry in `dest`'s folder whose name is `dest`'s, compared without regard to case — `src`, the
+    file being moved there, aside — or None where the name is free (RUL-target_free_ignores_case, on every
+    filesystem). A folder that does not exist yet holds nothing; one that cannot be listed is not found free
+    (RUL-unchecked_counts_as_changed): its own path is returned."""
+    folder, name = os.path.split(dest)
+    low = name.lower()
+    try:
+        entries = os.listdir(folder or ".")
+    except FileNotFoundError:
+        return None
+    except OSError:
+        return folder
+    for e in entries:
+        if e.lower() != low:
+            continue
+        p = os.path.join(folder, e)
+        try:
+            if src is not None and os.path.samefile(p, src):
+                continue
+        except OSError:
+            pass
+        return p
+    return None
+
+
 def _move_no_clobber(src: str, dest: str, cross_fs=False):
     """Move src -> dest, failing (FileExistsError) instead of overwriting an existing destination.
     Primary path is an atomic same-filesystem MOVE (_rename_no_clobber_same_fs). Only a caller that
@@ -2648,14 +3834,20 @@ def _dev_of(path: str) -> int:
     return os.lstat(path).st_dev
 
 
-def workspace_volume_breaks(workspace_root: str) -> list:
+def workspace_volume_breaks(workspace_root: str, unlisted: list = None) -> list:
     """Workspace-relative folders that lie on another filesystem than the workspace root
     (BLD-workspace_one_filesystem): a workspace must lie on one filesystem, so every move within it is one rename. Walks
     every folder — the control directory and the quarantine included — without following links, and
-    does not descend into a folder found elsewhere. Sorted; empty when the workspace is whole."""
+    does not descend into a folder found elsewhere. Sorted; empty when the workspace is whole. A folder the walk cannot
+    list is added to `unlisted` (workspace-relative): what lies below it is unchecked, never taken for one filesystem
+    (RUL-workspace_one_filesystem, RUL-unchecked_counts_as_changed)."""
     root_dev = _dev_of(workspace_root)
     breaks = []
-    for dirpath, dirnames, _files in os.walk(workspace_root):
+
+    def cannot_list(e):
+        if not isinstance(e, FileNotFoundError) and unlisted is not None:   # vanished mid-walk: nothing lies there
+            unlisted.append(os.path.relpath(e.filename, workspace_root) if e.filename else ".")
+    for dirpath, dirnames, _files in os.walk(workspace_root, onerror=cannot_list):
         keep = []
         for d in sorted(dirnames):
             p = os.path.join(dirpath, d)
@@ -2672,14 +3864,213 @@ def workspace_volume_breaks(workspace_root: str) -> list:
 
 
 def workspace_volume_error(workspace_root: str):
-    """The message stopping a run on a workspace that spans filesystems, or None when it lies on one."""
-    breaks = workspace_volume_breaks(workspace_root)
+    """The message stopping a run on a workspace that spans filesystems, or holding a folder that cannot be listed — so
+    whether it does cannot be told —, or None when it lies on one."""
+    unlisted = []
+    breaks = workspace_volume_breaks(workspace_root, unlisted)
+    if unlisted:
+        shown = ", ".join(f"{u}/" for u in sorted(unlisted)[:5]) + \
+            (f" and {len(unlisted) - 5} more" if len(unlisted) > 5 else "")
+        return (f"The workspace holds a folder that cannot be listed: {shown}. Whether it lies on one filesystem "
+                "cannot be told; make the folder readable and re-run. Nothing was touched.")
     if not breaks:
         return None
     shown = ", ".join(f"{b}/" for b in breaks[:5]) + (f" and {len(breaks) - 5} more" if len(breaks) > 5 else "")
     return (f"The workspace spans more than one filesystem: {shown} lies on another volume than the "
             f"workspace root. A workspace must lie on one filesystem; move it onto one and re-run. "
             f"Nothing was touched.")
+
+
+# The filesystem types known to be local (BLD-local_filesystem_types): the machine's own disks, or its memory.
+# `overlay` is a local union of local filesystems — what a container's root, and many CI runners', is made of.
+# Anything else — nfs, cifs/smb3, 9p, virtiofs, every fuse.* (sshfs among them), vfat/exfat/ntfs — is refused.
+LOCAL_FILESYSTEM_TYPES = frozenset({
+    "ext2", "ext3", "ext4", "xfs", "btrfs", "zfs", "f2fs", "bcachefs", "jfs", "reiserfs", "nilfs2",
+    "tmpfs", "ramfs", "overlay",
+})
+MOUNT_TABLES = ("/proc/self/mountinfo", "/proc/mounts")
+
+
+def _unescape_mount_field(s: str) -> str:
+    """A mount table's field with its octal escapes (`\\040` for a space) decoded."""
+    return re.sub(r"\\([0-7]{3})", lambda m: chr(int(m.group(1), 8)), s)
+
+
+def _mount_table():
+    """[(mount point, filesystem type)] in the order the system lists them, from /proc/self/mountinfo or else
+    /proc/mounts; None where neither can be read — a system that is not Linux."""
+    for path in MOUNT_TABLES:
+        try:
+            with open(path, encoding="utf-8", errors="surrogateescape") as f:
+                lines = f.read().splitlines()
+        except OSError:
+            continue
+        table = []
+        for line in lines:
+            if path.endswith("mountinfo"):
+                head, sep, tail = line.partition(" - ")
+                fields, rest = head.split(), tail.split()
+                if sep and len(fields) >= 5 and rest:
+                    table.append((_unescape_mount_field(fields[4]), rest[0]))
+            else:
+                fields = line.split()
+                if len(fields) >= 3:
+                    table.append((_unescape_mount_field(fields[1]), fields[2]))
+        return table
+    return None
+
+
+def filesystem_type(path: str):
+    """The type of the filesystem `path` lies on: of the mount whose point is the longest prefix of the path's real
+    location, the later listed of two at one point (it covers the earlier). None where it cannot be told."""
+    table = _mount_table()
+    if not table:
+        return None
+    real = os.path.realpath(path)
+    best, best_len = None, -1
+    for point, fstype in table:
+        p = point.rstrip("/") or "/"
+        if p == "/" or real == p or real.startswith(p + "/"):
+            if len(p) >= best_len:
+                best, best_len = fstype, len(p)
+    return best
+
+
+def local_filesystem_error(ws: str):
+    """The message stopping a run on a workspace not on a local filesystem (RUL-workspace_local_filesystem), naming
+    its type; None when it is local. A system whose mount table cannot be read cannot tell, and is refused."""
+    fstype = filesystem_type(ws)
+    if fstype is None:
+        return ("Cannot tell what filesystem the workspace lies on — there is no mount table to read "
+                f"({' or '.join(MOUNT_TABLES)}); cartographer runs on Linux. Nothing was touched.")
+    if fstype in LOCAL_FILESYSTEM_TYPES:
+        return None
+    return (f"The workspace lies on a {fstype} filesystem, which is not known to be local. A workspace must lie on "
+            f"a local filesystem ({', '.join(sorted(LOCAL_FILESYSTEM_TYPES))}); move it onto one and re-run. "
+            "Nothing was touched.")
+
+
+# What a filesystem must do (RUL-filesystem_agnostic), each tried on a scratch file (BLD-filesystem_trial).
+FS_LOCKS = "file locks"
+FS_ATOMIC_RENAME = "a rename that is atomic"
+FS_NO_CLOBBER_MOVE = "a move that fails where its target exists"
+FS_FILE_SYNC = "syncing a file to disk"
+FS_FOLDER_SYNC = "syncing a folder to disk"
+WORKSPACE_FS_REQUIREMENTS = (FS_LOCKS, FS_ATOMIC_RENAME, FS_NO_CLOBBER_MOVE, FS_FILE_SYNC, FS_FOLDER_SYNC)
+LIBRARY_FS_REQUIREMENTS = (FS_LOCKS, FS_NO_CLOBBER_MOVE, FS_FILE_SYNC, FS_FOLDER_SYNC)
+FS_TRIAL_PREFIX = ".photos-fs-trial-"
+
+
+def _scratch(d: str, name: str, data: bytes) -> str:
+    p = os.path.join(d, name)
+    with open(p, "wb") as f:
+        f.write(data)
+    return p
+
+
+def _try_locks(d: str) -> bool:
+    """An exclusive lock, as the workspace's and the library's are taken, can be taken and let go."""
+    fd = os.open(os.path.join(d, "lock"), os.O_RDWR | os.O_CREAT, 0o644)
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        fcntl.flock(fd, fcntl.LOCK_UN)
+    finally:
+        os.close(fd)
+    return True
+
+
+def _try_atomic_rename(d: str) -> bool:
+    """A rename onto a taken name replaces it whole."""
+    a, b = _scratch(d, "rename-a", b"new"), _scratch(d, "rename-b", b"old")
+    os.replace(a, b)
+    with open(b, "rb") as f:
+        return f.read() == b"new" and not os.path.exists(a)
+
+
+def _try_no_clobber_move(d: str) -> bool:
+    """The move every placement makes refuses a taken name, leaving both files as they were, and moves to a free
+    one."""
+    src, taken = _scratch(d, "move-src", b"src"), _scratch(d, "move-taken", b"taken")
+    try:
+        _rename_no_clobber_same_fs(src, taken)
+    except FileExistsError:
+        pass
+    else:
+        return False
+    with open(taken, "rb") as f:
+        if f.read() != b"taken" or not os.path.exists(src):
+            return False
+    free = os.path.join(d, "move-free")
+    _rename_no_clobber_same_fs(src, free)
+    return os.path.exists(free) and not os.path.exists(src)
+
+
+def _try_file_sync(d: str) -> bool:
+    fd = os.open(_scratch(d, "sync", b"sync"), os.O_RDONLY)
+    try:
+        os.fsync(fd)
+    finally:
+        os.close(fd)
+    return True
+
+
+def _try_folder_sync(d: str) -> bool:
+    _fsync_dir(d)
+    return True
+
+
+_FS_TRIALS = {FS_LOCKS: _try_locks, FS_ATOMIC_RENAME: _try_atomic_rename, FS_NO_CLOBBER_MOVE: _try_no_clobber_move,
+              FS_FILE_SYNC: _try_file_sync, FS_FOLDER_SYNC: _try_folder_sync}
+
+
+def filesystem_lacks(folder: str, requirements):
+    """The first of `requirements` the filesystem `folder` lies on fails at, tried in order on scratch files in a
+    folder of their own made in `folder` and removed after, `folder`'s modification time put back as it was, so the
+    trial leaves nothing behind (RUL-filesystem_trial_leaves_nothing); None when it does every one."""
+    try:
+        st = os.stat(folder)
+        d = tempfile.mkdtemp(prefix=FS_TRIAL_PREFIX, dir=folder)
+    except OSError:
+        return "creating a file"
+    try:
+        for req in requirements:
+            try:
+                if not _FS_TRIALS[req](d):
+                    return req
+            except OSError:
+                return req
+        return None
+    finally:
+        shutil.rmtree(d, ignore_errors=True)
+        try:
+            os.utime(folder, ns=(st.st_atime_ns, st.st_mtime_ns))
+        except OSError:
+            pass
+
+
+def workspace_filesystem_error(ws: str):
+    """The message stopping a run whose workspace's filesystem cannot hold one, or None: the filesystem local
+    (RUL-local_filesystem_checked_first), then each requirement tried in the control directory — in the workspace
+    itself on a first prep run, before the control directory is made (RUL-filesystem_requirements_tried)."""
+    err = local_filesystem_error(ws)
+    if err:
+        return err
+    cd = control_dir(ws)
+    lacks = filesystem_lacks(cd if os.path.isdir(cd) else ws, WORKSPACE_FS_REQUIREMENTS)
+    if lacks:
+        return (f"The workspace's filesystem fails at {lacks}, which cartographer needs of it. Move the workspace "
+                "onto a filesystem that does it and re-run. Nothing was touched.")
+    return None
+
+
+def library_filesystem_error(library_root: str):
+    """The message stopping merge on a library whose filesystem fails at a requirement, tried in the library
+    (RUL-library_requirements_tried), or None. Its type is not checked: a library may lie on a network filesystem."""
+    lacks = filesystem_lacks(library_root, LIBRARY_FS_REQUIREMENTS)
+    if lacks:
+        return (f"The library's filesystem ({library_root}) fails at {lacks}, which merge needs of it. Nothing was "
+                "merged.")
+    return None
 
 class PlanFingerprintMemo:
     """Plan-time decode memo (BLD-plan_memo): the fingerprint + metadata prep observed for a file at a
@@ -2756,9 +4147,8 @@ class PlanFingerprintMemo:
                 continue                     # a failed fingerprint is never reused, so never kept
             if not rec.get("metadata"):
                 continue
-            stored = {k: v for k, v in rec.items() if k != "absolute_path"}   # path is machine-specific
             rows.append({"relative_path": rec["relative_path"], "size": rec.get("size"),
-                         "mtime_ns": rec.get("mtime_ns"), "record_json": json.dumps(stored, sort_keys=True)})
+                         "mtime_ns": rec.get("mtime_ns"), "record_json": json.dumps(rec, sort_keys=True)})
         with self._lock, self.conn:
             self.conn.execute("DELETE FROM plan_fingerprint_memo")
             self.conn.executemany("""
@@ -2807,7 +4197,6 @@ class WorkspaceCache:
             self.conn.execute("""
                 CREATE TABLE IF NOT EXISTS file_cache (
                     relative_path TEXT PRIMARY KEY,
-                    absolute_path TEXT,
                     size INTEGER,
                     mtime_ns INTEGER,
                     inode INTEGER,
@@ -2847,6 +4236,20 @@ class WorkspaceCache:
                               ("cache_schema_version", str(CACHE_SCHEMA_VERSION)))
             self.conn.execute("INSERT OR IGNORE INTO meta (key, value) VALUES (?, ?)",
                               ("fingerprint_algorithm_version", FINGERPRINT_ALGORITHM_VERSION))
+
+            # The state the last execution left the workspace's files in (BLD-workspace_record): every execution
+            # rewrites it whole at its end, and every checking command compares the files with it first. Its own
+            # table, apart from file_cache: that one is prep's, of the files prep fingerprinted and as it found them;
+            # this one is of every file the check covers, as the last execution of any phase left it.
+            self.conn.execute("""
+                CREATE TABLE IF NOT EXISTS workspace_record (
+                    relative_path TEXT PRIMARY KEY,
+                    size INTEGER,
+                    mtime_ns INTEGER,
+                    inode INTEGER,
+                    fingerprint TEXT
+                )
+            """)
 
             # Library-file fingerprint cache (BLD-library_file_fingerprinted). The permanent
             # library has no database of its own; when merge fingerprints a resident library file to
@@ -2938,14 +4341,13 @@ class WorkspaceCache:
         with self._write_ctx():
             self.conn.execute("""
                 INSERT INTO file_cache (
-                    relative_path, absolute_path, size, mtime_ns, inode, media_class,
+                    relative_path, size, mtime_ns, inode, media_class,
                     content_hash, last_seen_ns
                 ) VALUES (
-                    :relative_path, :absolute_path, :size, :mtime_ns, :inode, :media_class,
+                    :relative_path, :size, :mtime_ns, :inode, :media_class,
                     :content_hash, :last_seen_ns
                 )
                 ON CONFLICT(relative_path) DO UPDATE SET
-                    absolute_path = excluded.absolute_path,
                     size = excluded.size,
                     mtime_ns = excluded.mtime_ns,
                     inode = excluded.inode,
@@ -3011,7 +4413,10 @@ class WorkspaceCache:
         """Cache a resident library file's content fingerprint (BLD-library_file_fingerprinted),
         keyed by absolute library path + size + mtime_ns. `fp` is a ContentHasher fingerprint dict
         (value / strategy / engine_version). Re-keying on (path,size,mtime_ns) means a changed library
-        file naturally misses and is re-fingerprinted."""
+        file naturally misses and is re-fingerprinted. One taken under no known ImageMagick version is not kept: it
+        could never be reused (BLD-library_file_fingerprinted)."""
+        if not known_engine_version(fp.get("engine_version")):
+            return
         with self._write_ctx():
             self.conn.execute("""
                 INSERT INTO library_fingerprint_cache
@@ -3042,7 +4447,7 @@ class WorkspaceCache:
             row = cur.fetchone()
         if row is None or row["size"] != size or row["mtime_ns"] != mtime_ns:
             return None
-        if (row["fingerprint_strategy"] != IMAGE_FINGERPRINT_STRATEGY or engine_version is None
+        if (row["fingerprint_strategy"] != IMAGE_FINGERPRINT_STRATEGY or not known_engine_version(engine_version)
                 or row["engine_version"] != engine_version):
             return None
         return {"status": "valid", "value": row["fingerprint_value"],
@@ -3050,6 +4455,11 @@ class WorkspaceCache:
 
     def close(self):
         self.conn.close()
+
+
+class LockFileError(Exception):
+    """The lock file cannot be opened — a refusal naming the file (RUL-exit_status_says_how_it_ended), never read as
+    a lock another run holds."""
 
 
 class _FlockLock:
@@ -3064,12 +4474,16 @@ class _FlockLock:
         self.owner = None  # on a failed acquire, the identity of the current holder (if readable)
 
     def acquire(self) -> bool:
+        """True once held; False when another run holds it. A lock file that cannot be opened raises LockFileError
+        naming it: that is no run's lock, and saying "locked" would send the user to wait for none."""
         try:
             fd = os.open(self.lock_path, os.O_RDWR | os.O_CREAT, 0o644)
             self._lock_fd = os.fdopen(fd, 'r+')
-        except OSError:
+        except OSError as e:
             self._lock_fd = None
-            return False
+            raise LockFileError(f"The lock file {self.lock_path} cannot be opened ({e.strerror or e}), so the run "
+                                "cannot hold the lock; nothing was read or changed. Make the file readable and "
+                                "writable, or remove it.") from e
         try:
             fcntl.flock(self._lock_fd.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
         except (IOError, OSError):

@@ -59,9 +59,10 @@ then the proposal evidence last; non-coord cells just show the proposal.
   tree** — a parent shows its descendants' proposals; you can override any node; inheriting cells are
   badged "inherited from `<ancestor>`" and overrides badged "overridden"; a **live, advisory** inheritance
   preview updates children when you override a parent (the rule mirrored is just "nearest **resolved**
-  ancestor → child with no own decision"; badged *preview*, authoritative on re-run). **GPS** defaults to
-  a **worklist** of review items (+ per-destination fallback); automatic-only destinations collapse to a
-  counts row. Any view is switchable to any other. File-less **container** destinations (parents with
+  ancestor → child with no own decision"; badged *preview*, authoritative on re-run). **GPS** is the same
+  destination tree: each destination's fallback row, then its photos in buckets — Unplaced (open, first) or
+  Fallback, and Placed — split by why the tracks missed a photo or how it was placed (the grouping rules are in
+  `docs/design/decisions.md`). Any view is switchable to any other. File-less **container** destinations (parents with
   no media of their own, Section 10.1 of the time spec) appear in the time tree and the GPS worklist badged `container` —
   editable propagation points that hold defaults for their children and never sit on the to-do list.
 - **GPS-depends-on-time gate.** GPS placement is derived from each photo's resolved UTC, and the pipeline
@@ -108,7 +109,8 @@ then the proposal evidence last; non-coord cells just show the proposal.
   resolve the cell (mirroring the decision-json-reference §6 resolution rules) it shows `resolved` next to the `edited` chip
   rather than the now-stale `needs input` — advisory until Re-run, like the effective-outcome preview.
 - **Specialized controls:**
-  - **Timezone:** a full IANA-zone **drop-down**; accepting the proposal mirrors it into the field and
+  - **Timezone:** a full IANA-zone **drop-down** of the host's zones — those geotag's plan accepts, sent by the
+    server with the decisions (`zones`), never the browser's own list, against which a zone is also checked (why: `docs/design/decisions.md`); accepting the proposal mirrors it into the field and
     **locks** the drop-down (unaccepting frees it). The "accept" box is disabled when there's nothing to accept.
   - **Clock offset:** **three always-visible choices, click-to-activate** — *accept proposal* (the
     automatic offset, never edited → `accept_proposal`), *manual offset* (the **h/m/s spinner**:
@@ -159,10 +161,9 @@ then the proposal evidence last; non-coord cells just show the proposal.
     Google-Maps style) **relocates** the map to a named place — manual submit only (Enter/button, never
     per-keystroke, to respect Nominatim's ≤1 req/s policy); picking a result moves the view but does **not**
     set the decision (the operator still picks under the crosshair). The **folder fallback** is optional:
-    an inherited one is a proposal you accept (the checkbox), a manual one re-roots inheritance for
-    descendants, and a **Clear** button (beside the accept checkbox) resets the cell to *no fallback*
-    (effective `null`) — so a fallback can always be taken back; an unset fallback reads `none`, not
-    `resolved`.
+    an inherited one applies itself (badged *inherited ⟵ destination*), a manual one re-roots inheritance for
+    descendants, and **back to the inherited** (or **clear**, with nothing above) takes a manual one away; a
+    destination with no fallback here or above reads `none`, not `resolved`.
     - *Built with vendored Leaflet (`web/vendor/leaflet/`, no CDN/build); two **runtime** OpenStreetMap
       dependencies — map **tiles** and the **Nominatim** geocoder — degrade gracefully when offline.*
     - *The earlier idea of drawing the **GPX track / anchors / ghost marker** is not realised here: a GPS

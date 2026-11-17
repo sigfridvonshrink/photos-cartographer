@@ -16,7 +16,7 @@
 (photos-2-geotag, BLD-geotag_file_model). Still pre-decision: no JSON artifacts. From conftest.py.
 """
 import json
-from _handoff import match_disk
+from _handoff import match_disk, vouched
 import os
 import sys
 from datetime import datetime, timezone
@@ -61,7 +61,7 @@ def _wf(tmp_path, handoff_files):
 
 # --- Stage 2: by-dest file model --------------------------------------------
 
-@pytest.mark.spec("DEF-destination")
+@pytest.mark.spec("DEF-destination", test="TST-geotag_model-file_model_builds_by_dest_photos")
 def test_file_model_builds_by_dest_photos(tmp_path):
     wf = _wf(tmp_path, [_hfile("6-photos-by-dest/Belgium/Brussels/a.arw", gps=(50.84, 4.35))])
     files = wf.build_file_model()
@@ -73,6 +73,17 @@ def test_file_model_builds_by_dest_photos(tmp_path):
     assert f["native_gps"]["lat"] == 50.84 and f["has_native_gps"]
     assert f["content_fingerprint"] == "fp-6-photos-by-dest/Belgium/Brussels/a.arw"
     assert f["planned_filename"] is None
+
+
+@pytest.mark.spec("RUL-suffix_in_capture_order", "BLD-sub_second_read",
+                  test="TST-geotag_model-file_model_carries_the_sub_second")
+def test_file_model_carries_the_sub_second(tmp_path):
+    """The fraction of a second prep read beside a photo's recorded time reaches geotag through the handoff."""
+    rec = _hfile("6-photos-by-dest/T/a.jpg")
+    parsed = json.loads(rec["metadata_status"]["parsed_json"])
+    rec["metadata_status"]["parsed_json"] = json.dumps(dict(parsed, SubSecTimeOriginal="25"))
+    files = _wf(tmp_path, [rec, _hfile("6-photos-by-dest/T/b.jpg")]).build_file_model()
+    assert [f["sub_second"] for f in files] == [0.25, None]
 
 
 @pytest.mark.spec("BLD-geotag_file_model", "RUL-geotag_changes_only_by_dest", "RUL-video_never_changed",
@@ -183,10 +194,12 @@ def test_a_track_of_untimed_points_is_reported_not_empty(tmp_path):
                             "GPX point without a position in untimed.gpx at trkpt 2"]
 
 
+@pytest.mark.skipif(hasattr(os, "geteuid") and os.geteuid() == 0, reason="root reads a file of mode 000")
 def test_gpx_unreadable_file_warns_and_skips(tmp_path):
-    # a .gpx that os.walk lists but open() fails on (broken symlink) -> the OSError branch warns.
+    # a .gpx that os.walk lists but open() fails on (no permission to read it) -> the OSError branch warns.
     root = tmp_path / "gpx"; root.mkdir()
-    os.symlink(str(tmp_path / "does-not-exist"), str(root / "broken.gpx"))
+    (root / "locked.gpx").write_text(GPX)
+    (root / "locked.gpx").chmod(0)
     idx = cal.GPXIndex(str(root)).build()
     assert any("Could not read GPX file" in w for w in idx.warnings) and idx.points == []
 
@@ -209,6 +222,25 @@ def test_camera_group_classification(tmp_path, monkeypatch):
                       "CANON|R5|999": {"camera_group_key": "CANON|R5|999", "camera_group_class": "unknown"},
                       "SONY|ILCE-6400|123": {"camera_group_key": "SONY|ILCE-6400|123", "camera_group_class": "camera"}}
     assert unknown == ["CANON|R5|999"]
+
+
+@pytest.mark.spec("BLD-editor_lists_new_camera_groups", "BLD-known_camera_group",
+                  test="TST-geotag_model-the_editor_s_camera_groups_are_those_geotag_stops_on")
+def test_the_editor_s_camera_groups_are_those_geotag_stops_on(tmp_path, monkeypatch):
+    """What the decision editor asks the class of, found from the handoff and the configuration, is what geotag stops
+    on: a group listed in neither array, or in both; never one classed, nor files naming no camera."""
+    dg = {"phones": ["APPLE|iPhone|p1", "GOOGLE|Pixel|9"], "fixed_clock_cameras": ["SONY|ILCE-6400|123", "GOOGLE|Pixel|9"]}
+    monkeypatch.setitem(utils.CONFIG["camera_time_and_timezone_policy"], "device_groups", dg)
+    recs = [_hfile("6-photos-by-dest/A/a.arw", key="SONY|ILCE-6400|123"),
+            _hfile("6-photos-by-dest/B/p.jpg", key="APPLE|iPhone|p1"),
+            _hfile("6-photos-by-dest/A/u.jpg", key="CANON|R5|999"),
+            _hfile("6-photos-by-dest/A/g.jpg", key="GOOGLE|Pixel|9"),
+            _hfile("6-photos-by-dest/A/n.jpg", key=utils.NO_IDENTITY_KEY)]
+    wf = _wf(tmp_path, recs)
+    _groups, unknown = wf.recognize_camera_groups(wf.build_file_model())
+    asked = cal.unclassified_camera_groups(wf.handoff, utils.CONFIG)
+    assert sorted(asked) == sorted(unknown) == ["CANON|R5|999", "GOOGLE|Pixel|9"]
+    assert asked["CANON|R5|999"] == ["6-photos-by-dest/A/u.jpg"]
 
 
 @pytest.mark.spec("RUL-geotag_reuses_camera_group", test="TST-geotag_model-geotag_reuses_handoff_camera_group_key_never_recomputes")
@@ -257,7 +289,7 @@ def _full_ws(tmp_path, *, device_groups, bydest_key="SONY|ILCE-6400|123"):
     (ctl / "photos-00-config.json").write_text(json.dumps(cfg))
     rel = "6-photos-by-dest/Trip/a.jpg"
     p = ws / rel; p.parent.mkdir(parents=True, exist_ok=True); p.write_bytes(b"img")
-    (ctl / "photos-11-handoff.json").write_text(json.dumps({"filename_timestamp_format": utils.CONFIG["filename_timestamp_format"], "files": match_disk(ws, [_hfile(rel, key=bydest_key)]), "depends_on": {"cache": {"fingerprint_algorithm_version": utils.FINGERPRINT_ALGORITHM_VERSION}}}))
+    (ctl / "photos-11-handoff.json").write_text(json.dumps(vouched(ctl.parent, {"filename_timestamp_format": utils.CONFIG["filename_timestamp_format"], "files": match_disk(ws, [_hfile(rel, key=bydest_key)]), "depends_on": {"cache": {"fingerprint_algorithm_version": utils.FINGERPRINT_ALGORITHM_VERSION}}})))
     return ws
 
 
@@ -270,7 +302,7 @@ def _main(monkeypatch, ws):
         return e.code if isinstance(e.code, int) else (0 if e.code is None else 1)
 
 
-@pytest.mark.spec("RUL-no_record_before_decisions")
+@pytest.mark.spec("RUL-no_record_before_decisions", test="TST-geotag_model-run_known_group_builds_model")
 def test_run_known_group_builds_model(tmp_path, monkeypatch, capsys):
     ws = _full_ws(tmp_path, device_groups={"fixed_clock_cameras": ["SONY|ILCE-6400|123"], "phones": []})
     code = _main(monkeypatch, ws)
@@ -330,6 +362,7 @@ def test_a_tracks_folder_that_is_not_there_stops_geotag(tmp_path, monkeypatch, c
 
 @pytest.mark.spec("RUL-unreadable_tracks_stop_geotag", "RUL-no_tracks_no_stop", "BLD-track_points",
                   test="TST-geotag_model-a_tracks_folder_none_of_whose_files_is_read_stops_geotag")
+@pytest.mark.skipif(hasattr(os, "geteuid") and os.geteuid() == 0, reason="root reads a file of mode 000")
 def test_a_tracks_folder_none_of_whose_files_is_read_stops_geotag(tmp_path, monkeypatch, capsys):
     """A tracks folder that is there, holding track files not one of which can be read — one malformed, one that
     cannot be opened — is not "no tracks": `geotag plan` stops before any record, naming the folder and each file
@@ -341,7 +374,8 @@ def test_a_tracks_folder_none_of_whose_files_is_read_stops_geotag(tmp_path, monk
     tracks = tmp_path / "tracks"
     (tracks / "2024").mkdir(parents=True)
     (tracks / "2024" / "cut.gpx").write_text("<gpx><trk><trkseg><trkpt lat='1'")
-    (tracks / "locked.gpx").symlink_to(tracks / "gone.gpx")                     # there, and cannot be opened
+    (tracks / "locked.gpx").write_text(GPX)                                     # there, and cannot be opened
+    (tracks / "locked.gpx").chmod(0)
     cfg_path.write_text(json.dumps(dict(cfg, gpx_root=str(tracks))))
     assert _main(monkeypatch, ws) == 2
     err = capsys.readouterr()
@@ -361,7 +395,7 @@ def test_a_tracks_folder_none_of_whose_files_is_read_stops_geotag(tmp_path, monk
     assert _main(monkeypatch, ws) == 0
 
 
-@pytest.mark.spec("RUL-unreadable_tracks_stop_geotag", "BLD-track_points",
+@pytest.mark.spec("RUL-track_link_never_followed", "RUL-track_link_named", "BLD-track_points",
                   test="TST-geotag_model-a_linked_folder_of_tracks_is_named_not_followed")
 def test_a_linked_folder_of_tracks_is_named_not_followed(tmp_path):
     """A folder under gpx_root that is a link to tracks elsewhere is not followed — its tracks are not read — and
@@ -373,4 +407,50 @@ def test_a_linked_folder_of_tracks_is_named_not_followed(tmp_path):
     (root / "2023").symlink_to(elsewhere, target_is_directory=True)
     idx = cal.GPXIndex(str(root)).build()
     assert idx.status == "usable" and {p.source_file for p in idx.points} == {"trip.gpx"}
-    assert [w for w in idx.warnings if "Linked folder" in w and w.endswith(": 2023")], idx.warnings
+    assert [w for w in idx.warnings if "not followed" in w and w.endswith(": 2023")], idx.warnings
+
+
+@pytest.mark.spec("RUL-track_link_never_followed", "RUL-track_link_named", "BLD-track_points",
+                  test="TST-geotag_model-a_linked_track_file_is_named_not_read")
+def test_a_linked_track_file_is_named_not_read(tmp_path):
+    """A track file under gpx_root that is a link to one elsewhere is a link like a linked folder: what it leads to
+    is not read, its points are not used, and it is said by name."""
+    elsewhere = tmp_path / "elsewhere"; elsewhere.mkdir()
+    (elsewhere / "far.gpx").write_text(GPX)
+    root = tmp_path / "gpx"; root.mkdir()
+    (root / "trip.gpx").write_text(GPX)
+    (root / "day2.gpx").symlink_to(elsewhere / "far.gpx")
+    idx = cal.GPXIndex(str(root)).build()
+    assert idx.status == "usable" and {p.source_file for p in idx.points} == {"trip.gpx"}
+    assert idx.read == 1 and "day2.gpx" not in idx.file_sha and idx.unreadable == []
+    assert [w for w in idx.told if "not followed" in w and w.endswith(": day2.gpx")], idx.warnings
+
+
+@pytest.mark.spec("RUL-gone_track_told", test="TST-geotag_model-a_gone_track_file_is_named_past_the_cap")
+def test_a_gone_track_file_is_named_past_the_cap(tmp_path, monkeypatch, capsys):
+    """A track file gone from gpx_root is named by the plan that finds it gone — past the cap on the warnings of
+    skipped points, and on the stop for tracks none of which can be read — since the catalogue forgets it then."""
+    ws = _full_ws(tmp_path, device_groups={"fixed_clock_cameras": ["SONY|ILCE-6400|123"], "phones": []})
+    cfg_path = ws / ".photos-ingest" / "photos-00-config.json"
+    tracks = tmp_path / "tracks"; tracks.mkdir()
+    cfg_path.write_text(json.dumps(dict(json.loads(cfg_path.read_text()), gpx_root=str(tracks))))
+    (tracks / "first.gpx").write_text(GPX)
+    assert _main(monkeypatch, ws) == 0
+    capsys.readouterr()
+    (tracks / "first.gpx").unlink()                       # gone, among a dozen skipped points
+    (tracks / "untimed.gpx").write_text(
+        '<gpx xmlns="http://www.topografix.com/GPX/1/1"><trk><trkseg>'
+        + "".join(f'<trkpt lat="50.{i}" lon="4.0"></trkpt>' for i in range(12))
+        + '<trkpt lat="50.5" lon="4.5"><time>2024-07-03T12:00:00Z</time></trkpt></trkseg></trk></gpx>')
+    assert _main(monkeypatch, ws) == 0
+    said = "".join(capsys.readouterr())
+    assert "Track file gone from gpx_root, no longer used: first.gpx" in said, said
+    assert "and 2 more" in said
+    (tracks / "second.gpx").write_text(GPX)
+    assert _main(monkeypatch, ws) == 0
+    capsys.readouterr()
+    (tracks / "second.gpx").unlink()                      # gone, and nothing left that can be read
+    (tracks / "untimed.gpx").write_text("<gpx><trk><trkseg><trkpt lat='1'")
+    assert _main(monkeypatch, ws) == 2
+    said = "".join(capsys.readouterr())
+    assert "can be read" in said and "Track file gone from gpx_root, no longer used: second.gpx" in said, said

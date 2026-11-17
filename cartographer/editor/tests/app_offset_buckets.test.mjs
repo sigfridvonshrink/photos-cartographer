@@ -115,11 +115,28 @@ test("peerKeys: cluster ref fans out to its peers, plain ref to itself", () => {
 // --- picking a correction group (a place visited on several days, RUL-revisit_matched_to_its_day) ---
 test("groupChoice: the recommended group accepts the proposal, another sets its offset", () => {
   const p = { proposed_offset_seconds: -7200, groups: [{ offset_seconds: -7200, count: 3 }, { offset_seconds: -93600, count: 3 }] };
-  assert.deepEqual(app.groupChoice(p, p.groups[0]), { accept_proposal: true, accepted_offset_seconds: -7200, manual_offset_seconds: "" });
-  assert.deepEqual(app.groupChoice(p, p.groups[1]), { accept_proposal: false, accepted_offset_seconds: "", manual_offset_seconds: -93600 });
+  const c = { proposal: p };
+  assert.deepEqual(app.groupChoice(c, p.groups[0]), { accept_proposal: true, accepted_offset_seconds: -7200, manual_offset_seconds: "" });
+  assert.deepEqual(app.groupChoice(c, p.groups[1]), { accept_proposal: false, accepted_offset_seconds: "", manual_offset_seconds: -93600 });
   assert.equal(app.chosenOffset(p, { accept_proposal: true, accepted_offset_seconds: -7200, manual_offset_seconds: "" }), -7200);
   assert.equal(app.chosenOffset(p, { accept_proposal: false, manual_offset_seconds: -93600 }), -93600);
   assert.equal(app.chosenOffset(p, { accept_proposal: false, manual_offset_seconds: "" }), null);
+});
+
+// --- a same-day conflict (conflicts_with): the proposal taken is the user's own offset ---
+test("groupChoice / proposalTaken: in a same-day conflict the proposal is taken as the user's own offset", () => {
+  const p = { proposal_source: "gpx_self_anchor", proposed_offset_seconds: -7200,
+    groups: [{ offset_seconds: -7200, count: 3 }, { offset_seconds: -93600, count: 1 }] };
+  // an acceptance there counts as what the GPS gave by itself and is withheld again: the offset is written instead
+  const k = [{ destination: "6-photos-by-dest/Other", bucket: "K", offset_seconds: -3600, chosen: false }];
+  const c = { proposal: p, conflicts_with: k };
+  assert.deepEqual(app.groupChoice(c, p.groups[0]), { accept_proposal: false, accepted_offset_seconds: "", manual_offset_seconds: -7200 });
+  assert.deepEqual(app.groupChoice(c, p.groups[1]), { accept_proposal: false, accepted_offset_seconds: "", manual_offset_seconds: -93600 });
+  assert.equal(app.inConflict({ conflicts_with: k }), true);
+  assert.equal(app.inConflict({ conflicts_with: [] }), false);
+  assert.equal(app.inConflict({}), false);
+  assert.deepEqual(app.proposalTaken({ proposal: p, conflicts_with: k }), { accept_proposal: false, accepted_offset_seconds: "", manual_offset_seconds: -7200 });
+  assert.deepEqual(app.proposalTaken({ proposal: p }), { accept_proposal: true, accepted_offset_seconds: -7200, manual_offset_seconds: "" });
 });
 
 test("proposalNotes: a tie asks for the day; disagreeing photos are named, five at most", () => {
@@ -169,6 +186,32 @@ test("offsetCellNotes: a shared offset, a guess checked on the tracks, one clock
     effective_time_anchor: { offset_seconds: -7200, source: "timezone_unconfirmed" } })[0], /Drift view/);
   assert.match(app.offsetCellNotes({ conflicts_with: [{ destination: "6-photos-by-dest/Other", bucket: "K", offset_seconds: -6600 }] })[0],
     /6-photos-by-dest\/Other — one clock, two readings/);
+  // the other side is the user's choice: named as theirs, not as what the GPS gives
+  const theirs = app.offsetCellNotes({ conflicts_with: [{ destination: "6-photos-by-dest/Castle", bucket: "K", offset_seconds: -6600, chosen: true }] });
+  assert.match(theirs[0], /^You chose .* in 6-photos-by-dest\/Castle .*change your choice there/);
+  assert.doesNotMatch(theirs[0], /camera's GPS gives/);
+  // this cell is the user's choice: it stands, the GPS's own reading waits
+  const mine = app.offsetCellNotes({ effective_time_anchor: { offset_seconds: -6600, source: "gpx_anchor_chosen" },
+    conflicts_with: [{ destination: "6-photos-by-dest/Trip", bucket: "K", offset_seconds: -7200, chosen: false }] });
+  assert.match(mine[0], /by itself the same day in 6-photos-by-dest\/Trip, against the offset you chose here.*Your choice stands/);
+});
+
+test("offsetCellNotes: a recorded offset checked on the tracks, and photos recording different offsets", () => {
+  assert.match(app.offsetCellNotes({ proposal: { proposal_source: "recorded_offset" },
+    effective_time_anchor: { offset_seconds: -3600, source: "recorded_offset_unconfirmed" } })[0], /Drift view/);
+  const differ = app.offsetCellNotes({ proposal: { proposal_source: "timezone_naive" }, recorded_offsets_differ: [
+    { recorded_offset_seconds: 3600, photos: 1, example: "6-photos-by-dest/Kyoto/a.arw" },
+    { recorded_offset_seconds: -18000, photos: 2, example: "6-photos-by-dest/Kyoto/b.arw" }] });
+  assert.equal(differ.length, 1);
+  assert.match(differ[0], /\+01:00 \(1 photo, e\.g\. a\.arw\), −05:00 \(2 photos, e\.g\. b\.arw\)/);
+  assert.match(differ[0], /none is proposed from them/);
+});
+
+test("utcOff: a recorded UTC offset reads as it is written, sign, hours and minutes", () => {
+  assert.equal(app.utcOff(3600), "+01:00");
+  assert.equal(app.utcOff(-34200), "−09:30");
+  assert.equal(app.utcOff(0), "+00:00");
+  assert.equal(app.utcOff(20700), "+05:45");
 });
 
 
@@ -211,4 +254,66 @@ test("zoneOffer: one click takes the proposed zone, never the zone the photos co
   assert.equal(app.zoneOffer({ proposed_iana_timezone: "Europe/Madrid", proposal_source: "inherited", contradicted_by: k, user_decision: {} }), "Europe/Madrid");
   assert.equal(app.zoneOffer({ proposed_iana_timezone: "Europe/Brussels", proposal_source: "config_default",
     user_decision: { manual_iana_timezone: "Asia/Tokyo" } }), "");
+});
+
+test("offsetCellNotes / fmtSpan: a guess far from all evidence says how far, and that accepting is not enough", () => {
+  const notes = app.offsetCellNotes({ proposal: { proposal_source: "timezone_naive", proposed_offset_seconds: -3600,
+    far_from_evidence: { max_clock_error_seconds: 172800, other_photos: 3, nearest_other_photo: "6-photos-by-dest/Bruges/p.heic",
+      nearest_other_photo_seconds: 26.3 * 365.25 * 86400, nearest_track_seconds: "" } } });
+  assert.equal(notes.length, 1);
+  assert.match(notes[0], /26\.3 years from the nearest photo another device took here \(p\.heic\) — farther than a clock may be wrong \(2 days\)/);
+  assert.match(notes[0], /Accepting it is not enough: give the true time of one of its photos/);
+  assert.doesNotMatch(notes[0], /track point/);
+  const withTrack = app.offsetCellNotes({ proposal: { far_from_evidence: { max_clock_error_seconds: 172800, other_photos: 1,
+    nearest_other_photo: "p.heic", nearest_other_photo_seconds: 864000, nearest_track_seconds: 18000 } } });
+  assert.match(withTrack[0], /10 days from .* and 5 hours from the nearest track point/);
+  assert.equal(app.fmtSpan(90), "2 minutes");
+  assert.equal(app.fmtSpan(-7200), "2 hours");
+});
+
+// --- a cluster's one answer is written into each of its days: never into a day that takes it otherwise ---
+test("offsetGroups: a day in a same-day conflict, kept as recorded, or far from all evidence is a row of its own", () => {
+  const gpx = (date, extra = {}, ud = {}) => ({ camera_group: "CAM", date, ...extra, user_decision: ud,
+    proposal: { proposal_source: "gpx_self_anchor", proposed_offset_seconds: -7200, ...(extra.proposal || {}) } });
+  const k = [{ destination: "6-photos-by-dest/Other", bucket: "K", offset_seconds: -3600, chosen: false }];
+  const rows = (cells) => app.offsetGroups({ camera_group_time_decisions: cells })[0].proposals.map((p) => p.keys);
+  // taking the proposal on the first day's row would write an acceptance geotag withholds in the conflicted day
+  assert.deepEqual(rows({ "CAM@2024-07-03": gpx("2024-07-03"), "CAM@2024-07-04": gpx("2024-07-04", { conflicts_with: k }) }),
+    [["CAM@2024-07-03"], ["CAM@2024-07-04"]]);
+  assert.deepEqual(rows({ "CAM@2024-07-03": gpx("2024-07-03", { conflicts_with: k }), "CAM@2024-07-04": gpx("2024-07-04", { conflicts_with: k }) }),
+    [["CAM@2024-07-03", "CAM@2024-07-04"]]);                    // both taken as the user's own offset: one row
+  const far = { proposal: { proposal_source: "recorded_offset", far_from_evidence: { nearest_other_photo_seconds: 99999 } } };
+  assert.deepEqual(rows({ "CAM@2024-07-03": gpx("2024-07-03", { proposal: { proposal_source: "recorded_offset" } }),
+    "CAM@2024-07-04": gpx("2024-07-04", far) }), [["CAM@2024-07-03"], ["CAM@2024-07-04"]]);
+  // a phone kept as it records itself on one day, not the other: the row shows each day's own answer
+  const phone = { phone: { applies_to: "every_photo", photos: 2, read_by_offsets: [-3600] } };
+  assert.deepEqual(rows({ "CAM@2024-07-03": gpx("2024-07-03", phone, { keep_as_recorded: true }),
+    "CAM@2024-07-04": gpx("2024-07-04", phone, { keep_as_recorded: false }) }), [["CAM@2024-07-03"], ["CAM@2024-07-04"]]);
+});
+
+test("groupChoice: on a phone's day kept as recorded, either group ends the keeping, so the answer takes effect", () => {
+  const p = { proposal_source: "gpx_self_anchor", proposed_offset_seconds: -3600, acceptance_tolerance_seconds: 120,
+    groups: [{ offset_seconds: -3600, count: 3 }, { offset_seconds: -90000, count: 1 }] };
+  const c = { camera_group: "P", phone: { applies_to: "every_photo", photos: 3, read_by_offsets: [-7200] }, proposal: p,
+    user_decision: { accept_proposal: false, accepted_offset_seconds: "", manual_offset_seconds: "", keep_as_recorded: true } };
+  assert.deepEqual(app.groupChoice(c, p.groups[0]),
+    { accept_proposal: true, accepted_offset_seconds: -3600, manual_offset_seconds: "", keep_as_recorded: false });
+  assert.deepEqual(app.groupChoice(c, p.groups[1]),
+    { accept_proposal: false, accepted_offset_seconds: "", manual_offset_seconds: -90000, keep_as_recorded: false });
+  const taken = { ...c, user_decision: { ...c.user_decision, ...app.groupChoice(c, p.groups[0]) } };
+  assert.equal(app.keepHolds(taken), false);
+  assert.equal(app.chosenOffset(p, taken.user_decision), -3600);
+});
+
+test("offsetGroups: a day that waits for an answer is never folded with one that does not (grouping rule 3)", () => {
+  // Two days of one camera, the same proposal and nothing written: one in effect, one asking. Folded together, the row
+  // would show the first day's chip and notes — the waiting day shown settled (docs/design/decisions.md, rule 3).
+  const settled = { ...cell("CAM", "2024-07-03", -7200), requires_user_input: false,
+    effective_time_anchor: { offset_seconds: -7200, source: "timezone_unconfirmed" } };
+  const waits = { ...cell("CAM", "2024-07-04", -7200), requires_user_input: true, effective_time_anchor: "" };
+  const g = app.offsetGroups({ camera_group_time_decisions: { "CAM@2024-07-03": settled, "CAM@2024-07-04": waits } });
+  assert.deepEqual(g[0].proposals.map((p) => p.keys), [["CAM@2024-07-03"], ["CAM@2024-07-04"]]);
+  const stale = { ...cell("CAM", "2024-07-05", -7200), stale_user_decision: true };
+  const g2 = app.offsetGroups({ camera_group_time_decisions: { "CAM@2024-07-03": settled, "CAM@2024-07-05": stale } });
+  assert.equal(g2[0].proposals.length, 2);
 });

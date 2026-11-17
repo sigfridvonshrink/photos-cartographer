@@ -54,7 +54,7 @@ def _pol(**overrides):
     (_cfg(zfs={"snapshot_prefix": "bad name!"}), "snapshot_prefix"),             # illegal zfs prefix
     (_pol(single_anchor_auto_apply="yes"), "must be a boolean"),                 # non-bool flag
     (_pol(default_folder_timezone="Mars/Phobos"), "valid IANA timezone"),        # bad tz
-    (_pol(phone_gpx_max_distance_meters=-5), "phone_gpx_max_distance_meters"),   # negative
+    (_cfg(gpx_extrapolation_max_distance_meters=-5), "gpx_extrapolation_max_distance_meters"),   # negative
     (_pol(device_groups={"phones": "nope"}), "list of strings"),                # not a list
     (_pol(device_groups={"phones": [1, 2]}), "list of strings"),                # non-string elems
     (_cfg(folders="nope"), "folders must be an object"),                        # folders not a dict
@@ -63,7 +63,7 @@ def _pol(**overrides):
     (_cfg(zfs={"datasets": "nope"}), "zfs.datasets must be an object"),         # zfs.datasets not a dict
     (_cfg(gpx_interpolation_max_gap_seconds=json.loads("NaN")), "must be a number"),       # JSON NaN
     (_cfg(gpx_interpolation_max_distance_meters=json.loads("Infinity")), "must be a number"),  # JSON Infinity
-    (_pol(dst_conflict_tolerance_seconds=float("-inf")), "must be a number"),   # not finite
+    (_cfg(gpx_extrapolation_max_speed_kmh=float("-inf")), "must be a number"),   # not finite
     (_cfg(gpx_root="   "), "must not be blank"),                                # blank path
     (_cfg(merge={"library_root": " \t"}), "must not be blank"),                # blank library path
     (_pol(device_groups={"phone": ["Pixel"]}), "device_groups.phone is not a device class"),  # misspelt class
@@ -168,11 +168,83 @@ def test_gpx_root_outside_the_managed_folders_is_accepted(tmp_path):
     utils.validate_config(_cfg(gpx_root="0-sources/gpx"))       # no workspace given: path syntax only
 
 
+@pytest.mark.parametrize("gpx_root", ["gpx", "tracks/2024", "ABS_TOP"])
+@pytest.mark.spec("RUL-tracks_outside_managed_folders", "RUL-top_level_only_managed", "BLD-gpx_root_checked",
+                  test="TST-config_validation-gpx_root_at_a_top_level_entry_of_the_workspace_is_refused")
+def test_gpx_root_at_a_top_level_entry_of_the_workspace_is_refused(tmp_path, gpx_root):
+    """A `gpx_root` at or under an entry of the workspace's top level that is not hidden — where only the managed
+    folders belong, any other entry being a misplaced dump — is refused as the configuration is read."""
+    ws = tmp_path / "ws"; ws.mkdir()
+    gpx_root = {"ABS_TOP": str(ws / "gpx")}.get(gpx_root, gpx_root)
+    with pytest.raises(ValueError, match="gpx_root .* must lie outside the workspace's folders"):
+        utils.validate_config(_cfg(gpx_root=gpx_root), str(ws))
+    utils.validate_config(_cfg(gpx_root=".photos-ingest/gpx"), str(ws))   # a hidden entry stays open to it
+
+
+@pytest.mark.spec("BLD-config_values_checked", "RUL-checked_extension_lists",
+                  test="TST-config_validation-a_media_extension_holding_a_dot_is_refused")
+def test_a_media_extension_holding_a_dot_is_refused():
+    """A `media_extensions` entry holds no dot at all — an inner one as much as a leading one: `tar.gz` is refused,
+    named."""
+    with pytest.raises(ValueError, match=r"media_extensions\.image\[1\] 'tar\.gz' must be a canonical bare"):
+        utils.validate_config(_mx(image=["jpg", "tar.gz"], raw=["arw"], video=["mp4"]))
+
+
+@pytest.mark.spec("RUL-merge_suffix_above_highest", "RUL-filename_format_configured", "BLD-config_values_checked",
+                  test="TST-config_validation-a_format_ending_like_a_suffix_is_refused")
+def test_a_format_ending_like_a_suffix_is_refused():
+    """A filename format whose names end in `-` and three or more digits — how a differentiating suffix looks — is
+    refused, so a time is never read as a suffix; an unpadded field is seen too. Two digits after the dash pass."""
+    for fmt in ("%Y%m%d-%H%M%S", "%Y-%j", "%Y-%m-%d-%-H%M"):
+        with pytest.raises(ValueError, match="differentiating suffix"):
+            utils.validate_config(_cfg(filename_timestamp_format=fmt))
+    for fmt in ("%Y-%m-%d--%H-%M-%S", "%Y%m%d_%H%M%S", "%Y%m%d-%H%M%S_x"):
+        utils.validate_config(_cfg(filename_timestamp_format=fmt))
+
+
+@pytest.mark.spec("RUL-filename_format_zone_free", "BLD-filename_format_zone_checked",
+                  test="TST-config_validation-the_epoch_seconds_field_is_refused")
+def test_the_epoch_seconds_field_is_refused():
+    """`%s`, the seconds since the epoch, renders a time without a zone through the host's zone: refused, whatever its
+    flags; a literal `%%s` passes."""
+    for fmt in ("%s", "%Y_%s", "%-s"):
+        with pytest.raises(ValueError, match="reads a timezone"):
+            utils.validate_config(_cfg(filename_timestamp_format=fmt))
+    utils.validate_config(_cfg(filename_timestamp_format="%Y-%m-%d--%H-%M-%S%%s"))
+
+
 def test_config_without_merge_block_still_valid():
     utils.validate_config({"gpx_root": ""})        # legacy config (no merge key) is accepted
 
 
-@pytest.mark.spec("RUL-invalid_value_stops")
+@pytest.mark.spec("RUL-filename_format_zone_free", "BLD-filename_format_zone_checked",
+                  test="TST-config_validation-a_format_reading_a_zone_refused")
+def test_a_format_reading_a_zone_refused(tmp_path):
+    """A filename format holding a field that reads a timezone is refused as the configuration is read — by prep as it
+    seeds and reads it, by geotag and merge as they load it — with what is wrong in plain words; the date and time
+    fields alone pass."""
+    zoned = ["%Y-%m-%d--%H-%M-%S%z", "%Y%m%d_%H%M%S_%Z"]
+    try:
+        utils.datetime(2001, 1, 1).strftime("%:z")
+        zoned.append("%Y-%m-%d--%H-%M-%S%:z")         # Python 3.12 and later
+    except ValueError:
+        pass
+    for fmt in zoned:
+        with pytest.raises(ValueError, match="reads a timezone") as ei:
+            utils.validate_config(_cfg(filename_timestamp_format=fmt))
+        assert "prep" in str(ei.value) and "geotag" in str(ei.value)
+    for fmt in ("%Y-%m-%d--%H-%M-%S", "%Y%m%d_%H%M%S", "%d.%m.%Y %Hh%M'%S"):
+        utils.validate_config(_cfg(filename_timestamp_format=fmt))
+    ws = tmp_path / "ws"
+    (ws / ".photos-ingest").mkdir(parents=True)
+    with open(utils.config_path(str(ws)), "w") as f:
+        json.dump(_cfg(filename_timestamp_format=zoned[0]), f)
+    for read in (utils.load_or_seed_config, utils.load_config):     # prep's read; geotag's and merge's
+        with pytest.raises(ValueError, match="reads a timezone"):
+            read(str(ws))
+
+
+@pytest.mark.spec("RUL-invalid_value_stops", test="TST-config_validation-load_or_seed_config_rejects_bad_value")
 def test_load_or_seed_config_rejects_bad_value(tmp_path):
     ws = tmp_path / "ws"
     (ws / ".photos-ingest").mkdir(parents=True)

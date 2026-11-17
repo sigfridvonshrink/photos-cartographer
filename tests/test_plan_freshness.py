@@ -202,11 +202,14 @@ def _geotag_setup(tmp_path):
     deps["camera_group_key_version"] = U.CAMERA_GROUP_KEY_VERSION
     deps["metadata_field_set_version"] = U.FIELD_SET_VERSION
     deps["gpx_fingerprint"] = "GPXFP"
+    deps["gpx_window"] = []
     deps["planned_operation_fingerprint"] = U.sha256_text(json.dumps([], sort_keys=True))
+    _table = U.zone_table(ws)
+    deps["country_table"] = {"source": _table["source"], "sha256": _table["sha256"]}
     plan = {"status": "ready", "destinations": {}, "depends_on": deps}
     self_obj = SimpleNamespace(workspace_root=ws,
                                _verify_handoff_dependency=geo.GeotagWorkflow._verify_handoff_dependency)
-    gpx = SimpleNamespace(fingerprint="GPXFP")
+    gpx = SimpleNamespace(fingerprint="GPXFP", status="usable")
     cur = {  # the cheap shared subset the helper compares (no gpx, no planned-op, no status)
         "handoff": U.handoff_content_fingerprint(handoff),
         "config_fingerprint": U.sha256_file(U.config_path(ws)),
@@ -251,5 +254,5 @@ def test_helper_is_strict_subset_gpx_out_of_scope(tmp_path):
     # This is quick ⊆ deep (affordance only): the console can't promise execute will succeed, only
     # that no CHEAP staleness exists — the core's deep check still runs at execute.
     geo, ws, self_obj, gpx, plan, cur = _geotag_setup(tmp_path)
-    assert any("gpx" in r for r in _geo_verdict(geo, self_obj, plan, SimpleNamespace(fingerprint="DIFFERENT")))
+    assert any("gpx" in r for r in _geo_verdict(geo, self_obj, plan, SimpleNamespace(fingerprint="DIFFERENT", status="usable")))
     assert U.plan_dependencies_fresh(ws, plan["depends_on"], cur) == []

@@ -2,6 +2,412 @@
 
 *What was decided and why, newest first. A record: never corrected forward. Per-commit detail is `git log`.*
 
+## 2026-11-17 — tried on live data before 3.1
+
+The build was run on a real workspace, prep to merge, before the release. What that showed was fixed.
+
+- **Prep no longer fingerprints again what geotag has just proved.** A `geotag plan` after `geotag execute` re-preps,
+  and prep decoded every photo geotag had written or renamed — two minutes for 150 RAWs. Geotag's journal now records,
+  for each photo it left, the path it found it at and the fingerprint it confirmed after the write; prep keeps a
+  photo's fingerprint while the photo is as that journal says. A photo changed since, a write not confirmed, a journal
+  that cannot be read or another image engine still means a fresh decode; the metadata geotag wrote is read again. The
+  owner chose that prep read geotag's record over geotag writing prep's cache: each phase writes only its own.
+- **The editor shows where a placed photo is.** photos-23 now records each placed photo's position. Clicking its row
+  copies the position in the form the coordinate field takes, and opens the photo on the map there, where a position
+  can be set by hand; a photo's own position opens on the map to look at only, geotag keeping it. Every position set
+  by hand has a visible way back.
+- **Messages that misled now say what they mean**: the stop when prep's plan would quarantine or move media names it
+  in plain words, and a decision record not yet written says which command writes it.
+- **What the third walk left open was closed**: execute refuses a managed folder lost since its plan, rather than make
+  it again by a move into it; a hidden track file at the root of a first dump is tested; a test mark without an id —
+  78 of them, silently dropped from the corpus — now fails the build.
+
+## 2026-11-17 — a third walk: the code held to the corpus as it now stands
+
+The whole code was walked against the corpus as settled, in both directions — every rule and build item against the
+code, every function against the items — and every high-criticality rule broken on purpose to see its tests fail. The
+walk was completed where it had stopped short: build items only spot-checked were traced clause by clause, code left
+unswept was swept, and every mutation was run again with clean bytecode, stale compiled files having misled a few.
+About 1,050 items were checked and some 610 mutations run.
+
+- **One finding was unsafe:** withdrawing an answer to a contradicted position cleared the photo's own GPS instead of
+  giving it back. It now writes the photo's own position back from its pin, and marks a time corrected only where
+  geotag wrote it.
+- **The code was brought to the rules it broke** — some sixty places. Among them: the console executed a plan made
+  again in a terminal without showing it; merge did not check that geotag's records belong to the plan it reads;
+  prep's check of the workspace could be skipped, and a deleted configuration was quietly made again; prep recorded
+  the ImageMagick of its execution, not its plan's; a hidden track file in the dump was set aside instead of refused; a
+  linked track file was read; a decision did not follow a photo through every fingerprint; a set-aside JPEG never
+  caught up with a RAW geotag had written; an unforeseen error in prep's execution ended as if the workspace were
+  locked.
+- **Tests now catch what they claimed to**: some ninety gaps closed with a test or a mark, and every test runs under a
+  time limit.
+- **The owner's questions:** an offset borrowed from another destination or day holds within the tolerance; a day
+  split at a change of the clock passes no offset on, and is held against the same day elsewhere; an answer to a
+  contradicted position holds until withdrawn; the distance that calls an own position contradicted is a setting of
+  its own; the database image counts as made once captured; geotag checks all three decision records before writing
+  any; the case-only rename through the tool's own temporary name, and the quarantine compared whole, are stated as
+  they are; the editor settles a date or a folder's fallback below it live; withdrawing a time kept asks again; fields
+  nothing reads are dropped; merge keeps each run's summary beside the next.
+- **Twenty more preferences** joined the owner's, choices that change nothing that counts.
+
+## 2026-11-17 — the contradictions settled with the spec as the authority
+
+The corpus's contradictions were sorted again: each as its two sides, the side the owner ruled taken, the code
+counted only as the cost of a choice. Most were a rule worded wider than the exceptions its own children state, or a
+list missing what another ruled node adds; those were reworded. The owner's questions:
+
+- **A day with no GPS of its own is offered the neighbouring day's offset** before the one its photos record.
+- **Geotag's execute and finalize stop on the loop's gates** as its plan does — the inbox, photos by date, a
+  non-photo or an unrecorded photo in photos by destination; a name the plan gives counts as recorded.
+- **"No workspace inside the library"** looks for this workspace at any depth, for others among the library's
+  folders only; **the workspace check leaves hidden files aside**.
+- **Geotag removes an interrupted write's leftover only where its own journal shows that write begun** and never
+  confirmed; any other leftover stops the plan, named, and holds its photo back — the same name is what the user's own
+  exiftool leaves, and it may be the only whole copy.
+- **The question of the table of countries is answered in the editor too, and by hand** — the owner having said
+  *"the user should be able to answer all questions in the editor"*.
+- **Tracks kept in the control directory stay out of the archival package.**
+- **The owner's preferences.** Choices that change nothing that counts left the rules for a section of their own in
+  docs/design/decisions.md: the console's summary before an execution, whether the filesystem checks come before the
+  lock, what a report counts as reused, where merge reads in the library.
+
+## 2026-11-16 — the corpus audited against itself
+
+Every node of the corpus was checked, reading the corpus alone, against the nodes it links to and is linked from and
+against the whole: some three hundred findings. A first sorting read the code to settle them and took, where two
+nodes disagreed, the side the code follows; the owner stopped that — *"I asked you to assess the corpus without
+reference to code"* — and the contradictions are being sorted again with the spec as the authority. What did not
+choose between two statements was applied. The owner's decisions:
+
+- **An unforeseen error ends with a status of its own**, 4, never 1, which says the workspace was locked.
+- **A file whose camera fields are all blank names no camera**, rather than making a camera group of its own.
+- **An unknown field in any decision is refused**, in the time and drift decisions as in the GPS ones.
+- **Merge compares a photo with every library file at its place**, each case variant of its name, so one the library
+  holds byte for byte is never placed again.
+- **A country said inside a folder already in another is taken out** — kept, and now stated as the one exception to
+  nothing overwriting what the user wrote: the folder lies inside the other country.
+- **Deleting a stray by hand stops the next run until accepted**, and the corpus now says so throughout.
+- **Merge records a refusal for a library short of room** as it does for a failed required snapshot.
+- **The prune of the quarantine rests on being the user's explicit, listed choice**, not on the quarantine holding
+  only spare copies — an interrupted write's leftover may be the only whole copy.
+- **An offset the photos' own GPS times gave is kept for the day's later photos** while the photos it came from are
+  there and no new GPS evidence disagrees — as the rule the owner ruled already said.
+- **Choices that change nothing that counts are not rules.** On whether the console's summary before an execution
+  belongs in the rules: *"this does not affect the behaviour that counts in the sense that it can happen before or
+  after without affecting what matters. Such choices are build choices and should be ruled under a separate heading
+  as my preferences."*
+
+Applied with them: definitions for the handoff, the quarantine, the dump, a blocker, a media class, an anchor, a
+recorded offset, a photo's own values and the filesystem's requirements; a build item for the workspace lock, which
+had none; some hundred missing links between the build and the rules it carries out; an exception linked as one,
+not as a refinement; the editor and the workspace's filesystem in sections of their own.
+
+## 2026-11-16 — a second walk of the code against the corpus
+
+The code changed since v3.0.0 — some 9,700 lines, built rule first — was walked against the corpus again, and each
+rule it touched broken on purpose to see its tests fail. Ruled *"All as recommended"*:
+
+- **A photo merge placed is confirmed by its bytes.** A merge cut short, ImageMagick upgraded, and the next plan read
+  the library's copy as gone, so the workspace could never seal. Execute now journals each placed file's hash; a later
+  plan confirms the place by it, whatever ImageMagick reads.
+- **A failed prep execute keeps the hand changes it passed.** A RAW deleted before it was otherwise lost from every
+  record, and its JPEG was never quarantined.
+- **Geotag judges the offsets the photos' own GPS fixed before the guesses**, so a guess never stands on a fix the
+  same pass withdraws. **A set-aside JPEG left behind takes its RAW's name.** A run the snapshot stops records no
+  tracks as used.
+- **The editor** writes no acceptance into a day geotag withholds; its phone "accept" takes effect; it previews the
+  offset accepted; it offers no time geotag cannot read; a stale split can be cleared.
+- **The console's Accept** on an execute the page never ran opens the confirmation gate; it no longer sends a merge plan
+  that cannot be read to be planned again.
+- **Merge checks the workspace before it validates**, as the rule says; a record of the wrong shape is unreadable, not
+  a traceback. **Prep:** a prune cut short is no change; an inbox source is looked for on disk; one photo in two
+  destinations is matched by path. An unreadable answer about the table of countries stops the run; its download
+  follows no redirect off HTTPS.
+- Six build items caught up with the code; four high-criticality behaviours no test caught a break of now have one;
+  the editor's own test suites count in the corpus.
+
+## 2026-11-16 — an inherited fallback applies itself; the editor grouped by what can differ (BACKLOG 56)
+
+- **An inherited folder fallback applies itself.** It used to be a proposal each destination had to accept. The owner:
+  *"The idea is not to manually accept it for all children but to manually override if I want for the children."* —
+  and *"An inherited fallback applies itself - yes but I should be able to be overriden at child destination level, in
+  one go, not to be overriden at image level."* A fallback written for a destination outranks the inherited one and
+  passes to the destinations below; emptied, the inherited one returns. There is no "none" to write: the owner wants
+  no unlocated photos. The user is told, per destination, how many photos the fallback placed and whose fallback it
+  was, and each such photo is recorded with why the tracks missed it.
+- **The editor's views are grouped by what can differ**: a level only where its members can carry different answers;
+  a level of one folds into its parent; what waits is open and first; destination, then its own decisions, then
+  per-camera ones, then single photos. The GPS view is a tree whose destinations open on two buckets, Fallback and
+  Placed (Unplaced where no fallback reaches), broken down by why or how. It has no camera level — the owner: *"the
+  per camera buckets should be showed only if there are decisions that might be different for different cameras"* —
+  but names a camera's day whose photos all fell back though tracks had points that day. In the Time view the cameras
+  the photos settle fold into one line.
+
+## 2026-11-16 — dates for scans, zones asked once per place, fingerprints across ImageMagick (BACKLOG 7, 11, 14, 22, 28, 40, 47, 55)
+
+- **A date fallback per destination** for photos with no recorded time — scans above all. The owner: *"date could be
+  any of Y, YM, YMD, with missing parts filled as 1; same cascade; what gets written is (a); scanner order ok"*. Set on
+  a folder in the time decisions, passed down, used only for a photo with no time of its own; written as 00:00:00
+  local on the filled day, no XMP; never placed from the tracks and never clock evidence; named in file-name order. A
+  photo no date reaches still stops geotag, now once its question is written, so it can be answered.
+- **A timezone is asked at every level** where an answer would reach a destination still waiting, containers and the
+  root included; an answer passes down and ends the asking below it — the owner: *"This should not multiply
+  choices - once a time zone is set, children destinations should not ask any longer"*.
+- **Within a country of several zones, the photos propose the zone**: the one zone whose offset fits every offset the
+  destination's phone photos record. BACKLOG 14 — a zone from the positions — is declined: it needs a boundary
+  database the tool does not take. The rationales speak of places and countries, not trips.
+- **The country table** is the host's; where the host has none, a copy downloaded from IANA once, only on the user's
+  word at the first prep plan — refusing keeps a carried copy that may be stale — else that carried copy. The plan
+  records which and its hash.
+- **A photo whose fingerprint a newer ImageMagick changed is merged** when finalize's record proves it the same file
+  and old and new values pair one to one; the pair goes into merge's package, and geotag's sealed records are never
+  rewritten.
+- **Anchor candidates are found by place** through a grid over the track points: same results, about a hundred times
+  faster on years of tracks. **Sub-second times** are read beside CreateDate and ModifyDate too.
+- **Rationales split** where they justified forced rules and judgements alike; a duplicate rationale folded into the
+  philosophy's; the job-count rule hung on the right parent.
+
+## 2026-11-16 — the filesystems, the library's room, a torn plan, a culled RAW (BACKLOG 18, 27, 48, 54)
+
+- **The workspace must be on a local filesystem** — known by its type against a list of kinds known to be local,
+  anything else refused, naming it; no setting overrides it. Every run first tries, on scratch files, what it needs of
+  the filesystem — the lock, an atomic rename, a move refusing a taken name, syncing — and stops naming what is
+  missing. The library may lie on a network share; merge tries it the same way first. Two machines merging into one
+  library at once is the user's to avoid: at worst a photo fails or lands twice, never one overwritten.
+- **Merge checks the library's room before moving anything** into another filesystem: the photos still to move and a
+  margin on top — the owner: *"I think a safety margin is needed. Configurable, too, default say 5% on top of by-dest
+  size?"* — `merge.library_space_margin_percent`, 5 by default. The plan warns of it.
+- **A plan that cannot be read** sends the user to plan again, never a traceback. **The editor's save** writes its
+  records in the order each depends on the one before — a save cut short keeps a leading part, no answer standing on
+  one left unsaved — and keeps each record it replaces as a `-NNN` copy, in one series with a re-plan's. Finalize
+  passes over a torn plan so set aside when no execution ran it — no summary names its SHA-256 and every journal is a
+  readable plan's — so the way out is one step; one an execution may have run still stops it.
+- **A RAW the user culls takes its set-aside JPEG into the quarantine** on the next prep run, noted in the prep log
+  with the RAW it went with, and recorded as the run's own change — a RAW moved out of the workspace as well as one
+  deleted. A video is never a pair.
+
+## 2026-11-16 — no photo leaves geotag without a position (BACKLOG 21)
+
+The owner: *"I explicitly want* no *unlocated photos. this is the role of the folder fallback."* Ruled as recommended:
+
+- **"Leave unlocated" is gone** — from the decision records, the editor and the by-hand reference; a record still
+  holding an unknown field is refused, naming it.
+- **Finalize refuses while a photo in photos by destination holds no position**, judged from what each photo holds,
+  and merge refuses the same; a photo nothing places waits for a position for it or a fallback for its folder, and
+  the editor offers the folder's fallback first.
+- **What existed only for unlocated photos is removed**, the clearing of a device's 0,0 among it: a photo holding
+  0,0 has no position, so it is placed like any other and the zeros are written over, the log keeping them. This
+  supersedes the ruling of 2026-11-15 that cleared the 0,0 of a photo accepted as unlocated.
+- **A position for one photo the tracks or the fallback place** can now be given, in the editor from a folded list
+  of the destination's placed photos, or by hand as a `chosen_by_user` entry; it is kept while it holds.
+
+## 2026-11-16 — names outside photos by destination, and a second's photos (BACKLOG 43, 45)
+
+Ruled as recommended (*"43 - ok"*, *"45 - ok"*):
+
+- **A JPEG set aside beside its RAW is renamed with it**, to the RAW's new name — a rename only, the one exception to
+  geotag changing nothing outside photos by destination. Prep records the pair when it sets the JPEG aside, and
+  accepts the JPEG's new name on a later run while its RAW bears it.
+- **A video keeps its camera's clock in its name**, final for this tool: it has no destination, so no zone. Sorting
+  videos into destinations and geotagging them is BACKLOG 53.
+- **Photos of one second are named in the order they were taken** — sub-second time, then the suffix each held — and
+  a pair sharing a stem is given one name across its extensions.
+- **A filename format holding a zone field is refused**: prep and geotag would read it differently.
+- **Names in the hour a clock repeats sort by local time**, as a name is local time; the true order is in the metadata.
+
+## 2026-11-16 — an untimed photo, a photo that cannot be written, what "corrected" means (BACKLOG 22, 25, 46)
+
+- **A photo with no recorded time** still stops geotag. Letting it through untimed, or giving it a time by a
+  per-photo decision, were set aside; BACKLOG 22 now holds the idea the owner is considering for scans: a date
+  given per destination, as a position is by the folder's fallback.
+- **A photo the metadata tool will not write** keeps the tool's own reason beside its failure in the execution
+  summary; failing again the same way under the same plan, it is named with the way out — moved back into photos by
+  date, a move the workspace check lets pass, then prep and the plan again. Accepting it as it is, and writing a
+  sidecar, were ruled out: a photo must not reach the library holding values other than the plan decided.
+- **"Corrected" means geotag wrote the time.** A photo already holding its true time is not touched: no mark is
+  written to it, since the mark would tell the library of a correction never made, and a re-run decides it from its
+  own values the same way.
+
+## 2026-11-16 — a clock changed mid-day, a wrong own position, a midnight mid-shoot, two bodies (BACKLOG 15, 16, 23, 39)
+
+One offset per camera, destination and day fails four ways. Ruled *"rest is ok"*, with the owner on 15 (*"15 can only
+be detected using GPS, the photos themselves are not enough. Correct?"* — yes) and on 39:
+
+- **a clock changed during the day** is seen from the camera's GPS — its track matches, its fixes' times — ordered by
+  each photo's true time, so a clock set back shows as well as one set forward; the day is proposed split at the
+  change, each part anchored by its own photos, and a photo either part could have taken is asked its part.
+- **a photo whose own position the day's offset contradicts** is offered the track's position as a review item; a
+  photo's own position is replaced only on the user's answer, the old one logged.
+- **a day with no anchor** is offered the anchored day next to it, asked once — at the drift check where tracks lie by
+  it, accepted in the time decisions where none do (*"Both ok"*; built first asking twice).
+- **two bodies in one camera group** — *"this needs a workspace setting, default being that it's just one camera. If the
+  setting says multiple cameras, then do the recommended"*: `several_bodies_groups` names them; such a group's GPS
+  offset is only ever proposed, never split, never read as wrong positions.
+
+## 2026-11-15 — every question answerable in the editor, and by hand (BACKLOG 52)
+
+The owner: *"the user should be able to answer all questions in the editor"* — and *"the editor is not the only
+possibility to answer, I need to keep the option to manually give answers, so the snippet added for a new camera
+needs to stay."* An audit of every question the tool asks found the gaps; ruled *"all as recommended in principle"*:
+
+- **a same-day conflict** settles from the editor: its offset is written as the user's own choice.
+- **a drift correction** can be typed, as seconds or a photo's true time, not only scrubbed.
+- **a photo whose content changed after a write** (photos-25) is accepted in the editor, with its preview.
+- **a decision record that does not parse** shows its error.
+- **a new camera's class** is answered in the editor, which writes `device_groups` into the configuration under the
+  lock, every other setting kept; the snippet to paste by hand stays.
+- **a time changed by hand after geotag wrote it** is a question, no longer only a stop: restore geotag's, or keep the
+  new one — *"“keep” means this is the true local time - ruled"*: read by the destination's zone, no camera offset ever
+  applied to it, never evidence of the camera's clock. (Built first as the photo's own camera time, which would have
+  corrected a true time twice; caught before use.)
+
+## 2026-11-15 — a phone's clock and a fix's time checked, nothing assumed silently (BACKLOG 6, 20, 35)
+
+Geotag trusted a phone's clock with nothing checking it, read no camera's GPS fix time, and read phone photos with no
+offset tag and files naming no camera by the zone, unasked. Ruled *"otherwise all as recommended"*: a photo's true
+time has four sources, strongest first — a track against its own position, its fix's GPS time, its offset tag, the
+zone's guess.
+
+- **phones anchored like cameras**, by the same settings: agreeing, nothing; several disagreeing, the anchored offset
+  applies for that phone and day; one, a proposal. The user may keep the phone as it records itself.
+- **a fix's GPS time** is clock evidence below a track: counted only where the fixes' times all differ and agree (a
+  stale fix repeats its time); two or more apply themselves, one is a proposal.
+- **untagged phone photos** read as the phone's tagged ones that day show, else settled by its GPS, else the drift
+  check, else asked; **files naming no camera**, one question per destination, answered once.
+- **a time a daylight-saving change skips or repeats** is answered in the time decisions, per photo, no longer a stop;
+  an offset tag that is no offset is named and read as none.
+- **every question answerable in the editor and by hand** (*"the user should be able to answer all questions in the
+  editor"*; *"the editor is not the only possibility to answer"*) — the new ones are; the existing gaps are item 52.
+
+## 2026-11-15 — every ruling checked against the corpus
+
+The owner asked: *"all rulings I am making, are they transcribed in the corpus?"* An audit of every ruling since the
+backlog work began found one ruled and never built — a (0,0) left in a photo accepted as unlocated is now cleared,
+the clear logged (*"A-D ok"*; a kept (0,0) shows the photo off Africa in digiKam) — and a few stated only in the build
+or without the owner's reason: an accepted proposal counts as the positions' own (*"keep it automatic"*), the track
+window has no setting of its own (*"aren't you reusing a config value for a different purpose?"*), geotag's summary
+only for an execution, the other time fields logged with what they held. Each is an item now. Track points outside
+the window are pruned, but for those an executed plan used (*"as per recommended"*), as BACKLOG 13 ruled.
+
+## 2026-11-15 — every run checks the workspace is as the last one left it (BACKLOG 50)
+
+The owner: *"I wonder if before each run, as a rule, there should be a quick check to see if anything unexpected
+happened. The only manual moves in a workspace should be the moves to by-dest."* The protection was a scatter of
+particular checks, and prep took its folders as it found them; a photo put by hand where a removed one had been took
+the removed one's history.
+
+- **the record** — every execute, prep's, geotag's and merge's, records the state it leaves: each file's path, size,
+  modification time, inode and fingerprint, in the media folders, quarantine and strays. Every phase command first
+  compares the workspace with it, from file entries alone (*"a replaced file would also typically have a different
+  inode"*).
+- **what a person does passes** — a dump in the inbox; sorting into photos by destination; culling; a photo moved
+  back; a time given in missing metadata, which prep now files on; a copy keeping size and time with new inodes. The
+  ones that are not sorting are named in the run's log.
+- **anything else stops**, named, until accepted by a code printed with the list — a hash of it, so a list changed
+  since accepts nothing (*"hand accepting these is tedious"*); the acceptances are kept and sealed. The console offers
+  the same as a button.
+- **a run killed outright** — its own half-done work is recognised from its plan and journal and passes; a change it
+  would not have left still stops.
+- **prep's log** — a fingerprint counts as retaken only where the file is unchanged.
+- **found on the way** (BACKLOG 51, ruled *"ok both"*): a prep plan executed again kept no journal of the earlier
+  attempt — it is set aside under `-NNN` now; and a JPEG set aside beside a RAW that was given a time keeps its
+  name, the two not pairable there.
+
+## 2026-11-15 — the tracks geotag used, kept and sealed with the workspace (BACKLOG 13)
+
+The owner: *"I will have always the gps data used during the process, in the form used during the decisioning, which
+would make the workspace truly self-contained."* A sealed workspace named the track behind each position but kept
+none of its points; once `gpx_root` changed, the evidence was gone. Ruled *"rest as recommended"*:
+
+- **kept in the record** — `photos-00-ingest.db` holds a catalogue of every track file (path, rank, size, modification
+  time, inode, SHA-256, first and last point) and the points of the window; archived at finalize and merge, sealed
+  with the workspace. The scratch track memo is gone.
+- **read where reached** — the window is what geotag's readers of tracks reach, each by its own setting (*"aren't you
+  reusing a config value for a different purpose?"* — so no setting of its own: one smaller than a reader's reach would
+  starve it unseen). Tracks of other times no longer restale a plan; a file unchanged in size, time and inode is not
+  read again.
+- **a track taken out** is named and no longer used — the one reason to take one out is someone else's trip — but its
+  points stay, withdrawn, where an executed plan placed or timed photos by it.
+- **tracks that cannot be checked stop geotag**, at plan and execute; finalize and merge need none.
+
+Written at plan time, outside the op model, as the memo it replaces was: a file can skip its re-read only if its
+points are already kept. Execute records which tracks it used.
+
+## 2026-11-15 — the rest of the gap audit ruled (BACKLOG 2)
+
+The walk of the code against the corpus left forty-one behaviours no item stated. Ruled *"all as recommended"*, four
+of them on a second look:
+
+- **a moved photo's position is asked again** (1) — an accepted "unlocated", or a typed position, may have been
+  decided because of the destination: its fallback, its tracks (*"it may have been decided partially because of the
+  destination"*). So like its zone and offset, nothing of the old destination goes with it; a renamed folder is a move.
+- **a development subfolder in any case** (4) — the names mark development begun; matched with case, a `JPG` folder
+  was not seen and its copies were geotagged as photos.
+- **`geotag plan` stops on a prep log the handoff does not vouch for** (5) — it went on without the mapping that keeps
+  a photo's original values across a new fingerprint, and could take geotag's own writes for originals.
+- **geotag lowercases the extension in its rename** (34) — prep leaves photos by destination as found, so a `.JPG`
+  put there by hand reached the library; geotag renames every photo anyway.
+- **records are not taken for empty** — an unreadable journal, earlier pass, prep log or quarantine manifest stops the
+  command, named; photos-25 and the photos-26 package keep their earlier copy under `-NNN`; a prune is recorded
+  (photos-16); quarantine is counted by reason.
+- **merge** stops without ImageMagick, and its plan and dry run exit 2 on blockers like the other phases; the exit
+  statuses are stated.
+- **the editor** checks a zone by the host's list, as geotag does; a drift cell's offsets are checked confirmed or not;
+  `null` is no answer everywhere.
+- **dropped** — three fields nothing read, and the four settings kept for BACKLOG 6, which adds what it needs.
+
+The rest is stated as it is. One stated behaviour was wrong when tested: a new photo taking a removed photo's name
+was given its log entry; fixed. Prep's exit statuses and the prep fields nothing reads are left for a ruling.
+
+## 2026-11-15 — seven ways a wrong value reached the originals (BACKLOG 24, 26, 36, 37, 38, 42, 44)
+
+Each was a value the tool could write into a photo while looking settled. Ruled *"42 a; 38 a; 24 a; 37 ok; 36 a;
+44 a; 26 a"*:
+
+- **a clock reset to its factory date** (42) — a guessed offset (the destination's zone, or the camera's recorded
+  offset) that puts every photo of a cell farther than the largest clock error from every other device's photo of the
+  destination — phones, cameras settled by their own GPS or by the user — takes no effect, accepted or not; only an
+  offset written by hand resolves it. Tracks alone never set it off: under years of tracks, a trip with none of its
+  own is far from all of them too. The editor takes the true time of one photo and writes the offset from it.
+- **the camera's recorded offset** (36) — where a camera cell's photos all record one `OffsetTimeOriginal`, it is
+  proposed ahead of the zone's, a guess like it, accepted or checked against the tracks; photos recording different
+  offsets propose none and are listed.
+- **a drift confirmation** (37) — it names the tracks it was made against, by fingerprint, and holds only while each is
+  there unchanged; otherwise it is asked again, the answer kept as written.
+- **a time from the modification field** (38) — a photo whose only time is `ModifyDate` is the editing computer's
+  clock: solved like a file naming no camera, never given its camera's offset nor opening its days.
+- **a position at (0, 0)** (24) — no position: placed like a photo without one, never an anchor; the write over it is
+  logged with what it replaced.
+- **a time changed by hand after geotag wrote it** (44) — geotag records every time it writes; a photo holding a time
+  that is neither its original nor one geotag wrote stops the plan, named, never written back over.
+- **the other time fields** (26) — `CreateDate` with its offset, `XMP:DateCreated` and the IPTC date and time, where
+  the photo holds them, are written the corrected time too; none is added. `ModifyDate` stays (the edit time), and the
+  sub-second fields stay: an offset is whole seconds, so the fraction holds. Prep reads these fields now
+  (`FIELD_SET_VERSION` 3), so a workspace prepped before is prepped again.
+
+## 2026-11-15 — tracks ranked by the device that recorded them (BACKLOG 29)
+
+**The better device is believed first.** The owner records each trip on a phone and a standalone receiver, and the
+phone is the more accurate: *"I want the device track to be used when phone track unavailable."* Until now no track
+outranked another — where both covered a photo the one a second nearer in time placed it, and where they lay apart the
+photo was not placed at all, as if two people had walked. Ruled *"all as recommended"*:
+
+- **by folder** — `gpx_track_precedence` lists folders directly under `gpx_root`, best first; a track ranks as the
+  folder it is filed in, one in none below all. A file's `creator` was rejected: whatever the app wrote, and the same
+  for a companion's phone with the same app. A listed folder that is not there is warned of.
+- **rank before method** — of the tracks that record the photo's time, by a point or between two, the best-ranked
+  places it, even by a fill against a lower track's point at the second; a projection past an end counts only where no
+  track records the time. Clock offsets are anchored the same way: a lower track only where no higher one recorded.
+- **disagreement** — a lower track never stops a photo; tracks of one rank that disagree still do, which keeps the
+  guard for a companion's trip filed outside the ranked folders. `RUL-disagreeing_tracks_place_nothing`, held at
+  seed for this, is ruled.
+- **a measure, not a question** — each position keeps how far each lower track put it, and photos-23 counts, per
+  track, the photos it put farther off than tracks may differ: the worse device's error.
+- **a dependency** — the ranking enters the tracks' fingerprint, so changing it restales what the tracks decided.
+
+A workspace begun under 3.0.0 needs the setting added (`[]` ranks every track alike, as before).
+
 ## 2026-11-14 — v3.0.0
 
 **The conversion is finished: geotag is in the corpus, the original specs are retired, and every rule has a test.**

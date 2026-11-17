@@ -17,28 +17,164 @@ to. *Why* each holds is in [the rationale](../rationale/geotag.md); *how this bu
 Geotag SHALL plan no photo's position until every photo's true time is resolved.
 :::
 
-:::{rul} A photo with no recorded time stops geotag
+:::{rul} A photo with no recorded time and no date fallback stops geotag
 :id: RUL-untimed_photo_stops_geotag
 :status: ruled
 :criticality: high
 :anti: yes
 :verify: required
 :refines: RUL-time_before_gps
-:uses: DEF-geotag, DEF-managed_folders, DEF-recorded_time
+:uses: DEF-geotag, DEF-managed_folders, DEF-recorded_time, DEF-date_fallback
 
-A photo in photos by destination carrying no recorded time SHALL stop geotag before it plans anything.
+A photo in photos by destination carrying no recorded time, which no date fallback covers, SHALL stop geotag before it
+resolves any photo's time.
 :::
 
 :::{rul} A photo with no recorded time is named
 :id: RUL-untimed_photo_named
 :status: ruled
 :criticality: high
-:anti: yes
 :verify: required
 :refines: RUL-untimed_photo_stops_geotag
-:uses: DEF-geotag, DEF-managed_folders, DEF-recorded_time
+:uses: DEF-geotag, DEF-managed_folders, DEF-recorded_time, DEF-date_fallback
 
-A photo that stops geotag for carrying no recorded time SHALL be named to the user as belonging in missing metadata.
+A photo that stops geotag for carrying no recorded time SHALL be named to the user as wanting a date fallback for its
+folder, or else belonging in missing metadata.
+:::
+
+:::{def} A date fallback
+:id: DEF-date_fallback
+:status: ruled
+:uses: DEF-destination, DEF-recorded_time
+
+A **date fallback** is a date the user gives a destination — a year, a month of a year, or a day — for when its photos
+that carry no recorded time were made.
+:::
+
+:::{rul} A date fallback is a year, a month or a day
+:id: RUL-date_fallback_checked
+:status: ruled
+:criticality: med
+:anti: yes
+:verify: required
+:refines: INV-authored_values_checked
+:uses: DEF-date_fallback, RUL-invalid_value_stops, RUL-invalid_value_located
+
+A date fallback that is not a year, a month of a year or a day of the calendar SHALL be refused, naming it.
+:::
+
+:::{rul} The nearest date fallback covers a photo
+:id: RUL-date_fallback_from_nearest
+:status: ruled
+:criticality: med
+:verify: required
+:uses: DEF-date_fallback, DEF-destination
+
+The date fallback covering a photo SHALL be the one given at the nearest destination it lies in that has one, its own
+included.
+:::
+
+:::{rul} A date fallback applies itself
+:id: RUL-date_fallback_applies_itself
+:status: ruled
+:criticality: med
+:verify: required
+:refines: RUL-date_fallback_from_nearest
+:uses: DEF-date_fallback
+
+A date fallback SHALL take effect with no acceptance asked.
+:::
+
+:::{rul} A date fallback times a photo with no recorded time
+:id: RUL-date_fallback_times_untimed
+:status: ruled
+:criticality: high
+:verify: required
+:uses: DEF-date_fallback, DEF-recorded_time, DEF-destination
+
+A photo with no recorded time that a date fallback covers SHALL take as its true time the midnight that begins the
+fallback's day, local to its destination.
+:::
+
+:::{rul} A year or a month stands for its first day
+:id: RUL-date_fallback_fills_to_a_day
+:status: ruled
+:criticality: med
+:verify: required
+:refines: RUL-date_fallback_times_untimed
+
+A date fallback given as a year, or as a month of a year, SHALL stand for its first day.
+:::
+
+:::{rul} A photo's own time is never replaced by a date fallback
+:id: RUL-date_fallback_only_untimed
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+:refines: RUL-date_fallback_times_untimed
+:uses: DEF-recorded_time
+
+A date fallback SHALL NOT time a photo that carries a recorded time of its own.
+:::
+
+:::{rul} The time a date fallback gives is written
+:id: RUL-date_fallback_time_written
+:status: ruled
+:criticality: med
+:verify: required
+:refines: RUL-date_fallback_times_untimed
+:uses: DEF-corrected_time
+
+Geotag SHALL write into a photo the time its date fallback gives it, as it writes any corrected time.
+:::
+
+:::{rul} A time from a date fallback is recorded with the date as given
+:id: RUL-date_fallback_recorded
+:status: ruled
+:criticality: med
+:verify: required
+:refines: RUL-cause_locatable
+:uses: DEF-date_fallback
+
+A time a date fallback gave a photo SHALL be recorded in the workspace's record with the date fallback as the user gave
+it and the destination it was given at.
+:::
+
+:::{rul} No track places a photo by the time a date fallback gave it
+:id: RUL-date_fallback_never_placed_by_tracks
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+:refines: RUL-placement_order
+:uses: DEF-date_fallback, DEF-tracks
+
+The tracks SHALL NOT place a photo that a date fallback times.
+:::
+
+:::{rul} A photo a date fallback times is no clock's evidence
+:id: RUL-date_fallback_no_clock_evidence
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+:uses: DEF-date_fallback
+
+A photo a date fallback times SHALL take no part in finding any camera's clock offset.
+:::
+
+:::{rul} Photos of one date fallback are suffixed in the order of their names
+:id: RUL-date_fallback_names_in_scanner_order
+:status: ruled
+:criticality: low
+:verify: required
+:refines: RUL-suffix_deterministic
+:excepts: RUL-suffix_in_capture_order
+:uses: DEF-date_fallback, DEF-timestamp_name
+
+Photos of a destination that a date fallback times, taking new names of one timestamp, SHALL take their suffixes in the
+order of the names they hold before geotag renames them.
 :::
 
 ## 3. Linear dependency inclusion
@@ -67,7 +203,7 @@ dependencies to vouch for what came before it.
 :verify: required
 :uses: DEF-geotag, DEF-managed_folders
 
-Geotag SHALL change only files in photos by destination — never a file in any other folder.
+Geotag SHALL change no media file outside photos by destination.
 :::
 
 :::{rul} A photo with no fingerprint stops geotag
@@ -78,6 +214,18 @@ Geotag SHALL change only files in photos by destination — never a file in any 
 :verify: required
 
 Geotag SHALL NOT plan, execute or finalize while a photo in photos by destination has no fingerprint.
+:::
+
+:::{rul} Geotag plans only from metadata read as this build reads it
+:id: RUL-handoff_fields_of_this_build
+:status: ruled
+:criticality: med
+:anti: yes
+:verify: required
+:uses: DEF-geotag
+
+Geotag SHALL NOT plan from prep's record of a photo whose metadata was read as another version of cartographer reads
+it — another set of fields, or another order of finding them.
 :::
 
 :::{rul} Geotag runs prep itself only to record a sort
@@ -100,6 +248,54 @@ Geotag SHALL run prep's execution itself only where prep's plan moves, renames o
 :uses: DEF-geotag, DEF-managed_folders
 
 Geotag SHALL never change a video.
+:::
+
+:::{rul} A video keeps the name prep gave it
+:id: RUL-video_name_stays_uncorrected
+:status: ruled
+:criticality: med
+:anti: yes
+:verify: required
+:refines: RUL-video_never_changed
+:uses: RUL-prep_name_provisional, RUL-geotag_name_final
+
+Geotag SHALL NOT correct a video's name: the name prep gives a video from its camera's clock, uncorrected, is final.
+:::
+
+:::{rul} A JPEG set aside beside its RAW is renamed with it
+:id: RUL-set_aside_jpeg_renamed_with_raw
+:status: ruled
+:criticality: med
+:verify: required
+:excepts: RUL-geotag_changes_only_by_dest
+:uses: DEF-geotag, DEF-managed_folders, RUL-redundant_jpeg_set_aside
+
+Where geotag renames a RAW in photos by destination, it SHALL rename the JPEG prep set aside beside that RAW to the
+RAW's new name, extension aside — the one change geotag makes outside photos by destination.
+:::
+
+:::{rul} A JPEG left behind its RAW takes the RAW's name
+:id: RUL-set_aside_jpeg_catches_up
+:status: ruled
+:criticality: med
+:verify: required
+:refines: RUL-set_aside_jpeg_renamed_with_raw
+:uses: DEF-geotag, DEF-managed_folders, RUL-redundant_jpeg_set_aside
+
+Where a RAW in photos by destination that geotag changed on an earlier run holds a name the JPEG prep set aside beside
+it does not, extension aside, geotag SHALL rename that JPEG to the RAW's name, extension aside.
+:::
+
+:::{rul} A set-aside JPEG is renamed, never written
+:id: RUL-set_aside_jpeg_only_renamed
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+:refines: RUL-set_aside_jpeg_renamed_with_raw
+:uses: DEF-geotag
+
+Geotag SHALL write no tag into a JPEG set aside beside its RAW: it only renames it.
 :::
 
 ## 5. JSON artifact rule
@@ -130,7 +326,6 @@ A geotag plan stopped before its first decision stage SHALL write no record of i
 :status: ruled
 :criticality: med
 :verify: required
-:refines: RUL-no_record_before_decisions
 :uses: DEF-geotag
 
 A geotag plan stopped before its first decision stage SHALL say what stopped it in its output.
@@ -153,6 +348,7 @@ configuration's settings for one anchor and for several allow.
 :id: RUL-disagreeing_anchors_never_auto
 :status: ruled
 :criticality: high
+:anti: yes
 :verify: required
 :refines: RUL-anchor_offset_auto_as_configured
 :uses: DEF-geotag, DEF-decision
@@ -191,7 +387,8 @@ A timezone the user writes for a destination SHALL take effect over the one it i
 :refines: RUL-timezone_auto_resolves
 :uses: DEF-geotag, DEF-decision
 
-A destination with no timezone to inherit SHALL wait for the user.
+A destination with no timezone to inherit SHALL wait for the user, save one its photos give within its country
+({need}`RUL-zone_from_photos_in_country`).
 :::
 
 :::{rul} An inherited timezone yields to the destination's own photos
@@ -200,7 +397,8 @@ A destination with no timezone to inherit SHALL wait for the user.
 :criticality: high
 :anti: yes
 :verify: required
-:uses: DEF-geotag, DEF-decision
+:refines: RUL-zone_against_photos_needs_word
+:uses: DEF-geotag, DEF-decision, DEF-recorded_offset
 
 An inherited timezone SHALL NOT take effect without the user's answer in a destination holding a photo, read by the
 offset recorded with its time, whose offset is not that timezone's at the photo's time — one such photo being enough.
@@ -236,8 +434,9 @@ A destination holding photos SHALL have one timezone for all of them.
 :verify: required
 :uses: DEF-geotag, DEF-decision
 
-A destination the user says is in a country SHALL take that country's timezone, with every destination within it,
-where the country has one.
+A destination the user says is in a country SHALL take that country's timezone, with every destination within it, where
+the country has one, taking effect as an inherited timezone does ({need}`RUL-timezone_auto_resolves`), over any it would
+inherit from above.
 :::
 
 :::{rul} A country of several timezones gives none
@@ -260,7 +459,32 @@ answering for themselves.
 :refines: RUL-country_gives_its_timezone
 :uses: DEF-geotag, DEF-decision
 
-A timezone answered for a destination in a country of several timezones SHALL be one of that country's timezones.
+A timezone answered for a destination within a country SHALL be one of that country's timezones.
+:::
+
+:::{rul} In a country of several timezones, the photos' offsets propose the one that fits
+:id: RUL-zone_from_photos_in_country
+:status: ruled
+:criticality: high
+:verify: required
+:refines: RUL-country_of_several_gives_none
+:uses: DEF-geotag, DEF-decision, DEF-recorded_offset
+
+A destination in a country of several timezones, with no timezone written or inherited, SHALL be proposed the one
+timezone of that country whose offset at the time of each of its photos read by the offset recorded with its time is
+that offset — where exactly one is, and at least one photo records an offset.
+:::
+
+:::{rul} A timezone the photos give within their country applies itself
+:id: RUL-zone_from_photos_applies
+:status: ruled
+:criticality: high
+:verify: required
+:refines: RUL-zone_from_photos_in_country
+:uses: DEF-geotag, DEF-decision
+
+A timezone proposed from the offsets a destination's photos record within its country SHALL take effect without the
+user's answer.
 :::
 
 :::{rul} A country is said once, at the top of its tree
@@ -269,8 +493,10 @@ A timezone answered for a destination in a country of several timezones SHALL be
 :criticality: med
 :verify: required
 :refines: RUL-country_gives_its_timezone
+:excepts: RUL-user_writes_decisions
 
-A country said of a destination within one already said to be in a country SHALL be taken out of the decision.
+A country said of a destination within one already said to be in a country SHALL be taken out of the decision — the one
+value the tool takes out of what the user wrote.
 :::
 
 :::{rul} A country taken out is told, with why
@@ -283,6 +509,184 @@ A country said of a destination within one already said to be in a country SHALL
 The user SHALL be told of a country taken out of a decision, and why.
 :::
 
+:::{rul} The table of countries is the host's, else the workspace's, else the one carried
+:id: RUL-zone_table_host_first
+:status: ruled
+:criticality: high
+:verify: required
+:uses: DEF-geotag
+
+The countries a destination can be said to be in, with their timezones, SHALL be read from the host's zone database
+where it has them; else from a copy downloaded for the workspace; else from the copy cartographer carries.
+:::
+
+:::{rul} A timezone the host does not know is no country's
+:id: RUL-zone_table_zone_known
+:status: ruled
+:criticality: high
+:verify: required
+:refines: RUL-zone_table_host_first
+
+A timezone the table of countries names that the host's zone database does not know SHALL be given to no country.
+:::
+
+:::{rul} The table is downloaded only on the user's word
+:id: RUL-zone_table_download_on_word
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+:refines: RUL-zone_table_host_first
+
+The table of countries SHALL NOT be downloaded but on the user's permission, asked for before.
+:::
+
+:::{rul} The table is downloaded only where the host has none
+:id: RUL-zone_table_download_where_missing
+:status: ruled
+:criticality: med
+:anti: yes
+:verify: required
+:refines: RUL-zone_table_download_on_word
+
+The table of countries SHALL NOT be downloaded, nor the user asked to, where the host's zone database has it.
+:::
+
+:::{rul} Asked to download, the user is told what refusing leaves
+:id: RUL-zone_table_refusal_told
+:status: ruled
+:criticality: med
+:verify: required
+:refines: RUL-zone_table_download_on_word
+
+The user asked whether to download the table of countries SHALL be told that refusing leaves in use the copy
+cartographer carries, which may be stale.
+:::
+
+:::{rul} The question of the table is asked once
+:id: RUL-zone_table_asked_once
+:status: ruled
+:criticality: med
+:verify: required
+:refines: RUL-zone_table_download_on_word
+
+A workspace's answer to whether to download the table of countries SHALL be kept with it, the question not asked
+again.
+:::
+
+:::{rul} The question of the table is answered in the editor too
+:id: RUL-zone_table_answered_in_editor
+:status: ruled
+:criticality: med
+:verify: required
+:refines: RUL-zone_table_asked_once
+
+The question whether to download the table of countries SHALL be answerable in the decision editor, the answer kept
+as one given to prep is.
+:::
+
+:::{rul} The question of the table is answered by hand too
+:id: RUL-zone_table_answered_by_hand
+:status: ruled
+:criticality: med
+:verify: required
+:refines: RUL-zone_table_asked_once
+:uses: DEF-control_records
+
+The question whether to download the table of countries SHALL be answerable by hand, in the record that keeps its
+answer — a permission written there downloading the table at prep's next plan.
+:::
+
+:::{rul} An unreadable record of the answer stops the run
+:id: RUL-unreadable_zone_table_record_stops
+:status: ruled
+:criticality: med
+:anti: yes
+:verify: required
+:refines: RUL-zone_table_asked_once
+:uses: DEF-control_records
+
+A run that reads a workspace's record of the answer to whether to download the table of countries SHALL stop, before
+any change but the workspace check's record of the changes the user accepted ({need}`RUL-workspace_checked_first`),
+naming the record, where it exists and cannot be read — never taking it for no answer.
+:::
+
+:::{rul} A permission downloads the table once
+:id: RUL-zone_table_downloaded_once
+:status: ruled
+:criticality: med
+:verify: required
+:refines: RUL-zone_table_download_on_word
+
+A permission to download the table of countries SHALL download it once, by the run it is given to.
+:::
+
+:::{rul} A table downloaded is kept with the workspace
+:id: RUL-zone_table_copy_kept
+:status: ruled
+:criticality: high
+:verify: required
+:refines: RUL-zone_table_downloaded_once
+:uses: DEF-control_records
+
+A table of countries downloaded for a workspace SHALL be kept among its control records.
+:::
+
+:::{rul} The question of the table never stops prep
+:id: RUL-zone_table_never_stops_prep
+:status: ruled
+:criticality: med
+:verify: required
+:refines: RUL-zone_table_download_on_word
+:uses: DEF-prep
+
+Prep SHALL go on, the copy cartographer carries in use, where nobody answers whether to download the table of countries.
+:::
+
+:::{rul} A table downloaded is taken only whole and well formed
+:id: RUL-zone_table_checked
+:status: ruled
+:criticality: high
+:verify: required
+:refines: RUL-zone_table_downloaded_once
+
+A download of the table of countries that does not give it whole and well formed SHALL be refused, the table in use
+before staying in use.
+:::
+
+:::{rul} A download that failed is told
+:id: RUL-zone_table_failure_told
+:status: ruled
+:criticality: med
+:verify: required
+:refines: RUL-zone_table_checked
+
+The user SHALL be told of a download of the table of countries that failed or was refused, and that another table
+stays in use.
+:::
+
+:::{rul} The download carries nothing of the user
+:id: RUL-zone_table_request_bare
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+:refines: RUL-zone_table_downloaded_once
+
+A download of the table of countries SHALL NOT carry anything of the workspace, the host or the user.
+:::
+
+:::{rul} Another table of countries makes the plan stale
+:id: RUL-zone_table_restales_plan
+:status: ruled
+:criticality: high
+:verify: required
+:refines: RUL-geotag_plan_carries_every_dependency, RUL-zone_table_host_first
+
+Geotag's executable plan SHALL record the table of countries it was made from and where that came from, so that
+another table makes it stale.
+:::
+
 :::{rul} A timezone stands against the photos only on the user's word
 :id: RUL-zone_against_photos_needs_word
 :status: ruled
@@ -290,6 +694,7 @@ The user SHALL be told of a country taken out of a decision, and why.
 :anti: yes
 :verify: required
 :refines: RUL-destination_has_one_timezone
+:uses: DEF-recorded_offset
 
 A destination's timezone, written or inherited, SHALL NOT take effect while a photo there, read by the offset recorded
 with its time, records an offset that timezone does not have at the photo's time — until the user confirms the
@@ -304,8 +709,8 @@ timezone for the offsets those photos record.
 :verify: required
 :refines: RUL-timezone_auto_resolves
 
-The configured default timezone SHALL be offered to a destination with no zone to inherit, never applied without the
-user's answer.
+The configured default timezone SHALL be offered to a destination with no zone to inherit nor one its photos give,
+never applied without the user's answer.
 :::
 
 :::{rul} A proposal waits for the user's acceptance
@@ -317,8 +722,8 @@ user's answer.
 :uses: DEF-geotag, DEF-decision
 
 A proposal geotag makes SHALL take effect only once the user accepts it, save one a rule says takes effect without the
-user's answer. A clock offset derived from the destination's timezone is such a proposal, and so is a folder fallback
-position inherited from the destination the folder lies in.
+user's answer. A clock offset derived from the destination's timezone, or from the offset a camera's photos record with
+their times, is such a proposal.
 :::
 
 :::{rul} A confirmation against the tracks is an acceptance
@@ -329,19 +734,20 @@ position inherited from the destination the folder lies in.
 :refines: RUL-proposals_need_acceptance
 :uses: DEF-geotag, DEF-decision
 
-A timezone's offset the user confirms against the tracks SHALL count as accepted by that confirmation
-({need}`RUL-timezone_offset_asked_once`).
+A timezone's offset, or one a camera's photos record, that the user confirms against the tracks SHALL count as
+accepted by that confirmation ({need}`RUL-timezone_offset_asked_once`).
 :::
 
-:::{rul} A timezone's offset is asked about once
+:::{rul} A guessed offset is asked about once
 :id: RUL-timezone_offset_asked_once
 :status: ruled
 :criticality: med
 :verify: required
+:refines: RUL-proposals_need_acceptance
 :uses: DEF-geotag, DEF-decision
 
-A clock offset derived from the destination's timezone SHALL be asked about once: at the check against the tracks
-where tracks lie by its photos, and by acceptance where none do.
+A clock offset derived from the destination's timezone, or from the offset the camera's photos record, SHALL be asked
+about once: at the check against the tracks where tracks lie by its photos, and by acceptance where none do.
 :::
 
 :::{rul} An acceptance holds for the proposal it accepted
@@ -352,7 +758,9 @@ where tracks lie by its photos, and by acceptance where none do.
 :verify: required
 :refines: RUL-proposals_need_acceptance
 
-An acceptance of a proposed clock offset SHALL hold only while the offset proposed is the one that was accepted.
+An acceptance of a proposed clock offset SHALL hold only while the offset proposed is the one accepted, or, proposed
+from the camera's own GPS — that day there, the same day elsewhere or the day next to it — lies within the tolerance the
+configuration allows an accepted offset — the offset accepted being the one that takes effect.
 :::
 
 :::{rul} A proposal that has become another is asked about again
@@ -387,6 +795,21 @@ decision exactly as the user wrote it, for the user to replace.
 A value the user writes for a decision SHALL take effect over a proposal accepted for the same decision.
 :::
 
+:::{rul} A guessed offset that puts the photos where nothing else was is not taken on acceptance
+:id: RUL-offset_far_from_evidence_asks
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+:refines: RUL-proposals_need_acceptance
+:uses: DEF-clock_offset, DEF-tracks
+
+A clock offset proposed from the destination's timezone, or from the offset a camera's photos record, SHALL NOT take
+effect without an offset the user writes where it would put every photo of its day farther than the largest clock
+error the configuration allows from every track point and from the true time of every photo of the destination taken
+by another device whose true time is known, at least one such photo being there.
+:::
+
 
 ## 7. Per-destination structure
 
@@ -395,8 +818,9 @@ A value the user writes for a decision SHALL take effect over a proposal accepte
 :status: ruled
 :uses: DEF-managed_folders
 
-A **destination** is the folder in photos by destination that directly holds a photo; a folder nested in it that holds
-photos is a destination of its own.
+A **destination** is a folder in photos by destination that holds photos — directly, or only through the folders within
+it, as a container destination ({need}`DEF-container_destination`) does; a folder within a destination that holds photos
+is a destination of its own.
 :::
 
 :::{def} A container destination
@@ -415,8 +839,9 @@ photos by destination itself among them, when it holds no photo directly.
 :verify: required
 :uses: DEF-geotag, DEF-destination, DEF-camera_group
 
-Geotag SHALL decide a camera's clock offset once for each destination and each day it took photos there, by the
-camera's own clock — a container destination, holding no photo, having none.
+Geotag SHALL decide a camera's clock offset once for each destination and each day it took photos there — a day split
+at a change of its clock once per part ({need}`RUL-day_split_into_parts`) — by the camera's own clock, a container
+destination, holding no photo, having none.
 :::
 
 :::{rul} An offset is proposed from its own evidence only
@@ -428,8 +853,11 @@ camera's own clock — a container destination, holding no photo, having none.
 :refines: RUL-offset_per_camera_destination_day
 
 Each offset SHALL be proposed only from that camera's own positions on that day — in that destination, else in
-another ({need}`RUL-offset_shared_within_day`) — or from the destination's timezone; never from another day's offset,
-nor from one the user wrote or accepted on a guess in another destination.
+another ({need}`RUL-offset_shared_within_day`) — or from the times its own GPS fixes recorded
+({need}`RUL-gps_time_is_clock_evidence`), or from the offset its photos there record with their times
+({need}`RUL-recorded_offset_proposed`), or from the destination's timezone; never from another day's offset — save the
+one its own GPS gave the day before or after, as {need}`RUL-neighbour_day_offset_proposed` proposes it — nor from one
+the user wrote apart from what the camera's positions support, or accepted on a guess, in another destination.
 :::
 
 :::{rul} A day's offset is the camera's wherever its photos were sorted
@@ -440,7 +868,92 @@ nor from one the user wrote or accepted on a guess in another destination.
 :refines: RUL-offset_per_camera_destination_day
 
 A camera's photos of a day in a destination where none has its own position SHALL be proposed the offset the camera's
-own positions gave that day in another destination, in place of the timezone's.
+own positions gave that day in another destination, in place of the one their times record and the timezone's.
+:::
+
+:::{rul} A camera's offset is proposed from the offset its photos record
+:id: RUL-recorded_offset_proposed
+:status: ruled
+:criticality: high
+:verify: required
+:refines: RUL-offset_per_camera_destination_day
+:uses: DEF-clock_offset, DEF-recorded_offset
+
+A camera's photos of a day in a destination where none has its own position, and where every one of them recording an
+offset with its time records the same one, SHALL be proposed the clock offset of a clock set to that offset, in place
+of the timezone's.
+:::
+
+:::{rul} Photos recording different offsets propose none
+:id: RUL-differing_recorded_offsets_propose_none
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+:refines: RUL-recorded_offset_proposed
+
+Geotag SHALL NOT propose a camera's clock offset of a day in a destination from the offsets its photos there record
+with their times where they record different ones.
+:::
+
+:::{rul} A day with no anchor is offered the day next to it
+:id: RUL-neighbour_day_offset_proposed
+:status: ruled
+:criticality: high
+:verify: required
+:refines: RUL-offset_per_camera_destination_day
+:uses: DEF-clock_offset
+
+A camera's day in a destination with no offset from its own GPS — its anchors or the times its fixes recorded — and no
+offset from the same day elsewhere SHALL be proposed the offset of the day before or after of the same camera in the
+same destination, where that day's offset was found from the camera's own GPS, in place of the one its photos record
+and the timezone's.
+:::
+
+:::{rul} A neighbouring day's offset waits for the user's acceptance
+:id: RUL-neighbour_day_offset_needs_acceptance
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+:refines: RUL-neighbour_day_offset_proposed, RUL-track_confirmation_is_acceptance
+:uses: DEF-decision, DEF-tracks
+
+An offset proposed from a neighbouring day SHALL NOT take effect until the user accepts it — a confirmation of it
+against the tracks counting as its acceptance.
+:::
+
+:::{rul} A neighbouring day's offset is asked about once
+:id: RUL-neighbour_day_offset_drift_checked
+:status: ruled
+:criticality: high
+:verify: required
+:refines: RUL-neighbour_day_offset_needs_acceptance
+:uses: RUL-unanchored_offset_confirmed, RUL-timezone_offset_asked_once
+
+An offset proposed from a neighbouring day SHALL be asked about once, as a guessed offset is: at the check against the
+tracks where tracks lie by the day's photos, and by acceptance where none do.
+:::
+
+:::{rul} No bound is set on the time between the two days
+:id: RUL-neighbour_day_no_gap_bound
+:status: ruled
+:criticality: med
+:verify: required
+:refines: RUL-neighbour_day_offset_proposed
+
+A neighbouring day's offset SHALL be proposed however much time lies between its photos and the day's.
+:::
+
+:::{rul} The day stays the unit
+:id: RUL-neighbour_day_keeps_its_cell
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+:refines: RUL-neighbour_day_offset_proposed
+
+A day proposed its neighbour's offset SHALL NOT be joined to its neighbour: it keeps a decision of its own.
 :::
 
 :::{rul} A shared offset applies itself only where it did there
@@ -451,6 +964,18 @@ own positions gave that day in another destination, in place of the timezone's.
 :refines: RUL-offset_shared_within_day
 
 An offset proposed from another destination of the same day SHALL take effect by itself only where it did there.
+:::
+
+:::{rul} A camera's offset from the zone holds for its whole day
+:id: RUL-camera_zone_offset_for_the_day
+:status: ruled
+:criticality: high
+:verify: required
+:refines: RUL-offset_per_camera_destination_day
+:uses: DEF-clock_offset
+
+A camera's clock offset derived from its destination's timezone SHALL be the zone's at the earliest camera time its
+photos of that day there still hold, for every photo of that day.
 :::
 
 :::{rul} One clock is not read two ways in one day
@@ -465,6 +990,71 @@ Two offsets a camera's own positions gave on one day in different destinations, 
 allows, SHALL NOT take effect until the user writes which is right.
 :::
 
+:::{rul} A day split at a change of its clock passes no offset on
+:id: RUL-split_day_passes_no_offset
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+:refines: RUL-offset_per_camera_destination_day
+:excepts: RUL-offset_shared_within_day
+:uses: DEF-clock_offset, DEF-destination
+
+The offsets of a camera's day split at a change of its clock SHALL NOT be proposed to the camera's photos of that day
+in another destination.
+:::
+
+:::{rul} A day split at a change of its clock is held against the same day elsewhere
+:id: RUL-split_day_held_against_same_day
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+:refines: RUL-same_day_offsets_agree
+:uses: DEF-clock_offset, DEF-destination
+
+An offset a camera's own positions gave on a day in one destination, farther than the configuration allows from each
+offset of that day split at a change of its clock in another destination, SHALL NOT take effect until the user writes
+which is right.
+:::
+
+:::{rul} An offset chosen from the camera's positions is held against what they gave by themselves
+:id: RUL-chosen_offset_checked_same_day
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+:refines: RUL-same_day_offsets_agree
+
+An offset a camera's own positions gave by themselves on one day, farther than the configuration allows from one the
+user chose from those positions that day in another destination, SHALL NOT take effect until the user writes which is
+right.
+:::
+
+:::{rul} An offset accepted as proposed is the positions' own
+:id: RUL-accepted_offset_is_the_positions_own
+:status: ruled
+:criticality: high
+:verify: required
+:refines: RUL-chosen_offset_checked_same_day
+
+An offset the user accepted as the camera's own positions proposed it SHALL count, wherever offsets of one day in
+different destinations are held against each other, as one those positions gave by themselves, not as one the user
+chose.
+:::
+
+:::{rul} The user's choice is not set aside by an offset it was not asked about
+:id: RUL-chosen_offset_not_withheld
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+:refines: RUL-chosen_offset_checked_same_day
+
+An offset the user chose from a camera's own positions SHALL NOT lose its effect for differing from one those positions
+gave by themselves that day in another destination.
+:::
+
 :::{rul} A container destination never waits for the user
 :id: RUL-container_never_waits
 :status: ruled
@@ -472,7 +1062,8 @@ allows, SHALL NOT take effect until the user writes which is right.
 :verify: required
 :uses: DEF-container_destination
 
-A container destination's decisions SHALL never wait for the user.
+A container destination's decisions SHALL never wait for the user, save a timezone asked of it for the destinations
+waiting within it ({need}`RUL-zone_asked_at_every_level`).
 :::
 
 :::{rul} An answer follows its day
@@ -485,6 +1076,115 @@ A container destination's decisions SHALL never wait for the user.
 :uses: DEF-destination
 
 An answer given for a camera's day in a destination SHALL stay that day's answer when photos of another day arrive there or leave.
+:::
+
+:::{rul} A day split at a change of the clock is decided in parts
+:id: RUL-day_split_into_parts
+:status: ruled
+:criticality: high
+:verify: required
+:refines: RUL-offset_per_camera_destination_day
+:uses: DEF-clock_offset
+
+A camera's day in a destination, once split at a change of its clock, SHALL be decided as consecutive parts, each of
+its photos taking the offset of the part it was taken in.
+:::
+
+:::{rul} A clock changed during the day is proposed as a split
+:id: RUL-clock_change_split_proposed
+:status: ruled
+:criticality: high
+:verify: required
+:refines: RUL-day_split_into_parts
+:uses: DEF-camera_group, DEF-tracks
+
+Where the photos of a camera's day in a destination that its own GPS anchors form, in the order of the true times
+their GPS gives them, two consecutive runs, each agreeing within itself on an offset of its own, geotag SHALL propose
+splitting the day at the change between them.
+:::
+
+:::{rul} A change of the clock is seen only from the camera's GPS
+:id: RUL-clock_change_needs_gps
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+:refines: RUL-clock_change_split_proposed
+
+Geotag SHALL NOT find a change of a camera's clock within a day but from the camera's own GPS evidence of its photos'
+true time — their positions on the tracks, or the times their fixes recorded — never from the photos alone.
+:::
+
+:::{rul} Offsets that go back and forth are no change of the clock
+:id: RUL-alternating_runs_no_clock_change
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+:refines: RUL-clock_change_split_proposed
+:uses: DEF-anchor
+
+A day whose anchored photos, in the order of the true times their GPS gives them, form three runs or more SHALL NOT
+be proposed a split.
+:::
+
+:::{rul} A split waits for the user's acceptance
+:id: RUL-clock_change_needs_acceptance
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+:refines: RUL-clock_change_split_proposed
+:uses: DEF-decision
+
+A proposed split of a camera's day SHALL NOT take effect until the user accepts it.
+:::
+
+:::{rul} A split is accepted once
+:id: RUL-clock_change_accepted_once
+:status: ruled
+:criticality: med
+:verify: required
+:refines: RUL-clock_change_needs_acceptance
+
+An accepted split of a camera's day SHALL put the offset of each of its parts into effect with no further answer,
+save for each photo either part could have taken, or neither ({need}`RUL-clock_change_unsettled_photo_asked`).
+:::
+
+:::{rul} Each part is anchored by its own photos
+:id: RUL-clock_change_parts_own_evidence
+:status: ruled
+:criticality: high
+:verify: required
+:refines: RUL-clock_change_accepted_once
+:uses: DEF-anchor
+
+Each part of a day split at a change of the clock SHALL take its offset from its own anchored photos.
+:::
+
+:::{rul} A photo either part could have taken is asked its part
+:id: RUL-clock_change_unsettled_photo_asked
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+:refines: RUL-clock_change_accepted_once
+:uses: DEF-decision, DEF-clock_offset
+
+Where a photo with no evidence of its own could, by its camera time, have been taken in both parts — the first part's
+offset putting it before the first photo of the second run, and the second part's after the last photo of the first —
+or in neither, a split SHALL NOT take effect until the user says to which part the photo belongs.
+:::
+
+:::{rul} A photo only one part could have taken is not asked
+:id: RUL-clock_change_settled_photo_not_asked
+:status: ruled
+:criticality: med
+:verify: required
+:refines: RUL-clock_change_unsettled_photo_asked
+
+A photo with no evidence of its own that only one part could have taken SHALL be given that part without the user
+being asked.
 :::
 
 
@@ -546,6 +1246,28 @@ Geotag SHALL NOT plan while the tracks folder the configuration names is not the
 Geotag SHALL NOT plan while its tracks folder holds track files of which not one can be read.
 :::
 
+:::{rul} No link under the tracks folder is followed
+:id: RUL-track_link_never_followed
+:status: ruled
+:criticality: med
+:anti: yes
+:verify: required
+:uses: DEF-tracks
+
+A symbolic link under the tracks folder SHALL never be followed.
+:::
+
+:::{rul} A link under the tracks folder is named
+:id: RUL-track_link_named
+:status: ruled
+:criticality: med
+:verify: required
+:refines: RUL-track_link_never_followed
+:uses: DEF-tracks
+
+A symbolic link under the tracks folder that geotag does not follow SHALL be named to the user.
+:::
+
 :::{rul} Geotag runs without tracks
 :id: RUL-no_tracks_no_stop
 :status: ruled
@@ -574,7 +1296,7 @@ two points or beyond them.
 :criticality: high
 :anti: yes
 :verify: required
-:refines: RUL-tracks_never_joined
+:refines: RUL-anchor_consensus
 :uses: DEF-tracks
 
 Geotag SHALL never join a point of one track file to a point of another to anchor a clock on the line between them.
@@ -601,6 +1323,147 @@ Geotag SHALL treat each track a track file holds as a track of its own, never jo
 :uses: DEF-tracks
 
 Geotag SHALL NOT place a photo or anchor a clock across a break between two segments of one track.
+:::
+
+:::{rul} A track ranks by the folder it is filed in
+:id: RUL-tracks_ranked_by_folder
+:status: ruled
+:criticality: high
+:verify: required
+:uses: DEF-tracks, DEF-configuration
+
+Where the configuration ranks folders of the tracks, each track SHALL rank as the folder it is filed in, a track in no
+ranked folder below every ranked one, and tracks of one rank alike.
+:::
+
+:::{rul} A ranked folder the tracks lack is told
+:id: RUL-ranked_folder_missing_told
+:status: ruled
+:criticality: med
+:verify: required
+:refines: RUL-tracks_ranked_by_folder
+
+The user SHALL be told of each folder the configuration ranks that the tracks do not hold.
+:::
+
+:::{rul} The ranking is a dependency of what the tracks decide
+:id: RUL-track_ranking_in_dependencies
+:status: ruled
+:criticality: med
+:verify: required
+:refines: RUL-tracks_in_dependencies
+
+Geotag SHALL record the ranking of the tracks with their fingerprint, so that a change to the ranking makes stale every
+record a change to the tracks would.
+:::
+
+:::{rul} Tracks of other times restale nothing
+:id: RUL-tracks_elsewhere_restale_nothing
+:status: ruled
+:criticality: med
+:anti: yes
+:verify: required
+:refines: RUL-tracks_in_dependencies
+
+A change to the tracks at times no decision of geotag's reaches SHALL NOT make a record of geotag's stale.
+:::
+
+:::{rul} The track points decided by are kept with the workspace
+:id: RUL-track_points_kept
+:status: ruled
+:criticality: high
+:verify: required
+:uses: DEF-tracks, DEF-workspace_database
+
+Geotag SHALL keep in the workspace database each track point its decisions reach, as it decided by it.
+:::
+
+:::{rul} No point is kept that nothing rests on
+:id: RUL-unused_points_not_kept
+:status: ruled
+:criticality: low
+:anti: yes
+:verify: required
+:refines: RUL-track_points_kept
+
+Geotag SHALL keep no track point that lies outside what the decisions of its latest planning reach, unless an executed
+plan used it.
+:::
+
+:::{rul} Every point a decision can reach is read
+:id: RUL-track_window_reaches_every_reader
+:status: ruled
+:criticality: med
+:anti: yes
+:verify: required
+:uses: DEF-tracks
+
+Geotag SHALL read, for each of its decisions, every track point that decision can reach by the settings that bound it —
+the points read bounded by no setting of their own.
+:::
+
+:::{rul} A track file gone is told
+:id: RUL-gone_track_told
+:status: ruled
+:criticality: med
+:verify: required
+:uses: DEF-tracks
+
+The user SHALL be told of each track file the tracks folder held and holds no longer, naming it.
+:::
+
+:::{rul} A track file gone is not decided by
+:id: RUL-gone_track_not_used
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+:uses: DEF-tracks
+
+Geotag SHALL NOT decide by a track file the tracks folder no longer holds.
+:::
+
+:::{rul} The points an executed plan rests on stay
+:id: RUL-withdrawn_track_points_kept
+:status: ruled
+:criticality: high
+:verify: required
+:refines: RUL-track_points_kept
+
+The points of a track file by which an executed plan placed or timed photos SHALL stay in the workspace database, marked
+withdrawn, once the file is gone or changed.
+:::
+
+:::{rul} Tracks that cannot be listed stop geotag
+:id: RUL-unlisted_tracks_stop_geotag
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+:uses: DEF-tracks, RUL-unchecked_counts_as_changed
+
+Geotag SHALL NOT plan or execute while its tracks folder, or a folder within it, cannot be listed.
+:::
+
+:::{rul} Finalize needs no tracks folder
+:id: RUL-sealing_needs_no_tracks
+:status: ruled
+:criticality: med
+:verify: required
+:uses: DEF-tracks, DEF-finalize
+
+Finalize SHALL proceed without the tracks folder, on the track points the workspace keeps.
+:::
+
+:::{rul} Merge needs no tracks folder
+:id: RUL-merge_needs_no_tracks
+:status: ruled
+:criticality: med
+:verify: required
+:refines: RUL-sealing_needs_no_tracks
+:uses: DEF-merge, DEF-tracks
+
+Merge SHALL proceed without the tracks folder, on the track points the workspace keeps.
 :::
 
 
@@ -640,13 +1503,37 @@ The classification geotag offers SHALL keep every group already classed as it is
 :::{rul} A file naming no camera is solved on its own
 :id: RUL-unidentified_files_solved_alone
 :status: ruled
-:criticality: med
+:criticality: high
 :anti: yes
 :verify: required
 :uses: DEF-camera_group
 
 A file whose metadata names no camera SHALL be solved on its own — by the offset recorded with its time, else its
-destination's timezone.
+destination's timezone once accepted ({need}`RUL-camera_less_files_asked_per_destination`).
+:::
+
+:::{rul} Files naming no camera are one question for their destination
+:id: RUL-camera_less_files_asked_per_destination
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+:refines: RUL-unidentified_files_solved_alone
+:uses: DEF-destination, DEF-decision
+
+Files naming no camera and recording no offset with their time SHALL be read by their destination's timezone only once
+the user, asked once for the destination, accepts it.
+:::
+
+:::{rul} The answer for camera-less files is kept
+:id: RUL-camera_less_answer_kept
+:status: ruled
+:criticality: med
+:verify: required
+:refines: RUL-camera_less_files_asked_per_destination
+
+The user's answer for a destination's files naming no camera SHALL hold for such files arriving later, while the
+timezone it was given for is the destination's.
 :::
 
 :::{rul} A file naming no camera is never asked to be classed
@@ -673,6 +1560,43 @@ A file whose metadata names no camera SHALL never be asked to be classed.
 A file whose metadata names no camera SHALL never be given a camera's clock offset.
 :::
 
+:::{rul} A photo timed by its modification is solved on its own
+:id: RUL-modified_time_solved_alone
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+:uses: DEF-recorded_time, DEF-camera_group, RUL-recorded_time_order
+
+A photo whose recorded time is read from the time it was last modified SHALL be solved on its own, as a file naming no
+camera is, whatever camera its metadata names.
+:::
+
+:::{rul} A photo timed by its modification takes no camera's offset
+:id: RUL-modified_time_no_camera_offset
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+:refines: RUL-modified_time_solved_alone
+:uses: DEF-clock_offset
+
+A photo whose recorded time is read from the time it was last modified SHALL never be given its camera's clock offset.
+:::
+
+:::{rul} A photo timed by its modification is in none of its camera's days
+:id: RUL-modified_time_opens_no_day
+:status: ruled
+:criticality: med
+:anti: yes
+:verify: required
+:refines: RUL-modified_time_solved_alone
+:uses: RUL-offset_per_camera_destination_day
+
+A photo whose recorded time is read from the time it was last modified SHALL never open a day of its camera's clock
+offsets, nor be counted in one.
+:::
+
 :::{rul} A group classed both ways is unknown
 :id: RUL-group_classed_twice_is_unknown
 :status: ruled
@@ -681,7 +1605,82 @@ A file whose metadata names no camera SHALL never be given a camera's clock offs
 :verify: required
 :refines: RUL-unknown_group_stops_geotag
 
-Geotag SHALL NOT plan while the configuration classes a camera group as both a phone and a camera.
+Geotag SHALL NOT plan while the configuration classes a camera group in photos by destination as both a phone and a
+camera with a fixed clock.
+:::
+
+:::{rul} The configuration says which camera groups are several bodies
+:id: RUL-several_bodies_named_by_configuration
+:status: ruled
+:criticality: high
+:verify: required
+:uses: DEF-camera_group, DEF-configuration
+
+Geotag SHALL treat as several bodies of one camera exactly the camera groups the configuration names so, every other
+group being one camera.
+:::
+
+:::{rul} An offset from the GPS of several bodies never applies itself
+:id: RUL-several_bodies_offset_never_auto
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+:refines: RUL-several_bodies_named_by_configuration
+:uses: DEF-clock_offset, DEF-decision, RUL-anchor_offset_auto_as_configured
+
+A clock offset proposed from the GPS of a camera group the configuration names several bodies SHALL NOT take effect
+without the user's answer.
+:::
+
+:::{rul} The proposal says the group may be several bodies
+:id: RUL-several_bodies_noted
+:status: ruled
+:criticality: med
+:verify: required
+:refines: RUL-several_bodies_offset_never_auto
+
+A clock offset proposed from the GPS of a camera group the configuration names several bodies SHALL be recorded with
+the note that the group may be several bodies.
+:::
+
+:::{rul} The bodies' days in different destinations are decided apart
+:id: RUL-several_bodies_days_apart
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+:refines: RUL-several_bodies_named_by_configuration
+:uses: RUL-offset_shared_within_day
+
+A day of a camera group the configuration names several bodies SHALL NOT take, nor be held against, the offset the
+group's GPS gave that day in another destination: the bodies are told apart by the destinations their photos are
+sorted into.
+:::
+
+:::{rul} Several bodies are never split at a change of the clock
+:id: RUL-several_bodies_no_clock_change_split
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+:refines: RUL-several_bodies_named_by_configuration
+:uses: RUL-clock_change_split_proposed
+
+Geotag SHALL NOT propose splitting a day of a camera group the configuration names several bodies.
+:::
+
+:::{rul} The disagreeing photos of several bodies are not wrong positions
+:id: RUL-several_bodies_positions_not_doubted
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+:refines: RUL-several_bodies_named_by_configuration
+:uses: RUL-contradicted_position_reviewed
+
+Geotag SHALL NOT read the photos of a camera group the configuration names several bodies that disagree with its clock
+offset as holding wrong positions.
 :::
 
 
@@ -696,6 +1695,31 @@ Geotag SHALL NOT plan while the configuration classes a camera group as both a p
 
 A destination's proposed timezone SHALL be the one in effect at the nearest destination it lies in that has one —
 however it was reached there.
+:::
+
+:::{rul} A timezone is asked at every folder above a destination waiting for one
+:id: RUL-zone_asked_at_every_level
+:status: ruled
+:criticality: med
+:verify: required
+:refines: RUL-no_timezone_to_inherit_waits
+:uses: DEF-container_destination, DEF-decision
+
+A container destination with no timezone, written or inherited, SHALL ask for one while a destination within it waits
+for one that a timezone written at the container would reach.
+:::
+
+:::{rul} A container a timezone reaches is not asked for one
+:id: RUL-zone_not_asked_where_one_reaches
+:status: ruled
+:criticality: med
+:anti: yes
+:verify: required
+:refines: RUL-zone_asked_at_every_level
+:uses: DEF-container_destination
+
+A container destination with a timezone, written there or inherited, or where a country of several timezones is said,
+SHALL NOT be asked for one.
 :::
 
 :::{rul} A moved photo is decided where it now is
@@ -713,16 +1737,38 @@ its old destination carried with it.
 
 ## 11. Clock offsets from the camera's own GPS
 
+:::{def} An anchor
+:id: DEF-anchor
+:status: ruled
+:uses: DEF-tracks, DEF-clock_offset
+
+An **anchor** is a photo holding its own position whose place on the tracks, at some offset of its camera's clock, gives
+that offset; an offset its camera's anchors support is **anchored**.
+:::
+
 :::{rul} A track anchors a clock only within the plausible error
 :id: RUL-anchor_within_clock_error
 :status: ruled
 :criticality: high
 :anti: yes
 :verify: required
-:uses: DEF-tracks
+:uses: DEF-tracks, DEF-anchor
 
 A track SHALL anchor a camera's clock only at times within the largest clock error the configuration allows of the
 camera's own time, whatever timezone the camera was set to.
+:::
+
+:::{rul} A lower-ranked track anchors only where no higher one recorded
+:id: RUL-lower_track_anchors_where_higher_absent
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+:refines: RUL-tracks_ranked_by_folder
+:uses: DEF-anchor
+
+A lower-ranked track SHALL anchor a camera's clock at a time only where no higher-ranked track has a point at that
+time or two around it that a photo could be placed between.
 :::
 
 :::{rul} The offset is the one most photos agree on
@@ -766,7 +1812,8 @@ Where a camera's photos support two visits equally, its clock offset SHALL NOT t
 :status: ruled
 :criticality: med
 :verify: required
-:refines: RUL-indistinct_visits_wait
+:refines: RUL-anchor_consensus
+:uses: DEF-anchor
 
 A clock offset the user sets that the camera's own GPS positions support SHALL count as anchored by them, as an
 accepted proposal does — never asked to be checked against the tracks again.
@@ -791,6 +1838,7 @@ counts as a moment — SHALL NOT take effect without the user's answer.
 :anti: yes
 :verify: required
 :refines: RUL-stay_fixes_no_clock
+:uses: DEF-anchor
 
 An offset fixed only to within a stay of the tracks SHALL NOT count as anchored once accepted.
 :::
@@ -805,8 +1853,207 @@ An offset fixed only to within a stay of the tracks SHALL NOT count as anchored 
 A clock offset proposed from a camera's own GPS SHALL be recorded with the photos that support it, the photos that do not, and the track each was matched to.
 :::
 
+:::{rul} The time a photo's GPS fix recorded is evidence of its clock
+:id: RUL-gps_time_is_clock_evidence
+:status: ruled
+:criticality: high
+:verify: required
+:refines: RUL-offset_from_own_evidence
+:uses: DEF-clock_offset
+
+The time a photo's own GPS fix recorded, less the photo's camera time, SHALL be evidence of its clock's offset.
+:::
+
+:::{rul} A fix's time ranks below the tracks and above the guesses
+:id: RUL-gps_time_rank
+:status: ruled
+:criticality: high
+:verify: required
+:refines: RUL-gps_time_is_clock_evidence
+:uses: DEF-clock_offset, DEF-anchor, DEF-recorded_offset
+
+The offset the times of a camera's own GPS fixes give SHALL rank below the offset its positions on the tracks give, and
+above the offset its photos record with their times and the destination's timezone.
+:::
+
+:::{rul} A GPS time that repeats, or that disagrees, is not counted
+:id: RUL-repeated_gps_time_not_counted
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+:refines: RUL-gps_time_is_clock_evidence
+
+The GPS times of a camera's photos of a day in a destination SHALL NOT be counted as evidence of its clock where two of
+them record the same GPS time at different camera times, or where their differences from the camera times lie farther
+apart than the configuration lets anchors agree.
+:::
+
+:::{rul} GPS times that agree apply themselves as several anchors do
+:id: RUL-gps_times_agreeing_apply
+:status: ruled
+:criticality: high
+:verify: required
+:refines: RUL-gps_time_is_clock_evidence
+:uses: DEF-decision, RUL-anchor_offset_auto_as_configured
+
+An offset the GPS times of two or more photos agree on SHALL take effect without the user's answer as the
+configuration's setting for several anchors allows.
+:::
+
+:::{rul} One GPS time is a proposal
+:id: RUL-single_gps_time_proposed
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+:refines: RUL-gps_time_is_clock_evidence
+:uses: DEF-decision
+
+An offset the GPS time of one photo gives SHALL NOT take effect until the user accepts it.
+:::
+
+:::{rul} An offset from GPS times far from all evidence is not applied
+:id: RUL-gps_time_far_from_evidence_withheld
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+:refines: RUL-gps_time_is_clock_evidence
+:uses: DEF-clock_offset, DEF-tracks
+
+A clock offset from the GPS times of a camera's photos SHALL NOT take effect without an offset the user writes where it
+would put every photo of its day farther than the largest clock error the configuration allows from every track point
+and from the true time of every photo of the destination taken by another device whose true time is known, at least
+one such photo being there.
+:::
+
+
+## 12. A phone's clock, checked against its own GPS
+
+:::{rul} A phone's photos are anchored as a camera's are
+:id: RUL-phone_anchored_like_camera
+:status: ruled
+:criticality: high
+:verify: required
+:uses: DEF-camera_group, DEF-tracks
+
+A phone's photos holding their own position SHALL anchor the phone's clock for each destination and day on the tracks
+as a camera's photos do, by the same settings.
+:::
+
+:::{rul} A phone's GPS times check its clock where no track does
+:id: RUL-gps_time_checks_phone
+:status: ruled
+:criticality: high
+:verify: required
+:refines: RUL-phone_anchored_like_camera
+:uses: RUL-gps_time_is_clock_evidence
+
+Where no track anchors a phone's day in a destination, the GPS times of its photos SHALL check its clock as a camera's
+GPS times do.
+:::
+
+:::{rul} A phone whose own GPS agrees is read as before
+:id: RUL-phone_agreeing_anchor_changes_nothing
+:status: ruled
+:criticality: med
+:verify: required
+:refines: RUL-phone_anchored_like_camera
+
+A phone's photos SHALL be read as they are without their own GPS, nothing asked, where the offset that GPS gives agrees,
+within the tolerance the configuration allows an accepted offset, with the one each of the photos giving it is read by.
+:::
+
+:::{rul} Several of a phone's photos disagreeing apply what they agree on
+:id: RUL-phone_disagreeing_anchors_apply
+:status: ruled
+:criticality: high
+:verify: required
+:refines: RUL-phone_anchored_like_camera
+:uses: DEF-decision, RUL-anchor_offset_auto_as_configured
+
+An offset two or more of a phone's photos of a destination and day give from their own GPS, agreeing among themselves
+and disagreeing with the one they are read by, SHALL take effect for every photo of the phone's day there as a camera's
+several anchors do.
+:::
+
+:::{rul} One phone photo disagreeing is a proposal
+:id: RUL-phone_single_anchor_proposed
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+:refines: RUL-phone_anchored_like_camera
+:uses: DEF-decision
+
+An offset one of a phone's photos gives from its own GPS, disagreeing with the one it is read by, SHALL NOT take effect
+until the user accepts it.
+:::
+
+:::{rul} A phone's photo with no offset is read by the zone only as its tagged ones show
+:id: RUL-untagged_phone_photo_read_as_siblings
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+:refines: RUL-phone_time_from_own_offset
+:uses: DEF-camera_group
+
+A phone's photo recording no offset with its time SHALL be read by its destination's timezone without the user's answer
+only where at least one of the same phone's photos of that day there records an offset with its time, and every one that
+does records the zone's.
+:::
+
+:::{rul} Else the phone's own GPS reads it
+:id: RUL-untagged_phone_photo_settled_by_evidence
+:status: ruled
+:criticality: high
+:verify: required
+:refines: RUL-untagged_phone_photo_read_as_siblings
+:excepts: RUL-anchor_offset_auto_as_configured
+:uses: RUL-phone_anchored_like_camera
+
+Where its tagged photos do not, a phone's photos of a day in a destination recording no offset SHALL be read, without
+the user's answer, by the offset the phone's own GPS gives that day there, where it agrees with how its photos giving it
+are read.
+:::
+
+:::{rul} With neither, the phone's photo is asked about once
+:id: RUL-untagged_phone_photo_asked
+:status: ruled
+:criticality: high
+:verify: required
+:refines: RUL-untagged_phone_photo_read_as_siblings
+:uses: RUL-timezone_offset_asked_once
+
+A phone's photos recording no offset that neither its tagged photos nor its own GPS settle SHALL be asked about once,
+as a camera's guessed offset is: at the check against the tracks where tracks lie by them, by acceptance where none do.
+:::
+
+:::{rul} A phone kept as it records itself
+:id: RUL-phone_kept_as_recorded
+:status: ruled
+:criticality: med
+:verify: required
+:refines: RUL-phone_anchored_like_camera
+:uses: DEF-decision
+
+A phone's day the user keeps as its photos record themselves SHALL be read as it is without its own GPS, while that GPS
+gives another offset.
+:::
+
 
 ## 13. Resolved UTC
+
+:::{def} The offset recorded with a time
+:id: DEF-recorded_offset
+:status: ruled
+:uses: DEF-recorded_time
+
+The **offset recorded with** a photo's time is the UTC offset written within the value of the time field that time was
+read from, else in the offset field paired with it; a tag holding no offset records none.
+:::
 
 :::{rul} A phone's time is read by the offset recorded with it
 :id: RUL-phone_time_from_own_offset
@@ -814,19 +2061,19 @@ A clock offset proposed from a camera's own GPS SHALL be recorded with the photo
 :criticality: high
 :anti: yes
 :verify: required
-:uses: DEF-camera_group
+:uses: DEF-camera_group, DEF-recorded_offset
 
 A phone's photo SHALL take its true time from the offset recorded with the time it was read from, else from its
-destination's timezone.
+destination's timezone as {need}`RUL-untagged_phone_photo_read_as_siblings` allows — save where its own GPS reads the
+phone's clock otherwise ({need}`RUL-phone_disagreeing_anchors_apply`).
 :::
 
 :::{rul} An offset inside the time's own value is recorded with it
 :id: RUL-offset_within_time_value
 :status: ruled
 :criticality: high
-:anti: yes
 :verify: required
-:refines: RUL-phone_time_from_own_offset
+:uses: DEF-recorded_offset
 
 An offset written within the value of a time field itself SHALL count as the offset recorded with that time.
 :::
@@ -836,7 +2083,7 @@ An offset written within the value of a time field itself SHALL count as the off
 :status: ruled
 :criticality: high
 :verify: required
-:refines: RUL-offset_within_time_value
+:uses: DEF-recorded_offset
 
 An offset written within a time's value SHALL be taken before one in a field beside it.
 :::
@@ -849,6 +2096,61 @@ An offset written within a time's value SHALL be taken before one in a field bes
 :verify: required
 
 Geotag SHALL NOT resolve by a timezone a local time which that timezone skips or repeats at a daylight-saving change.
+:::
+
+:::{rul} A time a daylight-saving change skips or repeats is asked about, photo by photo
+:id: RUL-ambiguous_local_time_answered
+:status: ruled
+:criticality: high
+:verify: required
+:refines: RUL-ambiguous_local_time_never_guessed
+:uses: DEF-decision
+
+A photo whose local time its destination's timezone skips or repeats, and which that timezone would read, SHALL be
+asked about on its own in the time decisions: for a time repeated, which of its two readings; for a time skipped, its
+offset.
+:::
+
+:::{rul} A time shown twice is answered by one of its readings
+:id: RUL-repeated_time_answered_by_a_reading
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+:refines: RUL-ambiguous_local_time_answered
+
+An answer for a local time its timezone repeats SHALL take effect only as one of the time's two readings.
+:::
+
+:::{rul} An offset tag that is no offset is read as none
+:id: RUL-unreadable_offset_tag_is_none
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+:uses: DEF-recorded_offset
+
+A photo's offset tag holding something that is no offset SHALL be read as no tag, never loosely.
+:::
+
+:::{rul} An offset tag that is no offset is told
+:id: RUL-unreadable_offset_tag_told
+:status: ruled
+:criticality: med
+:verify: required
+:refines: RUL-unreadable_offset_tag_is_none
+
+Geotag SHALL tell the user of each photo whose offset tag holds no offset, naming the photo.
+:::
+
+:::{rul} An offset tag that is no offset is recorded
+:id: RUL-unreadable_offset_tag_recorded
+:status: ruled
+:criticality: med
+:verify: required
+:refines: RUL-unreadable_offset_tag_is_none
+
+Each photo whose offset tag holds no offset SHALL be recorded in the time decisions as such, with what the tag holds.
 :::
 
 :::{def} A clock offset
@@ -908,6 +2210,54 @@ A confirmation SHALL hold only for the offset it confirmed.
 An offset changed since it was confirmed SHALL be asked about again.
 :::
 
+:::{rul} A confirmation rests on the tracks it was made against
+:id: RUL-confirmation_rests_on_its_tracks
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+:refines: RUL-unanchored_offset_confirmed
+:excepts: RUL-tracks_elsewhere_restale_nothing
+:uses: DEF-tracks
+
+A confirmation SHALL hold only while every track file it was made against is there unchanged.
+:::
+
+:::{rul} A changed track is asked about again
+:id: RUL-changed_tracks_asked_again
+:status: ruled
+:criticality: high
+:verify: required
+:refines: RUL-confirmation_rests_on_its_tracks
+:uses: DEF-tracks
+
+A check whose confirmation was made against a track file since removed or changed SHALL be asked about again.
+:::
+
+:::{rul} A confirmation made with no track holds while there is none
+:id: RUL-trackless_confirmation_holds_while_none
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+:refines: RUL-confirmation_rests_on_its_tracks
+:uses: DEF-tracks
+
+A confirmation made where no track lay by the photos SHALL hold only while none lies by them.
+:::
+
+:::{rul} Geotag leaves a confirmation asked about again as the user wrote it
+:id: RUL-stale_confirmation_kept
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+:refines: RUL-unanchored_offset_confirmed
+
+When a check is asked about again, geotag SHALL leave the user's earlier confirmation in the decision exactly as the
+user wrote it, for the user to replace.
+:::
+
 
 ## 15. Every photo's own values
 
@@ -918,9 +2268,46 @@ An offset changed since it was confirmed SHALL be asked about again.
 :anti: yes
 :verify: required
 :refines: RUL-geotag_rerun_keeps_settled
+:uses: DEF-own_values
 
 A photo whose fingerprint is taken again with a new value SHALL keep the own values geotag pinned for it under the old
 one, so long as the change maps one value to one.
+:::
+
+:::{rul} A fingerprint mapping not one to one stops geotag
+:id: RUL-fingerprint_mapping_one_to_one
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+:refines: RUL-own_values_follow_new_fingerprint
+:uses: DEF-fingerprint
+
+Geotag SHALL neither plan nor execute while prep's log gives one fingerprint value two earlier values, or two later
+ones.
+:::
+
+:::{rul} Geotag plans only on the prep log the handoff vouches for
+:id: RUL-geotag_plans_on_vouched_log
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+:uses: RUL-unchecked_counts_as_changed
+
+Geotag SHALL NOT plan while prep's log is not the one the handoff vouches for.
+:::
+
+:::{rul} Geotag executes only on the prep log the handoff vouches for
+:id: RUL-geotag_executes_on_vouched_log
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+:refines: RUL-geotag_plans_on_vouched_log
+
+Geotag SHALL NOT execute a plan, nor change anything toward it, while prep's log is not the one the handoff vouches
+for.
 :::
 
 
@@ -933,7 +2320,81 @@ one, so long as the change maps one value to one.
 :anti: yes
 :verify: required
 
-Geotag SHALL never replace a photo's own GPS position.
+Geotag SHALL never replace a photo's own GPS position — save on the user's answer, where its camera's agreed clock
+offset contradicts it ({need}`RUL-own_position_replaced_on_answer`).
+:::
+
+:::{rul} An own position the agreed offset contradicts is replaced only on the user's answer
+:id: RUL-own_position_replaced_on_answer
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+:refines: RUL-own_position_kept
+:uses: DEF-clock_offset, DEF-decision
+
+A photo's own GPS position SHALL be replaced only by a position the user sets for it, answering the question its
+camera's clock offset, agreed from its own GPS, raised by contradicting that position — the answer holding until the
+user withdraws it.
+:::
+
+:::{rul} An own position the agreed offset contradicts is offered the track's
+:id: RUL-contradicted_position_reviewed
+:status: ruled
+:criticality: high
+:verify: required
+:refines: RUL-own_position_replaced_on_answer
+:uses: DEF-tracks
+
+A photo whose own position its camera's agreed clock offset contradicts, lying farther from where the tracks place it at
+its true time than the configuration lets an anchor lie from its track, SHALL be asked about by itself among the GPS
+decisions, proposing that place.
+:::
+
+:::{rul} The contradicted photo keeps its own position unless the user takes another
+:id: RUL-contradicted_position_kept_unless_taken
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+:refines: RUL-contradicted_position_reviewed
+
+A review of a photo's own position its camera's agreed clock offset contradicts SHALL NOT wait for the user: the photo
+keeps its own position until the user sets another.
+:::
+
+:::{rul} With no track, the contradicted photo keeps its own, noted
+:id: RUL-contradicted_position_without_track_noted
+:status: ruled
+:criticality: med
+:verify: required
+:refines: RUL-contradicted_position_reviewed
+
+A photo whose own position its camera's agreed clock offset contradicts, at a true time where no track places it,
+SHALL keep its own position, noted in the GPS decisions.
+:::
+
+:::{rul} A replaced own position is logged with what it replaced
+:id: RUL-replaced_own_position_logged
+:status: ruled
+:criticality: high
+:verify: required
+:refines: RUL-own_position_replaced_on_answer
+:uses: RUL-cause_locatable
+
+A photo's own position replaced on the user's answer SHALL be recorded in the workspace's record with the position it
+replaced.
+:::
+
+:::{rul} A position at latitude 0 and longitude 0 is none
+:id: RUL-null_island_is_no_position
+:status: ruled
+:criticality: high
+:verify: required
+:refines: RUL-own_position_kept
+
+A photo whose position is latitude 0 and longitude 0 SHALL count, wherever geotag judges a photo's own position, as
+having none.
 :::
 
 :::{rul} A photo is placed by the most specific source it has
@@ -941,7 +2402,6 @@ Geotag SHALL never replace a photo's own GPS position.
 :status: ruled
 :criticality: high
 :verify: required
-:refines: RUL-own_position_kept
 
 A photo with no position of its own SHALL be placed by the first that applies: a position the user set for it, the
 tracks at its resolved time, its destination's folder fallback.
@@ -954,7 +2414,44 @@ tracks at its resolved time, its destination's folder fallback.
 :verify: required
 :refines: RUL-placement_order
 
-A photo none of these places SHALL wait for the user to set a position or to leave it unlocated.
+A photo none of these places SHALL wait for the user to set a position for it or a fallback for its folder.
+:::
+
+:::{rul} A position the user gives one placed photo places it
+:id: RUL-chosen_position_honoured
+:status: ruled
+:criticality: med
+:verify: required
+:refines: RUL-placement_order
+
+A position the user adds to the GPS decisions for one photo of a destination that the tracks or its folder fallback
+place SHALL place that photo.
+:::
+
+:::{rul} A position added for a photo names one geotag places
+:id: RUL-chosen_position_names_a_photo
+:status: ruled
+:criticality: med
+:anti: yes
+:verify: required
+:refines: RUL-chosen_position_honoured
+:uses: RUL-invalid_value_stops
+
+A position the user adds for one photo, other than one answering the question about its contradicted own position
+({need}`RUL-contradicted_position_reviewed`), SHALL be refused unless it names a photo of that destination with no
+position of its own.
+:::
+
+:::{rul} An answer given for one photo is kept while it holds a position
+:id: RUL-chosen_position_kept
+:status: ruled
+:criticality: med
+:anti: yes
+:verify: required
+:refines: RUL-placement_order
+
+A position the user gave for one photo SHALL be kept, while it holds one, whatever tracks or fallback come to place the
+photo since.
 :::
 
 :::{rul} A destination's fallback is the nearest one it lies in
@@ -964,8 +2461,53 @@ A photo none of these places SHALL wait for the user to set a position or to lea
 :verify: required
 :refines: RUL-placement_order
 
-A destination's folder-fallback proposal SHALL be the fallback in effect at the nearest destination it lies in that
-has one.
+The folder fallback a destination inherits SHALL be the one written at the nearest destination it lies in that has one
+written.
+:::
+
+:::{rul} An inherited fallback applies itself and follows the one above
+:id: RUL-inherited_fallback_applies
+:status: ruled
+:criticality: med
+:verify: required
+:refines: RUL-fallback_from_nearest
+
+A destination with no folder fallback written for it SHALL take, without the user's answer, the fallback it inherits as
+that fallback then stands, a later change to it included.
+:::
+
+:::{rul} A fallback written for a destination outranks the one it inherits
+:id: RUL-written_fallback_over_inherited
+:status: ruled
+:criticality: med
+:verify: required
+:refines: RUL-inherited_fallback_applies
+
+A folder fallback the user writes for a destination SHALL take effect there, for every photo there the fallback places,
+over the one it inherits.
+:::
+
+:::{rul} The user is told what the fallback placed, and whose it is
+:id: RUL-fallback_placements_told
+:status: ruled
+:criticality: med
+:verify: required
+:refines: RUL-placement_order
+:uses: DEF-destination
+
+The user SHALL be told, for each destination, how many photos its folder fallback placed, and whether that fallback is
+the destination's own or inherited, naming the destination it is inherited from.
+:::
+
+:::{rul} A photo the fallback places is recorded with why the tracks did not
+:id: RUL-fallback_photo_says_why
+:status: ruled
+:criticality: med
+:verify: required
+:refines: RUL-placement_order
+:uses: DEF-tracks
+
+A photo its folder's fallback places SHALL be recorded with why the tracks did not place it.
 :::
 
 :::{rul} No destination waits on its fallback
@@ -975,7 +2517,7 @@ has one.
 :verify: required
 :refines: RUL-placement_order
 
-A destination SHALL never wait on its folder fallback.
+A destination SHALL never wait on its folder fallback while each of its photos is placed otherwise.
 :::
 
 :::{rul} The tracks place a photo only within the configured limits
@@ -995,21 +2537,33 @@ A track SHALL place a photo only within the limits the configuration sets — ne
 :status: ruled
 :criticality: med
 :verify: required
-:refines: RUL-track_placement_bounded
+:refines: RUL-highest_ranked_track_places
 
 Of the ways a track can place a photo, geotag SHALL take the first that applies: a track point at its time, the place between the two points around it, the place past an end of the track — an end being where that track's own recording starts, stops or breaks off.
 :::
 
-:::{rul} Tracks in two places place nothing
-:id: RUL-disagreeing_tracks_place_nothing
-:status: seed
+:::{rul} The highest-ranked track that covers a photo places it
+:id: RUL-highest_ranked_track_places
+:status: ruled
 :criticality: high
 :anti: yes
 :verify: required
-:refines: RUL-track_placement_bounded
+:refines: RUL-tracks_ranked_by_folder
 
-Where tracks that cover a photo's time put it in places farther apart than the configuration lets tracks differ, the
-tracks SHALL NOT place it.
+Of the tracks that place a photo, the highest-ranked SHALL place it, whatever a lower-ranked track says — a track that
+places it only past its end counting where no track places it on a point or between two.
+:::
+
+:::{rul} Tracks of one rank in two places place nothing
+:id: RUL-disagreeing_tracks_place_nothing
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+:refines: RUL-highest_ranked_track_places
+
+Where tracks of the highest rank that cover a photo's time put it in places farther apart than the configuration lets
+tracks differ, the tracks SHALL NOT place it.
 :::
 
 :::{rul} Tracks that disagree are named
@@ -1042,25 +2596,48 @@ A position the tracks give a photo SHALL be recorded in the workspace's record w
 time it was placed at.
 :::
 
+:::{rul} A position is recorded with how far the lower-ranked tracks put it
+:id: RUL-lower_track_distance_recorded
+:status: ruled
+:criticality: med
+:verify: required
+:refines: RUL-placement_recorded_with_its_track
+
+A position the tracks give a photo SHALL be recorded with each lower-ranked track that placed it the same way and how far
+from the position that track put it.
+:::
+
+:::{rul} Lower-ranked tracks that disagree are counted
+:id: RUL-lower_track_disagreements_told
+:status: ruled
+:criticality: med
+:verify: required
+:refines: RUL-lower_track_distance_recorded
+
+The user SHALL be told, for each lower-ranked track, how many photos it put farther from where a higher-ranked track
+placed them than the configuration lets tracks differ.
+:::
+
 :::{rul} The track is not written in the photo
 :id: RUL-track_never_written_in_photo
 :status: ruled
 :criticality: med
+:anti: yes
 :verify: required
 :refines: RUL-placement_recorded_with_its_track
 
 The track that gave a photo its position SHALL NOT be written in the photo.
 :::
 
-:::{rul} An unplaced photo is listed with why
+:::{rul} An unplaced photo is listed
 :id: RUL-unplaced_photo_listed
 :status: ruled
 :criticality: high
 :verify: required
 :refines: RUL-placement_order
 
-Every photo no source places SHALL be listed for the user by itself, until a position is set for it or it is left
-unlocated.
+Every photo no source places SHALL be listed for the user by itself, until a position is set for it or a fallback for
+its folder.
 :::
 
 :::{rul} An unplaced photo is listed with why
@@ -1095,18 +2672,43 @@ A decision made for one photo SHALL stay that photo's when geotag renames it or 
 A decision made for one photo SHALL never pass to another photo that takes its name.
 :::
 
-:::{rul} An accepted inherited fallback follows the one above
-:id: RUL-accepted_fallback_follows
+:::{rul} A moved photo's position is decided anew
+:id: RUL-moved_photo_position_decided_anew
 :status: ruled
-:criticality: med
+:criticality: high
+:anti: yes
 :verify: required
-:refines: RUL-fallback_from_nearest
+:uses: DEF-destination
+:refines: RUL-moved_photo_decided_anew
 
-A destination whose inherited fallback the user accepted SHALL take the fallback then in effect above it, a later change there included.
+A photo moved to another destination — its folder renamed among the ways — SHALL be placed with no position decision
+made for it in its old destination carried with it.
 :::
 
 
 ## 17. The corrected time
+
+:::{def} A corrected time
+:id: DEF-corrected_time
+:status: ruled
+:uses: DEF-geotag, DEF-recorded_time
+
+A photo's time is **corrected** when geotag writes its true time into the photo, the photo holding another, or none, and
+stays corrected once written: a time geotag wrote on an earlier run is a corrected one. A true time the photo already
+holds is resolved, not corrected.
+:::
+
+:::{rul} Only a corrected time is marked
+:id: RUL-only_corrected_time_marked
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+:refines: RUL-mutate_on_difference
+:uses: DEF-geotag, DEF-corrected_time
+
+Geotag SHALL NOT record in a photo that its time was corrected unless the time is corrected.
+:::
 
 :::{rul} The corrected time is written as the destination's local time
 :id: RUL-corrected_time_written_local
@@ -1115,7 +2717,7 @@ A destination whose inherited fallback the user accepted SHALL take the fallback
 :verify: required
 :uses: DEF-geotag, DEF-destination
 
-Geotag SHALL write each photo's true time into it as its destination's local time.
+Geotag SHALL write each true time it writes into a photo as its destination's local time.
 :::
 
 :::{rul} The time's offset is written beside it
@@ -1129,6 +2731,68 @@ Geotag SHALL write each photo's true time into it as its destination's local tim
 Geotag SHALL write beside each time it writes that time's offset from UTC.
 :::
 
+:::{rul} Every field recording the making holds the corrected time
+:id: RUL-other_capture_times_corrected
+:status: ruled
+:criticality: med
+:verify: required
+:refines: RUL-corrected_time_written_local
+:uses: DEF-geotag, DEF-destination
+
+Geotag SHALL write each photo's true time, as its destination's local time, also into every other field in which the
+photo already records when it was made, adding none it does not hold.
+:::
+
+
+## 18. Renames
+
+:::{rul} Geotag leaves every photo's extension in lowercase
+:id: RUL-geotag_extension_lowercase
+:status: ruled
+:criticality: low
+:verify: required
+:uses: DEF-geotag, DEF-managed_folders, RUL-prep_leaves_by_dest_as_found
+
+Each photo in photos by destination SHALL end with its extension in lowercase once geotag has executed — one whose name
+already carries its timestamp renamed for its extension alone.
+:::
+
+:::{rul} The photos of one second keep the order they were taken in
+:id: RUL-suffix_in_capture_order
+:status: ruled
+:criticality: med
+:verify: required
+:refines: RUL-suffix_deterministic
+:uses: DEF-timestamp_name
+
+Geotag SHALL give the photos of a destination that take new names of one timestamp their suffixes in the order they
+were taken: by the fraction of a second each records, where it records one, then by the suffix its name already holds,
+none first.
+:::
+
+:::{rul} A pair takes one name
+:id: RUL-pair_named_as_one
+:status: ruled
+:criticality: med
+:verify: required
+:refines: RUL-suffix_choice_by_phase
+:uses: DEF-timestamp_name
+
+Photos of a destination that share a name, extension aside, and take new names of one timestamp SHALL be given one new
+name, each keeping its extension, that no other photo there holds under any extension.
+:::
+
+:::{rul} In the hour a zone repeats, names are its local time
+:id: RUL-names_local_in_repeated_hour
+:status: ruled
+:criticality: low
+:verify: required
+:refines: RUL-geotag_name_final
+
+In the hour a destination's zone repeats as its clocks go back, geotag SHALL name each photo by its local time there,
+so that the names of that hour sort by local time and not by true time.
+:::
+
 
 ## 19. The executable plan
 
@@ -1139,13 +2803,14 @@ Geotag SHALL write beside each time it writes that time's offset from UTC.
 :anti: yes
 :verify: required
 
-A position geotag writes SHALL be written whole — latitude, longitude and their hemisphere references together.
+A position geotag writes SHALL be written whole — every part of the position together.
 :::
 
 :::{rul} A position is cleared whole
 :id: RUL-position_cleared_whole
 :status: ruled
 :criticality: high
+:anti: yes
 :verify: required
 :refines: RUL-position_written_whole
 
@@ -1158,6 +2823,7 @@ A position geotag clears SHALL be cleared whole.
 :criticality: high
 :verify: required
 :refines: RUL-offset_per_camera_destination_day
+:excepts: RUL-gps_time_far_from_evidence_withheld
 
 A camera's clock offset for a day, once resolved, SHALL stay that day's offset for photos of that camera arriving
 later — one found from its own GPS included, though the later photos bring no anchor.
@@ -1170,9 +2836,23 @@ later — one found from its own GPS included, though the later photos bring no 
 :anti: yes
 :verify: required
 :refines: RUL-day_offset_kept_for_later_photos
+:excepts: RUL-tracks_elsewhere_restale_nothing
 
-An offset found from a camera's own GPS SHALL be kept for later photos only while every track it was found from is
-there unchanged.
+An offset found from a camera's own positions on the tracks SHALL be kept for later photos only while every track file
+it was found from is there unchanged.
+:::
+
+:::{rul} A kept offset rests on the fixes it was found from
+:id: RUL-kept_offset_rests_on_its_fixes
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+:refines: RUL-day_offset_kept_for_later_photos
+:uses: DEF-destination
+
+An offset found from the times a camera's own GPS fixes recorded SHALL be kept for later photos only while every
+photo whose fix gave it is still among that camera's photos in the destination.
 :::
 
 :::{rul} A kept offset yields to a photo that says otherwise
@@ -1181,10 +2861,11 @@ there unchanged.
 :criticality: high
 :anti: yes
 :verify: required
-:refines: RUL-kept_offset_rests_on_its_tracks
+:refines: RUL-day_offset_kept_for_later_photos
 
-An offset found from a camera's own GPS SHALL be kept for later photos only while no photo that has arrived since says
-otherwise.
+An offset found from a camera's own GPS SHALL be kept for later photos only while no proposal its own GPS now gives that
+day — photos arrived since included — disagrees with it beyond the tolerance the configuration allows an accepted
+offset, ties, or fixes it only to within a stay.
 :::
 
 :::{rul} No plan while anything waits
@@ -1193,10 +2874,10 @@ otherwise.
 :criticality: high
 :anti: yes
 :verify: required
-:refines: RUL-time_before_gps
+:upholds: INV-every_change_from_the_record
 :uses: DEF-decision
 
-Geotag SHALL make no executable plan while a decision waits for the user or a photo is neither placed nor left unlocated by the user.
+Geotag SHALL make no executable plan while a decision waits for the user or a photo is not placed.
 :::
 
 :::{rul} The plan counts how every photo is placed
@@ -1206,7 +2887,7 @@ Geotag SHALL make no executable plan while a decision waits for the user or a ph
 :verify: required
 :uses: DEF-geotag
 
-The executable plan SHALL count its photos by how each comes by its position — its own, each way the tracks or the user give one — those left without one among them.
+The executable plan SHALL count its photos by how each comes by its position — its own, each way the tracks or the user give one.
 :::
 
 
@@ -1227,6 +2908,7 @@ applied plan changing nothing.
 :id: RUL-edit_since_plan_never_overwritten
 :status: ruled
 :criticality: high
+:anti: yes
 :verify: required
 :refines: RUL-geotag_execution_resumable
 :uses: DEF-geotag
@@ -1261,7 +2943,7 @@ A photo's rename SHALL be held back while a write to it is not counted as done.
 :criticality: high
 :anti: yes
 :verify: required
-:refines: RUL-every_change_journaled
+:refines: RUL-failed_operation_clean
 
 A photo whose planned changes cannot be made SHALL fail alone: every other photo's result is still recorded.
 :::
@@ -1274,6 +2956,67 @@ A photo whose planned changes cannot be made SHALL fail alone: every other photo
 :refines: RUL-one_photo_failure_contained
 
 A photo whose planned changes cannot be made SHALL be reported by name.
+:::
+
+:::{rul} A failed write is recorded with the tool's reason
+:id: RUL-failed_write_reason_recorded
+:status: ruled
+:criticality: med
+:verify: required
+:refines: RUL-failed_photo_named
+:uses: DEF-geotag
+
+A photo whose metadata write fails SHALL be recorded with the reason the writing tool gave, beside the photo and each
+operation that failed.
+:::
+
+:::{rul} A write failing again the same way names the way out
+:id: RUL-repeated_write_failure_way_out
+:status: ruled
+:criticality: med
+:verify: required
+:refines: RUL-failed_write_reason_recorded
+:uses: DEF-geotag, DEF-managed_folders, RUL-moved_back_passes
+
+A photo whose metadata write fails in an execution as it failed in the previous execution of the same plan — the same
+operations, the same reason — SHALL be reported so, in the run's output and its record, with the way out: moving it
+back into photos by date, then running prep and planning geotag again.
+:::
+
+:::{rul} Geotag clears only the leftover of its own interrupted write
+:id: RUL-geotag_clears_own_leftover
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+:excepts: RUL-write_leftovers_by_dest_warned
+:uses: DEF-geotag
+
+Geotag SHALL remove the temporary file an interrupted metadata write left beside a photo only to write that photo
+again, and only where its own journal of the execution shows its write to that photo begun and never confirmed.
+:::
+
+:::{rul} Another leftover holds its photo back
+:id: RUL-other_write_leftover_holds_photo
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+:refines: RUL-geotag_clears_own_leftover
+
+Geotag's execution SHALL NOT write a photo beside which lies a temporary file of an interrupted metadata write that it
+may not remove ({need}`RUL-geotag_clears_own_leftover`): the photo fails, the file named and left where it is.
+:::
+
+:::{rul} A write's leftover stops geotag's plan
+:id: RUL-write_leftover_stops_geotag_plan
+:status: ruled
+:criticality: med
+:verify: required
+:refines: RUL-write_leftovers_by_dest_warned
+:uses: DEF-geotag
+
+Geotag's plan SHALL stop, naming it, on a temporary file an interrupted metadata write left in photos by destination.
 :::
 
 :::{rul} What an interrupted run changed is recorded by the next
@@ -1291,6 +3034,7 @@ photo is seen to be that photo, holding what was planned.
 :id: RUL-found_applied_never_remade
 :status: ruled
 :criticality: high
+:anti: yes
 :verify: required
 :refines: RUL-applied_unrecorded_is_recorded
 
@@ -1339,10 +3083,59 @@ A photo's changed content SHALL stay open to accept until the photo's changes ar
 Geotag SHALL NOT write to a photo while the image engine is not the one the photos' fingerprints were taken with.
 :::
 
+:::{rul} A record of an earlier execution that cannot be read stops geotag
+:id: RUL-unreadable_execution_record_stops
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+:upholds: INV-no_stale_use
+:uses: DEF-geotag
+
+Geotag's execution and finalize SHALL NOT take a record of an earlier execution that they cannot read for none: they
+stop before they change or write anything, naming it.
+:::
+
+:::{rul} A kept plan no execution ran is passed over unread
+:id: RUL-unread_plan_never_run_passed
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+:refines: RUL-unreadable_plan_replanned
+:uses: DEF-geotag
+
+Finalize SHALL NOT pass over a plan set aside that it cannot read unless the records show no execution ran it — no
+execution's summary names it, and no execution's journal can be its.
+:::
+
+:::{rul} A plan that cannot be read is made again
+:id: RUL-unreadable_plan_replanned
+:status: ruled
+:criticality: med
+:verify: required
+:uses: DEF-geotag
+
+Each command that reads geotag's executable plan — its execution, finalize and merge's plan — SHALL stop on one it
+cannot read, changing nothing, and send the user to plan again.
+:::
+
+:::{rul} Geotag's summary is written only for an execution
+:id: RUL-geotag_summary_only_for_execution
+:status: ruled
+:criticality: low
+:verify: required
+:uses: DEF-geotag
+
+Geotag SHALL write no execution summary for a run stopped before its execution began — by a precondition, a plan no
+longer current, or a record of an earlier execution it cannot read — nor for a run interrupted, leaving the summary an
+earlier run wrote as it was.
+:::
+
 
 ## 21. Finalize
 
-:::{rul} Finalize packages only an execution that succeeded and still holds
+:::{rul} Finalize packages only an execution that succeeded
 :id: RUL-finalize_requires_success
 :status: ruled
 :criticality: high
@@ -1398,12 +3191,38 @@ Finalize SHALL report the plan's count of how every photo came by its position.
 Finalize SHALL keep the plan's count of how every photo came by its position in the package.
 :::
 
-:::{rul} A photo left unlocated is logged as such
-:id: RUL-unlocated_logged
+:::{rul} Finalize packages no photo without a position
+:id: RUL-finalize_refuses_unplaced
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+:refines: RUL-finalize_checks_photos
+:uses: DEF-finalize, RUL-null_island_is_no_position
+
+Finalize SHALL refuse while a photo in photos by destination holds no position — judged by what the photo holds, not
+by what the plan decided for it.
+:::
+
+:::{rul} Geotag's records of a run are set aside, never overwritten
+:id: RUL-geotag_run_records_kept
 :status: ruled
 :criticality: med
+:anti: yes
 :verify: required
-:refines: RUL-log_cites_decisions
+:uses: DEF-finalize
 
-A photo the user left unlocated SHALL have that in its log, with the decision that left it so.
+Geotag SHALL never overwrite an execution's summary or finalize's package: made again, the earlier one is first set
+aside, recoverably.
+:::
+
+:::{rul} Finalize needs no tool it never runs
+:id: RUL-finalize_needs_no_metadata_tool
+:status: ruled
+:criticality: med
+:anti: yes
+:verify: required
+:uses: DEF-finalize
+
+Finalize SHALL NOT refuse for want of the tool geotag reads and writes photos' metadata with, which it never runs.
 :::

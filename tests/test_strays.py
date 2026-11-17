@@ -125,7 +125,41 @@ def test_stray_not_fingerprinted_and_not_cached(tmp_path, monkeypatch):
     assert "notes.txt" not in log                                # in no log
 
 
-@pytest.mark.spec("RUL-not_inventoried", "RUL-strays_never_processed")
+@pytest.mark.spec("RUL-strays_leave_no_trace", "BLD-stray_records", test="TST-strays-a_stray_is_named_only_in_the_plan_that_moves_it")
+def test_a_stray_is_named_only_in_the_plan_that_moves_it(tmp_path, monkeypatch):
+    """The plan names the stray — it moves it — and nothing else does: not the journal beyond the move's id, not the
+    database's rows of files, the plan memo, the handoff or the log; only the record of the workspace's state holds
+    it, as it holds every file there."""
+    _install(monkeypatch)
+    ws = _ws(tmp_path)
+    (ws / "0-sources" / "notes-stray.txt").write_bytes(b"hello")
+    (ws / "0-sources" / "real.jpg").write_bytes(b"img")
+    plan = _plan(ws)
+    assert "0-sources/notes-stray.txt" in plan.inventory
+    (move,) = [op for op in plan.operations if op.source == "0-sources/notes-stray.txt"]
+    prep.PlanExecutor(str(ws)).execute(plan)
+    ctl = ws / ".photos-ingest"
+    (journal,) = glob.glob(str(ctl / "journal-*.json"))
+    for record in (journal, utils.handoff_path(str(ws)), utils.prep_log_path(str(ws))):
+        assert "notes-stray" not in open(record).read(), record
+    assert move.operation_id in open(journal).read()
+    assert not any("notes-stray" in p for p in _cached_paths(ws))
+    # the record of the workspace's state holds it as it holds every file there, unfingerprinted
+    (stray_entry,) = [e for p, e in utils.read_workspace_record(str(ws))[1].items() if "notes-stray" in p]
+    assert stray_entry["fingerprint"] is None
+    memo = utils.plan_memo_db_path(str(ws))
+    if os.path.exists(memo):
+        conn = sqlite3.connect(memo)
+        try:
+            assert "notes-stray" not in " ".join(str(r) for r in conn.execute("SELECT * FROM sqlite_master"))
+            for (table,) in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall():
+                assert not any("notes-stray" in str(r) for r in conn.execute(f"SELECT * FROM {table}"))
+        finally:
+            conn.close()
+
+
+@pytest.mark.spec("RUL-not_inventoried", "RUL-strays_never_processed",
+                  test="TST-strays-strays_scan_skipped_on_next_run")
 def test_strays_scan_skipped_on_next_run(tmp_path, monkeypatch):
     _install(monkeypatch)
     ws = _ws(tmp_path)
@@ -418,3 +452,55 @@ def test_a_failed_metadata_read_never_blocks_a_file_of_no_media_class(tmp_path, 
     plan = _plan(ws)
     assert not [b for b in plan.blockers if "notes.txt" in b], plan.blockers
     assert [b for b in plan.blockers if "photo.jpg" in b], plan.blockers     # media still blocks
+
+
+@pytest.mark.spec("RUL-track_files_block_prep", "RUL-track_file_left_in_place",
+                  test="TST-strays-a_hidden_track_file_blocks_and_stays_put")
+@pytest.mark.parametrize("rel", ["0-sources/.day2.gpx", "0-sources/trip/.gps/day1.gpx"],
+                         ids=["hidden_file", "in_a_hidden_folder"])
+def test_a_hidden_track_file_blocks_and_stays_put(tmp_path, monkeypatch, rel):
+    """A track file hidden in the dump — its own name hidden, or inside a hidden folder — blocks the plan like any
+    track, and is left where it is: never set aside with the dump's hidden files."""
+    _install(monkeypatch)
+    ws = _ws(tmp_path)
+    (ws / rel).parent.mkdir(parents=True, exist_ok=True)
+    (ws / rel).write_text("<gpx/>")
+    (ws / "0-sources" / "photo.jpg").write_bytes(b"img")
+    plan = _plan(ws)
+    assert any(rel in b and "Track file" in b for b in plan.blockers), plan.blockers
+    assert not [op for op in plan.operations if rel in ((op.source or "") + (op.destination or ""))]
+    with pytest.raises(ValueError, match="blockers"):
+        prep.PlanExecutor(str(ws)).execute(plan)
+    assert (ws / rel).exists()
+
+
+@pytest.mark.spec("RUL-track_files_block_prep", "RUL-track_file_left_in_place",
+                  test="TST-strays-a_hidden_track_file_in_the_root_dump_blocks_on_the_run_that_initializes")
+@pytest.mark.parametrize("rel", [".day3.gpx", ".cache/day4.gpx", "dump/.gps/day5.gpx"],
+                         ids=["root_dotfile", "in_a_hidden_root_folder", "in_a_hidden_folder_of_a_dump"])
+def test_a_hidden_track_file_in_the_root_dump_blocks_on_the_run_that_initializes(tmp_path, monkeypatch, rel):
+    """On the run that initializes a workspace the dump still lies at its root: a track file hidden there blocks the
+    plan like any track, and is left where it is."""
+    _install(monkeypatch)
+    ws = tmp_path / "ws"
+    (ws / rel).parent.mkdir(parents=True, exist_ok=True)
+    (ws / rel).write_text("<gpx/>")
+    (ws / "dump").mkdir(exist_ok=True)
+    (ws / "dump" / "photo.jpg").write_bytes(b"img")
+    plan = _plan(ws)
+    assert any(rel in b and "Track file" in b for b in plan.blockers), plan.blockers
+    assert not [op for op in plan.operations if rel in ((op.source or "") + (op.destination or ""))]
+    assert (ws / rel).exists()
+
+
+@pytest.mark.spec("RUL-no_links", test="TST-strays-a_folder_link_inside_a_hidden_folder_of_a_dump_blocks")
+def test_a_folder_link_inside_a_hidden_folder_of_a_dump_blocks(tmp_path, monkeypatch):
+    """A link to a folder inside a hidden folder of a dump is a link like any other: the plan is blocked, naming it."""
+    _install(monkeypatch)
+    ws = _ws(tmp_path)
+    (tmp_path / "outside").mkdir()
+    (ws / "0-sources" / "trip" / ".thumbnails").mkdir(parents=True)
+    os.symlink(tmp_path / "outside", ws / "0-sources" / "trip" / ".thumbnails" / "linkdir")
+    (ws / "0-sources" / "trip" / "photo.jpg").write_bytes(b"img")
+    plan = _plan(ws)
+    assert any("0-sources/trip/.thumbnails/linkdir" in b for b in plan.blockers), plan.blockers

@@ -91,7 +91,8 @@ def test_multi_date_splits_into_per_day_buckets(tmp_path):
     assert winter["proposal"]["proposed_offset_seconds"] == -3600
 
 
-@pytest.mark.spec("RUL-offset_from_own_evidence")
+@pytest.mark.spec("RUL-offset_from_own_evidence",
+                  test="TST-geotag_per_date-per_bucket_manual_decision_is_independent")
 def test_per_bucket_manual_decision_is_independent(tmp_path):
     _tz()
     wf = _wf(tmp_path)

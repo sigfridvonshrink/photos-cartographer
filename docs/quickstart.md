@@ -39,13 +39,40 @@ The pipeline shells out to a few standard command-line tools (it doesn't bundle 
 | **ImageMagick** (`magick`, or `identify`) | the photo fingerprint (decoded pixels = stable photo identity) + editor previews |
 | **ffmpeg** | the video fingerprint |
 
-Without ImageMagick or ffmpeg, prep warns and the photos or videos it cannot fingerprint stop it, so
-treat both as required. SQLite comes with Python — nothing to install. **ZFS** is optional (it enables
+Without ImageMagick or ffmpeg, prep warns and the photos or videos it cannot fingerprint stop it, and
+merge refuses to start without ImageMagick, so treat both as required. SQLite comes with Python — nothing to install. **ZFS** is optional (it enables
 snapshots before each change; the safety model stands without it). The decision editor needs only a
 browser; its map tiles and place search use OpenStreetMap at runtime and degrade gracefully offline.
 
 > Just want to look around first? `photos-cartographer edit --demo` opens a read-only tour on bundled
 > example data — no workspace, no setup. See the [editor guide](editor.md).
+
+### Upgrading from 3.0.0
+
+Replace both files. A workspace begun under 3.0.0 needs four settings added to its
+`.photos-ingest/photos-00-config.json`: `"gpx_track_precedence": []` keeps every track ranked alike, as
+before; see [ranking your devices](concepts.md#placing-each-photo) for what to put in it. And
+`"several_bodies_groups": []`, under `camera_time_and_timezone_policy` beside `device_groups`, keeps every camera
+group one camera, as before; see [camera groups](concepts.md#camera-groups) for what to put in it. And
+`"library_space_margin_percent": 5`, under `merge` beside `library_root`: the room merge asks of a library on
+another filesystem beyond the photos' own size, in percent of it. And `"gpx_own_position_contradicted_distance_meters":
+50`, beside the other `gpx_` settings: how far from where the track was a photo's own position must lie, at the time
+its camera's agreed offset gives it, before geotag asks whether to keep it. Four settings under
+`camera_time_and_timezone_policy` are gone and must be taken out: `phone_gpx_agreement_tolerance_seconds`,
+`phone_gpx_conflict_threshold_seconds`, `phone_gpx_max_distance_meters` and `dst_conflict_tolerance_seconds` —
+nothing read them, and every run now refuses a setting it does not know.
+
+Then run `prep plan` and `prep execute` again: prep now reads more of each photo's time fields, and geotag refuses
+a workspace prepped without them. That execute also writes the first record of the workspace's state, which every
+command now checks the files against before it does anything ([what you may change by
+hand](concepts.md#what-you-may-change-by-hand)); geotag and merge refuse a workspace without one, and prep's
+first run under this version compares nothing. A drift check you confirmed under 3.0.0 is asked again, since a
+confirmation now names the tracks it was made against.
+
+Geotag now keeps the tracks it decides by in the workspace database, in place of the scratch memo
+`.photos-ingest/photos-00-track-memo.db`: delete that file, or it is carried into the archive at finalize. The
+first `geotag plan` reads every track file once to catalogue it; the points of a plan executed under 3.0.0 are not
+in the database, only those of plans made from now on.
 
 ### Upgrading from 2.0.0
 
@@ -75,8 +102,9 @@ the destination inherits it from a folder above; zones you wrote by hand stay. Y
 
 ## 2. Initialize a workspace and run prep
 
-Pick an empty working folder (separate from your permanent library) on a single filesystem — every
-phase refuses a workspace with a folder mounted from another volume — and drop your raw dump into it.
+Pick an empty working folder (separate from your permanent library) on a single, local filesystem — every
+phase refuses a workspace with a folder mounted from another volume, and one on a network share or a FAT/exFAT
+card — and drop your raw dump into it. (The library may live on a network share.)
 Then plan:
 
 ```bash
@@ -86,7 +114,17 @@ photos-cartographer prep plan    # plan the work (no photo is moved or changed)
 
 The first `prep plan` creates the hidden control folder `.photos-ingest/`, seeds the workspace's
 configuration in it, and prints a **FIRST RUN** notice: review the configuration *now*, before anything
-is executed (next section). Then plan again, inspect, and apply:
+is executed (next section).
+
+On a host whose zone database ships without its table of countries (`zone.tab`, missing from some minimal
+images), the first `prep plan` also asks — before anything is downloaded — whether to download the current table
+from IANA, once, into the workspace; geotag needs it only to offer a country's timezones. Refusing uses the copy
+carried inside photos-cartographer, which may be stale. Give the answer with `--download-zone-table yes` (or `no`)
+where nobody is at the terminal; with no answer, prep goes on with the carried copy and says how to answer. The
+answer is kept in the workspace and not asked again; the console's Plan button asks the same question, and the
+decision editor's Time view offers it while it is open.
+
+Then plan again, inspect, and apply:
 
 ```bash
 photos-cartographer prep plan    # re-plan under the configuration you reviewed
@@ -130,7 +168,8 @@ file as **authoritative for this workspace**. The defaults are *my* choices and 
 - **`gpx_root`** — the folder geotag reads your tracks from (`*.gpx` files, searched beneath it). The
   default, `/srv/pictures/gpslogs/gpx`, is mine: if that folder doesn't exist on your machine,
   `geotag plan` stops. Point it at your tracks, or set it to `""` to geotag without tracks. It must lie
-  outside the managed `0`–`6` folders (inside `.photos-ingest/` is fine). Keep track files (`.gpx`,
+  outside the workspace's folders — the managed `0`–`6` ones and any other at its top level — though
+  inside `.photos-ingest/` is fine. Keep track files (`.gpx`,
   `.kml`, `.kmz`, `.igc`, …) out of the dump: prep stops on one.
 - **`camera_time_and_timezone_policy.default_folder_timezone`** — empty by default. Set it to your home
   zone (e.g. `"Europe/Brussels"`) and the editor offers it as a one-click answer; it is never applied on
@@ -161,8 +200,9 @@ so tuning the config and running `prep plan` again reuses them instead of re-rea
 
 This is the one step only you can do: move photos from `5-photos-by-date/` into a destination tree
 under `6-photos-by-dest/`. Move them, don't rename them — a file outside the inbox whose name isn't the
-one prep gave it stops prep, which names the file and the name it should carry. Build a tree of places —
-for example `year/country/city/place`:
+one prep gave it stops prep, which names the file and the name it should carry. Build a tree of places,
+each folder lying in the one above it — a country, a city in it, a sight in the city — under a folder that
+groups them, such as a year:
 
 ```
 6-photos-by-dest/2026/Belgium/Brussels/Atomium/
@@ -181,9 +221,10 @@ Before geotag can run:
 
 - **every photo must leave `5-photos-by-date/`** — into a destination, or out of the workspace;
 - `6-photos-by-dest/` holds **photos only** — videos stay in `4-videos-by-date/`;
-- photos with no recorded time stay in `2-missing-metadata/` — one in a destination stops geotag;
-- no `jpg` / `tif` development subfolder in a destination (development happens in the library, after
-  merge).
+- photos with no recorded time stay in `2-missing-metadata/` — one in a destination stops geotag; give
+  one a time there and the next prep run files it into `5-photos-by-date/`, to sort with its day;
+- no `jpg` / `tif` development subfolder in a destination, in any case — `JPG` too (development happens in
+  the library, after merge).
 
 ### Then re-run prep
 
@@ -217,10 +258,11 @@ photos-cartographer edit          # open the browser editor on this workspace
 - **Unknown camera groups** — the first time it sees a camera, geotag stops and prints the two
   `device_groups` lists ready to paste into `camera_time_and_timezone_policy` in your config. A new
   camera is printed in **both**: keep it in `phones` if it is a phone (it records its own timezone), or
-  in `fixed_clock_cameras` if it is a camera with a hand-set clock — and delete it from the other.
+  in `fixed_clock_cameras` if it is a camera with a hand-set clock — and delete it from the other. Or
+  open `photos-cartographer edit`: its **Cameras** view asks the same and writes the lists for you.
   Files that name no camera at all are not asked about.
 - A photo with no recorded time, or one prep could not fingerprint, in `6-photos-by-dest/`; a link
-  among the photos; a time that falls at a daylight-saving change. Each is named, with what to do;
+  among the photos. Each is named, with what to do;
   [What stops a run](concepts.md#what-stops-a-run) lists them all.
 
 ### Then the editor
@@ -245,9 +287,11 @@ The order is forced (the editor enforces the same gates — **Time → Drift →
    check blocks the run**; you must confirm even "no change", and a confirmation holds only for the offset
    you confirmed.
 3. **Place GPS leftovers** (GPS view). Whatever native GPS and the tracks couldn't place shows up as a
-   short worklist, each photo with the reason the tracks didn't place it: set a per-destination fallback
-   coordinate, place photos on the map (paste a `lat, lon`, search a place, or pan a crosshair;
-   shift-click to place a run at once), or leave a photo unlocated.
+   short worklist, each photo with the reason the tracks didn't place it. Every photo needs a position: set
+   the folder's fallback coordinate first — one answer places every leftover in that destination and the ones
+   inside it — or place a photo on the map (paste a `lat, lon`, search a place, or pan a crosshair; shift-click to
+   place a run at once). A photo the tracks or the fallback did place can still be given a position of its own
+   (**set position**, in the destination's folded **Fallback** or **Placed** bucket).
 
 The cycle each time is **edit → Save → `geotag plan` → reload**. Repeat until `geotag plan` says the
 executable plan is `ready` and points you at `geotag execute`. Full editor mechanics:
@@ -270,13 +314,16 @@ photos-cartographer merge dry-run     # summarize it
 photos-cartographer merge execute     # move the finished set into the library
 ```
 
-`geotag execute` never writes over a photo you edited since the plan — re-plan instead. `finalize`
+`geotag execute` never writes over a photo you edited since the plan — re-plan instead. Its renames also
+leave every photo's extension in lowercase (a `.JPG` you put in `6-photos-by-dest/` yourself becomes
+`.jpg`, even when its name was already right). `finalize`
 prints how every photo got its position (its own GPS, matched / interpolated / extrapolated along a
 track, set by you, its folder's fallback) and refuses if the plan no longer holds or a photo changed
 since execute.
 
 `merge init-library` marks the folder as a library (an empty `.photos-library` file) and records it as
-`merge.library_root`; without a path it marks the configured one. `merge` moves your finalized
+`merge.library_root` — every other setting keeps its value, though the file is rewritten with its keys sorted and
+non-ASCII characters as `\u` escapes; without a path it marks the configured one and writes nothing. `merge` moves your finalized
 `6-photos-by-dest/` tree into the library at the same paths — digiKam, or anything that reads a plain
 folder tree — recording per file exactly where it landed and whether it was renamed. No library file is
 ever overwritten: a different photo under a taken name gets a numbered name; the same file already

@@ -31,6 +31,11 @@ MANAGED = ["0-sources", "1-strays", "2-missing-metadata", "3-redundant-jpgs",
            "4-videos-by-date", "5-photos-by-date", "6-photos-by-dest"]
 
 
+# What prep read of a photo geotag placed: a position, as every photo leaving geotag holds one
+# (RUL-merge_refuses_unplaced).
+PLACED = {"parsed_json": json.dumps({"GPSLatitude": 48.8566, "GPSLongitude": 2.3522})}
+
+
 def _ctl(ws):
     return ws / ".photos-ingest"
 
@@ -39,7 +44,7 @@ def _make(tmp_path, *, guard=True, config=True, library_in_config=True, bless_li
           handoff=True, handoff_current=True, cal_plan=True, cal_summary=True,
           summary_status="success", prep_log=True, complete_log=True, archive_manifest=True, finalized_media=True,
           bydest=("6-photos-by-dest/Trip/a.jpg",), sources_files=(),
-          fingerprint_method=utils.FINGERPRINT_ALGORITHM_VERSION):
+          fingerprint_method=utils.FINGERPRINT_ALGORITHM_VERSION, held=None):
     """Build a workspace that PASSES preflight by default, plus a sibling blessed library. Each
     keyword turns off / corrupts one precondition's input so a single check can be isolated."""
     ws = tmp_path / "ws"
@@ -62,12 +67,15 @@ def _make(tmp_path, *, guard=True, config=True, library_in_config=True, bless_li
         (ws / "0-sources" / name).write_bytes(b"x")
 
     ho = {"filename_timestamp_format": utils.CONFIG["filename_timestamp_format"], "files": [{"relative_path": rel, "folder_class": "6-photos-by-dest", "media_class": "image",
-                     "content_hash": json.dumps({"status": "valid", "value": f"fp-{i}"})}
+                     "content_hash": json.dumps({"status": "valid", "value": f"fp-{i}"}),
+                     "metadata_status": {"parsed_json": json.dumps(held[rel])} if rel in (held or {}) else PLACED}
                     for i, rel in enumerate(bydest)],
           "content_fingerprint": "whole-file-hash", "run_metadata": {"started_at": "t0"},
           "depends_on": {"cache": {"fingerprint_algorithm_version": fingerprint_method}}}
     if fingerprint_method is None:
         del ho["depends_on"]["cache"]["fingerprint_algorithm_version"]
+    # Prep's ImageMagick the one in use, so a plan takes no fingerprint again (BLD-merge_engine_recheck).
+    ho["depends_on"]["cache"]["image_engine_version"] = utils.get_imagemagick_version()
     if prep_log:
         (ctl / "photos-15-prep-log.json").write_text(json.dumps({"photos": {}}))
         ho["depends_on"]["prep_log"] = {"sha256": utils.sha256_file(str(ctl / "photos-15-prep-log.json"))}
@@ -81,18 +89,18 @@ def _make(tmp_path, *, guard=True, config=True, library_in_config=True, bless_li
         (ctl / "photos-00-config.json").write_text(json.dumps(cfg))
     if cal_plan:
         pinned = fp if handoff_current else ("stale-" + fp)
-        plan = {"status": "ready",
+        plan = {"status": "ready", "plan_id": "geotag-plan-1",
                 "depends_on": {"handoff": {"dependency_type": "handoff_content",
                                            "artifact_name": "photos-11-handoff.json",
                                            "content_fingerprint": pinned}}}
         (ctl / "photos-24-executable-plan.json").write_text(json.dumps(plan))
     if cal_summary:
-        (ctl / "photos-25-execution-summary.json").write_text(json.dumps({"status": summary_status}))
+        (ctl / "photos-25-execution-summary.json").write_text(json.dumps({"status": summary_status, "plan_id": "geotag-plan-1"}))
     if complete_log:
         (ctl / "photos-26-complete-log.json").write_text(json.dumps({"photos": {}}))
     if archive_manifest:
         (ctl / "photos-26-archive-manifest.json").write_text(
-            json.dumps({"artifact_name": "photos-26-archive-manifest.json"}))
+            json.dumps({"artifact_name": "photos-26-archive-manifest.json", "plan_id": "geotag-plan-1"}))
     if finalized_media:
         (ctl / "photos-26-finalized-media.json").write_text(json.dumps({"media": {
             rel: {"size": os.stat(ws / rel).st_size, "mtime_ns": os.stat(ws / rel).st_mtime_ns}
@@ -133,6 +141,18 @@ def test_filename_format_other_than_prep_s_blocks(tmp_path):
     assert blockers == [utils.filename_format_changed("%Y%m%d_%H%M%S", utils.CONFIG["filename_timestamp_format"])]
 
 
+@pytest.mark.parametrize("held", [{}, {"GPSLatitude": 0, "GPSLongitude": 0}])
+@pytest.mark.spec("RUL-merge_refuses_unplaced", "BLD-no_photo_unplaced", "RUL-merge_rechecks_gates",
+                  test="TST-merge_preflight-a_photo_holding_no_position_blocks")
+def test_a_photo_holding_no_position_blocks(tmp_path, held):
+    """Finalize's refusal of a photo holding no position, checked again at merge's own start from what each photo
+    holds: a finalized workspace one of whose photos holds none — or latitude 0 and longitude 0 — merges nothing."""
+    ws, _ = _make(tmp_path, bydest=("6-photos-by-dest/Trip/a.jpg", "6-photos-by-dest/Trip/b.jpg"),
+                  held={"6-photos-by-dest/Trip/b.jpg": held})
+    blockers, _, _ = _pf(ws)
+    assert len(blockers) == 1 and "hold no position" in blockers[0] and "Trip/b.jpg" in blockers[0], blockers
+
+
 # --- happy path --------------------------------------------------------------
 
 def test_clean_workspace_passes(tmp_path):
@@ -142,6 +162,31 @@ def test_clean_workspace_passes(tmp_path):
     assert info["library_root"] == str(lib)
     assert info["by_dest_photos"] == 1
     assert info["handoff_sha256"]
+
+
+@pytest.mark.parametrize("command", ["plan", "dry-run", "execute"])
+@pytest.mark.parametrize("present", [(), ("identify",), ("magick",)])
+@pytest.mark.spec("RUL-imagemagick_absent_stops_merge", "BLD-merge_preflight",
+                  test="TST-merge_preflight-imagemagick_absent_stops_merge")
+def test_imagemagick_absent_stops_merge(tmp_path, monkeypatch, capsys, command, present):
+    """With neither `magick` nor the older `identify` on the PATH, merge's plan, dry run and execute stop (exit 2) as
+    they start, naming ImageMagick, nothing written and the library not locked; either one of them is enough."""
+    ws, lib = _make(tmp_path)
+    monkeypatch.setattr("photos_utils.missing_tools", lambda tools: [t for t in tools if t not in present])
+    blockers, _, _ = _pf(ws)
+    if present:
+        assert not any("ImageMagick" in b for b in blockers), blockers
+        return
+    assert len(blockers) == 1 and "ImageMagick" in blockers[0], blockers
+    utils.write_workspace_record(str(ws))       # the state prep's execution left, which the check compares first
+    before = sorted(str(p) for p in tmp_path.rglob("*"))
+    assert merge._run_locked_workflow(command, str(ws)) == 2
+    out = capsys.readouterr()
+    assert "ImageMagick" in out.out + out.err
+    assert not os.path.exists(merge.merge_plan_path(str(ws)))
+    assert not os.path.exists(utils.library_lock_path(str(lib)))
+    assert sorted(str(p) for p in tmp_path.rglob("*") if not p.name.endswith(".lock")) == \
+        [p for p in before if not p.endswith(".lock")]
 
 
 # --- lifecycle / structural guards (return early) ----------------------------
@@ -155,7 +200,7 @@ def test_sealed_blocks_and_warns_on_dump(tmp_path):
     assert any("new dump" in w.lower() for w in warnings), warnings
 
 
-@pytest.mark.spec("RUL-only_prep_builds_structure")
+@pytest.mark.spec("RUL-only_prep_builds_structure", test="TST-merge_preflight-uninitialized_blocks")
 def test_uninitialized_blocks(tmp_path):
     ws, _ = _make(tmp_path, guard=False)
     blockers, _, _ = _pf(ws)
@@ -200,7 +245,7 @@ def test_missing_managed_folder_block_tells_to_restore_and_run_again(tmp_path):
     assert "Restore the 0-6 structure" in block[0] and "before merging" in block[0], block[0]
 
 
-@pytest.mark.spec("RUL-top_level_only_managed")
+@pytest.mark.spec("RUL-top_level_only_managed", test="TST-merge_preflight-loose_root_file_blocks")
 def test_loose_root_file_blocks(tmp_path):
     ws, _ = _make(tmp_path)
     (ws / "stray.txt").write_text("loose")
@@ -270,6 +315,18 @@ def test_missing_handoff_blocks(tmp_path):
     assert any("photos-11-handoff.json is missing" in b for b in blockers), blockers
 
 
+@pytest.mark.spec("BLD-merge_preflight", test="TST-merge_preflight-a_handoff_that_is_no_object_is_refused_naming_it")
+def test_a_handoff_that_is_no_object_is_refused_naming_it(tmp_path, capsys):
+    """A handoff that parses but is not a JSON object is read as unreadable: merge refuses, naming it, and ends with
+    the refusal's status, not an unforeseen error's."""
+    ws, _ = _make(tmp_path)
+    (_ctl(ws) / "photos-11-handoff.json").write_text("[]")
+    capsys.readouterr()
+    assert merge._run_locked_workflow("plan", str(ws)) == 2
+    assert "photos-11-handoff.json" in "".join(capsys.readouterr())
+    assert not [n for n in os.listdir(_ctl(ws)) if n.startswith("photos-3")]
+
+
 # --- gathered preconditions (0b, 1, 1a, 2, 3) --------------------------------
 
 @pytest.mark.spec("RUL-merge_rechecks_gates", test="TST-merge_preflight-sources_not_empty_blocks")
@@ -285,6 +342,19 @@ def test_missing_geotag_plan_blocks(tmp_path):
     assert any("has not produced an executable plan" in b for b in blockers), blockers
 
 
+@pytest.mark.spec("RUL-unreadable_plan_replanned", "BLD-unreadable_plan",
+                  test="TST-merge_preflight-unreadable_geotag_plan_blocks_with_plan_again")
+@pytest.mark.parametrize("torn", ['{"status": "ready", "depends_on": {', "[]"], ids=["torn", "not_an_object"])
+def test_unreadable_geotag_plan_blocks_with_plan_again(tmp_path, torn):
+    """A photos-24 merge cannot read — torn, or not an object — is a blocker sending the user to `geotag plan` again,
+    never an error the preflight does not catch."""
+    ws, _ = _make(tmp_path)
+    (_ctl(ws) / "photos-24-executable-plan.json").write_text(torn)
+    blockers, _, _ = _pf(ws)
+    assert any("photos-24-executable-plan.json cannot be read" in b and "geotag plan` again" in b
+               for b in blockers), blockers
+
+
 @pytest.mark.spec("RUL-merge_takes_finalized_current", test="TST-merge_preflight-geotag_not_executed_blocks")
 def test_geotag_not_executed_blocks(tmp_path):
     ws, _ = _make(tmp_path, cal_summary=False)
@@ -292,11 +362,40 @@ def test_geotag_not_executed_blocks(tmp_path):
     assert any("was not executed" in b for b in blockers), blockers
 
 
-@pytest.mark.spec("RUL-merge_takes_finalized_current")
+@pytest.mark.spec("RUL-merge_takes_finalized_current", test="TST-merge_preflight-geotag_failed_status_blocks")
 def test_geotag_failed_status_blocks(tmp_path):
     ws, _ = _make(tmp_path, summary_status="partial")
     blockers, _, _ = _pf(ws)
     assert any("did not end successfully" in b for b in blockers), blockers
+
+
+@pytest.mark.spec("RUL-merge_takes_finalized_current", "INV-no_stale_use",
+                  test="TST-merge_preflight-a_geotag_planned_again_since_finalize_blocks")
+@pytest.mark.parametrize("record", ["photos-25-execution-summary.json", "photos-26-archive-manifest.json", "both",
+                                    "no_plan_id"])
+def test_a_geotag_planned_again_since_finalize_blocks(tmp_path, record):
+    """Geotag finalized, then planned again without executing: its execution summary and its package are of the
+    earlier plan, and merge blocks, naming each record not of the current plan — as it does where the plan names
+    none."""
+    ws, _ = _make(tmp_path)
+    p24 = _ctl(ws) / "photos-24-executable-plan.json"
+    plan = json.loads(p24.read_text())
+    if record == "no_plan_id":
+        del plan["plan_id"]
+    else:
+        plan["plan_id"] = "geotag-plan-2"
+        for name in ("photos-25-execution-summary.json", "photos-26-archive-manifest.json"):
+            if record in (name, "both"):
+                continue
+            rec = json.loads((_ctl(ws) / name).read_text())
+            (_ctl(ws) / name).write_text(json.dumps(dict(rec, plan_id="geotag-plan-2")))
+    p24.write_text(json.dumps(plan))
+    blockers, _, _ = _pf(ws)
+    named = {n for n in ("photos-25-execution-summary.json", "photos-26-archive-manifest.json")
+             if any(n in b and "not of the current" in b for b in blockers)}
+    expected = {record} if record.endswith(".json") else {"photos-25-execution-summary.json",
+                                                          "photos-26-archive-manifest.json"}
+    assert named == expected, blockers
 
 
 @pytest.mark.spec("RUL-merge_refuses_changed_since_finalize",
@@ -370,7 +469,7 @@ def test_a_refresh_describing_only_a_prep_run_does_not_block_merge(tmp_path):
 
 
 @pytest.mark.parametrize("touch", ["edited", "removed", "unvouched"])
-@pytest.mark.spec("BLD-prep_log_checked", "RUL-merge_takes_finalized_current",
+@pytest.mark.spec("BLD-prep_log_checked", "RUL-merge_takes_finalized_current", "RUL-unchecked_counts_as_changed",
                   test="TST-merge_preflight-a_prep_log_the_handoff_does_not_vouch_for_blocks")
 def test_a_prep_log_the_handoff_does_not_vouch_for_blocks(tmp_path, touch):
     """Prep's log touched after finalize — edited, removed, or a handoff recording no hash of it — stops merge,
@@ -429,7 +528,8 @@ def test_residual_folders_do_not_block(tmp_path):
     assert blockers == [], blockers
 
 
-@pytest.mark.spec("RUL-development_after_merge", test="TST-merge_preflight-dev_subfolder_blocks")
+@pytest.mark.spec("RUL-merge_rechecks_gates",
+                  "RUL-development_after_merge", test="TST-merge_preflight-dev_subfolder_blocks")
 def test_dev_subfolder_blocks(tmp_path):
     ws, _ = _make(tmp_path)
     p = ws / "6-photos-by-dest" / "Trip" / "jpg" / "a__std.jpg"
@@ -439,6 +539,16 @@ def test_dev_subfolder_blocks(tmp_path):
     assert any("development subfolder" in b for b in blockers), blockers
 
 
+@pytest.mark.spec("RUL-development_subfolder_any_case", "BLD-development_subfolder_case",
+                  test="TST-merge_preflight-dev_subfolder_of_any_case_blocks")
+@pytest.mark.parametrize("name", ["JPG", "JpG", "Tif"])
+def test_dev_subfolder_of_any_case_blocks(tmp_path, name):
+    ws, _ = _make(tmp_path)
+    (ws / "6-photos-by-dest" / "Trip" / name).mkdir(parents=True)
+    blockers, _, _ = _pf(ws)
+    assert any("development subfolder" in b and f"Trip/{name}" in b for b in blockers), blockers
+
+
 def test_bydest_symlink_blocks(tmp_path):
     ws, _ = _make(tmp_path)
     os.symlink(str(tmp_path), str(ws / "6-photos-by-dest" / "Trip" / "link"))
@@ -446,6 +556,20 @@ def test_bydest_symlink_blocks(tmp_path):
     assert any("Forbidden symlink under" in b for b in blockers), blockers
 
 
+@pytest.mark.spec("RUL-shape_checked_first", "BLD-shape_guards_by_phase",
+                  test="TST-merge_preflight-a_link_among_the_photos_is_refused_before_they_are_scanned")
+def test_a_link_among_the_photos_is_refused_before_they_are_scanned(tmp_path, monkeypatch, capsys):
+    """A link in photos by destination is refused as a link before merge scans the photos: the workspace's check,
+    which scans them, is never run."""
+    ws, _ = _make(tmp_path)
+    os.symlink(str(tmp_path), str(ws / "6-photos-by-dest" / "Trip" / "link"))
+    monkeypatch.setattr(merge, "check_workspace", lambda *a, **k: pytest.fail("the photos were scanned first"))
+    capsys.readouterr()
+    assert merge._run_locked_workflow("plan", str(ws)) == 2
+    assert "Forbidden symlink under 6-photos-by-dest" in "".join(capsys.readouterr())
+
+
+@pytest.mark.spec("RUL-merge_rechecks_gates", test="TST-merge_preflight-bydate_stray_photo_blocks")
 def test_bydate_stray_photo_blocks(tmp_path):
     ws, _ = _make(tmp_path)
     (ws / "5-photos-by-date" / "x.jpg").write_bytes(b"img")
@@ -488,6 +612,51 @@ def test_init_library_in_workspace_with_path_blesses_and_writes_config(tmp_path)
     assert utils.is_library(str(lib))
     written = json.loads((ws / ".photos-ingest" / "photos-00-config.json").read_text())
     assert written["merge"]["library_root"] == str(lib)   # the one narrow config write
+
+
+@pytest.mark.spec("RUL-library_mark_made_by_setup",
+                  test="TST-merge_preflight-init_library_refuses_a_folder_of_the_mark_s_name")
+@pytest.mark.parametrize("where", ["outside", "with_path", "from_config"])
+def test_init_library_refuses_a_folder_of_the_mark_s_name(tmp_path, where):
+    """A folder of the mark's name in the library is no mark: setup refuses, ending as a refusal, makes no mark and
+    records nothing — never reports the library blessed."""
+    ws, lib = _fresh_ws_and_lib(tmp_path)
+    os.mkdir(utils.library_marker_path(str(lib)))
+    cfg_p = ws / ".photos-ingest" / "photos-00-config.json"
+    before = cfg_p.read_bytes()
+    args = {"outside": (str(lib), str(tmp_path / "nowhere")), "with_path": (str(lib), str(ws)),
+            "from_config": (None, str(ws))}[where]
+    assert merge.do_init_library(*args) == 2
+    assert not utils.is_library(str(lib)) and os.path.isdir(utils.library_marker_path(str(lib)))
+    assert cfg_p.read_bytes() == before
+
+
+@pytest.mark.spec("RUL-library_setup_writes_one_setting", "BLD-init_library_writes_library_root",
+                  test="TST-merge_preflight-init_library_keeps_every_other_setting")
+def test_init_library_keeps_every_other_setting(tmp_path):
+    """`init-library <path>` in a workspace records the library and keeps every other setting as the user wrote it —
+    a folder named beyond ASCII, a tuned value, the keys in the user's order — while the file's layout becomes the
+    control records' own: keys sorted, characters beyond ASCII escaped."""
+    ws = tmp_path / "ws"
+    (ws / ".photos-ingest").mkdir(parents=True)
+    (ws / ".photos-ingest" / "photos-00-workspace-guard").touch()
+    cfg = {k: v for k, v in reversed(list(utils.CONFIG.items())) if k != "jobs"}      # not in sorted order
+    cfg["folders"] = dict(cfg["folders"], photos_by_dest="6-fotos-por-destinación")
+    cfg["gpx_interpolation_max_gap_seconds"] = 1234
+    cfg_p = ws / ".photos-ingest" / "photos-00-config.json"
+    cfg_p.write_text(json.dumps(cfg, ensure_ascii=False))
+    for name in cfg["folders"].values():
+        (ws / name).mkdir()
+    lib = tmp_path / "lib"
+    lib.mkdir()
+    assert merge.do_init_library(str(lib), str(ws)) == 0
+    text = cfg_p.read_text()
+    written = json.loads(text)
+    assert written["merge"].pop("library_root") == str(lib)
+    cfg["merge"] = dict(cfg["merge"])
+    cfg["merge"].pop("library_root")
+    assert written == cfg                                             # every other setting as it was
+    assert "destinaci\\u00f3n" in text and list(written) == sorted(written)   # the layout is the writer's
 
 
 @pytest.mark.spec("RUL-sealed_refuses", "RUL-sealed_no_library_recorded", test="TST-merge_preflight-init_library_refuses_to_record_a_library_in_a_sealed_workspace")
@@ -557,7 +726,7 @@ def test_init_library_refuses_a_disturbed_workspace(tmp_path, with_path, defect)
     assert (ws / ".photos-ingest" / "photos-00-config.json").read_bytes() == cfg_before
 
 
-@pytest.mark.spec("BLD-init_library_cases")
+@pytest.mark.spec("BLD-init_library_cases", test="TST-merge_preflight-init_library_in_workspace_no_path_uses_config")
 def test_init_library_in_workspace_no_path_uses_config(tmp_path):
     ws, lib = _fresh_ws_and_lib(tmp_path)
     rc = merge.do_init_library(None, str(ws))
@@ -582,7 +751,8 @@ def test_init_library_without_path_refuses_a_locked_workspace(tmp_path):
     held.release()
 
 
-@pytest.mark.spec("BLD-init_library_cases")
+@pytest.mark.spec("BLD-init_library_cases",
+                  test="TST-merge_preflight-init_library_outside_workspace_with_path_blesses_only")
 def test_init_library_outside_workspace_with_path_blesses_only(tmp_path):
     lib = tmp_path / "lib"
     lib.mkdir()
@@ -593,7 +763,7 @@ def test_init_library_outside_workspace_with_path_blesses_only(tmp_path):
     assert utils.is_library(str(lib))
 
 
-@pytest.mark.spec("BLD-init_library_cases")
+@pytest.mark.spec("BLD-init_library_cases", test="TST-merge_preflight-init_library_outside_workspace_no_path_errors")
 def test_init_library_outside_workspace_no_path_errors(tmp_path):
     plain = tmp_path / "not_a_ws"
     plain.mkdir()
@@ -671,7 +841,8 @@ def test_locked_workflow_exits_1_if_workspace_locked(tmp_path):
         held.release()
 
 
-@pytest.mark.spec("RUL-library_confirmed_before_lock", "RUL-library_lock_fail_fast", test="TST-merge_preflight-locked_workflow_exits_1_if_library_locked")
+@pytest.mark.spec("RUL-library_confirmed_before_lock", "RUL-library_lock_fail_fast", "RUL-library_lock",
+                  test="TST-merge_preflight-locked_workflow_exits_1_if_library_locked")
 def test_locked_workflow_exits_1_if_library_locked(tmp_path):
     ws, lib = _make(tmp_path)
     held = utils.LibraryLock(str(lib))                # another workspace's merge holds the library
@@ -825,7 +996,7 @@ def test_sealed_new_dump_left_in_place_and_library_untouched(tmp_path):
     assert list(lib.iterdir()) == [lib / ".photos-library"]    # library untouched
 
 
-@pytest.mark.spec("RUL-lock_fail_fast", "RUL-lock_through_the_run",
+@pytest.mark.spec("RUL-lock_fail_fast", "RUL-lock_through_the_run", "INV-one_run_at_a_time",
                   test="TST-merge_preflight-lock_contention_covers_execute_not_just_plan")
 def test_lock_contention_covers_execute_not_just_plan(tmp_path):
     """The whole-run lock covers EXECUTE, not only plan: with the workspace lock held by another run,

@@ -103,6 +103,23 @@ def test_only_the_jpeg_beside_a_raw_is_set_aside(tmp_path):
     assert any(n.endswith(".png") for n in day), day                # the PNG is filed as a photo
 
 
+@pytest.mark.spec("BLD-raw_jpeg_pair_by_exact_name", test="TST-prep_pipeline-a_jpeg_pairs_with_its_raw_by_its_name_with_case")
+def test_a_jpeg_pairs_with_its_raw_by_its_name_with_case(tmp_path):
+    """The names before the extension must match with case: `IMG_1.JPG` beside `IMG_1.cr2` is set aside, `IMG_2.JPG`
+    beside `img_2.cr2` is not — it is filed as a photo — while the extension's case never matters."""
+    ws = _ws(tmp_path)
+    (ws / "0-sources" / "IMG_1.cr2").write_bytes(b"raw1")
+    (ws / "0-sources" / "IMG_1.JPG").write_bytes(b"jpg1")
+    (ws / "0-sources" / "img_2.cr2").write_bytes(b"raw2")
+    (ws / "0-sources" / "IMG_2.JPG").write_bytes(b"jpg2")
+    plan = _plan(ws)
+    moved = {op.source: op.destination for op in plan.operations if op.reason == "Separate redundant JPG"}
+    assert list(moved) == ["0-sources/IMG_1.JPG"], moved
+    organized = {op.source: op.destination for op in plan.operations
+                 if op.reason and "Chronological Organization" in op.reason}
+    assert organized["0-sources/IMG_2.JPG"].startswith("5-photos-by-date/")
+
+
 @pytest.mark.spec("RUL-duplicates_quarantined", "RUL-copy_kept_by_folder", "BLD-prep_stage_order",
                   test="TST-prep_pipeline-a_redumped_pair_settles_in_one_run")
 def test_a_redumped_pair_settles_in_one_run(tmp_path):
@@ -300,3 +317,44 @@ def test_a_quarantined_file_leaves_the_database(tmp_path):
     import shutil
     shutil.rmtree(ws / ".photos-ingest-quarantine")
     assert [op.type for op in _plan(ws).operations if op.type.startswith("db_")] == []
+
+
+@pytest.mark.spec("RUL-suffix_no_clobber", "RUL-suffix_case_insensitive", "BLD-two_step_case_rename",
+                  test="TST-prep_pipeline-a_case_rename_takes_a_suffix_free_in_its_folder")
+def test_a_case_rename_takes_a_suffix_free_in_its_folder(tmp_path):
+    """A by-date photo whose extension is lowercased where its lowercase name and the first suffix are both taken in
+    its folder takes the next free suffix there, and the plan executes: no name is taken twice."""
+    ws = _ws(tmp_path)
+    day = ws / "5-photos-by-date" / "2023-01-02"
+    day.mkdir()
+    for name, body in ((f"{NAME}.JPG", b"UPPER"), (f"{NAME}.jpg", b"LOWER"), (f"{NAME}-001.jpg", b"FIRST")):
+        (day / name).write_bytes(body)
+    plan = _run(ws)
+    finals = [op.destination for op in plan.operations
+              if op.type == "rename_no_clobber" and "(temp)" not in (op.reason or "")]
+    assert finals == [f"5-photos-by-date/2023-01-02/{NAME}-002.jpg"], finals
+    assert sorted(os.listdir(day)) == [f"{NAME}-001.jpg", f"{NAME}-002.jpg", f"{NAME}.jpg"]
+    assert (day / f"{NAME}-002.jpg").read_bytes() == b"UPPER"
+
+
+@pytest.mark.spec("RUL-target_free_ignores_case", "RUL-target_free_at_execute",
+                  test="TST-prep_pipeline-a_name_taken_in_another_case_since_the_plan_blocks_the_move")
+def test_a_name_taken_in_another_case_since_the_plan_blocks_the_move(tmp_path, monkeypatch):
+    """A file of the destination's name in another case appears once execute's preflight has passed: on any
+    filesystem, execute does not put the photo beside it — the move fails, the photo stays in the inbox and the
+    newcomer is untouched."""
+    ws = _ws(tmp_path)
+    (ws / "0-sources" / "IMG.jpg").write_bytes(b"AAAA")
+    plan = _plan(ws)
+    day = ws / "5-photos-by-date" / "2023-01-02"
+    checked = prep.PlanValidator.validate_plan_preflight
+
+    def then_a_newcomer(plan, workspace):
+        checked(plan, workspace)
+        day.mkdir()
+        (day / f"{NAME}.JPG").write_bytes(b"NEWCOMER")
+    monkeypatch.setattr(prep.PlanValidator, "validate_plan_preflight", staticmethod(then_a_newcomer))
+    with pytest.raises(prep.ExecuteFailed):
+        prep.PlanExecutor(str(ws)).execute(plan)
+    assert (ws / "0-sources" / "IMG.jpg").read_bytes() == b"AAAA"
+    assert sorted(os.listdir(day)) == [f"{NAME}.JPG"]

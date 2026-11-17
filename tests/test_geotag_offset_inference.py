@@ -22,7 +22,7 @@ conftest.py.
 from datetime import datetime, timedelta, timezone
 
 import pytest
-from _handoff import match_disk
+from _handoff import match_disk, vouched
 
 import photos_2_geotag as cal
 import photos_utils as utils
@@ -92,7 +92,8 @@ def test_point_match_offset_sign():
     assert c2["offset_seconds"] == 21
 
 
-@pytest.mark.spec("BLD-anchor_matching")
+@pytest.mark.spec("BLD-anchor_matching",
+                  test="TST-geotag_offset_inference-point_just_past_threshold_then_segment_or_none")
 def test_point_just_past_threshold_then_segment_or_none():
     far = _gpx([_pt(50.0, 4.0, _utc(12, 0, 0)), _pt(50.0, 4.001, _utc(12, 0, 30))])
     # a frame ~111 m from both points (beyond 30 m) but the segment between them is far too ->
@@ -141,7 +142,7 @@ def test_proposal_two_consistent_supporting():
     frames = [_frame(50.0, 4.0, "2024:07:03 14:00:00", "6-photos-by-dest/B/a.arw"),
               _frame(51.0, 5.0, "2024:07:03 15:00:02", "6-photos-by-dest/B/b.arw")]  # ~same offset
     p = cal.infer_anchor_proposal(frames, gpx, CFG)
-    assert p["anchor_count"] == 2 and p["supporting_count"] == 1 and p["conflicting_count"] == 0
+    assert p["anchor_count"] == 2 and p["conflicting_count"] == 0
     assert p["confidence"] == "high"
 
 
@@ -156,7 +157,7 @@ def test_proposal_conflict_review_required():
 def test_proposal_segment_only_medium_and_none():
     gpx = _gpx([_pt(50.0, 4.0, _utc(12, 0, 0)), _pt(50.0, 4.001, _utc(12, 0, 30))])
     p = cal.infer_anchor_proposal([_frame(50.0001, 4.0005, "2024:07:03 14:00:15")], gpx, CFG)
-    assert p["recommended_gpx_match"]["match_type"] == "gpx_segment_interpolation" and p["confidence"] == "medium"
+    assert p["anchors"][0]["gpx_match"]["match_type"] == "gpx_segment_interpolation" and p["confidence"] == "medium"
     assert cal.infer_anchor_proposal([], gpx, CFG) is None                          # nothing anchors
 
 
@@ -228,6 +229,58 @@ def test_consensus_majority_beats_closer_minority():
     assert [g["count"] for g in p["groups"]] == [3, 1]            # sorted by count desc
     assert p["groups"][0]["offset_seconds"] == 3600
     assert p["anchors"][0]["proposed_offset_seconds"] == 3600     # anchors[0] is the consensus rep
+
+
+def _offset_frame(offset_s, lat, lon, rel):
+    """A frame at (lat, lon) taken at camera time 14:00:00 and the track point that gives it `offset_s`."""
+    return (_pt(lat, lon, _utc(14, 0, 0) + timedelta(seconds=offset_s)),
+            _frame(lat, lon, "2024:07:03 14:00:00", f"6-photos-by-dest/B/{rel}.arw"))
+
+
+@pytest.mark.spec("BLD-anchor_clustering", "RUL-anchor_consensus",
+                  test="TST-geotag_offset_inference-offsets_cluster_around_the_best_ranked_and_a_tie_falls_to_the_smaller")
+def test_offsets_cluster_around_the_best_ranked_and_a_tie_falls_to_the_smaller():
+    """A cluster stays centred on its best-ranked candidate — 0, 100 and 200 s apart in turn are two clusters, never
+    one chained across 200 s; a tie goes to the offset smaller in magnitude, whatever its sign or rank, then to the
+    cluster started first; and `groups` lists equal magnitudes by signed offset."""
+    pts, frames = zip(*(_offset_frame(0, 50.0, 4.0, "a"), _offset_frame(100, 51.0, 5.0, "b"), _offset_frame(200, 52.0, 6.0, "c")))
+    p = cal.infer_anchor_proposal(list(frames), _gpx(pts), WCFG)
+    assert p["proposed_offset_seconds"] == 0 and p["conflicting_files"] == ["6-photos-by-dest/B/c.arw"]
+    assert [(g["offset_seconds"], g["count"]) for g in p["groups"]] == [(0, 2), (200, 1)]
+
+    pts, frames = zip(*(_offset_frame(-3600, 50.0, 4.0, "a"), _offset_frame(1800, 51.0, 5.0, "b")))      # a ranks first
+    p = cal.infer_anchor_proposal(list(frames), _gpx(pts), WCFG)
+    assert p["proposed_offset_seconds"] == 1800 and p["tied"] and p["confidence"] == "review_required"
+
+    pts, frames = zip(*(_offset_frame(3600, 50.0, 4.0, "a"), _offset_frame(-3600, 51.0, 5.0, "b")))      # one magnitude
+    p = cal.infer_anchor_proposal(list(frames), _gpx(pts), WCFG)
+    assert p["proposed_offset_seconds"] == 3600 and p["tied"]                     # the cluster started first
+    assert [g["offset_seconds"] for g in p["groups"]] == [-3600, 3600]
+
+
+@pytest.mark.spec("BLD-anchor_proposal_record", "RUL-anchor_proposal_carries_evidence",
+                  test="TST-geotag_offset_inference-proposal_records_its_anchors_and_their_count")
+def test_proposal_records_its_anchors_and_their_count():
+    """One anchor per photo that matched a pass — the representative first, a photo of another cluster by its own
+    best — each with its match; `anchor_count` counts them, a photo that matched nothing not among them."""
+    gpx = _gpx([_pt(50.0, 4.0, _utc(15, 0, 0)), _pt(51.0, 5.0, _utc(15, 0, 0)),
+                _pt(53.0, 7.0, _utc(14, 0, 0))])
+    frames = [_frame(51.0, 5.0, "2024:07:03 14:00:00", "6-photos-by-dest/B/b.arw"),
+              _frame(50.0, 4.0, "2024:07:03 14:00:00", "6-photos-by-dest/B/a.arw"),
+              _frame(53.0, 7.0, "2024:07:03 14:00:00", "6-photos-by-dest/B/d.arw"),     # another cluster
+              _frame(60.0, 10.0, "2024:07:03 14:00:00", "6-photos-by-dest/B/far.arw")]  # matches nothing
+    p = cal.infer_anchor_proposal(frames, gpx, WCFG)
+    assert p["anchor_count"] == 3 and p["proposed_offset_seconds"] == 3600
+    assert [a["source_file"] for a in p["anchors"]] == ["6-photos-by-dest/B/a.arw", "6-photos-by-dest/B/b.arw",
+                                                        "6-photos-by-dest/B/d.arw"]
+    assert [a["proposal_id"] for a in p["anchors"]] == ["anchor-001", "anchor-002", "anchor-003"]
+    assert [a["proposed_offset_seconds"] for a in p["anchors"]] == [3600, 3600, 0]
+    a = p["anchors"][0]
+    assert set(a) == {"proposal_id", "source_file", "camera_source_naive_time", "native_gps", "gpx_match",
+                      "proposed_offset_seconds"}
+    assert a["gpx_match"] == {"match_type": "gpx_point_match", "gpx_file": "trip.gpx", "distance_m": 0.0,
+                              "segment_duration_seconds": None}                      # a point, no segment
+    assert "rank" not in p                                          # a field nothing read, no longer written
 
 
 def test_groups_carry_full_path_and_local_inputs_plus_skipped():
@@ -303,7 +356,7 @@ def test_cell_manual_offset_and_bad_offset(monkeypatch):
     assert blk and bad["effective_time_anchor"] == ""
 
 
-@pytest.mark.spec("RUL-timezone_auto_resolves")
+@pytest.mark.spec("RUL-timezone_auto_resolves", test="TST-geotag_offset_inference-cell_no_anchor_is_manual_required")
 def test_cell_no_anchor_is_manual_required(monkeypatch):
     cell, _ = _cell({}, [], _gpx([]))
     assert cell["proposal"] == {"proposal_source": "manual_required"} and cell["requires_user_input"]
@@ -358,7 +411,7 @@ def test_run_auto_resolves_offset_from_gpx(tmp_path, monkeypatch):
              rec("6-photos-by-dest/B/b.arw", 50.8480, 4.3540, "2024:07:03 14:13:08")]
     for f in files:
         p = ws / f["relative_path"]; p.parent.mkdir(parents=True, exist_ok=True); p.write_bytes(b"x")
-    (ctl / "photos-11-handoff.json").write_text(json.dumps({"filename_timestamp_format": utils.CONFIG["filename_timestamp_format"], "files": match_disk(ws, files), "depends_on": {"cache": {"fingerprint_algorithm_version": utils.FINGERPRINT_ALGORITHM_VERSION}}}))
+    (ctl / "photos-11-handoff.json").write_text(json.dumps(vouched(ctl.parent, {"filename_timestamp_format": utils.CONFIG["filename_timestamp_format"], "files": match_disk(ws, files), "depends_on": {"cache": {"fingerprint_algorithm_version": utils.FINGERPRINT_ALGORITHM_VERSION}}})))
 
     CAM_CFG = CAM
     monkeypatch.chdir(str(ws))
@@ -373,6 +426,9 @@ def test_run_auto_resolves_offset_from_gpx(tmp_path, monkeypatch):
     assert cell["proposal"]["proposed_offset_seconds"] == -7187
     assert cell["decision_mode"] == "auto_resolved"                    # two consistent anchors
     assert cell["effective_time_anchor"]["offset_seconds"] == -7187
+    dest = art["destinations"]["6-photos-by-dest/B"]                 # fields nothing read are not written
+    assert "camera_groups_present" not in dest and "proposal_confidence" not in dest["destination_timezone"]
+    assert "rank" not in cell["proposal"]
 
 
 # --- timezone-derived offset proposal (no anchor, no inherited) — BLD-timezone_naive_offset -------
@@ -387,7 +443,7 @@ def _tzcell(prior_ud, *, tz, rep_naive, frames=None, date=None):
     return cell, blockers
 
 
-@pytest.mark.spec("BLD-timezone_naive_offset")
+@pytest.mark.spec("BLD-timezone_naive_offset", test="TST-geotag_offset_inference-timezone_naive_offset_is_dst_aware")
 def test_timezone_naive_offset_is_dst_aware():
     assert cal._timezone_naive_offset("2024:07:03 14:00:00", "Europe/Brussels")[0] == -7200   # summer +2
     assert cal._timezone_naive_offset("2024:01:03 14:00:00", "Europe/Brussels")[0] == -3600   # winter +1
@@ -491,7 +547,7 @@ def test_a_place_walked_on_two_days_takes_the_photos_day():
     frames.append(_photo(51.2200, 3.2400, datetime(2024, 7, 4, 11, 0, tzinfo=timezone.utc), 9))
     p = cal.infer_anchor_proposal(frames, gpx, WCFG)
     assert p["proposed_offset_seconds"] == -7200 and p["confidence"] == "high"
-    assert p["tied"] is False and p["conflicting_count"] == 0 and p["supporting_count"] == 3
+    assert p["tied"] is False and p["conflicting_count"] == 0 and p["anchor_count"] == 4
     assert {a["gpx_match"]["gpx_file"] for a in p["anchors"]} == {"day4.gpx"}
     assert [g["count"] for g in p["groups"]] == [4, 3]                      # 4 July: all four; 3 July: three
 
@@ -651,6 +707,26 @@ def test_an_acceptance_holds_only_for_the_proposal_it_accepted():
     assert cell["proposal"]["proposed_offset_seconds"] == -3600      # ...and what takes effect is what was accepted
 
 
+@pytest.mark.spec("RUL-acceptance_holds_for_its_proposal", "BLD-offset_acceptance",
+                  test="TST-geotag_offset_inference-a_guess_moved_by_seconds_is_another_proposal")
+def test_an_accepted_guess_moved_by_a_few_seconds_is_another_proposal():
+    """The tolerance is for an offset the camera's own GPS found — a few seconds of noise in the same finding. A
+    guess accepted (the zone's, or the offset the photos record) holds only for exactly what it proposed: one a few
+    seconds from it, well within the tolerance, was never accepted and asks."""
+    accepted = {"accept_proposal": True, "accepted_offset_seconds": -7190}                # 10 s from the zone's -7200
+    cell, blk = _tzcell(accepted, tz="Europe/Brussels", rep_naive="2024:07:03 14:00:00")
+    assert cell["proposal"]["proposal_source"] == "timezone_naive" and not blk
+    assert cell["effective_time_anchor"] == "" and cell["stale_user_decision"] and cell["requires_user_input"]
+    rec = [{"relative_path": "6-photos-by-dest/B/r.arw", "source_naive_time": "2024:07:03 14:00:00",
+            "source_time_tag": "EXIF:DateTimeOriginal", "raw_times": {"OffsetTimeOriginal": "+02:00"}}]   # records -7200
+    blk = []
+    cell = cal.GeotagWorkflow("/tmp")._offset_cell("6-photos-by-dest/B", "K", {"camera_group_class": "camera"},
+                                                    {"user_decision": accepted}, [], _gpx([]), blk,
+                                                    rep_naive="2024:07:03 14:00:00", photos=rec)
+    assert cell["proposal"]["proposal_source"] == "recorded_offset" and not blk
+    assert cell["effective_time_anchor"] == "" and cell["stale_user_decision"]
+
+
 @pytest.mark.spec("RUL-written_value_over_acceptance", test="TST-geotag_offset_inference-a_written_offset_outranks_an_acceptance")
 def test_a_written_offset_outranks_an_acceptance():
     cell, _ = _tzcell({"accept_proposal": True, "accepted_offset_seconds": -7200, "manual_offset_seconds": -60},
@@ -690,6 +766,32 @@ def test_a_kept_offset_rests_on_what_it_was_found_from():
     # ...while one that agrees leaves it kept
     same = [_frame(50.0, 4.0, "2024:07:03 14:00:05", "d")]
     assert wf._offset_cell("D", "K", g, kept, same, gpx, [])["decision_mode"] == "kept_from_earlier"
+
+
+@pytest.mark.spec("BLD-day_offset_kept", "BLD-offset_far_from_evidence",
+                  test="TST-geotag_offset_inference-a_kept_offset_is_not_withdrawn_for_the_guess")
+def test_a_kept_offset_is_not_withdrawn_for_the_guess_beside_it():
+    """A day's offset kept from its fixes, its later photo's own proposal the zone's guess: the guess, far from the
+    phone's photos there, is marked so, and the kept offset stands — it is not the guess's. The same offset taking
+    effect from the fixes now, as this run's own, is withdrawn with it."""
+    utils.CONFIG.update(CFG)
+    wf = cal.GeotagWorkflow("/tmp")
+    known = {"D": [("Apple|iPhone|", "D/p.jpg", datetime(2024, 7, 8, 8, 0, tzinfo=timezone.utc))]}
+    sel = [{"relative_path": "D/c.arw", "source_naive_time": "2024:07:03 14:50:00"}]
+
+    def judged(**cell):
+        cell = {"proposal": {"proposal_source": "timezone_naive", "proposed_offset_seconds": -7200},
+                "effective_time_anchor": {"offset_seconds": -6600, "source": "gps_time_auto"},
+                "requires_user_input": False, **cell}
+        withdrawn = wf._withhold_if_far(("D", CAM, (CAM, {}, {}, [], None, None, None, sel, None)),
+                                        {"D": {"camera_group_time_decisions": {CAM: cell}}}, dict(known), {}, {}, [])
+        return withdrawn, cell
+
+    withdrawn, cell = judged(decision_mode="kept_from_earlier")
+    assert not withdrawn and cell["proposal"]["far_from_evidence"]
+    assert cell["effective_time_anchor"]["offset_seconds"] == -6600 and not cell["requires_user_input"]
+    withdrawn, cell = judged(decision_mode="auto_resolved")
+    assert withdrawn and cell["effective_time_anchor"] == "" and cell["requires_user_input"]
 
 
 # --- each setting bounds one thing --------------------------------------------------------------------------
@@ -763,3 +865,69 @@ def test_how_far_a_proposal_may_move_under_an_acceptance_is_its_own_setting(monk
     assert eff["source"] == "gpx_anchor_accepted" and not stale
     eff, stale, proposal = source(gpx_anchor_decision_tolerance_seconds=5.0)
     assert eff == "" and stale and proposal["acceptance_tolerance_seconds"] == 5.0
+
+
+@pytest.mark.spec("BLD-anchor_matching", "RUL-anchor_within_clock_error", "RUL-tracks_never_joined",
+                  test="TST-geotag_offset_inference-anchor_search_by_place_finds_what_the_whole_walk_finds")
+def test_anchor_search_by_place_finds_what_the_whole_walk_finds(monkeypatch):
+    # Many points on loops walked again and again, stays, breaks in the recording, jumps too long for the grid, a
+    # track over the antimeridian and one by the pole: the search over only the points by each photo's place gives
+    # every candidate, in order, and every skipped reason, that the walk over every point of the window gives.
+    import math
+    import random
+    rnd = random.Random(28)
+    t0 = datetime(2024, 7, 1, tzinfo=timezone.utc)
+    pts = []
+
+    def track(src, trk, n, lat0, lon0, rlat, rlon, days=0):
+        seg, theta, t = 0, 0.0, t0 + timedelta(days=days)
+        for i in range(n):
+            if i % 2500 == 2499:
+                seg += 1                                            # a break in the recording
+            if i % 4000 == 3999:
+                lat, lon = lat0 + 0.6, lon0 - 0.7                   # a jump far off, within one segment
+            elif i % 700 < 40 and i:
+                lat, lon = pts[-1].lat, pts[-1].lon                 # a stay
+            else:
+                theta += rnd.uniform(0.0, 2 * math.pi / 300)
+                lat, lon = lat0 + rlat * math.sin(theta), lon0 + rlon * math.cos(2 * theta)
+            t += timedelta(seconds=rnd.choice((1, 1, 2, 5, 30, 200)))
+            pts.append(cal.GPXPoint(lat, ((lon + 180.0) % 360.0) - 180.0, t, src, i, trk, seg))
+
+    track("phone/a.gpx", 0, 9000, 48.0, 11.0, 0.003, 0.0045)
+    track("phone/a.gpx", 1, 3000, 48.001, 11.0, 0.002, 0.003)       # a second <trk> of the same file
+    track("watch/b.gpx", 0, 6000, 48.0005, 11.0005, 0.003, 0.004, 3)  # another device, ranked below
+    track("watch/c.gpx", 0, 4000, -16.5, 179.9995, 0.002, 0.003, 20)  # over the antimeridian
+    track("watch/d.gpx", 0, 3000, 89.995, 30.0, 0.002, 40.0, 40)      # by the pole
+    gpx = _gpx(pts)
+    gpx.precedence = ["phone", "watch"]
+    cfg = {**utils.CONFIG, **CFG}                                    # placement's limits: a better track's cover
+
+    frames = []
+    for _ in range(120):
+        p = pts[rnd.randrange(len(pts))]
+        reach = 0.0003 if rnd.random() < 0.85 else 0.05
+        naive = (p.time_utc + timedelta(seconds=rnd.choice((0, 1, -1)) * rnd.randrange(0, 260000))).replace(tzinfo=None)
+        frames.append(_frame(p.lat + rnd.uniform(-1, 1) * reach, p.lon + rnd.uniform(-1, 1) * 0.0004,
+                             naive.strftime("%Y:%m:%d %H:%M:%S")))
+    frames.append(_frame(95.0, 11.0, "2024:07:01 12:00:00"))            # no place on the globe: the whole walk
+
+    seen = {"walked": 0, "searched": 0}
+    real = gpx.nearby
+
+    def counted(lat, lon, pt_max, seg_max, spans=None):
+        out = real(lat, lon, pt_max, seg_max, spans)
+        if out is not None and spans is not None:
+            seen["walked"] += sum(hi - lo for lo, hi in spans)
+            seen["searched"] += sum(map(len, out))
+        return out
+
+    monkeypatch.setattr(gpx, "nearby", counted)
+    by_place = [(cal.frame_candidates(f, gpx, cfg), cal._frame_skip_reason(f, gpx, cfg)) for f in frames]
+    monkeypatch.setattr(gpx, "nearby", lambda *a, **k: None)        # every point of the window, one by one
+    whole = [(cal.frame_candidates(f, gpx, cfg), cal._frame_skip_reason(f, gpx, cfg)) for f in frames]
+
+    assert by_place == whole
+    assert sum(1 for cs, _ in whole if cs) > 40 and {r for _, r in whole} == {"no_nearby_track", "outside_time_window"}
+    assert {c["gpx_file"] for cs, _ in whole for c in cs} == {"phone/a.gpx", "watch/b.gpx", "watch/c.gpx", "watch/d.gpx"}
+    assert seen["searched"] * 3 < seen["walked"]                      # and it looked at a part of it

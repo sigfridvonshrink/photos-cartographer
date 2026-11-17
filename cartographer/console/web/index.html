@@ -87,6 +87,20 @@
     </div>
   </div>
 
+  <div id="zone-overlay" class="gate-overlay" hidden>
+    <div class="gate" role="dialog" aria-modal="true" aria-labelledby="zone-title">
+      <p class="gate-title" id="zone-title">Download the table of countries?</p>
+      <div id="zone-question" class="gate-sum"></div>
+      <p class="gate-warn">Asked once for this workspace: the answer is kept in
+        <code>photos-02-zone-table.json</code>.</p>
+      <div class="gate-act">
+        <button id="zone-cancel" class="btn">Cancel</button>
+        <button id="zone-no" class="btn">Use the carried copy</button>
+        <button id="zone-yes" class="btn primary">Download once</button>
+      </div>
+    </div>
+  </div>
+
   <div id="prune-overlay" class="gate-overlay" hidden>
     <div class="gate" role="dialog" aria-modal="true" aria-labelledby="prune-title">
       <p class="gate-title" id="prune-title">Prune quarantine</p>
@@ -102,6 +116,21 @@
         <button id="prune-cancel" class="btn">Cancel</button>
         <button id="prune-dry" class="btn">Dry-run</button>
         <button id="prune-del" class="btn primary">Delete</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="changes-overlay" class="gate-overlay" hidden>
+    <div class="gate gate-wide" role="alertdialog" aria-modal="true" aria-labelledby="changes-title">
+      <p class="gate-title" id="changes-title">The workspace is not as the last run left it</p>
+      <div class="gate-sum">No command made these changes, and none is one a workspace expects by hand. Nothing was
+        planned or changed. Undo them and run again — or, if they are wanted, accept them once: the acceptance is
+        recorded in <code>photos-01-accepted-changes.json</code>, and only this list is accepted.</div>
+      <pre id="changes-list" class="changes-list"></pre>
+      <p class="gate-warn" id="changes-cmd"></p>
+      <div class="gate-act">
+        <button id="changes-close" class="btn">Close</button>
+        <button id="changes-accept" class="btn primary">Accept these</button>
       </div>
     </div>
   </div>

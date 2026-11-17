@@ -154,6 +154,35 @@ def test_a_library_row_is_reused_only_from_the_method_in_use(tmp_path, row, curr
         cache.close()
 
 
+@pytest.mark.spec("BLD-library_file_fingerprinted", "RUL-unchecked_counts_as_changed",
+                  test="TST-merge_primitives-a_library_row_under_an_unread_imagemagick_is_neither_kept_nor_reused")
+def test_a_library_row_under_an_unread_imagemagick_is_neither_kept_nor_reused(tmp_path):
+    """A fingerprint taken while the ImageMagick version could not be read is under no known version: it is not
+    kept, and a row recording it is not reused while the version still cannot be read."""
+    cache = utils.WorkspaceCache(str(tmp_path), in_memory=True)
+    try:
+        p = "/library/a.jpg"
+        cache.cache_library_fingerprint(p, 100, 111, dict(_fp("deadbeef"), engine_version="unknown"))
+        assert cache.conn.execute("SELECT COUNT(*) FROM library_fingerprint_cache").fetchone()[0] == 0
+        cache.conn.execute("INSERT INTO library_fingerprint_cache (library_path, size, mtime_ns, fingerprint_value, "
+                           "fingerprint_strategy, engine_version) VALUES (?, 100, 111, 'deadbeef', ?, 'unknown')",
+                           (p, utils.IMAGE_FINGERPRINT_STRATEGY))
+        assert cache.get_cached_library_fingerprint(p, 100, 111, "unknown") is None
+    finally:
+        cache.close()
+
+
+@pytest.mark.spec("RUL-unchecked_counts_as_changed",
+                  test="TST-merge_primitives-a_prep_fingerprint_under_an_unread_imagemagick_is_not_reused")
+def test_a_prep_fingerprint_under_an_unread_imagemagick_is_not_reused():
+    """Prep reuses no fingerprint recorded under an ImageMagick version that could not be read, though the version
+    still cannot be read: `unknown` is not a version found the same."""
+    ch = json.dumps({"status": "valid", "value": "v", "strategy": utils.IMAGE_FINGERPRINT_STRATEGY,
+                     "engine_version": "unknown"})
+    assert utils.fingerprint_reusable(ch, "image", "unknown") is False
+    assert utils.fingerprint_reusable(ch.replace('"unknown"', '"im-7"'), "image", "im-7") is True
+
+
 # --- Deep merge-config validation (BLD-library_root_validated) -----------------
 
 def _cfg(lib):
@@ -166,7 +195,7 @@ def test_validate_merge_config_accepts_valid(tmp_path):
     utils.validate_merge_config(_cfg(lib), str(ws))      # no raise
 
 
-@pytest.mark.spec("RUL-library_place_checked")
+@pytest.mark.spec("RUL-library_place_checked", test="TST-merge_primitives-validate_merge_config_rejects_bad_inputs")
 def test_validate_merge_config_rejects_bad_inputs(tmp_path):
     import pytest
     ws = tmp_path / "ws"; ws.mkdir()

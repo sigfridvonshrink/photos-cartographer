@@ -19,6 +19,9 @@ import assert from "node:assert/strict";
 import * as app from "../web/app.js";
 
 const setWork = (work) => { app.state.work = work; app.state.base = work; };
+// The host's zones, as the server sends them with the decisions: a zone is checked against these alone.
+app.setHostZones(["America/New_York", "America/Phoenix", "Asia/Tokyo", "Europe/Brussels", "Europe/Bucharest",
+  "Europe/Lisbon", "Europe/Madrid", "Europe/Paris", "UTC"]);
 
 test("cellStatus maps the system flags", () => {
   assert.deepEqual(app.cellStatus({ requires_user_input: true }), ["needs", "needs input"]);
@@ -48,14 +51,51 @@ test("wouldResolve: each of the two offset modes is independently sufficient", (
   mk({});                                                                       assert.equal(app.wouldResolve(ref), false);
 });
 
-test("clearing a folder fallback (the Clear button payload) resolves to none", () => {
-  const dest = "6-photos-by-dest/Belgium", ref = { file: "gps", dest, kind: "fallback" };
-  const mk = (ud, proposal = {}) => setWork(
-    { gps: { destinations: { [dest]: { folder_fallback: { user_decision: ud, proposal } } } } });
-  mk({ fallback_lat: 50.5, fallback_lon: 4.2 });                              assert.equal(app.wouldResolve(ref), true);   // manual
-  mk({ accept_proposal: true }, { proposed_fallback: { lat: 50, lon: 4 } }); assert.equal(app.wouldResolve(ref), true);   // accept inherited
-  // The Clear button writes exactly this — clears coord AND the accept flag -> effective none:
-  mk({ fallback_lat: "", fallback_lon: "", accept_proposal: false });        assert.equal(app.wouldResolve(ref), false);
+test("wouldResolve: in a same-day conflict an acceptance resolves nothing, the offset written as the user's own does", () => {
+  // geotag withholds what the camera's GPS gave by itself, an acceptance among it; the user's own offset keeps its effect
+  // (RUL-chosen_offset_not_withheld) — the editor's status agrees with geotag's
+  const dest = "6-photos-by-dest/B", key = "CAM", ref = { file: "time", dest, kind: "offset", key };
+  const proposal = { proposal_source: "gpx_self_anchor", proposed_offset_seconds: -3600, acceptance_tolerance_seconds: 120,
+    groups: [{ offset_seconds: -3600, count: 2 }] };
+  const conflicts_with = [{ destination: "6-photos-by-dest/Other", bucket: "CAM", offset_seconds: -7200, chosen: false }];
+  const mk = (ud) => setWork(
+    { time: { destinations: { [dest]: { camera_group_time_decisions: { [key]: { user_decision: ud, proposal, conflicts_with } } } } } });
+  mk({ accept_proposal: true, accepted_offset_seconds: -3600, manual_offset_seconds: "" });
+  assert.equal(app.wouldResolve(ref), false);
+  mk({ accept_proposal: false, accepted_offset_seconds: "", manual_offset_seconds: -3600 });
+  assert.equal(app.wouldResolve(ref), true);
+});
+
+test("wouldResolve: a guess far from all evidence is not resolved by its acceptance, only by an offset written", () => {
+  const dest = "6-photos-by-dest/B", key = "CAM", ref = { file: "time", dest, kind: "offset", key };
+  const far = { proposal_source: "timezone_naive", proposed_offset_seconds: -3600,
+    far_from_evidence: { max_clock_error_seconds: 172800, other_photos: 1, nearest_other_photo: "p.heic",
+      nearest_other_photo_seconds: 830000000, nearest_track_seconds: "" } };
+  const mk = (ud) => setWork(
+    { time: { destinations: { [dest]: { camera_group_time_decisions: { [key]: { user_decision: ud, proposal: far } } } } } });
+  mk({ accept_proposal: true, accepted_offset_seconds: -3600, manual_offset_seconds: "" });
+  assert.equal(app.wouldResolve(ref), false);
+  mk({ accept_proposal: false, accepted_offset_seconds: "", manual_offset_seconds: 830000000 });
+  assert.equal(app.wouldResolve(ref), true);
+});
+
+test("a folder fallback is written here or inherited, and applies itself either way; cleared, the inherited one returns", () => {
+  const top = "6-photos-by-dest/Belgium", dest = `${top}/Bruges`, ref = { file: "gps", dest, kind: "fallback" };
+  const mk = (above, here) => setWork({ gps: { destinations: {
+    [top]: { folder_fallback: { user_decision: above } }, [dest]: { folder_fallback: { user_decision: here } } } } });
+  const none = { fallback_lat: "", fallback_lon: "" };
+  mk(none, { fallback_lat: 50.5, fallback_lon: 4.2 });
+  assert.equal(app.wouldResolve(ref), true);                                           // written here
+  assert.equal(app.previewFallback(dest).source, "own");
+  mk({ fallback_lat: 50.8, fallback_lon: 4.3 }, none);
+  assert.equal(app.wouldResolve(ref), true);                                           // inherited: nothing to accept
+  assert.deepEqual(app.previewFallback(dest), { lat: 50.8, lon: 4.3, source: "inherited", from: top });
+  assert.match(app.fallbackNote(dest), /^Inherited from 6-photos-by-dest\/Belgium: it applies here by itself/);
+  mk({ fallback_lat: 50.8, fallback_lon: 4.3 }, { fallback_lat: 51.2, fallback_lon: 3.2 });
+  assert.deepEqual(app.inheritedFallback(dest), { lat: 50.8, lon: 4.3, source: "inherited", from: top });  // what clearing returns to
+  assert.match(app.fallbackNote(dest), /own fallback.*Cleared, the one inherited from 6-photos-by-dest\/Belgium/);
+  mk(none, none);
+  assert.equal(app.wouldResolve(ref), false);                                          // nothing here or above
 });
 
 test("previewTz / previewFallback inherit from the nearest resolved ancestor", () => {
@@ -75,13 +115,16 @@ test("previewTz / previewFallback inherit from the nearest resolved ancestor", (
   assert.equal(inhTz.source, "inherited");
 
   const inhFb = app.previewFallback("6-photos-by-dest/Japan/Kyoto");
-  assert.deepEqual([inhFb.lat, inhFb.lon, inhFb.source], [35.0, 139.0, "inherited"]);
+  assert.deepEqual([inhFb.lat, inhFb.lon, inhFb.source, inhFb.from], [35.0, 139.0, "inherited", "6-photos-by-dest/Japan"]);
 });
 
 test("timezone: an inherited zone applies itself, the configured default is only proposed", () => {
   const dest = "6-photos-by-dest/Japan", ref = { file: "time", dest, kind: "timezone" };
-  const mk = (cell) => setWork({ time: { destinations: { [dest]: { destination_timezone: { user_decision: {}, ...cell } } } } });
-  mk({ proposed_iana_timezone: "Asia/Tokyo", proposal_source: "inherited" });  assert.equal(app.wouldResolve(ref), true);
+  const mk = (cell, above = {}) => setWork({ time: { destinations: {
+    "6-photos-by-dest": { file_less: true, destination_timezone: { user_decision: above } },
+    [dest]: { destination_timezone: { user_decision: {}, ...cell } } } } });
+  mk({ proposed_iana_timezone: "Asia/Tokyo", proposal_source: "inherited" }, { manual_iana_timezone: "Asia/Tokyo" });
+  assert.equal(app.wouldResolve(ref), true);
   mk({ proposed_iana_timezone: "Europe/Brussels", proposal_source: "config_default" });
   assert.equal(app.wouldResolve(ref), false);                 // home zone offered, not taken for a trip abroad
   assert.equal(app.previewTz(dest), null);                    // and nothing beneath inherits it
@@ -144,4 +187,19 @@ test("previewTz: a zone its photos contradict, not kept, is neither in effect no
   work.time.destinations[m].destination_timezone.user_decision = {};
   work.time.destinations[i].destination_timezone.user_decision.manual_iana_timezone = "Europe/Madrid";
   assert.equal(app.previewTz(pr).tz, "Europe/Madrid");
+});
+
+test("an offset set near a GPS group is previewed as picked as geotag counts it: within the spread, never imprecise", () => {
+  // RUL-chosen_group_is_anchored: geotag records `gpx_anchor_chosen` for an offset within the configured spread of one
+  // of a GPS proposal's groups, and never for one the tracks left imprecise; the label says whether a drift check follows.
+  const dest = "6-photos-by-dest/G", key = "CAM", ref = { file: "time", dest, kind: "offset", key };
+  const gps = { proposal_source: "gpx_self_anchor", proposed_offset_seconds: 3600, imprecise_seconds: 0,
+    groups: [{ offset_seconds: 3600, count: 4 }, { offset_seconds: -7200, count: 2 }] };
+  const mk = (manual, proposal = gps, spread = 30) => setWork({ anchor_spread_seconds: spread, time: { destinations: {
+    [dest]: { camera_group_time_decisions: { [key]: { proposal, user_decision: { manual_offset_seconds: manual } } } } } } });
+  mk(-7190); assert.match(app.previewEffective(ref), /GPS group, picked/);       // 10 s off a group: within the spread
+  mk(-7100); assert.match(app.previewEffective(ref), /\(manual\)/);              // 100 s off: the user's own
+  mk(-7200, { ...gps, imprecise_seconds: 600 }); assert.match(app.previewEffective(ref), /\(manual\)/);   // tracks stood still
+  mk(-7190, gps, null); assert.match(app.previewEffective(ref), /\(manual\)/);   // no spread sent: an exact match only
+  mk(-7200, gps, null); assert.match(app.previewEffective(ref), /GPS group, picked/);
 });

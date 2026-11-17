@@ -17,10 +17,12 @@ fingerprints, journal/resume, write photos-25. exiftool + fingerprint are mocked
 all external tools), so the executor logic is driven deterministically. From conftest.py.
 """
 import json
+from _handoff import recorded, vouched
 from _zone import answer_root_zone, with_root_zone
 import os
 import shutil
 import stat
+import sqlite3
 import sys
 from datetime import datetime, timezone
 
@@ -77,7 +79,7 @@ def _ready_ws(tmp_path, monkeypatch, *, zfs=None):
           "files": files, "cache_fingerprint": "pcf",
           "depends_on": {"cache": {"image_engine_version": utils.get_imagemagick_version(), "fingerprint_algorithm_version": utils.FINGERPRINT_ALGORITHM_VERSION}}}
     ho["content_fingerprint"] = utils.handoff_content_fingerprint(ho)
-    (ctl / "photos-11-handoff.json").write_text(json.dumps(ho))
+    (ctl / "photos-11-handoff.json").write_text(json.dumps(vouched(ctl.parent, ho)))
 
     def run():
         monkeypatch.chdir(str(ws))
@@ -94,7 +96,7 @@ def _ready_ws(tmp_path, monkeypatch, *, zfs=None):
     return ws, ctl
 
 
-def _mock_tools(monkeypatch, ws, *, write_ok=True, content_changed=False):
+def _mock_tools(monkeypatch, ws, *, write_ok=True, content_changed=False, refusal="Error: Not a valid ARW"):
     """Stand-ins for exiftool and the image fingerprint that behave as the real ones do across a rename: a
     photo keeps its fingerprint and the tags written to it whatever its name becomes (kept by inode)."""
     first_name, held = {}, {}
@@ -102,7 +104,8 @@ def _mock_tools(monkeypatch, ws, *, write_ok=True, content_changed=False):
     def write(self, p, tags):
         if write_ok:
             held.setdefault(os.stat(p).st_ino, {}).update(tags)
-        return write_ok
+            return True
+        return refusal                                  # exiftool's own words when it will not write
     monkeypatch.setattr(cal.GeotagWorkflow, "_exiftool_write", write)
     monkeypatch.setattr(cal.GeotagWorkflow, "_exiftool_read",
                         lambda self, p, keys: {k: v for k, v in held.get(os.stat(p).st_ino, {}).items() if k in keys})
@@ -128,7 +131,7 @@ def _summary(ctl):
 
 # --- clean apply -------------------------------------------------------------
 
-@pytest.mark.spec("BLD-execution_summary")
+@pytest.mark.spec("BLD-execution_summary", test="TST-geotag_execution-clean_execute_applies_and_renames")
 def test_clean_execute_applies_and_renames(tmp_path, monkeypatch):
     ws, ctl = _ready_ws(tmp_path, monkeypatch)
     _mock_tools(monkeypatch, ws)
@@ -192,6 +195,78 @@ def test_exiftool_failure_records_failure(tmp_path, monkeypatch):
     assert s["status"] == "failed" and len(s["failures"]) == 4 and s["totals"]["metadata_time_writes"] == 0
 
 
+@pytest.mark.spec("RUL-failed_write_reason_recorded", "BLD-write_failure_reason",
+                  test="TST-geotag_execution-a_failed_write_keeps_exiftools_reason")
+def test_a_failed_write_keeps_exiftools_reason(tmp_path, monkeypatch):
+    """Each failure in photos-25 carries, beside the photo and the operation, the kind of operation and exiftool's
+    own message — what tells a damaged file from a passing trouble."""
+    ws, ctl = _ready_ws(tmp_path, monkeypatch)
+    _mock_tools(monkeypatch, ws, write_ok=False, refusal="Error: Not a valid ARW - a.arw")
+    assert _execute(monkeypatch, ws) == 3
+    s = _summary(ctl)
+    assert s["failures"] and all(f["error"] == "Error: Not a valid ARW - a.arw" for f in s["failures"])
+    assert {f["relative_path"] for f in s["failures"]} == {"6-photos-by-dest/T/a.arw", "6-photos-by-dest/T/b.arw"}
+    assert {f["type"] for f in s["failures"]} == {"metadata_time_write", "gps_marker_write"}
+    assert s["repeated_failures"] == []                   # the first execution: nothing failed before
+
+
+@pytest.mark.spec("RUL-repeated_write_failure_way_out", "BLD-repeated_write_failure", "RUL-moved_back_passes",
+                  test="TST-geotag_execution-a_write_failing_again_the_same_way_names_the_way_out")
+def test_a_write_failing_again_the_same_way_names_the_way_out(tmp_path, monkeypatch, capsys):
+    """The same photo failing the same way on a second execution of the same plan will not mend by running again:
+    the summary and execute's output say so for it, naming the way out — back into photos by date, a move the
+    workspace check passes, then prep and `geotag plan` again. The exit status stays that of a partial run."""
+    ws, ctl = _ready_ws(tmp_path, monkeypatch)
+    _mock_tools(monkeypatch, ws, write_ok=False, refusal="Error: Not a valid ARW")
+    assert _execute(monkeypatch, ws) == 3
+    capsys.readouterr()
+    assert _execute(monkeypatch, ws) == 3                 # the exit status is unchanged
+    said = capsys.readouterr()
+    rep = _summary(ctl)["repeated_failures"]
+    assert [r["relative_path"] for r in rep] == ["6-photos-by-dest/T/a.arw", "6-photos-by-dest/T/b.arw"]
+    for r in rep:
+        assert r["error"] == "Error: Not a valid ARW"
+        assert r["types"] == ["gps_marker_write", "metadata_time_write"]
+        assert "from 6-photos-by-dest into 5-photos-by-date" in r["way_out"]
+        assert "`prep plan`, `prep execute` and `geotag plan`" in r["way_out"]
+    out = said.out + said.err
+    assert "6-photos-by-dest/T/a.arw: its write failed again" in out and "into 5-photos-by-date" in out
+    # the move it names passes the workspace check with no acceptance
+    [c] = utils.compare_workspace({"6-photos-by-dest/T/a.arw": {"size": 1, "mtime_ns": 2, "inode": 3}},
+                                  {"5-photos-by-date/2024/a.arw": (1, 2, 3)})
+    assert c["kind"] == "moved_back" and c["kind"] not in utils._UNEXPECTED_KINDS
+
+
+@pytest.mark.spec("RUL-repeated_write_failure_way_out", "BLD-repeated_write_failure",
+                  test="TST-geotag_execution-only_the_same_failure_of_the_same_plan_repeats")
+def test_only_the_same_failure_of_the_same_plan_repeats(tmp_path, monkeypatch):
+    """A failure is told as repeated only against the previous execution of the same plan, with the same operations
+    and the same reason: another reason, or another plan's summary, is no repetition; a run rejected before it tried
+    the photos is passed over for the one before it, kept under -NNN."""
+    ws, ctl = _ready_ws(tmp_path, monkeypatch)
+    plan_id = json.load(open(ctl / "photos-24-executable-plan.json"))["plan_id"]
+    _mock_tools(monkeypatch, ws, write_ok=False, refusal="Error: first reason")
+    assert _execute(monkeypatch, ws) == 3
+    _mock_tools(monkeypatch, ws, write_ok=False, refusal="Error: another reason")
+    assert _execute(monkeypatch, ws) == 3
+    assert _summary(ctl)["repeated_failures"] == []       # another reason: not the same failure
+    last = _summary(ctl)["failures"]
+    wf = cal.GeotagWorkflow(str(ws))
+    assert wf._prior_failures(str(ws), "another-plan") == []                       # another plan's: none
+    # a rejected run (a required snapshot that failed) wrote the latest summary: the one before it is read
+    summary_p = ctl / "photos-25-execution-summary.json"
+    utils.write_versioned_json(str(summary_p), {"plan_id": plan_id, "status": "rejected", "failures": []})
+    assert wf._prior_failures(str(ws), plan_id) == last
+    # a kept summary that cannot be read is never taken for none (RUL-unreadable_execution_record_stops)
+    sorted(ctl.glob("photos-25-execution-summary-*.json"))[-1].write_text("{torn")
+    with pytest.raises(cal.UnreadableRecord):
+        wf._prior_failures(str(ws), plan_id)
+    assert cal.repeated_write_failures(
+        [{"relative_path": "x", "type": "metadata_time_write", "error": "E"}],
+        [{"relative_path": "x", "type": "metadata_time_write", "error": "E"},
+         {"relative_path": "x", "type": "metadata_gps_write", "error": "E"}]) == []    # other operations then
+
+
 # --- resume / idempotency ----------------------------------------------------
 
 @pytest.mark.spec("RUL-geotag_execution_resumable", test="TST-geotag_execution-resume_skips_confirmed_ops")
@@ -225,6 +300,29 @@ def test_accept_fingerprint_change_finalizes(tmp_path, monkeypatch):
     assert _summary(ctl)["status"] == "success"
 
 
+@pytest.mark.spec("RUL-checked_shapes", "RUL-unknown_decision_field_refused", "RUL-invalid_value_located",
+                  "BLD-geotag_checks_decisions",
+                  test="TST-geotag_execution-a_content_acceptance_is_checked")
+@pytest.mark.parametrize("decision, said", [({"accept_fingerprint_change": "true"}, "must be true or false"),
+                                            ({"accept_fingerprint_change": True, "accept_all": True}, "accept_all")])
+def test_a_content_acceptance_is_checked(tmp_path, monkeypatch, capsys, decision, said):
+    """An acceptance of changed content written as text, or beside a field it does not have, is no answer to take:
+    execute stops on it, naming the photo and the field, before anything is done — the record left as written."""
+    ws, ctl = _ready_ws(tmp_path, monkeypatch)
+    _mock_tools(monkeypatch, ws, content_changed=True)
+    _execute(monkeypatch, ws)
+    s = _summary(ctl)
+    s["fingerprint_mismatches"][0]["user_decision"] = decision
+    (ctl / "photos-25-execution-summary.json").write_text(json.dumps(s))
+    before = (ctl / "photos-25-execution-summary.json").read_bytes()
+    capsys.readouterr()
+    assert _execute(monkeypatch, ws) == 2
+    err = "".join(capsys.readouterr())
+    rel = s["fingerprint_mismatches"][0]["relative_path"]
+    assert f"fingerprint_mismatches[{rel}].user_decision" in err and said in err, err
+    assert (ctl / "photos-25-execution-summary.json").read_bytes() == before
+
+
 # --- concurrency equality (Tier 3) -------------------------------------------
 
 def _execute_jobs(monkeypatch, ws, n):
@@ -237,7 +335,8 @@ def _execute_jobs(monkeypatch, ws, n):
         return e.code if isinstance(e.code, int) else (0 if e.code is None else 1)
 
 
-@pytest.mark.spec("RUL-execution_jobs_change_nothing", "BLD-geotag_execution")
+@pytest.mark.spec("RUL-execution_jobs_change_nothing", "BLD-geotag_execution",
+                  test="TST-geotag_execution-execute_j1_and_jN_produce_identical_summary_and_tree")
 def test_execute_j1_and_jN_produce_identical_summary_and_tree(tmp_path, monkeypatch):
     """Concurrency is a performance knob with NO semantic effect: executing the SAME geotag plan under
     -j1 vs -j4 yields a byte-identical photos-25 summary (modulo the volatile run_metadata, which by
@@ -247,6 +346,7 @@ def test_execute_j1_and_jN_produce_identical_summary_and_tree(tmp_path, monkeypa
     ws_a, ctl_a = _ready_ws(base, monkeypatch)                   # one fully-planned workspace
     ws_b = tmp_path / "b-ws"
     shutil.copytree(str(ws_a), str(ws_b))                        # exact copy -> same plan_id + artifacts
+    recorded(ws_b)          # the copy's files have inodes of their own: its record, as prep's execution would write it
 
     def run(ws, n):
         _mock_tools(monkeypatch, ws)                             # rebind fingerprint mock to this ws path
@@ -261,29 +361,44 @@ def test_execute_j1_and_jN_produce_identical_summary_and_tree(tmp_path, monkeypa
     assert t1 == t4 == ["2024-07-03--14-00-00.arw", "2024-07-03--15-00-00.arw"]  # identical tree
 
 
-@pytest.mark.spec("BLD-merge_execute", "BLD-geotag_execution")
-def test_journal_writes_only_from_the_main_thread(tmp_path, monkeypatch):
-    """Single-writer journal (BLD-geotag_execution): the confirmation journal is persisted ONLY by the main thread —
-    worker threads apply per-file ops but never touch the journal. Probe every journal write under -j4
-    and assert each originated on MainThread."""
+@pytest.mark.spec("BLD-merge_execute", "BLD-geotag_execution",
+                  test="TST-geotag_execution-journal_written_by_one_writer_at_a_time")
+def test_journal_written_by_one_writer_at_a_time(tmp_path, monkeypatch):
+    """One writer at a time (BLD-geotag_execution, BLD-own_leftover_cleared): the main thread persists each photo's
+    confirmations and a worker notes a write begun before it starts it, both under one lock — under -j4 no two journal
+    writes overlap, the confirmations come from the main thread and a worker's write only notes writes begun."""
     import threading
+    import time
     ws, ctl = _ready_ws(tmp_path, monkeypatch)
     _mock_tools(monkeypatch, ws)
     orig = cal.write_json_artifact
-    journal_threads = []
+    writes, active, most = [], [0], [0]
+    guard = threading.Lock()
 
     def spy(path, obj, *a, **k):
         if isinstance(obj, dict) and "journal_version" in obj:           # a journal write
-            journal_threads.append(threading.current_thread().name)
+            with guard:
+                active[0] += 1
+                most[0] = max(most[0], active[0])
+            writes.append((threading.current_thread().name, dict(obj["operations"])))
+            time.sleep(0.01)                                             # long enough for an overlap to show
+            with guard:
+                active[0] -= 1
         return orig(path, obj, *a, **k)
 
     monkeypatch.setattr(cal, "write_json_artifact", spy)
     assert _execute_jobs(monkeypatch, ws, 4) == 0
-    assert journal_threads, "expected at least one journal write"
-    assert all(t == "MainThread" for t in journal_threads), journal_threads
+    assert writes and most[0] == 1
+    before = {}
+    for thread, ops in writes:
+        changed = {k: v for k, v in ops.items() if before.get(k) != v}
+        assert thread == "MainThread" or set(changed.values()) <= {"begun"}, (thread, changed)
+        before = ops
+    assert any(t == "MainThread" for t, _ops in writes) and set(writes[-1][1].values()) == {"confirmed"}
 
 
-@pytest.mark.spec("RUL-control_records_never_media")
+@pytest.mark.spec("RUL-control_records_never_media",
+                  test="TST-geotag_execution-geotag_writes_no_artifacts_into_by_dest")
 def test_geotag_writes_no_artifacts_into_by_dest(tmp_path, monkeypatch):
     """RUL-control_records_never_media (anti): geotag's artifacts (photos-2*.json, plan/summary/journal) live ONLY under
     .photos-ingest/ — NEVER inside the scanned media tree 6-photos-by-dest. Drive a full plan +
@@ -365,24 +480,28 @@ def test_stale_plan_is_rejected_without_mutation(tmp_path, monkeypatch):
     assert not (ctl / "photos-25-execution-summary.json").exists()
 
 
-@pytest.mark.spec("RUL-scratch_database_not_journalled", test="TST-geotag_execution-the_track_memo_is_not_journalled")
-def test_the_track_memo_is_not_journalled(tmp_path, monkeypatch):
-    """The track memo geotag writes while it plans and executes is no operation of the plan and leaves no
-    entry in the journal: the journal holds the plan's operations and nothing else."""
+@pytest.mark.spec("BLD-track_catalogue", test="TST-geotag_execution-the_kept_tracks_are_no_operation_of_the_plan")
+def test_the_kept_tracks_are_no_operation_of_the_plan(tmp_path, monkeypatch):
+    """The catalogue of the tracks planning keeps in the record is written outside the plan's operations and leaves no
+    entry in the journal: the journal holds the plan's operations and nothing else; execute only checks the tracks."""
     ws, ctl = _ready_ws(tmp_path, monkeypatch)
-    memo = os.path.basename(utils.track_memo_db_path(str(ws)))
-    assert os.path.exists(utils.track_memo_db_path(str(ws)))              # planning wrote the memo...
+    conn = sqlite3.connect(str(ctl / "photos-00-ingest.db"))
+    catalogue = lambda: conn.execute("SELECT * FROM gpx_track_files ORDER BY track_id").fetchall()
+    planned = catalogue()
+    assert [r[1] for r in planned] == ["t.gpx"]                           # planning catalogued the tracks...
     assert not any(n.startswith("journal-") for n in os.listdir(ctl))     # ...and journalled nothing
     plan = json.load(open(ctl / "photos-24-executable-plan.json"))
     ops = [o for d in plan["destinations"].values() for o in d["operations"]]
-    assert ops and not any(memo in json.dumps(o) for o in ops)
+    assert ops and not any("gpx_track" in json.dumps(o) for o in ops)
     _mock_tools(monkeypatch, ws)
-    assert _execute(monkeypatch, ws) == 0                                 # execute reads the tracks again
+    assert _execute(monkeypatch, ws) == 0                                 # execute checks the tracks again
+    assert catalogue() == planned
+    conn.close()
     jpath = utils.journal_path(str(ws), plan["plan_id"])
     assert [n for n in os.listdir(ctl) if n.startswith("journal-")] == [os.path.basename(jpath)]
     journal = json.load(open(jpath))
     assert sorted(journal["operations"]) == sorted(o["operation_id"] for o in ops)
-    assert memo not in open(jpath).read()
+    assert "gpx_track" not in open(jpath).read()
 
 
 @pytest.mark.spec("RUL-no_plan_no_run", test="TST-geotag_execution-missing_plan_errors")
@@ -405,12 +524,25 @@ def test_target_occupied_recheck(tmp_path):
     assert wf._target_occupied(str(tmp_path), "A.JPG", "A.JPG") is False       # ignores the source itself
 
 
+@pytest.mark.spec("RUL-target_free_at_execute", "RUL-unchecked_counts_as_changed",
+                  test="TST-geotag_execution-a_folder_that_cannot_be_listed_is_no_free_target")
+def test_a_folder_that_cannot_be_listed_is_no_free_target(tmp_path, monkeypatch):
+    """Where the photo's folder cannot be listed, whether its rename target is free cannot be checked: the target
+    counts as taken, and the rename is held back, never made blind."""
+    wf = cal.GeotagWorkflow(str(tmp_path))
+
+    def refuse(_d):
+        raise PermissionError("not listable")
+    monkeypatch.setattr(cal.os, "listdir", refuse)
+    assert wf._target_occupied(str(tmp_path), "b.jpg", "src.arw") is True
+
+
 # --- unit: _exiftool_write seam --------------------------------------------
 
-def _fake_exiftool(calls=None, rc=0, new=b"rewritten"):
+def _fake_exiftool(calls=None, rc=0, new=b"rewritten", stderr=""):
     """Stands in for exiftool: writes the new file where `-o` says, as the real one does."""
     class _R:
-        def __init__(self, rc): self.returncode = rc
+        def __init__(self, rc): self.returncode, self.stdout, self.stderr = rc, "", stderr
     def _run(cmd, **k):
         if calls is not None:
             calls.append(cmd)
@@ -436,30 +568,29 @@ def test_exiftool_write_invocation(tmp_path, monkeypatch):
     assert photo.read_bytes() == b"rewritten" and not (tmp_path / "x.jpg_exiftool_tmp").exists()
     assert os.stat(photo).st_mode & 0o777 == 0o640
     photo.write_bytes(b"orig")
-    monkeypatch.setattr(cal.subprocess, "run", _fake_exiftool(rc=1))
-    assert wf._exiftool_write(str(photo), {}) is False                # non-zero exit
+    monkeypatch.setattr(cal.subprocess, "run", _fake_exiftool(rc=1, stderr="Error: Not a valid JPG - x.jpg\n"))
+    assert wf._exiftool_write(str(photo), {}) == "Error: Not a valid JPG - x.jpg"    # non-zero exit: its words
+    monkeypatch.setattr(cal.subprocess, "run", _fake_exiftool(rc=2))
+    assert wf._exiftool_write(str(photo), {}) == "exiftool exited with status 2"     # and none said
     def _boom(*a, **k): raise OSError("no exiftool")
     monkeypatch.setattr(cal.subprocess, "run", _boom)
-    assert wf._exiftool_write(str(photo), {}) is False                # tool missing
+    assert wf._exiftool_write(str(photo), {}) == "OSError: no exiftool"            # tool missing
     assert photo.read_bytes() == b"orig" and os.listdir(tmp_path) == ["x.jpg"]
 
 
-def test_exiftool_write_unlinks_stale_tmp(tmp_path, monkeypatch):
-    """An interrupted earlier write can leave `<file>_exiftool_tmp`; the writer removes it for THIS target before
-    it runs exiftool, which refuses an output that exists — so the resumed write never trips over the leftover."""
+def test_exiftool_write_never_removes_a_leftover(tmp_path, monkeypatch):
+    """The writer itself never removes a `<file>_exiftool_tmp` it finds beside the photo: it fails, as exiftool would,
+    the leftover and the photo left as they were. Only its caller clears geotag's own (BLD-own_leftover_cleared)."""
     wf = cal.GeotagWorkflow(str(tmp_path))
     target = tmp_path / "x.jpg"
     target.write_bytes(b"orig")
     stale = tmp_path / "x.jpg_exiftool_tmp"
     stale.write_bytes(b"partial")
-    seen = []
-    def _run(cmd, **k):
-        seen.append(stale.exists())               # what exiftool finds at its output's name
-        return _fake_exiftool()(cmd, **k)
-    monkeypatch.setattr(cal.subprocess, "run", _run)
-    assert wf._exiftool_write(str(target), {"DateTimeOriginal": "2024:07:03 14:00:00"}) is True
-    assert seen == [False]                        # the leftover was gone before the write
-    assert target.read_bytes() == b"rewritten" and not stale.exists()
+    calls = []
+    monkeypatch.setattr(cal.subprocess, "run", _fake_exiftool(calls))
+    said = wf._exiftool_write(str(target), {"DateTimeOriginal": "2024:07:03 14:00:00"})
+    assert said is not True and "x.jpg_exiftool_tmp" in said and calls == []
+    assert target.read_bytes() == b"orig" and stale.read_bytes() == b"partial"
 
 
 @pytest.mark.spec("RUL-rewrite_in_place_atomic", "BLD-metadata_safe_write",
@@ -498,6 +629,7 @@ def test_a_write_interrupted_at_the_rename_leaves_the_photo_whole(tmp_path, monk
         with pytest.raises(KeyboardInterrupt):
             wf._exiftool_write(str(photo), {"DateTimeOriginal": "x"})
     assert photo.read_bytes() == b"orig" and (tmp_path / "x.jpg_exiftool_tmp").exists()
+    wf._clear_own_leftover(str(photo) + "_exiftool_tmp")              # the journal shows the write begun
     assert wf._exiftool_write(str(photo), {"DateTimeOriginal": "x"}) is True
     assert photo.read_bytes() == b"rewritten" and os.listdir(tmp_path) == ["x.jpg"]
 
@@ -538,8 +670,9 @@ def test_an_interrupted_metadata_write_leaves_the_photo_whole(tmp_path, monkeypa
     with monkeypatch.context() as m:
         m.setenv("PERL5LIB", str(tmp_path))
         m.setenv("PERL5OPT", "-MCartoKillAtOutput")
-        assert wf._exiftool_write(str(photo), tags) is False             # killed mid-write
+        assert wf._exiftool_write(str(photo), tags) is not True         # killed mid-write
     assert photo.read_bytes() == original                                # the photo, intact
+    wf._clear_own_leftover(str(photo) + "_exiftool_tmp")                 # its own leftover, the write begun
     assert wf._exiftool_write(str(photo), tags) is True                  # the write done again
     assert not (tmp_path / "a.jpg_exiftool_tmp").exists()
     assert photo.read_bytes() != original and os.stat(photo).st_mode & 0o777 == 0o640
@@ -556,9 +689,101 @@ def test_exiftool_write_no_tmp_is_noop(tmp_path, monkeypatch):
     assert wf._exiftool_write(str(photo), {}) is True
 
 
-def test_target_occupied_bad_directory(tmp_path):
+def _one_write(rel="x.jpg", oid="o"):
+    return [_op(oid, "metadata_time_write", rel, pre={"content_fingerprint": "FP"}, writes={"DateTimeOriginal": "x"})]
+
+
+@pytest.mark.spec("RUL-geotag_clears_own_leftover", "BLD-own_leftover_cleared",
+                  test="TST-geotag_execution-own_leftover_cleared_where_the_journal_shows_the_write_begun")
+def test_own_leftover_cleared_where_the_journal_shows_the_write_begun(tmp_path, monkeypatch):
+    """Run again, the execution finds beside a photo the leftover of its own write, which its journal shows begun and
+    never confirmed: it removes it and writes the photo."""
     wf = cal.GeotagWorkflow(str(tmp_path))
-    assert wf._target_occupied(str(tmp_path / "nope"), "a.jpg", "s.jpg") is False  # listdir OSError -> False
+    photo = tmp_path / "x.jpg"; photo.write_bytes(b"orig")
+    (tmp_path / "x.jpg_exiftool_tmp").write_bytes(b"partial")
+    monkeypatch.setattr(cal.subprocess, "run", _fake_exiftool())
+    monkeypatch.setattr(cal.ContentHasher, "fingerprint_image", staticmethod(lambda p: {"value": "FP"}))
+    r = wf._apply_file("x.jpg", _one_write(), {"o": "begun"}, {})
+    assert r["blocker"] is None and r["applied"] == ["o"]
+    assert photo.read_bytes() == b"rewritten" and os.listdir(tmp_path) == ["x.jpg"]
+
+
+@pytest.mark.spec("RUL-other_write_leftover_holds_photo", "RUL-write_leftovers_by_dest_warned", "BLD-own_leftover_cleared",
+                  "RUL-geotag_clears_own_leftover",
+                  test="TST-geotag_execution-another_leftover_holds_its_photo_back")
+def test_another_leftover_holds_its_photo_back(tmp_path, monkeypatch):
+    """A leftover beside a photo whose write the journal does not show begun is not geotag's to remove — it may be the
+    only whole copy of something: the photo is held back, the leftover named and left as it was, nothing written."""
+    wf = cal.GeotagWorkflow(str(tmp_path))
+    photo = tmp_path / "x.jpg"; photo.write_bytes(b"orig")
+    leftover = tmp_path / "x.jpg_exiftool_tmp"; leftover.write_bytes(b"maybe the only copy")
+    calls, journal = [], {}
+    monkeypatch.setattr(cal.subprocess, "run", _fake_exiftool(calls))
+    monkeypatch.setattr(cal.ContentHasher, "fingerprint_image", staticmethod(lambda p: {"value": "FP"}))
+    r = wf._apply_file("x.jpg", _one_write(), journal, {})
+    assert "x.jpg_exiftool_tmp" in r["blocker"] and r["applied"] == [] and calls == []
+    assert leftover.read_bytes() == b"maybe the only copy" and photo.read_bytes() == b"orig"
+    assert journal == {}                                              # nothing begun
+
+
+@pytest.mark.spec("RUL-geotag_clears_own_leftover", "BLD-own_leftover_cleared",
+                  test="TST-geotag_execution-a_write_is_noted_begun_before_it_starts")
+def test_a_write_is_noted_begun_before_it_starts(tmp_path, monkeypatch):
+    """The journal says a photo's write is begun, on disk, before the tool writes anything beside the photo — so a
+    leftover an interruption leaves is known as geotag's own."""
+    wf = cal.GeotagWorkflow(str(tmp_path))
+    (tmp_path / "x.jpg").write_bytes(b"orig")
+    persisted, seen = [], []
+    wf._journal_out = lambda j: persisted.append(dict(j))
+
+    def _run(cmd, **k):
+        seen.append(persisted[-1] if persisted else None)
+        return _fake_exiftool()(cmd, **k)
+    monkeypatch.setattr(cal.subprocess, "run", _run)
+    monkeypatch.setattr(cal.ContentHasher, "fingerprint_image", staticmethod(lambda p: {"value": "FP"}))
+    r = wf._apply_file("x.jpg", _one_write(), {}, {})
+    assert r["applied"] == ["o"] and seen == [{"o": "begun"}]
+
+
+@pytest.mark.spec("RUL-geotag_clears_own_leftover", "RUL-geotag_execution_resumable", "BLD-own_leftover_cleared",
+                  test="TST-geotag_execution-a_run_cut_off_mid_write_clears_its_leftover_when_run_again")
+def test_a_run_cut_off_mid_write_clears_its_leftover_when_run_again(tmp_path, monkeypatch):
+    """An execution stopped while the tool writes a photo's new file leaves it beside the photo; the same plan's
+    execution run again finds its journal showing that write begun, clears the leftover and finishes."""
+    ws, ctl = _ready_ws(tmp_path, monkeypatch)
+    _mock_tools(monkeypatch, ws)
+    finishing = cal.GeotagWorkflow._exiftool_write
+
+    def cut_off(self, p, tags):
+        with open(p + "_exiftool_tmp", "wb") as f:
+            f.write(b"half")
+        raise KeyboardInterrupt
+    with monkeypatch.context() as m:
+        m.setattr(cal.GeotagWorkflow, "_exiftool_write", cut_off)
+        assert _execute(monkeypatch, ws) == 130
+    left = sorted(ws.glob("6-photos-by-dest/T/*_exiftool_tmp"))
+    assert left
+    plan_id = json.load(open(ctl / "photos-24-executable-plan.json"))["plan_id"]
+    ops = json.load(open(ctl / f"journal-{plan_id}.json"))["operations"]
+    assert "begun" in ops.values()
+    monkeypatch.setattr(cal.GeotagWorkflow, "_exiftool_write", finishing)
+    assert _execute(monkeypatch, ws) == 0
+    assert not list(ws.glob("6-photos-by-dest/T/*_exiftool_tmp")) and _summary(ctl)["status"] == "success"
+
+
+@pytest.mark.spec("RUL-write_leftover_stops_geotag_plan", "BLD-own_leftover_cleared",
+                  test="TST-geotag_execution-a_write_leftover_stops_the_plan_named")
+def test_a_write_leftover_stops_the_plan_named(tmp_path, monkeypatch):
+    """Geotag's plan stops on the leftover of an interrupted write under photos by destination, naming it in a blocker
+    of its own, and leaves it where it is."""
+    ws, _ctl = _ready_ws(tmp_path, monkeypatch)
+    leftover = ws / "6-photos-by-dest" / "T" / "a.arw_exiftool_tmp"
+    leftover.write_bytes(b"partial")
+    blockers, _w, _i = cal.GeotagWorkflow(str(ws)).preflight(needs_exiftool=False)
+    named = [b for b in blockers if "6-photos-by-dest/T/a.arw_exiftool_tmp" in b]
+    assert len(named) == 1 and "interrupted metadata write" in named[0]
+    assert not any("non-media" in b for b in blockers)
+    assert leftover.read_bytes() == b"partial"
 
 
 # --- unit: _apply_file precondition + resume + rename branches --------------
@@ -626,6 +851,23 @@ def test_an_edit_made_since_the_plan_is_never_overwritten(tmp_path, monkeypatch)
     assert not cal._holds_writes({"GPSLatitude": 33.9}, {"GPSLatitude": 33.865143})
 
 
+@pytest.mark.spec("BLD-own_write_recognised", test="TST-geotag_execution-planned_tags_held_by_magnitude_text_or_absence")
+def test_planned_tags_held_by_magnitude_text_or_absence():
+    """The read-back test that tells geotag's own interrupted write from an edit: a coordinate equal in magnitude to
+    within a millionth of a degree, its sign left to the reference tag; any other tag equal as text; a tag planned
+    empty absent or empty."""
+    lat = {"GPSLatitude": 50.123456}
+    assert cal._holds_writes({"GPSLatitude": 50.1234569}, lat)                   # 0.9e-6 off: held
+    assert cal._holds_writes({"GPSLatitude": "-50.123456"}, lat)                 # sign aside, read as text
+    assert not cal._holds_writes({"GPSLatitude": 50.1234575}, lat)               # 1.5e-6 off: not held
+    assert not cal._holds_writes({"GPSLatitude": "north"}, lat) and not cal._holds_writes({}, lat)
+    t = {"DateTimeOriginal": "2024:07:03 14:00:00", "OffsetTimeOriginal": "+02:00"}
+    assert cal._holds_writes(dict(t), t)
+    assert not cal._holds_writes(dict(t, OffsetTimeOriginal="+0200"), t)          # text, not meaning
+    assert cal._holds_writes({"GPSLatitude": ""}, {"GPSLatitude": ""}) and cal._holds_writes({}, {"GPSLatitude": None})
+    assert not cal._holds_writes({"GPSLatitude": 0}, {"GPSLatitude": ""})         # a value where none was planned
+
+
 def test_apply_file_rename_skip_and_failure(tmp_path, monkeypatch):
     wf = cal.GeotagWorkflow(str(tmp_path))
     p = tmp_path / "a.arw"; p.write_bytes(b"x")
@@ -646,7 +888,7 @@ def test_revalidate_detects_each_stale_input(tmp_path, monkeypatch):
     ws, ctl = _ready_ws(tmp_path, monkeypatch)
     wf = cal.GeotagWorkflow(str(ws)); wf.preflight(for_execute=True)
     plan = json.load(open(ctl / "photos-24-executable-plan.json"))
-    gpx = cal.GPXIndex(cal.selected_gpx_root()).build()
+    gpx = wf.plan_tracks(plan)
     assert wf.revalidate_plan(plan, gpx) == []                        # fresh -> nothing stale
     assert any("not 'ready'" in s for s in wf.revalidate_plan({**plan, "status": "blocked"}, gpx))
     for k in ("config_fingerprint", "filename_format_fingerprint", "camera_group_fingerprint",
@@ -658,6 +900,26 @@ def test_revalidate_detects_each_stale_input(tmp_path, monkeypatch):
     assert any("planned operations changed" in s for s in wf.revalidate_plan(pk, gpx))
 
 
+@pytest.mark.spec("RUL-zone_table_restales_plan", "BLD-country_table_dependency", "BLD-geotag_dependencies",
+                  test="TST-geotag_execution-another_table_of_countries_restales_the_plan")
+def test_another_table_of_countries_restales_the_plan(tmp_path, monkeypatch):
+    """The plan names the table of countries it was made from and where that came from; another one — the host's
+    gone, a copy downloaded, another release — makes it stale, as a changed decision does."""
+    ws, ctl = _ready_ws(tmp_path, monkeypatch)
+    wf = cal.GeotagWorkflow(str(ws)); wf.preflight(for_execute=True)
+    plan = json.load(open(ctl / "photos-24-executable-plan.json"))
+    gpx = wf.plan_tracks(plan)
+    table = utils.zone_table(str(ws))
+    assert plan["depends_on"]["country_table"] == {"source": "host", "sha256": table["sha256"]}
+    assert wf.revalidate_plan(plan, gpx) == []
+    pk = {**plan, "depends_on": {**plan["depends_on"], "country_table": {"source": "host", "sha256": "0" * 64}}}
+    assert any("country_table" in s for s in wf.revalidate_plan(pk, gpx))
+    real = utils._zone_database_file
+    monkeypatch.setattr(utils, "_zone_database_file",
+                        lambda name: None if name in ("zone.tab", "iso3166.tab") else real(name))
+    assert any("country_table" in s for s in wf.revalidate_plan(plan, gpx))   # the carried copy now
+
+
 @pytest.mark.spec("RUL-plan_carried_out_by_its_code", "BLD-code_fingerprint",
                   test="TST-geotag_execution-a_plan_made_by_other_code_is_stale")
 def test_a_plan_made_by_other_code_is_stale(tmp_path, monkeypatch):
@@ -666,22 +928,23 @@ def test_a_plan_made_by_other_code_is_stale(tmp_path, monkeypatch):
     ws, ctl = _ready_ws(tmp_path, monkeypatch)
     wf = cal.GeotagWorkflow(str(ws)); wf.preflight(for_execute=True)
     plan = json.load(open(ctl / "photos-24-executable-plan.json"))
-    gpx = cal.GPXIndex(cal.selected_gpx_root()).build()
+    gpx = wf.plan_tracks(plan)
     assert plan["depends_on"]["code_fingerprint"] == utils.code_fingerprint()
     for recorded in ("0" * 64, None):
         pk = {**plan, "depends_on": {**plan["depends_on"], "code_fingerprint": recorded}}
         assert any("code_fingerprint" in s for s in wf.revalidate_plan(pk, gpx)), recorded
 
 
-def test_corrupt_journal_is_ignored(tmp_path, monkeypatch):
+def test_corrupt_journal_stops_execution(tmp_path, monkeypatch):
     ws, ctl = _ready_ws(tmp_path, monkeypatch)
     _mock_tools(monkeypatch, ws)
-    # a corrupt journal must not crash execution (treated as empty -> a fresh apply)
+    # a corrupt journal is never taken for an empty one (RUL-unreadable_execution_record_stops)
     plan = json.load(open(ctl / "photos-24-executable-plan.json"))
     with open(utils.journal_path(str(ws), plan["plan_id"]), "w") as f:
         f.write("{corrupt")
-    assert _execute(monkeypatch, ws) == 0
-    assert _summary(ctl)["status"] == "success"
+    assert _execute(monkeypatch, ws) == 2
+    assert not (ctl / "photos-25-execution-summary.json").exists()
+    assert open(utils.journal_path(str(ws), plan["plan_id"])).read() == "{corrupt"
 
 
 @pytest.mark.spec("BLD-rename_planning", "BLD-geotag_execution",
@@ -691,10 +954,52 @@ def test_rename_target_occupied_at_execute_blocks(tmp_path, monkeypatch):
     _mock_tools(monkeypatch, ws)
     # occupy a planned rename target AFTER the plan was written -> execute-time no-clobber blocker
     (ws / "6-photos-by-dest" / "T" / "2024-07-03--14-00-00.arw").write_bytes(b"squatter")
+    recorded(ws)            # a file put there stops every command first (test_workspace_check); taken as the state here
     assert _execute(monkeypatch, ws) == 3
     s = _summary(ctl)
     assert s["status"] == "partial" and any("occupied at execute time" in b for b in s["blockers"])
     assert (ws / "6-photos-by-dest" / "T" / "a.arw").exists()      # not clobbered/renamed
+
+
+@pytest.mark.spec("RUL-geotag_extension_lowercase", "BLD-case_rename_via", "RUL-target_free_at_execute",
+                  test="TST-geotag_execution-a_change_of_case_alone_goes_by_a_temporary_name")
+def test_a_change_of_case_alone_goes_by_a_temporary_name(tmp_path, monkeypatch):
+    """`X.JPG` to `X.jpg`: on a filesystem that ignores case the new name is the photo's own, which a no-clobber move
+    refuses. The rename goes by a free temporary name in two no-clobber moves; interrupted between them, the next run
+    finds the photo under the temporary name and completes it, once it is seen to be that photo. A temporary name
+    taken blocks the rename, nothing moved."""
+    real_move = cal._move_no_clobber
+
+    def case_blind_move(src, dst, **kw):          # a filesystem that ignores case: the photo's own name is taken
+        if os.path.basename(src).lower() == os.path.basename(dst).lower() or \
+                any(e.lower() == os.path.basename(dst).lower() for e in os.listdir(os.path.dirname(dst))):
+            raise FileExistsError(dst)
+        return real_move(src, dst, **kw)
+    monkeypatch.setattr(cal, "_move_no_clobber", case_blind_move)
+    monkeypatch.setattr(cal.ContentHasher, "fingerprint_image", staticmethod(lambda path: {"value": "fp"}))
+    wf = cal.GeotagWorkflow(str(tmp_path))
+    ren = _op("oR", "rename_no_clobber", "X.JPG", pre={"content_fingerprint": "fp"},
+              **{"from": "X.JPG", "to": "X.jpg", "via": "X.carto-case.jpg"})
+    (tmp_path / "X.JPG").write_bytes(b"x")
+    r = wf._apply_file("X.JPG", [ren], {}, {})
+    assert r["applied"] == ["oR"] and r["blocker"] is None and os.listdir(tmp_path) == ["X.jpg"]
+    assert r["after"]["relative_path"] == "X.jpg"
+    # interrupted between the two moves: the photo waits under the temporary name
+    os.rename(tmp_path / "X.jpg", tmp_path / "X.carto-case.jpg")
+    r = wf._apply_file("X.JPG", [ren], {}, {})
+    assert r["applied"] == ["oR"] and r["blocker"] is None and os.listdir(tmp_path) == ["X.jpg"]
+    os.rename(tmp_path / "X.jpg", tmp_path / "X.carto-case.jpg")
+    monkeypatch.setattr(cal.ContentHasher, "fingerprint_image", staticmethod(lambda path: {"value": "another"}))
+    r = wf._apply_file("X.JPG", [ren], {}, {})                        # another photo there: not taken for it
+    assert r["blocker"] and "not this photo" in r["blocker"] and not r["applied"]
+    assert os.listdir(tmp_path) == ["X.carto-case.jpg"]
+    # the temporary name taken at execute: blocked, the photo left as it was
+    os.rename(tmp_path / "X.carto-case.jpg", tmp_path / "X.JPG")
+    (tmp_path / "x.CARTO-case.jpg").write_bytes(b"squatter")
+    monkeypatch.setattr(cal.ContentHasher, "fingerprint_image", staticmethod(lambda path: {"value": "fp"}))
+    r = wf._apply_file("X.JPG", [ren], {}, {})
+    assert r["blocker"] and "occupied at execute time" in r["blocker"] and not r["applied"]
+    assert sorted(os.listdir(tmp_path)) == ["X.JPG", "x.CARTO-case.jpg"]
 
 
 @pytest.mark.spec("RUL-geotag_execution_resumable", "RUL-found_applied_never_remade",
@@ -725,12 +1030,12 @@ def test_apply_file_already_renamed_resumes_without_journal(tmp_path, monkeypatc
     assert "is not this photo as planned" in r["blocker"]
 
 
-def test_corrupt_prior_summary_ignored(tmp_path, monkeypatch):
+def test_corrupt_prior_summary_stops_execution(tmp_path, monkeypatch):
     ws, ctl = _ready_ws(tmp_path, monkeypatch)
     _mock_tools(monkeypatch, ws)
-    (ctl / "photos-25-execution-summary.json").write_text("{corrupt")   # unreadable prior reconciliation
-    assert _execute(monkeypatch, ws) == 0                              # ignored -> a clean apply
-    assert _summary(ctl)["status"] == "success"
+    (ctl / "photos-25-execution-summary.json").write_text("{corrupt")   # unreadable: its acceptances unknown
+    assert _execute(monkeypatch, ws) == 2                              # never taken for none
+    assert (ctl / "photos-25-execution-summary.json").read_text() == "{corrupt"
 
 
 def test_execute_on_sealed_workspace_warns_and_blocks(tmp_path, monkeypatch):
@@ -744,7 +1049,7 @@ def test_execute_on_sealed_workspace_warns_and_blocks(tmp_path, monkeypatch):
     assert _execute(monkeypatch, ws) == 2                             # sealed -> blocked (exit 2)
 
 
-@pytest.mark.spec("BLD-execution_summary")
+@pytest.mark.spec("BLD-execution_summary", test="TST-geotag_execution-summary_keeps_run_metadata_separate")
 def test_summary_keeps_run_metadata_separate(tmp_path, monkeypatch):
     ws, ctl = _ready_ws(tmp_path, monkeypatch)
     _mock_tools(monkeypatch, ws)
@@ -772,7 +1077,7 @@ def _mock_zfs(monkeypatch, *, fail=False):
     monkeypatch.setattr(_sp, "run", run)
 
 
-@pytest.mark.spec("BLD-geotag_execution")
+@pytest.mark.spec("BLD-geotag_execution", test="TST-geotag_execution-execute_records_zfs_snapshot")
 def test_execute_records_zfs_snapshot(tmp_path, monkeypatch):
     zfs = {"enabled": True, "snapshots_required": True, "snapshot_prefix": "px-",
            "datasets": {"workspace": "auto", "library": "auto"}}
@@ -783,7 +1088,8 @@ def test_execute_records_zfs_snapshot(tmp_path, monkeypatch):
     assert s["snapshot"]["ok"] and s["snapshot"]["snapshot_name"] == f"pool/ws@px-geotag-{s['plan_id']}"
 
 
-@pytest.mark.spec("BLD-geotag_execution")
+@pytest.mark.spec("BLD-geotag_execution", "RUL-required_snapshot_or_nothing",
+                  test="TST-geotag_execution-execute_aborts_when_required_snapshot_fails")
 def test_execute_aborts_when_required_snapshot_fails(tmp_path, monkeypatch):
     zfs = {"enabled": True, "snapshots_required": True, "snapshot_prefix": "px-",
            "datasets": {"workspace": "auto", "library": "auto"}}
@@ -796,6 +1102,77 @@ def test_execute_aborts_when_required_snapshot_fails(tmp_path, monkeypatch):
     s = _summary(ctl)
     assert s["status"] == "rejected" and s["snapshot"]["ok"] is False and s["snapshot"]["required"] is True
     assert s["blockers"] and "snapshot failed" in s["blockers"][0]
+
+
+@pytest.mark.spec("BLD-geotag_execution", "BLD-withdrawn_track_points", "RUL-withdrawn_track_points_kept",
+                  "RUL-required_snapshot_or_nothing", test="TST-geotag_execution-a_run_the_snapshot_ends_records_no_tracks")
+def test_a_run_a_required_snapshot_ends_keeps_nothing_of_the_plan(tmp_path, monkeypatch):
+    """A required snapshot that fails ends the run before anything is executed: the tracks its plan rests on are not
+    recorded as used, nor its decisions kept as executed. The same plan run once the snapshot is taken records
+    both."""
+    import sqlite3
+    zfs = {"enabled": True, "snapshots_required": True, "snapshot_prefix": "px-",
+           "datasets": {"workspace": "auto", "library": "auto"}}
+    ws, ctl = _ready_ws(tmp_path, monkeypatch, zfs=zfs)
+    plan_id = json.load(open(ctl / "photos-24-executable-plan.json"))["plan_id"]
+
+    def used():
+        con = sqlite3.connect(str(ctl / "photos-00-ingest.db"))
+        try:
+            return con.execute("SELECT COUNT(*) FROM gpx_track_use WHERE plan_id = ?", (plan_id,)).fetchone()[0]
+        finally:
+            con.close()
+    _mock_tools(monkeypatch, ws); _mock_zfs(monkeypatch, fail=True)
+    assert _execute(monkeypatch, ws) == 2
+    assert used() == 0 and not (ctl / "executed" / plan_id).exists()
+    _mock_zfs(monkeypatch)
+    assert _execute(monkeypatch, ws) == 0
+    assert used() > 0 and (ctl / "executed" / plan_id).is_dir()
+
+
+@pytest.mark.spec("BLD-execution_summary_written", "RUL-content_acceptance_stays_open", "RUL-geotag_summary_only_for_execution",
+                  "RUL-required_snapshot_or_nothing", test="TST-geotag_execution-summary_written_only_by_a_run_that_executes")
+def test_summary_written_only_by_a_run_that_executes(tmp_path, monkeypatch):
+    """photos-25 is written by a run that applied the plan, or whose required snapshot failed — that one carrying
+    the mismatches still open, acceptances and all. A preflight refusal, a stale plan or an interrupt writes none:
+    the earlier summary stays as it was."""
+    zfs = {"enabled": True, "snapshots_required": True, "snapshot_prefix": "px-",
+           "datasets": {"workspace": "auto", "library": "auto"}}
+    ws, ctl = _ready_ws(tmp_path, monkeypatch, zfs=zfs)
+    _mock_tools(monkeypatch, ws, content_changed=True); _mock_zfs(monkeypatch)
+    assert _execute(monkeypatch, ws) == 3                                 # applied: written, mismatches in it
+    sp = ctl / "photos-25-execution-summary.json"
+    s = _summary(ctl)
+    assert s["fingerprint_mismatches"]
+    for m in s["fingerprint_mismatches"]:
+        m["user_decision"]["accept_fingerprint_change"] = True
+    sp.write_text(json.dumps(s))
+    earlier = sp.read_bytes()
+
+    def unchanged():
+        return sp.read_bytes() == earlier and not list(ctl.glob("photos-25-execution-summary-*.json"))
+
+    (ws / "6-photos-by-dest" / "T" / "jpg").mkdir()                         # a preflight refusal
+    assert _execute(monkeypatch, ws) == 2 and unchanged()
+    (ws / "6-photos-by-dest" / "T" / "jpg").rmdir()
+    gd = ctl / "photos-23-gps-decisions.json"
+    held = gd.read_bytes()
+    gd.write_bytes(held + b" ")                                            # a stale plan
+    assert _execute(monkeypatch, ws) == 2 and unchanged()
+    gd.write_bytes(held)
+
+    def interrupted(*a, **k):
+        raise KeyboardInterrupt
+    with monkeypatch.context() as m:                                      # an interrupt while applying
+        m.setattr(cal.GeotagWorkflow, "_apply_file_contained", interrupted)
+        assert _execute(monkeypatch, ws) == 130 and unchanged()
+
+    _mock_zfs(monkeypatch, fail=True)                                     # a required snapshot that fails
+    assert _execute(monkeypatch, ws) == 2
+    s = _summary(ctl)
+    assert s["status"] == "rejected"
+    assert s["fingerprint_mismatches"] == json.loads(earlier)["fingerprint_mismatches"]   # acceptances kept
+    assert (ctl / "photos-25-execution-summary-001.json").read_bytes() == earlier
 
 
 @pytest.mark.spec("RUL-camera_classes_not_derivation",
@@ -820,9 +1197,15 @@ def test_reclassing_a_camera_group_changes_its_treatment_not_its_key(tmp_path, m
             assert not e.code, groups
         dest = json.load(open(ctl / "photos-21-time-decisions.json"))["destinations"]["6-photos-by-dest/T"]
         cells = dest.get("camera_group_time_decisions") or {}
-        seen.append((dest["camera_groups_present"], {k: c["camera_group_class"] for k, c in cells.items()}))
+        cache = cal.GeotagCache(str(ws))
+        try:
+            keys = sorted({r["camera_group"] for r in cache.get_rows()})   # the group each photo was resolved as
+        finally:
+            cache.close()
+        seen.append((keys, {k: c["camera_group_class"] for k, c in cells.items()}))
         assert json.load(open(ctl / "photos-24-executable-plan.json"))["status"] == "ready", groups
-    assert seen == [([CAM], {CAM: "camera"}), ([CAM], {}), ([CAM], {CAM: "camera"})], seen
+    # as a phone it has a cell only because its own GPS reads its clock otherwise than the zone (BLD-phone_offset_cell)
+    assert seen == [([CAM], {CAM: "camera"}), ([CAM], {CAM: "smartphone"}), ([CAM], {CAM: "camera"})], seen
 
 
 _SNAPSHOTS_ON = {"enabled": True, "snapshots_required": False, "snapshot_prefix": "px-",
@@ -883,7 +1266,8 @@ def test_snapshot_is_taken_while_the_lock_is_held(tmp_path, monkeypatch):
     assert utils.WorkspaceLock(str(ws), create=False).held_owner() is None   # the probe tells held from free
 
 
-@pytest.mark.spec("RUL-execution_only_the_plan")
+@pytest.mark.spec("RUL-execution_only_the_plan",
+                  test="TST-geotag_execution-execute_applies_recorded_plan_verbatim_no_recalc")
 def test_execute_applies_recorded_plan_verbatim_no_recalc(tmp_path, monkeypatch):
     """RUL-execution_only_the_plan (anti): execute applies the recorded photos-24 plan VERBATIM and never recalculates a
     decision. Doctor a saved rename target to a value the planner would never derive (re-stamping
@@ -914,7 +1298,8 @@ def test_execute_applies_recorded_plan_verbatim_no_recalc(tmp_path, monkeypatch)
     assert _summary(ctl)["status"] == "success"
 
 
-@pytest.mark.spec("BLD-drift_validation")
+@pytest.mark.spec("BLD-drift_validation",
+                  test="TST-geotag_execution-execute_rejects_when_drift_validation_changed_after_planning")
 def test_execute_rejects_when_drift_validation_changed_after_planning(tmp_path, monkeypatch):
     """RUL-geotag_plan_carries_every_dependency (anti): photos-22 (the GPS-drift confirmation) is a recorded plan
     dependency, so an execute whose drift artifact changed after planning is rejected before ANY mutation — the drift
@@ -953,7 +1338,7 @@ def test_resume_after_journal_lost_skips_applied_files(tmp_path, monkeypatch):
     assert not s["blockers"] and not s["failures"]                    # not blocked on the renamed files
 
 
-@pytest.mark.spec("BLD-geotag_execution")
+@pytest.mark.spec("BLD-geotag_execution", test="TST-geotag_execution-journal_persisted_incrementally_during_run")
 def test_journal_persisted_incrementally_during_run(tmp_path, monkeypatch):
     """The journal is flushed per-file as the run proceeds (not only at the end), so a crash mid-run
     leaves a journal that records the already-applied files."""
@@ -972,7 +1357,7 @@ def test_journal_persisted_incrementally_during_run(tmp_path, monkeypatch):
     assert len(flushes) >= 2 and flushes == sorted(flushes) and flushes[-1] > flushes[0]
 
 
-@pytest.mark.spec("BLD-geotag_records_by_destination")
+@pytest.mark.spec("BLD-geotag_records_by_destination", test="TST-geotag_execution-summary_grouped_by_destination")
 def test_summary_grouped_by_destination(tmp_path, monkeypatch):
     """photos-25 carries a per-destination operation breakdown (BLD-execution_summary) that sums to the global
     totals."""
@@ -987,7 +1372,7 @@ def test_summary_grouped_by_destination(tmp_path, monkeypatch):
     assert sum(v["renames"] for v in s["destinations"].values()) == s["totals"]["renames"]
 
 
-@pytest.mark.spec("RUL-handoff_verified_by_content")
+@pytest.mark.spec("RUL-handoff_verified_by_content", test="TST-geotag_execution-noop_reprep_does_not_restale_plan")
 def test_noop_reprep_does_not_restale_plan(tmp_path, monkeypatch):
     """A no-op prep re-run refreshes only the handoff's run_metadata (and its byte layout); geotag
     depends on the handoff CONTENT fingerprint, so the plan must NOT restale — but a real content change
@@ -997,7 +1382,7 @@ def test_noop_reprep_does_not_restale_plan(tmp_path, monkeypatch):
     _mock_tools(monkeypatch, ws)
     wf = cal.GeotagWorkflow(str(ws)); wf.preflight(for_execute=True)
     plan = json.load(open(ctl / "photos-24-executable-plan.json"))
-    gpx = cal.GPXIndex(cal.selected_gpx_root()).build()
+    gpx = wf.plan_tracks(plan)
     assert wf.revalidate_plan(plan, gpx) == []                            # fresh
     ho = json.load(open(ctl / "photos-11-handoff.json"))
     ho["run_metadata"] = {"plan_id": "NEW-PLAN", "execution_id": "NEW-EXEC"}   # only run metadata changed
@@ -1052,6 +1437,7 @@ def test_one_photo_s_failure_is_its_own(tmp_path, monkeypatch):
     s = _summary(ctl)
     assert s["status"] == "partial" and len(s["blockers"]) == 1
     assert "a.arw: could not be applied (OSError" in s["blockers"][0]
+    assert s["failures"] and all(f["relative_path"].endswith("a.arw") for f in s["failures"])   # named by its photo
     plan = json.load(open(ctl / "photos-24-executable-plan.json"))
     journal = json.load(open(utils.journal_path(str(ws), plan["plan_id"])))
     b_ops = [o["operation_id"] for o in plan["destinations"]["6-photos-by-dest/T"]["operations"]
@@ -1082,6 +1468,29 @@ def test_what_a_killed_run_applied_is_recorded_by_the_next(tmp_path, monkeypatch
     after = journal["media_after"]
     assert len(after) == 2 and all(os.stat(ws / rel).st_size == v["size"] for rel, v in after.items())
     assert not any(rel.endswith(("a.arw", "b.arw")) for rel in after)                    # under their new names
+
+
+@pytest.mark.spec("RUL-applied_unrecorded_is_recorded", "RUL-found_applied_never_remade",
+                  test="TST-geotag_execution-a_write_with_no_rename_found_applied_is_recorded")
+def test_a_write_with_no_rename_found_applied_is_recorded(tmp_path, monkeypatch):
+    """A photo whose plan writes its time and renames nothing, written by a run killed before its journal reached the
+    disk: the next run finds it at its own name holding the planned values, writes nothing again, and records the write
+    applied."""
+    wf = cal.GeotagWorkflow(str(tmp_path))
+    photo = tmp_path / "x.jpg"; photo.write_bytes(b"orig")
+    st = photo.stat()
+    ops = [_op("o", "metadata_time_write", "x.jpg", pre={"size": st.st_size, "mtime_ns": st.st_mtime_ns,
+                                                         "content_fingerprint": "FP"},
+               writes={"DateTimeOriginal": "2024:07:03 14:00:00"})]
+    photo.write_bytes(b"orig, written")                              # the killed run's write
+    written = []
+    monkeypatch.setattr(cal.ContentHasher, "fingerprint_image", staticmethod(lambda p: {"value": "FP"}))
+    monkeypatch.setattr(cal.GeotagWorkflow, "_exiftool_write", lambda self, p, t: written.append(t) or True)
+    monkeypatch.setattr(cal.GeotagWorkflow, "_exiftool_read",
+                        lambda self, p, keys: {"DateTimeOriginal": "2024:07:03 14:00:00"})
+    r = wf._apply_file("x.jpg", ops, {}, {})                          # the journal lost
+    assert r["blocker"] is None and r["applied"] == ["o"] and written == []
+    assert photo.read_bytes() == b"orig, written"
 
 
 @pytest.mark.spec("RUL-content_acceptance_is_of_that_content", "RUL-content_changed_write_held",
@@ -1120,7 +1529,7 @@ def test_an_acceptance_of_changed_content_is_of_the_content_shown(tmp_path, monk
     assert not r["applied"] and (r["mismatch"] or r["blocker"])
 
 
-@pytest.mark.spec("RUL-engine_checked_before_writes", "BLD-geotag_dependencies",
+@pytest.mark.spec("RUL-engine_checked_before_writes", "BLD-geotag_dependencies", "RUL-engine_change_is_checked",
                   test="TST-geotag_execution-another_image_engine_stops_execute_before_any_write")
 def test_another_image_engine_stops_execute_before_any_write(tmp_path, monkeypatch):
     """Every write is checked by taking the photo's fingerprint again. With another image engine than the one
@@ -1128,16 +1537,16 @@ def test_another_image_engine_stops_execute_before_any_write(tmp_path, monkeypat
     ws, ctl = _ready_ws(tmp_path, monkeypatch)
     plan = json.load(open(ctl / "photos-24-executable-plan.json"))
     wf = cal.GeotagWorkflow(str(ws))
-    gpx = cal.GPXIndex(cal.selected_gpx_root()).build()
+    gpx = wf.plan_tracks(plan)
     monkeypatch.setattr(cal, "get_imagemagick_version", lambda: "IM-7.1.2")
     ho = json.load(open(ctl / "photos-11-handoff.json"))
     ho["depends_on"] = {"cache": {"image_engine_version": "IM-7.1.2"}}
-    (ctl / "photos-11-handoff.json").write_text(json.dumps(ho))
+    (ctl / "photos-11-handoff.json").write_text(json.dumps(vouched(ctl.parent, ho)))
     assert not [s for s in wf.revalidate_plan(plan, gpx) if "image engine" in s]
     monkeypatch.setattr(cal, "get_imagemagick_version", lambda: "IM-7.1.3")
     assert [s for s in wf.revalidate_plan(plan, gpx) if "image engine changed" in s]
     # a handoff that records no engine cannot vouch for it: refused, never passed
     monkeypatch.setattr(cal, "get_imagemagick_version", lambda: "IM-7.1.2")
     ho["depends_on"] = {"cache": {}}
-    (ctl / "photos-11-handoff.json").write_text(json.dumps(ho))
+    (ctl / "photos-11-handoff.json").write_text(json.dumps(vouched(ctl.parent, ho)))
     assert [s for s in wf.revalidate_plan(plan, gpx) if "records no image engine" in s]

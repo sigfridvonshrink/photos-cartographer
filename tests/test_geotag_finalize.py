@@ -16,7 +16,9 @@
 complete log (prep carried forward + geotag steps), the DB snapshot, and the manifest.
 Non-destructive. exiftool-write + fingerprint mocked. From conftest.py.
 """
+import hashlib
 import json
+from _handoff import recorded
 from _zone import answer_root_zone, with_root_zone
 import os
 import sqlite3
@@ -106,7 +108,7 @@ def test_complete_log_gps_written():
     assert next(s for s in photos2["fpN"]["journey"] if s["action"] == "gps_written")["gps_processing_method"] is None
 
 
-@pytest.mark.spec("RUL-log_records_time_replaced", "BLD-geotag_log_steps",
+@pytest.mark.spec("RUL-log_records_time_replaced", "RUL-log_records_other_times_replaced", "BLD-geotag_log_steps",
                   test="TST-geotag_finalize-a_time_written_is_logged_with_what_it_replaced")
 def test_a_time_written_is_logged_with_what_it_replaced_and_how_it_was_found():
     """Two phone photos written alike: one read by the offset its phone recorded, one by assuming the
@@ -114,9 +116,13 @@ def test_a_time_written_is_logged_with_what_it_replaced_and_how_it_was_found():
     def op(rel, rule, held_off):
         f = {"relative_path": rel, "raw_times": {"DateTimeOriginal": "2024:07:03 19:00:00",
                                                  **({"OffsetTimeOriginal": held_off} if held_off else {})}}
+        writes = {"DateTimeOriginal": "2024:07:03 12:00:00", "OffsetTimeOriginal": "+02:00"}
+        if held_off:                              # another time field it holds, rewritten with it
+            f["other_times"] = {"IPTC:TimeCreated": "19:00:00" + held_off}
+            writes["IPTC:TimeCreated"] = "12:00:00+02:00"
         return {"type": "metadata_time_write", "relative_path": rel, "operation_id": "t-" + rel,
-                "writes": {"DateTimeOriginal": "2024:07:03 12:00:00", "OffsetTimeOriginal": "+02:00"},
-                "pre_state": cal.held_time_pre_state(f),
+                "writes": writes,
+                "pre_state": cal.held_time_pre_state(f, writes),
                 "provenance": {"time_rule_used": rule, "source_time_provenance": "EXIF:DateTimeOriginal"}}
     a, b = f"{BYDEST}/T/a.jpg", f"{BYDEST}/T/b.jpg"
     plan = {"plan_id": "p1", "destinations": {f"{BYDEST}/T": {"operations": [
@@ -124,11 +130,13 @@ def test_a_time_written_is_logged_with_what_it_replaced_and_how_it_was_found():
     photos = cal.build_complete_log({}, [_file(a, "fpA"), _file(b, "fpB")], [], {}, plan)
     wa = next(s for s in photos["fpA"]["journey"] if s["action"] == "time_written")
     wb = next(s for s in photos["fpB"]["journey"] if s["action"] == "time_written")
-    assert wa["pre_state"] == {"DateTimeOriginal": "2024:07:03 19:00:00", "OffsetTimeOriginal": "+09:00"}
+    assert wa["pre_state"] == {"DateTimeOriginal": "2024:07:03 19:00:00", "OffsetTimeOriginal": "+09:00",
+                               "IPTC:TimeCreated": "19:00:00+09:00"}          # every value the write replaced
     assert wb["pre_state"] == {"DateTimeOriginal": "2024:07:03 19:00:00", "OffsetTimeOriginal": None}
     assert (wa["rule"], wb["rule"]) == ("smartphone_native_offset", "destination_timezone")
     assert wa["read_from"] == "EXIF:DateTimeOriginal" and wa["run"] == "p1"
-    assert wa["writes"] == {"DateTimeOriginal": "2024:07:03 12:00:00", "OffsetTimeOriginal": "+02:00"}
+    assert wa["writes"] == {"DateTimeOriginal": "2024:07:03 12:00:00", "OffsetTimeOriginal": "+02:00",
+                            "IPTC:TimeCreated": "12:00:00+02:00"}
     # a pass executed earlier logs its time write the same way
     plan["destinations"][f"{BYDEST}/T"]["operations"][0]["preconditions"] = {"content_fingerprint": "fpA"}
     later = cal.build_complete_log({}, [_file(a, "fpA")], [], {}, {"plan_id": "p2", "destinations": {}},
@@ -174,10 +182,9 @@ def test_each_step_names_its_exact_decision():
         f"photos-22 destinations.{BYDEST}/T.drift_decisions.{CAM}"
     assert cal.manual_gps_pointer("manual_locked", f"{BYDEST}/T", f"{BYDEST}/T/m.jpg", None) == \
         f"photos-23 destinations.{BYDEST}/T.gps_decisions.review_items[m.jpg]"
-    inherited = {"proposal": {"proposal_source": "inherited", "inherited_from": BYDEST},
-                 "user_decision": {"accept_proposal": True}}
+    inherited = {"fallback_source": "inherited", "inherited_from": BYDEST}
     assert cal.manual_gps_pointer("manual_fallback", f"{BYDEST}/T", f"{BYDEST}/T/m.jpg", inherited) == \
-        f"photos-23 destinations.{BYDEST}/T.folder_fallback (accepted from {BYDEST})"
+        f"photos-23 destinations.{BYDEST}/T.folder_fallback (inherited from {BYDEST})"
     files = [_file(f"{BYDEST}/T/m.jpg", "fpM")]
     plan = {"destinations": {f"{BYDEST}/T": {"operations": [
         {"type": "metadata_gps_write", "relative_path": f"{BYDEST}/T/m.jpg", "gps_origin": "apply_manual",
@@ -273,6 +280,38 @@ def _to_executed(monkeypatch, ws, ctl):
     _run(monkeypatch, ws, "execute")
 
 
+@pytest.mark.spec("RUL-geotag_gates", "BLD-loop_gates", test="TST-geotag_finalize-execute_stops_on_a_gate")
+def test_execute_stops_on_a_gate(tmp_path, monkeypatch, capsys):
+    """A dump dropped into the inbox after the plan was made stops its execution, as it stops planning: nothing is
+    written to a photo, and no execution is recorded."""
+    ws, ctl = _ready_ws(tmp_path, monkeypatch)
+    _run(monkeypatch, ws, "plan")
+    _run(monkeypatch, ws, "plan")
+    assert (ctl / "photos-24-executable-plan.json").exists()
+    (ws / "0-sources" / "new-dump.jpg").write_bytes(b"new")
+    writes = []
+    monkeypatch.setattr(cal.GeotagWorkflow, "_exiftool_write", lambda self, p, t: writes.append(p) or True)
+    capsys.readouterr()
+    assert _run(monkeypatch, ws, "execute") == 2
+    assert "0-sources/ is not empty" in capsys.readouterr().err
+    assert writes == [] and not (ctl / "photos-25-execution-summary.json").exists()
+
+
+@pytest.mark.spec("RUL-geotag_gates", "BLD-loop_gates", test="TST-geotag_finalize-finalize_stops_on_a_gate")
+def test_finalize_stops_on_a_gate(tmp_path, monkeypatch, capsys):
+    """A dump dropped into the inbox after a successful execution stops finalize: no package is made."""
+    ws, ctl = _ready_ws(tmp_path, monkeypatch)
+    _to_executed(monkeypatch, ws, ctl)
+    assert json.load(open(ctl / "photos-25-execution-summary.json"))["status"] == "success"
+    (ws / "0-sources" / "new-dump.jpg").write_bytes(b"new")
+    capsys.readouterr()
+    assert _run(monkeypatch, ws, "finalize") == 2
+    assert "0-sources/ is not empty" in capsys.readouterr().err
+    assert not (ctl / "photos-26-archive-manifest.json").exists()
+    (ws / "0-sources" / "new-dump.jpg").unlink()
+    assert _run(monkeypatch, ws, "finalize") == 0          # the same workspace, the inbox empty again
+
+
 def test_finalize_refuses_before_execute(tmp_path, monkeypatch):
     ws, ctl = _ready_ws(tmp_path, monkeypatch)
     _run(monkeypatch, ws, "plan")                                         # only photos-21 yet
@@ -300,7 +339,7 @@ def test_finalize_refuses_plan_id_mismatch(tmp_path, monkeypatch):
 
 @pytest.mark.spec("RUL-finalize_explicit", "RUL-finalize_non_destructive", "RUL-carry_forward_by_copy",
                   "RUL-package_contents", "RUL-package_self_describing", "RUL-package_lists_contents",
-                  "RUL-database_archived",
+                  "RUL-database_archived", "RUL-phase_writes_own_records",
                   test="TST-geotag_finalize-finalize_assembles_package_and_is_nondestructive")
 def test_finalize_assembles_package_and_is_nondestructive(tmp_path, monkeypatch):
     ws, ctl = _ready_ws(tmp_path, monkeypatch)
@@ -378,7 +417,7 @@ def test_finalize_archives_the_whole_control_directory(tmp_path, monkeypatch):
         assert hashlib.sha256(archived[rec["path"]]).hexdigest() == rec["sha256"], rec["path"]
 
 
-@pytest.mark.spec("RUL-finalize_explicit")
+@pytest.mark.spec("RUL-finalize_explicit", test="TST-geotag_finalize-finalize_bundles_archive_but_performs_no_merge")
 def test_finalize_bundles_archive_but_performs_no_merge(tmp_path, monkeypatch):
     """RUL-finalize_non_destructive (anti): finalize assembles the archival package (photos-26 complete-log + DB +
     manifest) but NEVER merges into a library — it produces no merge artifacts and moves no media. Snapshot the
@@ -439,7 +478,7 @@ def test_finalize_sealed_workspace_blocks(tmp_path, monkeypatch):
     assert _run(monkeypatch, ws, "finalize") == 2                        # sealed -> preflight blocks
 
 
-@pytest.mark.spec("RUL-unchecked_counts_as_changed", "BLD-finalize_checks_prep_log", test="TST-geotag_finalize-finalize_refuses_a_prep_log_the_handoff_does_not_vouch_for")
+@pytest.mark.spec("RUL-unchecked_counts_as_changed", "BLD-prep_log_checked", test="TST-geotag_finalize-finalize_refuses_a_prep_log_the_handoff_does_not_vouch_for")
 @pytest.mark.parametrize("damage", ["changed", "missing"])
 def test_finalize_refuses_a_prep_log_the_handoff_does_not_vouch_for(tmp_path, monkeypatch, capsys, damage):
     """Finalize copies prep's log only as the handoff records it, by hash: a log changed since — or gone,
@@ -484,7 +523,7 @@ def test_geotag_keeps_its_records_in_the_one_control_directory(tmp_path, monkeyp
     records = ("photos-21-time-decisions.json", "photos-22-gps-drift-validation.json", "photos-23-gps-decisions.json",
                "photos-24-executable-plan.json", "photos-25-execution-summary.json", "photos-26-complete-log.json",
                "photos-26-finalized-media.json", "photos-26-geotag-ingest.db", "photos-26-archive-manifest.json",
-               "photos-26-archive.tar.gz", "photos-00-track-memo.db")
+               "photos-26-archive.tar.gz", "photos-00-ingest.db")
     for name, folders in (("default", None), ("renamed", renamed)):
         (tmp_path / name).mkdir()
         ws, ctl = _ready_ws(tmp_path / name, monkeypatch, folders=folders)
@@ -676,10 +715,17 @@ def test_a_photo_not_as_execution_left_it_stops_finalize(tmp_path, monkeypatch, 
         photos[0].unlink()
     else:
         (ws / BYDEST / "T" / "dropped-in.jpg").write_bytes(b"new")
+    # An edit or a new file stops every command first, as a change by hand (tests/test_workspace_check.py): taken as
+    # the workspace's state here, finalize's own check of the photos is the one that meets it.
+    recorded(ws)
     capsys.readouterr()
     assert _run(monkeypatch, ws, "finalize") == 2
     said = capsys.readouterr()
-    assert "not as the execution left" in said.out + said.err
+    if change == "added":
+        # a photo neither prep nor the plan records stops finalize at its gates first (RUL-geotag_gates)
+        assert "is out of date" in said.err and "dropped-in.jpg" in said.err
+    else:
+        assert "not as the execution left" in said.out + said.err
     assert not (ctl / "photos-26-finalized-media.json").exists()
 
 
@@ -687,8 +733,8 @@ def test_a_photo_not_as_execution_left_it_stops_finalize(tmp_path, monkeypatch, 
                   "RUL-finalize_keeps_placement_count",
                   test="TST-geotag_finalize-finalize_reports_how_every_photo_was_placed")
 def test_finalize_reports_how_every_photo_was_placed(tmp_path, monkeypatch, capsys):
-    """The measure of a run: every photo counted by how it came by its position, those left without one among
-    them — in the plan, in finalize's output, and in the package's manifest."""
+    """The measure of a run: every photo counted by how it came by its position — in the plan, in finalize's output,
+    and in the package's manifest."""
     ws, ctl = _ready_ws(tmp_path, monkeypatch)
     _to_executed(monkeypatch, ws, ctl)
     plan = json.load(open(ctl / "photos-24-executable-plan.json"))
@@ -699,18 +745,16 @@ def test_finalize_reports_how_every_photo_was_placed(tmp_path, monkeypatch, caps
     assert json.load(open(ctl / "photos-26-archive-manifest.json"))["placement"] == {"native": 2}
 
 
-@pytest.mark.spec("RUL-unlocated_logged", "RUL-log_cites_decisions", "RUL-placement_recorded_with_its_track",
-                  test="TST-geotag_finalize-the_log_says_what_placed_a_photo_or_that_nothing_did")
-def test_the_log_says_what_placed_a_photo_or_that_nothing_did():
-    """A photo the user left unlocated has that in its log, with the decision; one the tracks placed has the
-    track that placed it and the time it was placed at. And a photo recorded under its new name by a prep run
-    since the plan keeps the time steps of the row planned under its old one."""
+@pytest.mark.spec("RUL-log_cites_decisions", "RUL-placement_recorded_with_its_track",
+                  test="TST-geotag_finalize-the_log_says_what_placed_a_photo")
+def test_the_log_says_what_placed_a_photo():
+    """A photo the tracks placed has in its log the track that placed it and the time it was placed at. And a photo
+    recorded under its new name by a prep run since the plan keeps the time steps of the row planned under its old
+    one."""
     d = f"{BYDEST}/T"
-    files = [_file(f"{d}/u.arw", "fpU"), _file(f"{d}/2024-07-03--14-00-00.arw", "fpT")]
+    files = [_file(f"{d}/2024-07-03--14-00-00.arw", "fpT")]
     rows = [{"relative_path": f"{d}/t.arw", "resolved_utc": "2024-07-03T12:00:00Z"}]
     plan = {"destinations": {d: {
-        "left_unlocated": [{"relative_path": f"{d}/u.arw", "content_fingerprint": "fpU",
-                            "because": f"photos-23 destinations.{d}.gps_decisions.review_items[u.arw]"}],
         "operations": [
             {"type": "metadata_gps_write", "relative_path": f"{d}/t.arw", "gps_origin": "recompute_automated",
              "preconditions": {"content_fingerprint": "fpT"}, "writes": {"GPSLatitude": 50.0, "GPSLongitude": 4.0},
@@ -718,8 +762,477 @@ def test_the_log_says_what_placed_a_photo_or_that_nothing_did():
             {"type": "rename_no_clobber", "relative_path": f"{d}/t.arw", "preconditions": {"content_fingerprint": "fpT"},
              "from": "t.arw", "to": "2024-07-03--14-00-00.arw"}]}}}
     log = cal.build_complete_log({}, files, rows, {}, plan)
-    assert {"phase": "geotag", "action": "left_unlocated",
-            "because": f"photos-23 destinations.{d}.gps_decisions.review_items[u.arw]"} in log["fpU"]["journey"]
     steps = {s["action"]: s for s in log["fpT"]["journey"]}
     assert steps["gps_written"]["gpx_file"] == "trip.gpx" and steps["gps_written"]["at_utc"] == "2024-07-03T12:00:00Z"
     assert steps["resolved_utc"]["value"] == "2024-07-03T12:00:00Z"            # found under the old name's row
+    assert not any(s["action"] == "left_unlocated" for e in log.values() for s in e["journey"])
+
+
+def _hold(ws, ctl, rel, lat, lon):
+    """The handoff, as a prep run since would record it, saying photo `rel` holds (`lat`, `lon`) — None for none."""
+    ho = json.load(open(ctl / "photos-11-handoff.json"))
+    for r in ho["files"]:
+        if r["relative_path"] == rel:
+            parsed = json.loads(r["metadata_status"]["parsed_json"])
+            parsed.pop("GPSLatitude"); parsed.pop("GPSLongitude")
+            if lat is not None:
+                parsed.update(GPSLatitude=lat, GPSLongitude=lon)
+            r["metadata_status"]["parsed_json"] = json.dumps(parsed)
+    (ctl / "photos-11-handoff.json").write_text(json.dumps(ho))
+    recorded(str(ws))
+
+
+@pytest.mark.parametrize("held", [(None, None), (0, 0), (0.0, -0.0)])
+@pytest.mark.spec("RUL-finalize_refuses_unplaced", "BLD-no_photo_unplaced", "RUL-null_island_is_no_position",
+                  test="TST-geotag_finalize-finalize_refuses_a_photo_holding_no_position")
+def test_finalize_refuses_a_photo_holding_no_position(tmp_path, monkeypatch, capsys, held):
+    """Finalize reads each photo's position from what it holds — prep's reading of it, and what the executed plan
+    wrote it — not from the plan's decisions alone: a photo that holds none, or latitude 0 and longitude 0, stops it,
+    named, and nothing is packaged."""
+    ws, ctl = _ready_ws(tmp_path, monkeypatch)
+    _to_executed(monkeypatch, ws, ctl)
+    _hold(ws, ctl, f"{BYDEST}/T/b.arw", *held)
+    capsys.readouterr()
+    assert _run(monkeypatch, ws, "finalize") == 2
+    said = capsys.readouterr()
+    out = said.out + said.err
+    assert "1 photo(s) in 6-photos-by-dest hold no position" in out and "b.arw" in out and "a.arw" not in out
+    # the closing hint defers to the blocker's own fix, never a stale "run geotag execute" for an executed plan
+    assert "do what each line above says" in out and "to a successful finish" not in out
+    assert not (ctl / "photos-26-complete-log.json").exists()
+
+
+@pytest.mark.spec("RUL-finalize_refuses_unplaced", "BLD-no_photo_unplaced",
+                  test="TST-geotag_finalize-a_position_the_plan_wrote_counts")
+def test_a_position_the_plan_wrote_counts():
+    """A photo prep read with no position, or at latitude 0 and longitude 0, holds the one the executed plan wrote
+    it; a photo whose position the plan cleared holds none; one the plan did not touch holds what prep read."""
+    def rec(name, gps):
+        parsed = {} if gps is None else {"GPSLatitude": gps[0], "GPSLongitude": gps[1]}
+        return {"relative_path": f"{BYDEST}/T/{name}", "folder_class": BYDEST, "media_class": "raw",
+                "content_hash": json.dumps({"status": "valid", "value": "fp-" + name}),
+                "metadata_status": {"parsed_json": json.dumps(parsed)}}
+    def op(name, kind, writes):
+        return {"type": kind, "relative_path": f"{BYDEST}/T/{name}", "writes": writes,
+                "preconditions": {"content_fingerprint": "fp-" + name}}
+    handoff = {"files": [rec("none.arw", None), rec("zero.arw", (0, 0)), rec("own.arw", (50.0, 4.0)),
+                         rec("cleared.arw", (50.0, 4.0)), rec("left.arw", None),
+                         dict(rec("elsewhere.arw", None), folder_class="5-photos-by-date")]}
+    plan = {"destinations": {f"{BYDEST}/T": {"operations": [
+        op("none.arw", "metadata_gps_write", {"GPSLatitude": 50.5, "GPSLongitude": 4.5}),
+        op("none.arw", "gps_marker_write", {"GPSProcessingMethod": "carto-gpx-interpolated"}),
+        op("zero.arw", "metadata_gps_write", {"GPSLatitude": 50.5, "GPSLongitude": 4.5}),
+        op("cleared.arw", "gps_marker_write", {"GPSLatitude": "", "GPSLatitudeRef": "", "GPSLongitude": "",
+                                               "GPSLongitudeRef": ""})]}}}
+    assert utils.photos_without_position(handoff, plan) == [f"{BYDEST}/T/cleared.arw", f"{BYDEST}/T/left.arw"]
+
+
+@pytest.mark.spec("RUL-finalize_refuses_unplaced", "RUL-merge_refuses_unplaced", "BLD-no_photo_unplaced",
+                  test="TST-geotag_finalize-a_copy_in_another_destination_is_placed_on_its_own")
+def test_a_copy_in_another_destination_is_placed_on_its_own():
+    """One photo copied into two destinations — two records of one fingerprint — the plan placing only one copy: the
+    other holds no position, and is named. Each copy is joined to the plan by the path the plan was built on."""
+    def rec(dest):
+        return {"relative_path": f"{BYDEST}/{dest}/a.arw", "folder_class": BYDEST, "media_class": "raw",
+                "content_hash": json.dumps({"status": "valid", "value": "fp-a"}),
+                "metadata_status": {"parsed_json": "{}"}}
+    handoff = {"files": [rec("Rome"), rec("Paris")]}
+    plan = {"destinations": {f"{BYDEST}/Rome": {"operations": [
+        {"type": "metadata_gps_write", "relative_path": f"{BYDEST}/Rome/a.arw",
+         "writes": {"GPSLatitude": 41.9, "GPSLongitude": 12.5}, "preconditions": {"content_fingerprint": "fp-a"}}]}}}
+    assert utils.photos_without_position(handoff, plan) == [f"{BYDEST}/Paris/a.arw"]
+
+
+@pytest.mark.spec("RUL-finalize_needs_no_metadata_tool", "BLD-geotag_exiftool_needed",
+                  test="TST-geotag_finalize-finalize_runs_without_exiftool_plan_and_execute_do_not")
+def test_finalize_runs_without_exiftool_plan_and_execute_do_not(tmp_path, monkeypatch, capsys):
+    """Finalize runs no tool on a photo, so it packages an execution with exiftool not installed; plan and
+    execute, whose plan is written through it, stop without it."""
+    ws, ctl = _ready_ws(tmp_path, monkeypatch)
+    real = utils.missing_tools
+    no_exiftool = lambda tools: [t for t in tools if t == "exiftool"] or real(tools)
+    monkeypatch.setattr(utils, "missing_tools", no_exiftool)
+    capsys.readouterr()
+    assert _run(monkeypatch, ws, "plan") == 2
+    out = capsys.readouterr()
+    assert "exiftool not found" in out.out + out.err
+    monkeypatch.setattr(utils, "missing_tools", real)
+    _to_executed(monkeypatch, ws, ctl)
+    monkeypatch.setattr(utils, "missing_tools", no_exiftool)
+    capsys.readouterr()
+    assert _run(monkeypatch, ws, "execute") == 2
+    out = capsys.readouterr()
+    assert "exiftool not found" in out.out + out.err
+    assert _run(monkeypatch, ws, "finalize") == 0
+    out = capsys.readouterr()
+    assert "exiftool not found" not in out.out + out.err
+    assert (ctl / "photos-26-archive-manifest.json").exists()
+
+
+def _planned(monkeypatch, ws, ctl):
+    _run(monkeypatch, ws, "plan")
+    _run(monkeypatch, ws, "plan")
+    return json.load(open(ctl / "photos-24-executable-plan.json"))["plan_id"]
+
+
+@pytest.mark.spec("RUL-unreadable_execution_record_stops", "BLD-unreadable_execution_records",
+                  test="TST-geotag_finalize-execute_stops_on_an_unreadable_journal_or_summary")
+@pytest.mark.parametrize("record", ["journal", "summary"])
+def test_execute_stops_on_an_unreadable_journal_or_summary(tmp_path, monkeypatch, capsys, record):
+    """A journal or an execution summary of the plan that cannot be read is never taken for none: execute stops
+    before it keeps, snapshots or writes anything, naming the file, and leaves the file as it is."""
+    ws, ctl = _ready_ws(tmp_path, monkeypatch)
+    plan_id = _planned(monkeypatch, ws, ctl)
+    journal, summary = ctl / f"journal-{plan_id}.json", ctl / "photos-25-execution-summary.json"
+    bad = journal if record == "journal" else summary
+    bad.write_text('{"operations": {"x": "confirm')                      # torn: not JSON
+    written = []
+    monkeypatch.setattr(cal.GeotagWorkflow, "_exiftool_write", lambda self, p, t: written.append(p) or True)
+    capsys.readouterr()
+    assert _run(monkeypatch, ws, "execute") == 2
+    out = capsys.readouterr()
+    assert str(bad) in out.out + out.err and "cannot be read" in out.out + out.err
+    assert written == [] and not (ctl / "executed").exists()
+    assert bad.read_text() == '{"operations": {"x": "confirm'
+    assert (journal if record == "summary" else summary).exists() is False
+
+
+@pytest.mark.spec("RUL-unreadable_execution_record_stops", "BLD-unreadable_execution_records",
+                  test="TST-geotag_finalize-finalize_stops_on_an_unreadable_record_of_a_pass")
+@pytest.mark.parametrize("record", ["own_journal", "kept_plan", "other_journal", "list_not_object"])
+def test_finalize_stops_on_an_unreadable_record_of_a_pass(tmp_path, monkeypatch, capsys, record):
+    """The plan's journal, a kept plan or any journal finalize reads to find the earlier passes, unreadable, stops
+    finalize writing nothing: no pass is left out of the log unsaid, no photo judged by a baseline it lacks."""
+    ws, ctl = _ready_ws(tmp_path, monkeypatch)
+    _to_executed(monkeypatch, ws, ctl)
+    plan_id = json.load(open(ctl / "photos-24-executable-plan.json"))["plan_id"]
+    bad = {"own_journal": ctl / f"journal-{plan_id}.json",
+           "kept_plan": ctl / "photos-24-executable-plan-007.json",
+           "other_journal": ctl / "journal-0123456789abcdef.json",
+           "list_not_object": ctl / "journal-0123456789abcdef.json"}[record]
+    bad.write_text("[]" if record == "list_not_object" else "{not json")
+    if record == "kept_plan":                                              # one an execution ran, by its summary
+        (ctl / "photos-25-execution-summary-009.json").write_text(json.dumps(
+            {"plan_id": "0123456789abcdef", "status": "success",
+             "summarizes": {"photos-24-executable-plan.json": {"sha256": hashlib.sha256(b"{not json").hexdigest()}}}))
+    capsys.readouterr()
+    assert _run(monkeypatch, ws, "finalize") == 2
+    out = capsys.readouterr()
+    assert str(bad) in out.out + out.err and "cannot be read" in out.out + out.err
+    assert not list(ctl.glob("photos-26-*"))
+
+
+_TORN_PLANS = {"torn": '{"plan_id": "abc", "destinations": {', "not_json": "plan", "not_an_object": "[]"}
+
+
+@pytest.mark.spec("RUL-unreadable_plan_replanned", "BLD-unreadable_plan",
+                  test="TST-geotag_finalize-execute_sends_an_unreadable_plan_to_plan_again")
+@pytest.mark.parametrize("torn", sorted(_TORN_PLANS))
+def test_execute_sends_an_unreadable_plan_to_plan_again(tmp_path, monkeypatch, capsys, torn):
+    """A photos-24 that cannot be read — torn, not JSON, not an object — stops execute with exit 2 and the way on,
+    `geotag plan`, never a traceback: nothing is written to a photo, no summary or journal is written, and the file is
+    left as it is."""
+    ws, ctl = _ready_ws(tmp_path, monkeypatch)
+    _planned(monkeypatch, ws, ctl)
+    plan = ctl / "photos-24-executable-plan.json"
+    plan.write_text(_TORN_PLANS[torn])
+    written = []
+    monkeypatch.setattr(cal.GeotagWorkflow, "_exiftool_write", lambda self, p, t: written.append(p) or True)
+    capsys.readouterr()
+    assert _run(monkeypatch, ws, "execute") == 2
+    out = capsys.readouterr()
+    said = out.out + out.err
+    assert str(plan) in said and "cannot be read" in said and "`geotag plan` again" in said
+    assert "Traceback" not in said
+    assert written == [] and not (ctl / "photos-25-execution-summary.json").exists()
+    assert not list(ctl.glob("journal-*.json"))
+    assert plan.read_text() == _TORN_PLANS[torn]
+
+
+@pytest.mark.spec("RUL-unreadable_plan_replanned", "BLD-unreadable_plan",
+                  test="TST-geotag_finalize-finalize_sends_an_unreadable_plan_to_plan_again")
+@pytest.mark.parametrize("torn", sorted(_TORN_PLANS))
+def test_finalize_sends_an_unreadable_plan_to_plan_again(tmp_path, monkeypatch, capsys, torn):
+    """The executed plan, unreadable at finalize, stops it with exit 2, sending the user to `geotag plan`; no part of
+    the package is written."""
+    ws, ctl = _ready_ws(tmp_path, monkeypatch)
+    _to_executed(monkeypatch, ws, ctl)
+    plan = ctl / "photos-24-executable-plan.json"
+    plan.write_text(_TORN_PLANS[torn])
+    capsys.readouterr()
+    assert _run(monkeypatch, ws, "finalize") == 2
+    out = capsys.readouterr()
+    said = out.out + out.err
+    assert str(plan) in said and "`geotag plan` again" in said and "Traceback" not in said
+    assert not list(ctl.glob("photos-26-*"))
+    assert plan.read_text() == _TORN_PLANS[torn]
+
+
+@pytest.mark.spec("RUL-unreadable_plan_replanned", "BLD-unreadable_plan",
+                  test="TST-geotag_finalize-a_plan_made_again_after_an_unreadable_one_executes")
+def test_a_plan_made_again_after_an_unreadable_one_executes(tmp_path, monkeypatch):
+    """The way on works: `geotag plan` makes the plan anew — the unreadable one set aside under -NNN, as a re-plan sets
+    aside any plan — and execute then carries it out."""
+    ws, ctl = _ready_ws(tmp_path, monkeypatch)
+    _planned(monkeypatch, ws, ctl)
+    plan = ctl / "photos-24-executable-plan.json"
+    plan.write_text("[]")
+    assert _run(monkeypatch, ws, "plan") == 0
+    assert isinstance(json.loads(plan.read_text()), dict)
+    assert [p.read_text() for p in ctl.glob("photos-24-executable-plan-*.json")] == ["[]"]
+    assert _run(monkeypatch, ws, "execute") == 0
+    assert json.load(open(ctl / "photos-25-execution-summary.json"))["status"] == "success"
+    assert _run(monkeypatch, ws, "finalize") == 0                         # the copy no execution ran: passed over
+    assert [p.read_text() for p in ctl.glob("photos-24-executable-plan-*.json")] == ["[]"]
+    listed = json.load(open(ctl / "photos-26-archive-manifest.json"))["contents"]
+    assert any(n.startswith("photos-24-executable-plan-") for n in listed)   # and kept, archived
+
+
+@pytest.mark.spec("RUL-unread_plan_never_run_passed", "BLD-unexecuted_kept_plan_passed",
+                  "RUL-unreadable_execution_record_stops",
+                  test="TST-geotag_finalize-an_unreadable_kept_plan_is_passed_over_only_if_never_run")
+@pytest.mark.parametrize("ran", ["never", "by_summary", "cut_off"])
+def test_an_unreadable_kept_plan_is_passed_over_only_if_never_run(tmp_path, monkeypatch, capsys, ran):
+    """A kept plan that cannot be read stops finalize unless no execution ran it: one a summary names by its SHA-256,
+    or one that may be the plan of a journal with a confirmed operation and no plan finalize can read — a run cut off
+    before its summary — still stops it, naming the copy; one neither can be is passed over, and the package
+    written."""
+    ws, ctl = _ready_ws(tmp_path, monkeypatch)
+    _to_executed(monkeypatch, ws, ctl)
+    torn = ctl / "photos-24-executable-plan-007.json"
+    torn.write_text('{"plan_id": "0123456789abcdef", "destinations": {')
+    if ran == "by_summary":
+        (ctl / "photos-25-execution-summary-009.json").write_text(json.dumps(
+            {"plan_id": "0123456789abcdef", "status": "partial",
+             "summarizes": {"photos-24-executable-plan.json": {"sha256": hashlib.sha256(torn.read_bytes()).hexdigest()}}}))
+    elif ran == "cut_off":
+        (ctl / "journal-0123456789abcdef.json").write_text(json.dumps(
+            {"plan_id": "0123456789abcdef", "operations": {"op-1": "confirmed"}}))
+    capsys.readouterr()
+    code = _run(monkeypatch, ws, "finalize")
+    said = "".join(capsys.readouterr())
+    if ran == "never":
+        assert code == 0 and (ctl / "photos-26-archive-manifest.json").exists()
+    else:
+        assert code == 2 and str(torn) in said and "cannot be read" in said
+        assert not list(ctl.glob("photos-26-*"))
+    assert torn.read_text() == '{"plan_id": "0123456789abcdef", "destinations": {'
+
+
+@pytest.mark.spec("RUL-geotag_run_records_kept", "BLD-geotag_records_versioned",
+                  test="TST-geotag_finalize-summary_and_package_made_again_keep_the_earlier")
+def test_summary_and_package_made_again_keep_the_earlier(tmp_path, monkeypatch):
+    """An execution run again sets the earlier summary aside under -NNN; finalize run again sets the whole earlier
+    package aside so, the archive as photos-26-archive-NNN.tar.gz — kept, and never archived again."""
+    import tarfile
+    ws, ctl = _ready_ws(tmp_path, monkeypatch)
+    _to_executed(monkeypatch, ws, ctl)
+    first_summary = (ctl / "photos-25-execution-summary.json").read_bytes()
+    assert _run(monkeypatch, ws, "execute") == 0                          # nothing left to do: a new summary
+    assert (ctl / "photos-25-execution-summary-001.json").read_bytes() == first_summary
+    assert _run(monkeypatch, ws, "finalize") == 0
+    names = ("photos-26-complete-log.json", "photos-26-finalized-media.json", "photos-26-geotag-ingest.db",
+             "photos-26-archive-manifest.json", "photos-26-archive.tar.gz")
+    first = {n: (ctl / n).read_bytes() for n in names}
+    assert not list(ctl.glob("photos-26-*-001*"))                        # a first package sets nothing aside
+    assert _run(monkeypatch, ws, "finalize") == 0
+    kept = {"photos-26-complete-log.json": "photos-26-complete-log-001.json",
+            "photos-26-finalized-media.json": "photos-26-finalized-media-001.json",
+            "photos-26-geotag-ingest.db": "photos-26-geotag-ingest-001.db",
+            "photos-26-archive-manifest.json": "photos-26-archive-manifest-001.json",
+            "photos-26-archive.tar.gz": "photos-26-archive-001.tar.gz"}
+    for n, copy in kept.items():
+        assert (ctl / copy).read_bytes() == first[n], copy
+    listed = set(json.load(open(ctl / "photos-26-archive-manifest.json"))["contents"])
+    assert "photos-26-complete-log-001.json" in listed and "photos-25-execution-summary-001.json" in listed
+    assert not any(n.endswith(".tar.gz") for n in listed)
+    with tarfile.open(ctl / "photos-26-archive.tar.gz") as tar:
+        assert not any(m.name.endswith(".tar.gz") for m in tar.getmembers())
+
+
+# --- the tracks kept with the workspace (BLD-track_catalogue, BLD-track_window, BLD-withdrawn_track_points) -------
+
+def _track_rows(ctl, sql):
+    conn = sqlite3.connect(str(ctl / "photos-00-ingest.db"))
+    try:
+        return conn.execute(sql).fetchall()
+    finally:
+        conn.close()
+
+
+@pytest.mark.spec("RUL-track_points_kept", "RUL-database_archived", "BLD-track_catalogue", "BLD-workspace_database",
+                  test="TST-geotag_finalize-the_tracks_decided_by_are_sealed_in_the_archive")
+def test_the_tracks_decided_by_are_sealed_in_the_archive(tmp_path, monkeypatch):
+    """The track points the plan was decided by are in the database of record from the plan on — no scratch memo
+    beside it — and finalize archives them, in the database and in its image."""
+    import tarfile
+    ws, ctl = _ready_ws(tmp_path, monkeypatch)
+    _run(monkeypatch, ws, "plan")
+    assert not (ctl / "photos-00-track-memo.db").exists()
+    assert _track_rows(ctl, "SELECT f.path, COUNT(*) FROM gpx_track_points JOIN gpx_track_files f USING (track_id) "
+                            "GROUP BY f.path") == [("t.gpx", 2)]
+    _to_executed(monkeypatch, ws, ctl)
+    assert _run(monkeypatch, ws, "finalize") == 0
+    image = sqlite3.connect(str(ctl / "photos-26-geotag-ingest.db"))
+    try:
+        assert image.execute("SELECT lat, lon, time_utc FROM gpx_track_points ORDER BY point_index").fetchall() == [
+            (50.0, 4.0, "2024-07-03T12:00:00+00:00"), (51.0, 5.0, "2024-07-03T13:00:00+00:00")]
+    finally:
+        image.close()
+    with tarfile.open(ctl / "photos-26-archive.tar.gz") as tar:
+        names = {m.name for m in tar.getmembers()}
+    assert any(n.endswith("photos-00-ingest.db") for n in names) and any(n.endswith("photos-26-geotag-ingest.db")
+                                                                         for n in names)
+
+
+@pytest.mark.spec("BLD-archive_manifest", "BLD-gpx_root", "RUL-unused_points_not_kept",
+                  test="TST-geotag_finalize-tracks_in_the_control_directory_are_left_out_of_the_package")
+def test_tracks_in_the_control_directory_are_left_out_of_the_package(tmp_path, monkeypatch):
+    """With the tracks kept under the control directory, the package carries none of their files: the points the
+    decisions rest on are in the database it archives, and no other point of any track is kept."""
+    import shutil
+    import tarfile
+    ws, ctl = _ready_ws(tmp_path, monkeypatch)
+    shutil.move(str(tmp_path / "gpx"), str(ctl / "gpx"))
+    (ctl / "gpx" / "notes.txt").write_text("where the logger was")
+    cfg = json.load(open(ctl / "photos-00-config.json"))
+    cfg["gpx_root"] = ".photos-ingest/gpx"
+    (ctl / "photos-00-config.json").write_text(json.dumps(cfg))
+    _to_executed(monkeypatch, ws, ctl)
+    assert _run(monkeypatch, ws, "finalize") == 0
+    manifest = json.load(open(ctl / "photos-26-archive-manifest.json"))
+    assert not any(e["path"].startswith(".photos-ingest/gpx") for e in manifest["contents"].values())
+    with tarfile.open(ctl / "photos-26-archive.tar.gz") as tar:
+        names = {m.name for m in tar.getmembers()}
+    assert not any("/gpx/" in n for n in names) and ".photos-ingest/photos-00-ingest.db" in names
+    assert _track_rows(ctl, "SELECT COUNT(*) FROM gpx_track_points") == [(2,)]
+
+
+@pytest.mark.spec("BLD-archive_manifest", "RUL-unused_points_not_kept",
+                  test="TST-geotag_finalize-tracks_that_are_the_control_directory_leave_only_their_files_out")
+def test_tracks_that_are_the_control_directory_leave_only_their_files_out(tmp_path, monkeypatch):
+    """Tracks kept in the control directory itself: the package leaves out the track files, and carries every
+    record beside them."""
+    ws = tmp_path / "ws"
+    (ws / ".photos-ingest").mkdir(parents=True)
+    ctl = ws / ".photos-ingest"
+    for n in ("t.gpx", "u.KML", "photos-21-time-decisions.json"):
+        (ctl / n).write_text("x")
+    monkeypatch.setitem(utils.CONFIG, "gpx_root", ".photos-ingest")
+    assert utils.control_archive_members(str(ws)) == [".photos-ingest/photos-21-time-decisions.json"]
+    monkeypatch.setitem(utils.CONFIG, "gpx_root", str(tmp_path / "elsewhere"))
+    assert len(utils.control_archive_members(str(ws))) == 3
+
+
+@pytest.mark.spec("RUL-withdrawn_track_points_kept", "BLD-withdrawn_track_points", "RUL-gone_track_told",
+                  test="TST-geotag_finalize-execute_marks_the_tracks_it_times_photos_by")
+def test_execute_marks_the_tracks_it_times_photos_by(tmp_path, monkeypatch):
+    """The offset the camera's own GPS gave rests on t.gpx: execute records it as used, and when the file is taken
+    out the tracks, catalogued again as a plan does, name it and keep its points, withdrawn."""
+    ws, ctl = _ready_ws(tmp_path, monkeypatch)
+    _to_executed(monkeypatch, ws, ctl)
+    plan = json.load(open(ctl / "photos-24-executable-plan.json"))
+    assert _track_rows(ctl, "SELECT u.plan_id, f.path FROM gpx_track_use u JOIN gpx_track_files f USING (track_id)") \
+        == [(plan["plan_id"], "t.gpx")]
+    gpx = cal.selected_gpx_root()
+    os.remove(os.path.join(gpx, "t.gpx"))
+    again = cal.GeotagWorkflow(str(ws)).plan_tracks(plan, keep=True)
+    assert again.gone == ["t.gpx"] and any("t.gpx" in w and "withdrawn" in w for w in again.warnings)
+    assert not again.points
+    assert _track_rows(ctl, "SELECT f.withdrawn, COUNT(*) FROM gpx_track_points JOIN gpx_track_files f "
+                            "USING (track_id) GROUP BY f.track_id") == [(1, 2)]
+
+
+@pytest.mark.spec("RUL-gone_track_not_used", "RUL-sealing_needs_no_tracks", "BLD-withdrawn_track_points",
+                  test="TST-geotag_finalize-a_used_track_changed_seals_on_its_current_points")
+def test_a_used_track_changed_since_execute_seals_on_its_current_points(tmp_path, monkeypatch):
+    """The track the executed plan rests on is changed — a point of another year added — and catalogued again as a plan
+    does: its earlier entry stays in the record, withdrawn, beside the current one, the window's points alike in both.
+    Finalize indexes the current entry alone: the tracks are as the plan was made from, and it seals them once."""
+    ws, ctl = _ready_ws(tmp_path, monkeypatch)
+    _to_executed(monkeypatch, ws, ctl)
+    plan = json.load(open(ctl / "photos-24-executable-plan.json"))
+    t = os.path.join(cal.selected_gpx_root(), "t.gpx")
+    with open(t) as f:
+        text = f.read()
+    with open(t, "w") as f:
+        f.write(text.replace("</trkseg>", '<trkpt lat="40.0" lon="3.0"><time>2019-05-01T10:00:00Z</time></trkpt>'
+                                          "</trkseg>"))
+    cal.GeotagWorkflow(str(ws)).plan_tracks(plan, keep=True)
+    assert _track_rows(ctl, "SELECT f.withdrawn, COUNT(*) FROM gpx_track_points JOIN gpx_track_files f "
+                            "USING (track_id) GROUP BY f.track_id ORDER BY f.withdrawn") == [(0, 2), (1, 2)]
+    assert _run(monkeypatch, ws, "finalize") == 0
+    assert (ctl / "photos-26-archive.tar.gz").exists()
+
+
+@pytest.mark.spec("RUL-sealing_needs_no_tracks", "RUL-finalize_requires_plan_still_holds", "BLD-track_window",
+                  test="TST-geotag_finalize-finalize_seals_without_the_tracks_folder")
+def test_finalize_seals_without_the_tracks_folder(tmp_path, monkeypatch):
+    """Finalize seals what the workspace keeps: with the tracks folder gone after execute it packages all the same,
+    and never builds the tracks from gpx_root."""
+    ws, ctl = _ready_ws(tmp_path, monkeypatch)
+    _to_executed(monkeypatch, ws, ctl)
+    gpx = cal.selected_gpx_root()
+    os.rename(gpx, gpx + "-unmounted")
+    real = cal.GPXIndex.build
+    monkeypatch.setattr(cal.GPXIndex, "build", lambda self, *a, **k: (k.get("read") is False or pytest.fail(
+        "finalize read gpx_root")) and real(self, *a, **k))
+    assert _run(monkeypatch, ws, "finalize") == 0
+    assert (ctl / "photos-26-archive.tar.gz").exists()
+
+
+@pytest.mark.spec("RUL-tracks_elsewhere_restale_nothing", "RUL-tracks_in_dependencies", "BLD-track_window", "BLD-gpx_root_missing",
+                  "RUL-unchecked_counts_as_changed",
+                  test="TST-geotag_finalize-execute_checks_the_tracks_over_the_plan_s_window")
+def test_execute_checks_the_tracks_over_the_plan_s_window(tmp_path, monkeypatch):
+    """The plan records the window its tracks' fingerprint is of; execute takes the tracks again over it: a track of
+    another year added since stales nothing, a point moved inside it stales the plan."""
+    ws, ctl = _ready_ws(tmp_path, monkeypatch)
+    _run(monkeypatch, ws, "plan")
+    p = ctl / "photos-21-time-decisions.json"; p.write_text(p.read_text())
+    _run(monkeypatch, ws, "plan")
+    plan = json.load(open(ctl / "photos-24-executable-plan.json"))
+    assert cal.valid_window(plan["depends_on"]["gpx_window"])
+    gpx = cal.selected_gpx_root()
+    with open(os.path.join(gpx, "2019.gpx"), "w") as f:
+        f.write('<gpx xmlns="http://www.topografix.com/GPX/1/1"><trk><trkseg>'
+                '<trkpt lat="50.0" lon="4.0"><time>2019-07-03T12:00:00Z</time></trkpt></trkseg></trk></gpx>')
+    wf = cal.GeotagWorkflow(str(ws)); wf.preflight(for_execute=True)
+    assert wf.revalidate_plan(plan, wf.plan_tracks(plan)) == []
+    t = os.path.join(gpx, "t.gpx")
+    with open(t) as f:
+        moved = f.read().replace('lat="51.0"', 'lat="51.5"')
+    with open(t, "w") as f:
+        f.write(moved)
+    assert any("gpx_fingerprint" in s for s in wf.revalidate_plan(plan, wf.plan_tracks(plan)))
+    os.rename(gpx, gpx + "-unmounted")                                    # not there: cannot be checked
+    assert any("cannot be checked" in s for s in wf.revalidate_plan(plan, wf.plan_tracks(plan)))
+    os.rename(gpx + "-unmounted", gpx)
+    del plan["depends_on"]["gpx_window"]
+    assert any("gpx_window" in s for s in wf.revalidate_plan(plan, wf.plan_tracks(plan)))
+
+
+@pytest.mark.skipif(hasattr(os, "geteuid") and os.geteuid() == 0, reason="root lists every folder")
+@pytest.mark.spec("RUL-unlisted_tracks_stop_geotag", "RUL-unchecked_counts_as_changed", "BLD-track_catalogue",
+                  test="TST-geotag_finalize-tracks_that_cannot_be_listed_stop_plan_and_execute")
+def test_tracks_that_cannot_be_listed_stop_plan_and_execute(tmp_path, monkeypatch, capsys):
+    """A tracks folder that cannot be listed cannot be checked: the plan stops on it, naming it, and execute finds the
+    plan stale, changing nothing."""
+    ws, ctl = _ready_ws(tmp_path, monkeypatch)
+    _run(monkeypatch, ws, "plan")
+    p = ctl / "photos-21-time-decisions.json"; p.write_text(p.read_text())
+    _run(monkeypatch, ws, "plan")
+    gpx = cal.selected_gpx_root()
+    plan = (ctl / "photos-24-executable-plan.json").read_bytes()
+    before = sorted(os.listdir(ws / BYDEST / "T"))
+    os.chmod(gpx, 0)
+    try:
+        capsys.readouterr()
+        assert _run(monkeypatch, ws, "execute") == 2
+        assert sorted(os.listdir(ws / BYDEST / "T")) == before
+        assert _run(monkeypatch, ws, "plan") == 2
+        said = capsys.readouterr()
+        assert "cannot be checked" in said.out + said.err and "cannot be seen" in said.out + said.err
+    finally:
+        os.chmod(gpx, 0o755)
+    assert (ctl / "photos-24-executable-plan.json").read_bytes() == plan

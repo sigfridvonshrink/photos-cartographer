@@ -1657,8 +1657,8 @@
     }
   },
   "depends_on": {
-    "camera_group_key_version": 1,
-    "camera_time_policy_fingerprint": "0e6123b50ca057182dbd6fd1585db9e2cabfd6bc2d0c1ce45f239e9a1b7e2ac6",
+    "camera_group_key_version": 2,
+    "camera_time_policy_fingerprint": "38ef860b9f5d26b78f05fe4692e64328729afdd4089a3300ef41e26df8390180",
     "gpx_fingerprint": "example-gpx-fingerprint",
     "handoff": {
       "artifact_name": "photos-11-handoff.json",
@@ -1684,8 +1684,11 @@
             "proposal_source": "timezone_naive",
             "proposed_from_timezone": "Europe/Brussels",
             "proposed_offset_seconds": -7200,
-            "proposed_real_utc": "2024-07-03T11:00:00Z",
-            "rank": "timezone_derived"
+            "proposed_real_utc": "2024-07-03T11:00:00Z"
+          },
+          "representative": {
+            "camera_source_naive_time": "2024:07:03 13:00:00",
+            "source_file": "6-photos-by-dest/root-cam.arw"
           },
           "requires_user_input": false,
           "stale_user_decision": false,
@@ -1696,13 +1699,17 @@
           }
         }
       },
-      "camera_groups_present": [
-        "NIKON|D750|B"
-      ],
+      "date_fallback": {
+        "effective_date": null,
+        "requires_user_input": false,
+        "stale_user_decision": false,
+        "user_decision": {
+          "date": ""
+        }
+      },
       "destination_path": "6-photos-by-dest",
       "destination_timezone": {
         "effective_iana_timezone": "Europe/Brussels",
-        "proposal_confidence": "high",
         "proposal_source": "config_default",
         "proposed_iana_timezone": "Europe/Brussels",
         "requires_user_input": false,
@@ -1730,8 +1737,11 @@
             "proposal_source": "timezone_naive",
             "proposed_from_timezone": "Europe/Brussels",
             "proposed_offset_seconds": -7200,
-            "proposed_real_utc": "2024-07-03T11:00:00Z",
-            "rank": "timezone_derived"
+            "proposed_real_utc": "2024-07-03T11:00:00Z"
+          },
+          "representative": {
+            "camera_source_naive_time": "2024:07:03 13:00:00",
+            "source_file": "6-photos-by-dest/Belgium/bel-cam.arw"
           },
           "requires_user_input": false,
           "stale_user_decision": false,
@@ -1742,16 +1752,19 @@
           }
         }
       },
-      "camera_groups_present": [
-        "APPLE|iPhone15|P",
-        "NIKON|D750|B"
-      ],
+      "date_fallback": {
+        "effective_date": null,
+        "requires_user_input": false,
+        "stale_user_decision": false,
+        "user_decision": {
+          "date": ""
+        }
+      },
       "destination_path": "6-photos-by-dest/Belgium",
       "destination_timezone": {
         "decision_mode": "auto_resolved",
         "effective_iana_timezone": "Europe/Brussels",
         "inherited_from": "6-photos-by-dest",
-        "proposal_confidence": "review_required",
         "proposal_source": "inherited",
         "proposed_iana_timezone": "Europe/Brussels",
         "requires_user_input": false,
@@ -1779,8 +1792,11 @@
             "proposal_source": "timezone_naive",
             "proposed_from_timezone": "Europe/Brussels",
             "proposed_offset_seconds": -7200,
-            "proposed_real_utc": "2024-07-03T11:15:00Z",
-            "rank": "timezone_derived"
+            "proposed_real_utc": "2024-07-03T11:15:00Z"
+          },
+          "representative": {
+            "camera_source_naive_time": "2024:07:03 13:15:00",
+            "source_file": "6-photos-by-dest/Belgium/Bruges/bruges.arw"
           },
           "requires_user_input": false,
           "stale_user_decision": false,
@@ -1791,15 +1807,19 @@
           }
         }
       },
-      "camera_groups_present": [
-        "NIKON|D750|B"
-      ],
+      "date_fallback": {
+        "effective_date": null,
+        "requires_user_input": false,
+        "stale_user_decision": false,
+        "user_decision": {
+          "date": ""
+        }
+      },
       "destination_path": "6-photos-by-dest/Belgium/Bruges",
       "destination_timezone": {
         "decision_mode": "auto_resolved",
         "effective_iana_timezone": "Europe/Brussels",
         "inherited_from": "6-photos-by-dest/Belgium",
-        "proposal_confidence": "review_required",
         "proposal_source": "inherited",
         "proposed_iana_timezone": "Europe/Brussels",
         "requires_user_input": false,
@@ -1827,11 +1847,14 @@
             "confidence": "high",
             "proposal_source": "same_day_elsewhere",
             "proposed_offset_seconds": -7200,
-            "rank": "same_day",
             "shared_from": {
               "bucket": "SONY|ILCE-6400|A",
               "destination": "6-photos-by-dest/Japan"
             }
+          },
+          "representative": {
+            "camera_source_naive_time": "2024:07:03 14:00:00",
+            "source_file": "6-photos-by-dest/Belgium/Brussels/bru-summer-1.arw"
           },
           "requires_user_input": false,
           "stale_user_decision": false,
@@ -1856,8 +1879,11 @@
             "proposal_source": "timezone_naive",
             "proposed_from_timezone": "Europe/Brussels",
             "proposed_offset_seconds": -7200,
-            "proposed_real_utc": "2024-07-04T12:00:00Z",
-            "rank": "timezone_derived"
+            "proposed_real_utc": "2024-07-04T12:00:00Z"
+          },
+          "representative": {
+            "camera_source_naive_time": "2024:07:04 14:00:00",
+            "source_file": "6-photos-by-dest/Belgium/Brussels/bru-summer-2.arw"
           },
           "requires_user_input": false,
           "stale_user_decision": false,
@@ -1878,8 +1904,11 @@
             "proposal_source": "timezone_naive",
             "proposed_from_timezone": "Europe/Brussels",
             "proposed_offset_seconds": -3600,
-            "proposed_real_utc": "2024-12-22T13:00:00Z",
-            "rank": "timezone_derived"
+            "proposed_real_utc": "2024-12-22T13:00:00Z"
+          },
+          "representative": {
+            "camera_source_naive_time": "2024:12:22 14:00:00",
+            "source_file": "6-photos-by-dest/Belgium/Brussels/bru-winter.arw"
           },
           "requires_user_input": true,
           "stale_user_decision": false,
@@ -1890,15 +1919,19 @@
           }
         }
       },
-      "camera_groups_present": [
-        "SONY|ILCE-6400|A"
-      ],
+      "date_fallback": {
+        "effective_date": null,
+        "requires_user_input": false,
+        "stale_user_decision": false,
+        "user_decision": {
+          "date": ""
+        }
+      },
       "destination_path": "6-photos-by-dest/Belgium/Brussels",
       "destination_timezone": {
         "decision_mode": "auto_resolved",
         "effective_iana_timezone": "Europe/Brussels",
         "inherited_from": "6-photos-by-dest/Belgium",
-        "proposal_confidence": "review_required",
         "proposal_source": "inherited",
         "proposed_iana_timezone": "Europe/Brussels",
         "requires_user_input": false,
@@ -1916,7 +1949,7 @@
           "anchored_by": [
             {
               "gpx_file": "trip-2024-07-03.gpx",
-              "sha256": null
+              "sha256": "3a523a4dfd1e3a4b76946262c5ee2cd60bd25bde0d086f5961683b5687e64379"
             }
           ],
           "camera_group": "SONY|ILCE-6400|A",
@@ -1985,20 +2018,16 @@
             "proposal_source": "gpx_self_anchor",
             "proposed_offset_seconds": -7200,
             "proposed_real_utc": "2024-07-03T12:00:00Z",
-            "rank": "recommended",
-            "recommended_gpx_match": {
-              "distance_m": 0.0,
-              "gpx_file": "trip-2024-07-03.gpx",
-              "match_type": "gpx_point_match",
-              "segment_duration_seconds": null
-            },
             "skipped": {
               "examples": [],
               "no_nearby_track": 0,
               "outside_time_window": 0
             },
-            "supporting_count": 1,
             "tied": false
+          },
+          "representative": {
+            "camera_source_naive_time": "2024:07:03 14:00:00",
+            "source_file": "6-photos-by-dest/Japan/anchor-1.arw"
           },
           "requires_user_input": false,
           "stale_user_decision": false,
@@ -2009,15 +2038,19 @@
           }
         }
       },
-      "camera_groups_present": [
-        "SONY|ILCE-6400|A"
-      ],
+      "date_fallback": {
+        "effective_date": null,
+        "requires_user_input": false,
+        "stale_user_decision": false,
+        "user_decision": {
+          "date": ""
+        }
+      },
       "destination_path": "6-photos-by-dest/Japan",
       "destination_timezone": {
         "decision_mode": "auto_resolved",
         "effective_iana_timezone": "Europe/Brussels",
         "inherited_from": "6-photos-by-dest",
-        "proposal_confidence": "review_required",
         "proposal_source": "inherited",
         "proposed_iana_timezone": "Europe/Brussels",
         "requires_user_input": false,
@@ -2031,15 +2064,19 @@
     },
     "6-photos-by-dest/PhoneOnly": {
       "camera_group_time_decisions": {},
-      "camera_groups_present": [
-        "APPLE|iPhone15|P"
-      ],
+      "date_fallback": {
+        "effective_date": null,
+        "requires_user_input": false,
+        "stale_user_decision": false,
+        "user_decision": {
+          "date": ""
+        }
+      },
       "destination_path": "6-photos-by-dest/PhoneOnly",
       "destination_timezone": {
         "decision_mode": "auto_resolved",
         "effective_iana_timezone": "Europe/Brussels",
         "inherited_from": "6-photos-by-dest",
-        "proposal_confidence": "review_required",
         "proposal_source": "inherited",
         "proposed_iana_timezone": "Europe/Brussels",
         "requires_user_input": false,

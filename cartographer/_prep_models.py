@@ -51,6 +51,7 @@ __all__ = [
     'empty_cache_freshness_counts',
     'STATUS_TO_CACHE_FRESHNESS_KEY',
     'PREP_ALLOWED_OPERATION_TYPES',
+    'QUARANTINE_KINDS',
     'PLAN_SCHEMA_VERSION',
     'Fingerprint',
     'Operation',
@@ -70,6 +71,10 @@ def empty_cache_freshness_counts() -> dict:
         "metadata_carried_forward": 0,
         "metadata_missing": 0,
     }
+
+# Why a file is quarantined, as each quarantine move's `kind` records it (BLD-quarantine_reasons): a copy of a file
+# kept, a leftover of an interrupted metadata write, a hidden file of a dump, a set-aside JPEG whose RAW was culled.
+QUARANTINE_KINDS = ("duplicate", "exiftool_leftover", "dump_dotfile", "raw_culled")
 
 STATUS_TO_CACHE_FRESHNESS_KEY = {
     "reused_from_cache": "metadata_reused_from_cache",
@@ -93,8 +98,9 @@ PREP_ALLOWED_OPERATION_TYPES = {
 }
 
 # Plan serialization/schema version. A plan whose version differs from this is rejected at execute
-# time (BLD-prep_dependencies). 3: the plan records the code that made it, and plans its folder removals.
-PLAN_SCHEMA_VERSION = 3
+# time (BLD-prep_dependencies). 3: the plan records the code that made it, and plans its folder removals; 4: no
+# workspace_root, and no absolute_path in its database effects.
+PLAN_SCHEMA_VERSION = 4
 
 
 # ==============================================================================
@@ -124,7 +130,6 @@ class Plan:
     plan_id: str
     command: str
     created_at: str
-    workspace_root: str
     config_fingerprint: Fingerprint
     summary: Dict[str, Any]
     blockers: List[str]
@@ -159,7 +164,6 @@ class Journal:
     started_at: str
     finished_at: Optional[str] = None
     status: str = "started" # "started" | "success" | "failed_intervention_required" | "aborted_before_mutation"
-    snapshots: Dict[str, Dict[str, Any]] = field(default_factory=dict)
     operations: List[JournalOperationResult] = field(default_factory=list)
     details: Dict[str, Any] = field(default_factory=dict)
     depends_on: Dict[str, Any] = field(default_factory=dict)  # version/fingerprint stamp (BLD-prep_dependencies)

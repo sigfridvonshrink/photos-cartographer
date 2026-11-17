@@ -19,7 +19,7 @@ stale, _valid_iana). Complements the per-stage suites. From conftest.py.
 """
 import json
 from _zone import answer_root_zone, with_root_zone
-from _handoff import match_disk
+from _handoff import match_disk, vouched
 import os
 import sys
 from datetime import datetime, timezone
@@ -54,12 +54,12 @@ def _run(monkeypatch, ws):
 
 # --- main(): lock + config/handoff error paths ------------------------------
 
-@pytest.mark.spec("RUL-lock_fail_fast", "RUL-lock_refusal_says_locked",
+@pytest.mark.spec("RUL-lock_fail_fast", "RUL-lock_refusal_says_locked", "INV-one_run_at_a_time",
                   test="TST-geotag_orchestration-lock_contention_exits_1")
 def test_lock_contention_exits_1(tmp_path, monkeypatch, capsys):
     ws, ctl = _init_ws(tmp_path)
     (ctl / "photos-00-config.json").write_text(json.dumps({k: v for k, v in utils.CONFIG.items() if k != "jobs"}))
-    (ctl / "photos-11-handoff.json").write_text(json.dumps({"filename_timestamp_format": utils.CONFIG["filename_timestamp_format"], "files": [], "depends_on": {"cache": {"fingerprint_algorithm_version": utils.FINGERPRINT_ALGORITHM_VERSION}}}))
+    (ctl / "photos-11-handoff.json").write_text(json.dumps(vouched(ctl.parent, {"filename_timestamp_format": utils.CONFIG["filename_timestamp_format"], "files": [], "depends_on": {"cache": {"fingerprint_algorithm_version": utils.FINGERPRINT_ALGORITHM_VERSION}}})))
     held = utils.WorkspaceLock(str(ws))
     assert held.acquire()
     try:
@@ -74,7 +74,7 @@ def test_invalid_config_blocks(tmp_path, monkeypatch, capsys):
     bad = {k: v for k, v in utils.CONFIG.items() if k != "jobs"}
     bad["gpx_interpolation_max_distance_meters"] = -5            # fails validate_config
     (ctl / "photos-00-config.json").write_text(json.dumps(bad))
-    (ctl / "photos-11-handoff.json").write_text(json.dumps({"filename_timestamp_format": utils.CONFIG["filename_timestamp_format"], "files": [], "depends_on": {"cache": {"fingerprint_algorithm_version": utils.FINGERPRINT_ALGORITHM_VERSION}}}))
+    (ctl / "photos-11-handoff.json").write_text(json.dumps(vouched(ctl.parent, {"filename_timestamp_format": utils.CONFIG["filename_timestamp_format"], "files": [], "depends_on": {"cache": {"fingerprint_algorithm_version": utils.FINGERPRINT_ALGORITHM_VERSION}}})))
     assert _run(monkeypatch, ws) == 2
     assert "Invalid workspace config" in capsys.readouterr().err
 
@@ -82,7 +82,7 @@ def test_invalid_config_blocks(tmp_path, monkeypatch, capsys):
 def test_corrupt_json_config_blocks(tmp_path, monkeypatch, capsys):
     ws, ctl = _init_ws(tmp_path)
     (ctl / "photos-00-config.json").write_text("{not valid json")      # JSONDecodeError is a ValueError
-    (ctl / "photos-11-handoff.json").write_text(json.dumps({"filename_timestamp_format": utils.CONFIG["filename_timestamp_format"], "files": [], "depends_on": {"cache": {"fingerprint_algorithm_version": utils.FINGERPRINT_ALGORITHM_VERSION}}}))
+    (ctl / "photos-11-handoff.json").write_text(json.dumps(vouched(ctl.parent, {"filename_timestamp_format": utils.CONFIG["filename_timestamp_format"], "files": [], "depends_on": {"cache": {"fingerprint_algorithm_version": utils.FINGERPRINT_ALGORITHM_VERSION}}})))
     assert _run(monkeypatch, ws) == 2
     assert "Invalid workspace config" in capsys.readouterr().err
 
@@ -90,7 +90,7 @@ def test_corrupt_json_config_blocks(tmp_path, monkeypatch, capsys):
 def test_unreadable_config_blocks(tmp_path, monkeypatch, capsys):
     ws, ctl = _init_ws(tmp_path)
     (ctl / "photos-00-config.json").mkdir()                            # a dir -> open() raises (not ValueError)
-    (ctl / "photos-11-handoff.json").write_text(json.dumps({"filename_timestamp_format": utils.CONFIG["filename_timestamp_format"], "files": [], "depends_on": {"cache": {"fingerprint_algorithm_version": utils.FINGERPRINT_ALGORITHM_VERSION}}}))
+    (ctl / "photos-11-handoff.json").write_text(json.dumps(vouched(ctl.parent, {"filename_timestamp_format": utils.CONFIG["filename_timestamp_format"], "files": [], "depends_on": {"cache": {"fingerprint_algorithm_version": utils.FINGERPRINT_ALGORITHM_VERSION}}})))
     assert _run(monkeypatch, ws) == 2
     assert "could not be read" in capsys.readouterr().err
 
@@ -163,13 +163,13 @@ def test_scans_handle_missing_folder_and_dotfiles(tmp_path):
     assert [r for r, _ in scanned] == ["5-photos-by-date/real.jpg"]
     assert list(wf._scan_media("0-sources")) == []                 # empty dir
     assert list(wf._scan_media("no-such-folder")) == []            # missing dir -> early return
-    assert wf._scan_by_dest("no-such-folder") == ([], [])          # missing dir -> early return
-    # _scan_by_dest: a dotfile is skipped, a non-photo is reported
+    assert wf._scan_by_dest("no-such-folder") == ([], [], [])      # missing dir -> early return
+    # _scan_by_dest: a dotfile is hidden, not a non-photo; a non-photo is reported
     (ws / "6-photos-by-dest" / ".hidden").write_text("x")
     (ws / "6-photos-by-dest" / "note.txt").write_text("x")
-    dev, nonphoto = wf._scan_by_dest("6-photos-by-dest")
+    dev, nonphoto, hidden = wf._scan_by_dest("6-photos-by-dest")
     assert any(p.endswith("note.txt") for p, _ in nonphoto)
-    assert all(not p.endswith(".hidden") for p, _ in nonphoto)
+    assert all(not p.endswith(".hidden") for p, _ in nonphoto) and hidden == ["6-photos-by-dest/.hidden"]
 
 
 def _completable_ws(tmp_path):
@@ -207,7 +207,7 @@ def _completable_ws(tmp_path):
     files = [rec("6-photos-by-dest/T/a.arw", "2024:07:03 14:00:00", gps=(50.0, 4.0)),
              rec("6-photos-by-dest/T/b.arw", "2024:07:03 15:00:00", gps=(51.0, 5.0)),
              rec("6-photos-by-dest/T/c.arw", "2024:07:03 14:30:00")]          # no GPS -> blocked
-    (ctl / "photos-11-handoff.json").write_text(json.dumps({"filename_timestamp_format": utils.CONFIG["filename_timestamp_format"], "files": match_disk(ws, files), "cache_fingerprint": "pcf", "depends_on": {"cache": {"fingerprint_algorithm_version": utils.FINGERPRINT_ALGORITHM_VERSION}}}))
+    (ctl / "photos-11-handoff.json").write_text(json.dumps(vouched(ctl.parent, {"filename_timestamp_format": utils.CONFIG["filename_timestamp_format"], "files": match_disk(ws, files), "cache_fingerprint": "pcf", "depends_on": {"cache": {"fingerprint_algorithm_version": utils.FINGERPRINT_ALGORITHM_VERSION}}})))
     return ws, ctl
 
 
@@ -235,8 +235,8 @@ def test_complete_run_writes_photos22_then_bad_coord_aborts(tmp_path, monkeypatc
 @pytest.mark.spec("RUL-no_plan_while_a_decision_waits", "BLD-geotag_stage_order",
                   test="TST-geotag_orchestration-no_plan_while_a_decision_waits")
 def test_no_executable_plan_while_a_decision_waits(tmp_path, monkeypatch, capsys):
-    """A photo neither placed nor left unlocated by the user waits in photos-23; a destination with no
-    timezone waits in photos-21. Either way the run makes no executable plan."""
+    """A photo nothing places waits in photos-23; a destination with no timezone waits in photos-21. Either way the
+    run makes no executable plan."""
     ws, ctl = _completable_ws(tmp_path)
     assert _run(monkeypatch, ws) == 0, capsys.readouterr().err
     assert json.load(open(ctl / "photos-23-gps-decisions.json"))["status"] == "requires_user_input"
@@ -263,7 +263,7 @@ def test_a_run_with_nothing_to_decide_writes_every_record(tmp_path, monkeypatch,
     parsed = json.loads(c["metadata_status"]["parsed_json"])
     parsed.update({"has_native_gps": True, "GPSLatitude": 50.5, "GPSLongitude": 4.5})
     c["metadata_status"].update({"has_native_gps": True, "parsed_json": json.dumps(parsed)})
-    (ctl / "photos-11-handoff.json").write_text(json.dumps(ho))
+    (ctl / "photos-11-handoff.json").write_text(json.dumps(vouched(ctl.parent, ho)))
     assert _run(monkeypatch, ws) == 0, capsys.readouterr().err
     for name in ("photos-21-time-decisions.json", "photos-22-gps-drift-validation.json",
                  "photos-23-gps-decisions.json"):
@@ -312,11 +312,39 @@ def test_unparseable_decision_artifact_blocks_and_is_kept(tmp_path, monkeypatch,
     assert sorted(x.name for x in ctl.iterdir()) == before                    # no backup, no new version
 
 
+@pytest.mark.spec("RUL-invalid_value_stops", "RUL-invalid_value_located", "BLD-geotag_checks_decisions",
+                  test="TST-geotag_orchestration-an_invalid_value_in_a_later_record_changes_nothing")
+@pytest.mark.parametrize("artifact", ["photos-22-gps-drift-validation.json", "photos-23-gps-decisions.json"],
+                         ids=["22", "23"])
+def test_an_invalid_value_in_a_later_record_changes_nothing(tmp_path, monkeypatch, capsys, artifact):
+    """A value in photos-22 or photos-23 that cannot be taken stops the plan before any decision record is written:
+    photos-21 and photos-22 as they were, no copy set aside, the resolved times not replaced."""
+    ws, ctl = _completable_ws(tmp_path)
+    assert _run(monkeypatch, ws) == 0                                         # writes photos-21, -22, -23
+    rec = json.loads((ctl / artifact).read_text())
+    dest = sorted(json.loads((ctl / "photos-21-time-decisions.json").read_text())["destinations"])[-1]
+    rec.setdefault("destinations", {}).setdefault(dest, {})
+    if artifact.startswith("photos-22"):
+        rec["destinations"][dest]["drift_decisions"] = {"X": {"user_decision": {"corrected_offset_seconds": "soon"}}}
+    else:
+        rec["destinations"][dest]["folder_fallback"] = {"user_decision": {"fallback_lat": 95.0, "fallback_lon": 4.0}}
+    (ctl / artifact).write_text(json.dumps(rec))
+    before = {p.name: p.read_bytes() for p in ctl.iterdir() if p.is_file() and p.name.startswith("photos-2")}
+    db = (ctl / "photos-00-ingest.db").read_bytes() if (ctl / "photos-00-ingest.db").exists() else None
+    capsys.readouterr()
+    assert _run(monkeypatch, ws) == 2
+    err = capsys.readouterr().err
+    assert f"invalid value(s) in {artifact}" in err and dest in err, err
+    assert {p.name: p.read_bytes() for p in ctl.iterdir() if p.is_file() and p.name.startswith("photos-2")} == before
+    rows = cal.GeotagCache(str(ws)).get_rows()
+    assert rows                                                               # the resolved times as they were
+
+
 @pytest.mark.spec("RUL-sealed_new_dump_warned", "RUL-sealed_new_dump_left", test="TST-geotag_orchestration-sealed_workspace_with_dump_warns_and_blocks")
 def test_sealed_workspace_with_dump_warns_and_blocks(tmp_path, monkeypatch, capsys):
     ws, ctl = _init_ws(tmp_path)
     (ctl / "photos-00-config.json").write_text(json.dumps({k: v for k, v in utils.CONFIG.items() if k != "jobs"}))
-    (ctl / "photos-11-handoff.json").write_text(json.dumps({"filename_timestamp_format": utils.CONFIG["filename_timestamp_format"], "files": [], "depends_on": {"cache": {"fingerprint_algorithm_version": utils.FINGERPRINT_ALGORITHM_VERSION}}}))
+    (ctl / "photos-11-handoff.json").write_text(json.dumps(vouched(ctl.parent, {"filename_timestamp_format": utils.CONFIG["filename_timestamp_format"], "files": [], "depends_on": {"cache": {"fingerprint_algorithm_version": utils.FINGERPRINT_ALGORITHM_VERSION}}})))
     open(utils.sealed_marker_path(str(ws)), "w").close()           # seal it
     (ws / "loose.jpg").write_bytes(b"x")                           # a new dump at the root
     assert _run(monkeypatch, ws) == 2                              # sealed -> hard stop
@@ -327,6 +355,25 @@ def test_sealed_workspace_with_dump_warns_and_blocks(tmp_path, monkeypatch, caps
     wf = cal.GeotagWorkflow(str(ws))
     blk, warn, _ = wf.preflight()
     assert any("SEALED" in b for b in blk) and not warn
+
+
+@pytest.mark.spec("BLD-phases_check_seal", "RUL-sealed_new_dump_warned",
+                  test="TST-geotag_orchestration-a_sealed_workspace_is_refused_before_its_zone_record_is_read")
+def test_a_sealed_workspace_is_refused_before_its_zone_record_is_read(tmp_path, monkeypatch, capsys):
+    """A sealed workspace on a host with no table of countries, holding a record of it that cannot be read, is
+    refused on its seal — with the new dump pointed out — not on the record, which is never read."""
+    real = utils._zone_database_file
+    monkeypatch.setattr(utils, "_zone_database_file",
+                        lambda name: None if name in ("zone.tab", "iso3166.tab") else real(name))
+    ws, ctl = _init_ws(tmp_path)
+    (ctl / "photos-00-config.json").write_text(json.dumps({k: v for k, v in utils.CONFIG.items() if k != "jobs"}))
+    (ctl / "photos-11-handoff.json").write_text(json.dumps(vouched(ctl.parent, {"filename_timestamp_format": utils.CONFIG["filename_timestamp_format"], "files": [], "depends_on": {"cache": {"fingerprint_algorithm_version": utils.FINGERPRINT_ALGORITHM_VERSION}}})))
+    (ctl / utils.ZONE_TABLE_ARTIFACT).write_text("{torn")
+    open(utils.sealed_marker_path(str(ws)), "w").close()
+    (ws / "loose.jpg").write_bytes(b"x")
+    assert _run(monkeypatch, ws) == 2
+    err = capsys.readouterr().err
+    assert "SEALED" in err and "likely new dump" in err and utils.ZONE_TABLE_ARTIFACT not in err, err
 
 
 @pytest.mark.spec("BLD-geotag_stage_order", test="TST-geotag_orchestration-unknown_group_aborts_before_gpx_ingest")
@@ -361,7 +408,7 @@ def test_unknown_group_template_is_valid_full_json(tmp_path, monkeypatch, capsys
     (ws / "6-photos-by-dest/T/z.nef").write_bytes(b"x")
     h["files"].append(extra)
     match_disk(ws, h["files"])
-    (ctl / "photos-11-handoff.json").write_text(json.dumps(h))
+    (ctl / "photos-11-handoff.json").write_text(json.dumps(vouched(ctl.parent, h)))
 
     assert _run(monkeypatch, ws) == 2
     err = capsys.readouterr().err
@@ -404,13 +451,14 @@ _T = ["destinations", "6-photos-by-dest/T"]
     ("photos-23-gps-decisions.json", _set(_T + ["gps_decisions", "review_items", 0, "user_decision", "manual_lat"], 50.0),
      "6-photos-by-dest/T/c.arw: review manual_lat/lon must both be set, or neither."),
     ("photos-23-gps-decisions.json",
-     _set(_T + ["gps_decisions", "review_items", 0, "user_decision", "accept_unlocated"], 1),
-     "6-photos-by-dest/T/c.arw: user_decision.accept_unlocated must be true or false, not 1."),
+     _set(_T + ["gps_decisions", "review_items", 0, "user_decision", "accept_unlocated"], True),
+     "6-photos-by-dest/T/c.arw: user_decision.accept_unlocated is not a field of a photo's position decision "
+     "(only manual_lat and manual_lon) — remove it."),
     ("photos-23-gps-decisions.json", _set(_T + ["folder_fallback", "user_decision", "fallback_lon"], 4.0),
      "6-photos-by-dest/T: folder_fallback.user_decision fallback_lat/lon must both be set, or neither."),
     ("photos-23-gps-decisions.json", _set(_T + ["gps_decisions", "review_items"], {}),
      "6-photos-by-dest/T: gps_decisions.review_items must be a list."),
-], ids=["21-flag", "21-user_decision", "21-destinations", "21-cell", "23-half-review", "23-flag",
+], ids=["21-flag", "21-user_decision", "21-destinations", "21-cell", "23-half-review", "23-unknown-field",
         "23-half-fallback", "23-review_items"])
 def test_broken_decision_is_a_located_blocker(tmp_path, monkeypatch, capsys, artifact, edit, message):
     ws, ctl = _completable_ws(tmp_path)
@@ -437,7 +485,8 @@ def test_drift_confirmation_must_be_a_real_yes(tmp_path):
     for value, confirmed, blocked in (("false", False, True), (True, True, False), (None, False, False)):
         blockers = []
         cell = wf._drift_cell("6-photos-by-dest/T", CAM, time_cell, [], [],
-                              {"user_decision": {"confirmed": value, "confirmed_offset_seconds": 0}}, blockers)
+                              {"user_decision": {"confirmed": value, "confirmed_offset_seconds": 0,
+                                                 "confirmed_against_tracks": []}}, blockers)
         assert bool(cell["effective_drift_offset"]) is confirmed, value
         assert bool(blockers) is blocked, (value, blockers)
     _, shape = wf.build_drift_validation([], {"destinations": {}}, [], None,

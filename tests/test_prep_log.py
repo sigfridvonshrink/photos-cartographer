@@ -92,6 +92,32 @@ def test_media_journey_keyed_by_fingerprint(tmp_path, monkeypatch):
     assert all(s.get("run") for s in entry["journey"])     # each step attributed to its run
 
 
+@pytest.mark.spec("BLD-set_aside_pair_recorded", test="TST-prep_log-set_aside_jpeg_names_its_raw")
+def test_set_aside_jpeg_names_its_raw(tmp_path, monkeypatch):
+    """A JPEG set aside beside its RAW names that RAW by fingerprint, in its step of the log and in its record of the
+    handoff — however the two were named. One set aside beside two RAWs of its name names neither."""
+    _install(monkeypatch)
+    ws = _ws(tmp_path)
+    (ws / "0-sources" / "a").mkdir()
+    (ws / "0-sources" / "b").mkdir()
+    (ws / "0-sources" / "a" / "DSC_1.ARW").write_bytes(b"RAW1")
+    (ws / "0-sources" / "a" / "DSC_1.JPG").write_bytes(b"JPG1")
+    (ws / "0-sources" / "b" / "DSC_2.ARW").write_bytes(b"RAW2")
+    (ws / "0-sources" / "b" / "DSC_2.DNG").write_bytes(b"DNG2")
+    (ws / "0-sources" / "b" / "DSC_2.JPG").write_bytes(b"JPG2")
+    _run(ws)
+    fp = {k: "sig-" + v.hex()[:16] for k, v in {"raw1": b"RAW1", "jpg1": b"JPG1", "jpg2": b"JPG2"}.items()}
+    steps = {f: [s for s in e["journey"] if s["action"] == "redundant_jpeg_separated"]
+             for f, e in _log(ws)["photos"].items()}
+    assert steps[fp["jpg1"]][0]["raw_fingerprint"] == fp["raw1"]
+    assert "raw_fingerprint" not in steps[fp["jpg2"]][0]
+    with open(utils.handoff_path(str(ws))) as f:
+        aside = {json.loads(r["content_hash"])["value"]: r for r in json.load(f)["files"]
+                 if r["folder_class"] == "3-redundant-jpgs"}
+    assert aside[fp["jpg1"]]["raw_fingerprint"] == fp["raw1"] and "raw_fingerprint" not in aside[fp["jpg2"]]
+    assert prep.set_aside_partners(_log(ws)["photos"]) == {fp["jpg1"]: fp["raw1"]}
+
+
 @pytest.mark.spec("RUL-prep_log_records_set_aside", "BLD-quarantine_layout", test="TST-prep_log-quarantined_duplicate_recorded")
 def test_quarantined_duplicate_recorded(tmp_path, monkeypatch):
     _install(monkeypatch)
@@ -110,7 +136,8 @@ def test_quarantined_duplicate_recorded(tmp_path, monkeypatch):
     assert dq[0]["retained_counterpart"]                              # the kept file at dedup time
 
 
-@pytest.mark.spec("RUL-prep_no_time_or_gps")
+@pytest.mark.spec("RUL-prep_no_time_or_gps",
+                  test="TST-prep_log-prep_organizes_by_raw_naive_timestamp_no_tz_or_utc_shift")
 def test_prep_organizes_by_raw_naive_timestamp_no_tz_or_utc_shift(tmp_path, monkeypatch):
     """RUL-prep_no_time_or_gps (anti): prep organizes by the RAW camera-naive timestamp and never timezone/UTC-corrects
     it (that is geotag's job). Use a late-evening naive time that ANY tz/UTC conversion would push to
@@ -132,7 +159,8 @@ def test_prep_organizes_by_raw_naive_timestamp_no_tz_or_utc_shift(tmp_path, monk
     assert entry["prep_path"] == "5-photos-by-date/2023-03-26/2023-03-26--23-45-00.jpg"
 
 
-@pytest.mark.spec("RUL-record_whole_each_phase")
+@pytest.mark.spec("RUL-record_whole_each_phase",
+                  test="TST-prep_log-prep_log_is_complete_and_standalone_without_geotag_or_merge")
 def test_prep_log_is_complete_and_standalone_without_geotag_or_merge(tmp_path, monkeypatch):
     """RUL-record_whole_each_phase: the prep log (photos-15) is complete and self-sufficient even if geotag/merge never
     run. After a prep-only run, NO geotag (photos-2x) / merge (photos-3x) artifact exists, yet photos-15
@@ -158,7 +186,8 @@ def test_prep_log_is_complete_and_standalone_without_geotag_or_merge(tmp_path, m
     assert all(s.get("run") for s in entry["journey"])                # every step attributed to its run
 
 
-@pytest.mark.spec("RUL-no_meaning_from_names")
+@pytest.mark.spec("RUL-no_meaning_from_names",
+                  test="TST-prep_log-nonconforming_name_is_ignored_timestamp_comes_from_metadata")
 def test_nonconforming_name_is_ignored_timestamp_comes_from_metadata(tmp_path, monkeypatch):
     """RUL-no_meaning_from_names: prep never parses meaning from a non-conforming filename — it re-ingests the file and
     takes the timestamp from metadata. A file whose name MISLEADINGLY encodes 2099 but whose EXIF
@@ -439,3 +468,156 @@ def test_an_earlier_runs_duplicates_are_kept(tmp_path, monkeypatch):
     dq = next(iter(photos.values()))["deduplicated"]["quarantined"]
     assert dq[:1] == first and len(dq) == 2, dq
     assert dq[1]["origin"] == "0-sources/c.jpg"
+
+
+_UNREADABLE_LOGS = ["{not json", "[]", '{"schema_version": 1, "tool": "photos-1-prep"}', '{"photos": null}',
+                    '{"photos": {}, "workspace_changes": {}}', '{"photos": {}, "workspace_changes": [1]}']
+
+
+@pytest.mark.parametrize("content", _UNREADABLE_LOGS, ids=["not_json", "a_list", "no_photos", "photos_null",
+                                                           "changes_not_a_list", "a_change_not_an_object"])
+@pytest.mark.spec("RUL-unreadable_prep_log_stops", "BLD-unreadable_prep_log", test="TST-prep_log-an_unreadable_log_blocks_the_plan")
+def test_an_unreadable_log_blocks_the_plan(tmp_path, monkeypatch, content):
+    """An earlier log that cannot be read is never taken for an empty one: the plan blocks, naming it, and execute
+    refuses the plan before any change — the new photo stays in the inbox and the log as it was."""
+    _install(monkeypatch)
+    ws = _ws(tmp_path)
+    (ws / "0-sources" / "a.jpg").write_bytes(b"AAAA")
+    _run(ws)
+    plp = utils.prep_log_path(str(ws))
+    with open(plp, "w") as f:
+        f.write(content)
+    (ws / "0-sources" / "b.jpg").write_bytes(b"BBBB")
+    cache = prep.WorkspaceCache(str(ws))
+    plan = prep.WorkspacePrepWorkflow(str(ws), cache).plan()
+    cache.close()
+    assert [b for b in plan.blockers if "photos-15-prep-log.json" in b], plan.blockers
+    with pytest.raises(ValueError):
+        prep.PlanExecutor(str(ws)).execute(plan)
+    assert (ws / "0-sources" / "b.jpg").exists()
+    assert open(plp).read() == content
+
+
+@pytest.mark.spec("RUL-unreadable_prep_log_stops", "BLD-unreadable_prep_log", test="TST-prep_log-a_log_unreadable_since_the_plan_is_refused_before_any_change")
+def test_a_log_unreadable_since_the_plan_is_refused_before_any_change(tmp_path, monkeypatch):
+    """A log that became unreadable after a clean plan is refused by execute's preflight, before any change."""
+    _install(monkeypatch)
+    ws = _ws(tmp_path)
+    (ws / "0-sources" / "a.jpg").write_bytes(b"AAAA")
+    _run(ws)
+    (ws / "0-sources" / "b.jpg").write_bytes(b"BBBB")
+    cache = prep.WorkspaceCache(str(ws))
+    plan = prep.WorkspacePrepWorkflow(str(ws), cache).plan()
+    cache.close()
+    assert not plan.blockers, plan.blockers
+    plp = utils.prep_log_path(str(ws))
+    with open(plp, "w") as f:
+        f.write("{not json")
+    with pytest.raises(ValueError, match="photos-15-prep-log.json"):
+        prep.PlanExecutor(str(ws)).execute(plan)
+    assert (ws / "0-sources" / "b.jpg").exists()
+    assert open(plp).read() == "{not json"
+
+
+@pytest.mark.spec("RUL-gone_photo_entry_carried", "BLD-gone_photo_entry", test="TST-prep_log-a_gone_photos_entry_is_carried_as_it_was")
+def test_a_gone_photos_entry_is_carried_as_it_was(tmp_path, monkeypatch):
+    """The user deletes a filed photo; the next run carries its entry exactly as it was — no step added, its
+    prep_path the place prep left it — beside the new photo's, though the new photo is filed under the name it left
+    free: a photo this run files is its own, never the gone one's under a retaken fingerprint."""
+    _install(monkeypatch)
+    ws = _ws(tmp_path)
+    (ws / "0-sources" / "a.jpg").write_bytes(b"AAAA")
+    _run(ws)
+    (gone_fp, entry), = _log(ws)["photos"].items()
+    os.remove(ws / entry["prep_path"])
+    (ws / "0-sources" / "b.jpg").write_bytes(b"BBBB")
+    _run(ws)
+    photos = _log(ws)["photos"]
+    assert len(photos) == 2
+    assert photos[gone_fp] == entry
+    (new_fp,) = set(photos) - {gone_fp}
+    assert [s["action"] for s in photos[new_fp]["journey"]] == ["organized", "provisional_rename"]
+
+
+@pytest.mark.spec("RUL-retake_only_unchanged_file", "BLD-retake_same_file", "RUL-gone_photo_entry_carried",
+                  test="TST-prep_log-a_different_file_at_a_freed_path_is_a_new_photo")
+def test_a_different_file_at_a_freed_path_is_a_new_photo(tmp_path, monkeypatch):
+    """The user deletes a filed photo and puts a different one at the path it freed, while ImageMagick changes: the
+    file there is not the one prep left — not its size, time or inode — so its fingerprint is no retake. It is a new
+    photo; the gone one's entry stays as it was."""
+    _install(monkeypatch)
+    monkeypatch.setattr(utils, "get_imagemagick_version", lambda: "t")
+    ws = _ws(tmp_path)
+    (ws / "0-sources" / "a.jpg").write_bytes(b"AAAA")
+    _run(ws)
+    (gone_fp, entry), = _log(ws)["photos"].items()
+    path = ws / entry["prep_path"]
+    os.remove(path)
+    path.write_bytes(b"ZZZZZZZZ another photo")
+    monkeypatch.setattr(prep.ContentHasher, "fingerprint_image", lambda p: {
+        "status": "valid", "strategy": "image-content-hash-v2",
+        "value": "sig2-" + open(p, "rb").read().hex()[:16], "engine_version": "u"})
+    monkeypatch.setattr(utils, "get_imagemagick_version", lambda: "u")
+    _run(ws)
+    photos = _log(ws)["photos"]
+    assert photos[gone_fp] == entry
+    (new_fp,) = set(photos) - {gone_fp}
+    assert not any(s["action"] == "fingerprint_retaken" for s in photos[new_fp]["journey"])
+
+
+@pytest.mark.spec("RUL-retake_only_unchanged_file", "BLD-retake_same_file",
+                  test="TST-prep_log-another_file_of_the_same_size_and_time_at_a_freed_path_is_a_new_photo")
+def test_another_file_of_the_same_size_and_time_at_a_freed_path_is_a_new_photo(tmp_path, monkeypatch):
+    """A file put in place of a filed photo with the old one's size and modification time, while ImageMagick
+    changes, is still another file — another inode: its fingerprint is no retake, and the gone photo's entry stays
+    as it was."""
+    _install(monkeypatch)
+    monkeypatch.setattr(utils, "get_imagemagick_version", lambda: "t")
+    ws = _ws(tmp_path)
+    (ws / "0-sources" / "a.jpg").write_bytes(b"AAAA")
+    _run(ws)
+    (gone_fp, entry), = _log(ws)["photos"].items()
+    path = ws / entry["prep_path"]
+    st = os.stat(path)
+    other = path.parent / "other.tmp"
+    other.write_bytes(b"ZZZZ")                                     # the same size, made while the old file exists
+    os.utime(other, ns=(st.st_atime_ns, st.st_mtime_ns))         # and the same modification time
+    os.replace(other, path)
+    assert (os.stat(path).st_size, os.stat(path).st_mtime_ns) == (st.st_size, st.st_mtime_ns)
+    assert os.stat(path).st_ino != st.st_ino
+    monkeypatch.setattr(prep.ContentHasher, "fingerprint_image", lambda p: {
+        "status": "valid", "strategy": "image-content-hash-v2",
+        "value": "sig2-" + open(p, "rb").read().hex()[:16], "engine_version": "u"})
+    monkeypatch.setattr(utils, "get_imagemagick_version", lambda: "u")
+    _run(ws)
+    photos = _log(ws)["photos"]
+    assert photos[gone_fp] == entry
+    (new_fp,) = set(photos) - {gone_fp}
+    assert not any(s["action"] == "fingerprint_retaken" for s in photos[new_fp]["journey"])
+
+
+@pytest.mark.spec("RUL-retake_only_unchanged_file", "BLD-retake_same_file",
+                  test="TST-prep_log-a_fingerprint_taken_again_by_the_same_method_is_no_retake")
+def test_a_fingerprint_taken_again_by_the_same_method_is_no_retake(tmp_path, monkeypatch):
+    """An unchanged file fingerprinted again by the same method — its database row and memo gone — that gets another
+    value is not counted as a fingerprint taken again: no `fingerprint_retaken` step, the earlier entry as it was."""
+    _install(monkeypatch)
+    monkeypatch.setattr(utils, "get_imagemagick_version", lambda: "t")
+    ws = _ws(tmp_path)
+    (ws / "0-sources" / "a.jpg").write_bytes(b"AAAA")
+    _run(ws)
+    (old_fp, entry), = _log(ws)["photos"].items()
+    cache = prep.WorkspaceCache(str(ws))
+    cache.remove_file(entry["prep_path"])                        # nothing kept to reuse: fingerprinted again
+    cache.close()
+    memo = os.path.join(str(ws), ".photos-ingest", "photos-00-plan-memo.db")
+    if os.path.exists(memo):
+        os.remove(memo)
+    monkeypatch.setattr(prep.ContentHasher, "fingerprint_image", lambda p: {
+        "status": "valid", "strategy": "image-content-hash-v2",          # the same method as before
+        "value": "sig3-" + open(p, "rb").read().hex()[:16], "engine_version": "t"})
+    _run(ws)
+    photos = _log(ws)["photos"]
+    assert photos[old_fp] == entry
+    (new_fp,) = set(photos) - {old_fp}
+    assert not any(s["action"] == "fingerprint_retaken" for s in photos[new_fp].get("journey", []))

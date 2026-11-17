@@ -20,6 +20,7 @@ import assert from "node:assert/strict";
 import * as app from "../web/app.js";
 
 const setWork = (work) => { app.state.work = work; app.state.base = work; };
+const TRIP = [{ gpx_file: "trip.gpx", sha256: "a".repeat(64) }];   // the tracks a drift cell shows
 
 test("scrubOffset = (chosen track UTC) − (photo camera-naive), in seconds", () => {
   const frame = { camera_naive: "2024:07:03 14:00:00" };
@@ -50,7 +51,8 @@ test("scrubSeedIndex lands on the track point implied by the current offset", ()
 test("wouldResolve(drift): confirmed for this offset (zero scrub or valid correction) resolves; else not", () => {
   const dest = "6-photos-by-dest/D", key = "CAM", ref = { file: "drift", dest, kind: "drift", key };
   const mk = (ud) => setWork({ drift: { destinations: { [dest]: { drift_decisions: { [key]: {
-    user_decision: { confirmed_offset_seconds: -7200, ...ud }, proposal: { current_offset_seconds: -7200 } } } } } } });
+    user_decision: { confirmed_offset_seconds: -7200, confirmed_against_tracks: TRIP, ...ud },
+    proposal: { current_offset_seconds: -7200, tracks: TRIP } } } } } } });
 
   mk({ confirmed: true, corrected_offset_seconds: "" });        assert.equal(app.wouldResolve(ref), true);   // zero scrub
   mk({ confirmed: true, corrected_offset_seconds: -3600 });     assert.equal(app.wouldResolve(ref), true);   // correction
@@ -60,14 +62,49 @@ test("wouldResolve(drift): confirmed for this offset (zero scrub or valid correc
   assert.equal(app.wouldResolve(ref), false);                                                                 // another offset's
   mk({ confirmed: true, corrected_offset_seconds: "", confirmed_offset_seconds: "" });
   assert.equal(app.wouldResolve(ref), false);                                                                 // names none
+  mk({ confirmed: true, corrected_offset_seconds: "", confirmed_against_tracks: undefined });
+  assert.equal(app.wouldResolve(ref), false);                                                                 // names no tracks
 });
 
-test("driftConfirmFields: confirming names the offset shown; unconfirming clears it", () => {
-  const c = { user_decision: {}, proposal: { current_offset_seconds: -5400 } };
-  assert.deepEqual(app.driftConfirmFields(c, true), { confirmed: true, confirmed_offset_seconds: -5400 });
-  assert.deepEqual(app.driftConfirmFields(c, false), { confirmed: false, confirmed_offset_seconds: "" });
-  assert.equal(app.driftConfirmHolds({ ...c, user_decision: { confirmed: true, confirmed_offset_seconds: -5400 } }), true);
-  assert.equal(app.driftConfirmHolds({ ...c, user_decision: { confirmed: true, confirmed_offset_seconds: 0 } }), false);
+test("driftConfirmFields: confirming names the offset and the tracks shown; unconfirming clears both", () => {
+  const c = { user_decision: {}, proposal: { current_offset_seconds: -5400, tracks: TRIP } };
+  assert.deepEqual(app.driftConfirmFields(c, true),
+    { confirmed: true, confirmed_offset_seconds: -5400, confirmed_against_tracks: TRIP });
+  assert.deepEqual(app.driftConfirmFields(c, false),
+    { confirmed: false, confirmed_offset_seconds: "", confirmed_against_tracks: [] });
+  const ud = app.driftConfirmFields(c, true);
+  assert.equal(app.driftConfirmHolds({ ...c, user_decision: ud }), true);
+  assert.equal(app.driftConfirmHolds({ ...c, user_decision: { ...ud, confirmed_offset_seconds: 0 } }), false);
+  assert.equal(app.driftStaleReason({ ...c, user_decision: { ...ud, confirmed_offset_seconds: 0 } }), "offset");
+  assert.equal(app.driftStaleReason({ ...c, user_decision: ud }), null);
+});
+
+test("driftConfirmHolds: a confirmation holds only while the tracks it names stand (RUL-confirmation_rests_on_its_tracks)", () => {
+  const ud = { confirmed: true, confirmed_offset_seconds: -7200, corrected_offset_seconds: "", confirmed_against_tracks: TRIP };
+  const cell = (tracks, extra = {}) => ({ user_decision: ud, proposal: { current_offset_seconds: -7200, tracks }, ...extra });
+  assert.equal(app.driftConfirmHolds(cell(TRIP)), true);
+  // the track shown is another export of the day: its SHA-256 differs
+  const redone = [{ gpx_file: "trip.gpx", sha256: "b".repeat(64) }];
+  assert.equal(app.driftConfirmHolds(cell(redone)), false);
+  assert.equal(app.driftStaleReason(cell(redone)), "tracks");
+  // a track added beside the one named leaves it standing
+  assert.equal(app.driftConfirmHolds(cell([...TRIP, { gpx_file: "other.gpx", sha256: "c".repeat(64) }])), true);
+  // named but no longer shown: what geotag found under gpx_root decides
+  const other = [{ gpx_file: "other.gpx", sha256: "c".repeat(64) }];
+  assert.equal(app.driftConfirmHolds(cell(other, { confirmed_tracks_changed: [] })), true);
+  assert.equal(app.driftConfirmHolds(cell(other, { confirmed_tracks_changed: ["trip.gpx"] })), false);
+  // confirming again names the tracks shown now, which hold whatever geotag found of the old ones
+  const again = cell(redone, { confirmed_tracks_changed: ["trip.gpx"] });
+  again.user_decision = { ...ud, ...app.driftConfirmFields(again, true) };
+  assert.equal(app.driftConfirmHolds(again), true);
+  // a confirmation without the tracks field confirms nothing
+  assert.equal(app.driftConfirmHolds({ ...cell(TRIP), user_decision: { ...ud, confirmed_against_tracks: undefined } }), false);
+});
+
+test("driftConfirmHolds: one made with no track shown holds only while none is (RUL-trackless_confirmation_holds_while_none)", () => {
+  const ud = { confirmed: true, confirmed_offset_seconds: -7200, corrected_offset_seconds: "", confirmed_against_tracks: [] };
+  assert.equal(app.driftConfirmHolds({ user_decision: ud, proposal: { current_offset_seconds: -7200, tracks: [] } }), true);
+  assert.equal(app.driftConfirmHolds({ user_decision: ud, proposal: { current_offset_seconds: -7200, tracks: TRIP } }), false);
 });
 
 test("refInvalid(drift): only a correction that is not whole seconds is invalid", () => {
@@ -82,4 +119,18 @@ test("refInvalid(drift): only a correction that is not whole seconds is invalid"
 test("cellStatus(drift): unconfirmed needs input, confirmed resolves", () => {
   assert.deepEqual(app.cellStatus({ requires_user_input: true }), ["needs", "needs input"]);
   assert.deepEqual(app.cellStatus({ requires_user_input: false }), ["ok", "resolved"]);
+});
+
+test("driftCorrectionFields: a correction typed for a bucket with no track confirms it, and resolves it", () => {
+  // a bucket no track lies by: nothing to scrub along, so the correction is typed (or given as a photo's true time)
+  const dest = "6-photos-by-dest/D", key = "CAM", ref = { file: "drift", dest, kind: "drift", key };
+  const cell = { proposal: { current_offset_seconds: -7200, frames: [{ source_file: "a.arw", camera_naive: "2024:07:03 14:00:00" }],
+    track_segment: [], tracks: [] }, user_decision: { confirmed: false, corrected_offset_seconds: "", confirmed_offset_seconds: "",
+    confirmed_against_tracks: [] } };
+  const typed = app.driftCorrectionFields(cell, -3600);
+  assert.deepEqual(typed, { confirmed: true, confirmed_offset_seconds: -7200, confirmed_against_tracks: [], corrected_offset_seconds: -3600 });
+  setWork({ drift: { destinations: { [dest]: { drift_decisions: { [key]: { ...cell, user_decision: typed } } } } } });
+  assert.equal(app.wouldResolve(ref), true);
+  // the offset a photo's true time gives, as the typed field computes it: true time − camera time
+  assert.equal(app.offsetFromTrueTime("2024:07:03 14:00:00", "2024-07-03T13:00:00", ""), -3600);
 });

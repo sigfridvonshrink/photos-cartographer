@@ -1657,8 +1657,8 @@
     }
   },
   "depends_on": {
-    "camera_group_key_version": 1,
-    "camera_time_policy_fingerprint": "c8d1f8b168eae1e8fbbc1b9ae11ea0b100006e1383c3047722a28df9069f8247",
+    "camera_group_key_version": 2,
+    "camera_time_policy_fingerprint": "17a94d3e0d38d4f07120b41415af2eda0310f2644f39cf96c5a3897dad0bd484",
     "gpx_fingerprint": "example-gpx-fingerprint",
     "handoff": {
       "artifact_name": "photos-11-handoff.json",
@@ -1670,14 +1670,23 @@
   "destinations": {
     "6-photos-by-dest": {
       "camera_group_time_decisions": {},
-      "camera_groups_present": [],
+      "date_fallback": {
+        "effective_date": null,
+        "requires_user_input": false,
+        "stale_user_decision": false,
+        "user_decision": {
+          "date": ""
+        }
+      },
       "destination_path": "6-photos-by-dest",
       "destination_timezone": {
+        "asked_for": [
+          "6-photos-by-dest/Stale"
+        ],
         "effective_iana_timezone": "",
-        "proposal_confidence": "none",
         "proposal_source": "none",
         "proposed_iana_timezone": null,
-        "requires_user_input": false,
+        "requires_user_input": true,
         "stale_user_decision": false,
         "user_decision": {
           "confirmed_despite_recorded_offsets": [],
@@ -1697,6 +1706,10 @@
           "proposal": {
             "proposal_source": "manual_required"
           },
+          "representative": {
+            "camera_source_naive_time": "2024:07:03 13:00:00",
+            "source_file": "6-photos-by-dest/Stale/x.arw"
+          },
           "requires_user_input": true,
           "stale_user_decision": true,
           "user_decision": {
@@ -1706,13 +1719,17 @@
           }
         }
       },
-      "camera_groups_present": [
-        "NIKON|D750|B"
-      ],
+      "date_fallback": {
+        "effective_date": null,
+        "requires_user_input": false,
+        "stale_user_decision": false,
+        "user_decision": {
+          "date": ""
+        }
+      },
       "destination_path": "6-photos-by-dest/Stale",
       "destination_timezone": {
         "effective_iana_timezone": "",
-        "proposal_confidence": "none",
         "proposal_source": "none",
         "proposed_iana_timezone": null,
         "requires_user_input": true,

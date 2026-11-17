@@ -162,21 +162,35 @@ def test_prune_quarantine_is_the_only_action_enabled_when_sealed(tmp_path, monke
     assert a["prep/plan"]["ok"] is False and a["geotag/finalize"]["ok"] is False
 
 
-def test_finalize_action_enabled_only_after_successful_execute_and_before_finalize(tmp_path):
-    from cartographer.photos_2_geotag import execution_summary_path, complete_log_path
-    ctl = tmp_path / ".photos-ingest"; ctl.mkdir()
-    _init_ws(str(tmp_path))
-    # before geotag execute: finalize is not offered
-    assert server._state(str(tmp_path))["actions"]["geotag/finalize"]["ok"] is False
-    # geotag executed successfully -> finalize becomes available
-    with open(execution_summary_path(str(tmp_path)), "w") as f:
-        json.dump({"status": "success", "plan_id": "cal-1"}, f)
-    assert server._state(str(tmp_path))["actions"]["geotag/finalize"]["ok"] is True
-    # once finalized (complete-log written) -> no longer offered
-    with open(complete_log_path(str(tmp_path)), "w") as f:
-        json.dump({"photos": {}}, f)
-    fin = server._state(str(tmp_path))["actions"]["geotag/finalize"]
-    assert fin["ok"] is False and "already" in fin["reason"]
+@pytest.mark.spec("BLD-geotag_records_versioned",
+                  test="TST-console_server-finalize_offered_after_every_execution_its_package_does_not_name")
+def test_finalize_offered_after_every_execution_its_package_does_not_name(tmp_path):
+    """Finalize "may be run again", and merge refuses until it is after a geotag execution its package does not cover:
+    the console offers it after every successful execution the package does not name — not after the first only, which
+    left the console's user stuck where the CLI's goes on."""
+    from cartographer.photos_2_geotag import archive_manifest_path, complete_log_path, execution_summary_path
+    ws = _init_ws(str(tmp_path))
+
+    def executed(execution_id, status="success"):
+        with open(execution_summary_path(ws), "w") as f:
+            json.dump({"status": status, "plan_id": "cal-1", "run_metadata": {"execution_id": execution_id}}, f)
+
+    def finalized(execution_id):
+        with open(complete_log_path(ws), "w") as f:
+            json.dump({"photos": {}}, f)
+        with open(archive_manifest_path(ws), "w") as f:
+            json.dump({"plan_id": "cal-1", "execution_id": execution_id}, f)
+
+    fin = lambda: server._state(ws)["actions"]["geotag/finalize"]       # noqa: E731
+    assert fin()["ok"] is False                                          # before geotag execute: not offered
+    executed("e1")
+    assert fin()["ok"] is True                                           # executed successfully: offered
+    finalized("e1")
+    assert fin()["ok"] is False and "already" in fin()["reason"]          # its package made: not offered again
+    executed("e2")
+    assert fin()["ok"] is True                                           # executed again: the package is the last one's
+    executed("e3", status="partial")
+    assert fin()["ok"] is False and "succeed" in fin()["reason"]          # an execution that did not succeed: not offered
 
 
 def test_init_library_action_runnable_anytime(tmp_path):
@@ -215,6 +229,92 @@ def test_geotag_and_merge_plan_summaries(tmp_path):
     assert ms["exists"] and ms["plan_id"] == "m1" and ms["operations"] == 5   # placed_new
 
 
+@pytest.mark.parametrize("torn", ['{"plan_id": "g1", "destinations": {', "[]"], ids=["torn", "not_an_object"])
+def test_unreadable_geotag_plan_summarised_as_a_blocker(tmp_path, torn):
+    """A photos-24 that cannot be read — torn, or not an object — is summarised as a plan with a blocker sending the
+    user to `geotag plan` again, never an error of the server; the gate refuses to execute it. The summary is the
+    owner's preference, not a rule (docs/design/decisions.md)."""
+    from cartographer.photos_2_geotag import executable_plan_path
+    g = executable_plan_path(str(tmp_path)); os.makedirs(os.path.dirname(g), exist_ok=True)
+    with open(g, "w") as f:
+        f.write(torn)
+    gs = server._plan_summary(str(tmp_path), "geotag")
+    assert gs["exists"] and len(gs["blockers"]) == 1 and "`geotag plan` again" in gs["blockers"][0]
+    assert server._execute_guard(str(tmp_path), "geotag", {"confirmed": True}) is not None
+
+
+def _console_harness():
+    """What the console page's own code sent and logged in each scenario of tests/console_accept_harness.js, run under
+    Node with its DOM and requests stood in for."""
+    import shutil
+    import subprocess
+    node = shutil.which("node")
+    if node is None:
+        pytest.skip("no node on this host")
+    here = os.path.dirname(os.path.abspath(__file__))
+    app = os.path.join(here, os.pardir, "cartographer", "console", "web", "app.js")
+    run = subprocess.run([node, os.path.join(here, "console_accept_harness.js"), app],
+                         capture_output=True, text=True, timeout=60)
+    assert run.returncode == 0, run.stdout + run.stderr
+    return json.loads(run.stdout)
+
+
+def test_the_gate_sends_the_plan_it_showed_and_says_every_refusal():
+    """The execute gate sends, as the plan reviewed, the id of the plan whose summary it showed — never one a state poll
+    brought in while it was open (a plan made again in a terminal meets the server's "plan changed" refusal). A plan the
+    server would refuse — none, a blocker, stale — opens no gate, and the log says why; a refused run is said in the
+    log too, never dropped (docs/design/decisions.md, the execute gate)."""
+    got = _console_harness()
+    polled = got["gate_polled_while_open"]
+    assert polled["gate_open"] and [s["plan_id"] for s in polled["sent"]] == ["p7"], polled
+    refused = got["gate_refused"]
+    assert any("merge execute refused" in m and "plan changed" in m for m in refused["logged"]), refused
+    for case, words in (("gate_on_blockers", "a photo is missing"), ("gate_on_stale", "stale"),
+                        ("gate_on_no_plan", "no saved plan")):
+        g = got[case]
+        assert not g["gate_open"] and g["sent"] == [], (case, g)
+        assert any(words in m for m in g["logged"]), (case, g)
+
+
+@pytest.mark.spec("BLD-accept_changes", "RUL-code_accepts_only_its_list",
+                  test="TST-console_server-accept_with_no_remembered_execute_opens_the_gate")
+def test_accept_with_no_remembered_execute_opens_the_gate():
+    """"Accept these" on a stopped execute this page never ran (reloaded, or another tab) sends nothing: it opens the
+    execute gate on the saved plan, and only the confirmation given there sends the execute, with the reviewed plan id
+    and the stop's code. A remembered execute, or a command that needs no confirmation, is sent again with the code at
+    once (docs/design/decisions.md, BACKLOG 50). The page's code runs under Node, its DOM and requests stood in for."""
+    got = _console_harness()
+    code = "0123456789ab"
+    fresh = got["execute_not_remembered"]
+    assert fresh["sent_on_accept"] == [] and fresh["gate_open"], fresh          # no confirmation made up
+    assert fresh["sent_on_confirm"] == [{"phase": "merge", "command": "execute", "confirm": True, "plan_id": "p7",
+                                         "jobs": 2, "accept_changes": code}]
+    assert got["execute_remembered"]["sent_on_accept"] == [
+        {"phase": "geotag", "command": "execute", "confirm": True, "plan_id": "p3", "jobs": 4, "accept_changes": code}]
+    assert got["plan_not_remembered"]["sent_on_accept"] == [
+        {"phase": "prep", "command": "plan", "jobs": 2, "accept_changes": code}]
+
+
+@pytest.mark.parametrize("torn", ['{"plan_id": "m1", "destinations": {', "[]", '{"destinations": {}}',
+                                  '{"plan_id": "m1", "destinations": [], "totals": {}}'],
+                         ids=["torn", "not_an_object", "no_plan_id", "another_shape"])
+def test_unreadable_merge_plan_summarised_with_its_repair(tmp_path, torn):
+    """A photos-30 merge cannot read — torn, not an object, without its plan id, or in another shape than merge reads
+    — is summarised as a plan with one blocker naming the file and the way on that merge itself gives: repair it or
+    restore a `-NNN` copy, never `merge plan` again, which stops on it; never an error of the server, and the gate
+    refuses to execute it. The summary is the owner's preference, not a rule (docs/design/decisions.md)."""
+    from cartographer.photos_3_merge import merge_plan_path
+    m = merge_plan_path(str(tmp_path)); os.makedirs(os.path.dirname(m), exist_ok=True)
+    with open(m, "w") as f:
+        f.write(torn)
+    ms = server._plan_summary(str(tmp_path), "merge")
+    assert ms["exists"] and len(ms["blockers"]) == 1, ms
+    [why] = ms["blockers"]
+    assert "photos-30-merge-plan.json" in why and "-NNN" in why and "repair" in why, why
+    assert "`merge plan` again" not in why, why
+    assert server._execute_guard(str(tmp_path), "merge", {"confirm": True}) is not None
+
+
 # --- execute gate (generic, per phase) ------------------------------------
 
 def test_execute_guard_requires_confirmation(tmp_path):
@@ -224,8 +324,16 @@ def test_execute_guard_requires_confirmation(tmp_path):
 
 def test_execute_guard_allows_clean_confirmed_plan(tmp_path):
     _write_plan(str(tmp_path), plan_id="p9", operations=["move"])
-    assert server._execute_guard(str(tmp_path), "prep", {"confirm": True}) is None
     assert server._execute_guard(str(tmp_path), "prep", {"confirm": True, "plan_id": "p9"}) is None
+
+
+def test_execute_guard_requires_the_reviewed_plan_id(tmp_path):
+    """A confirmation naming no plan is refused, never taken for the current plan: the gate sends the id of the plan
+    whose summary it showed, and a plan made again since meets the "plan changed" refusal (decisions.md, the execute
+    gate)."""
+    _write_plan(str(tmp_path), plan_id="p9", operations=["move"])
+    for payload in ({"confirm": True}, {"confirm": True, "plan_id": None}, {"confirm": True, "plan_id": ""}):
+        assert "reviewed plan" in server._execute_guard(str(tmp_path), "prep", payload)
 
 
 def test_execute_guard_refuses_blockers_missing_and_changed_plan(tmp_path):
@@ -310,7 +418,7 @@ def test_staleness_judged_by_the_workspaces_configuration(tmp_path):
     })
     assert server._plan_summary(ws, "prep", server._current_fingerprints(ws))["stale"] == []
     assert server._state(ws)["phases"]["prep"]["executable"] is True
-    assert server._execute_guard(ws, "prep", {"confirm": True}) is None
+    assert server._execute_guard(ws, "prep", {"confirm": True, "plan_id": "prep-1"}) is None
     assert U.CONFIG == before                                     # CONFIG left as it was
     cfg["folders"]["sources"] = "y-inbox"                         # the workspace's own change restales
     with open(U.config_path(ws), "w") as f:
@@ -435,7 +543,7 @@ def test_edit_tab_refuses_a_sealed_workspace(tmp_path):
         server._release_editor_locks()
 
 
-@pytest.mark.spec("BLD-control_directory_contents", test="TST-console_server-edit_tab_is_one_editor_at_a_time")
+@pytest.mark.spec("BLD-control_directory_contents", "RUL-one_editor_at_a_time", "RUL-editor_kept_until_stopped", "BLD-editor_session_lock", test="TST-console_server-edit_tab_is_one_editor_at_a_time")
 def test_edit_tab_is_one_editor_at_a_time(tmp_path):
     # One decision editor at a time: while a standalone editor holds the editor lock, the console's Edit
     # tab is refused (it neither reads nor saves); once the tab has opened, it holds the lock itself and
@@ -458,8 +566,69 @@ def test_edit_tab_is_one_editor_at_a_time(tmp_path):
     again.close()
 
 
+@pytest.mark.spec("RUL-local_filesystem_checked_first", "BLD-local_filesystem_types",
+                  test="TST-console_server-edit_tab_refuses_a_network_workspace_before_the_lock")
+def test_edit_tab_refuses_a_network_workspace_before_the_lock(tmp_path, monkeypatch):
+    """The Edit tab checks the workspace's filesystem before it takes the editor's lock, as the standalone editor's
+    start does: on a network filesystem it is refused, naming the type, and no lock file is made."""
+    ws = _editor_ws(tmp_path)
+    monkeypatch.setattr(U, "_mount_table", lambda: [("/", "ext4"), (os.path.realpath(ws), "nfs4")])
+    try:
+        why = server._editor_refusal(ws)
+        assert why and "nfs4" in why, why
+        assert not os.path.exists(os.path.join(U.control_dir(ws), server._editor.EDITOR_LOCK))
+    finally:
+        server._release_editor_locks()
+
+
+@pytest.mark.spec("RUL-sealed_new_dump_warned", "BLD-editor_checks_seal",
+                  test="TST-console_server-edit_tab_on_a_sealed_workspace_points_out_a_new_dump")
+def test_edit_tab_on_a_sealed_workspace_points_out_a_new_dump(tmp_path):
+    """Refusing a sealed workspace, the Edit tab says a new dump is likely there when one sits where a dump lands, as the
+    standalone editor does — and says nothing of one where none is."""
+    ws = _editor_ws(tmp_path)
+    with open(U.sealed_marker_path(ws), "w") as f:
+        json.dump({"sealed": True}, f)
+    try:
+        assert "new dump" not in server._editor_refusal(ws)
+        (tmp_path / "DCIM").mkdir()
+        why = server._editor_refusal(ws)
+        assert "sealed" in why and "new dump" in why, why
+    finally:
+        server._release_editor_locks()
+
+
 def test_edit_tab_refuses_an_uninitialized_workspace(tmp_path):
     # Like the standalone editor, the tab opens only an initialized workspace — and creates nothing there.
     ws = str(tmp_path)
     assert "initialized" in server._editor_refusal(ws)
     assert not os.path.exists(U.control_dir(ws))
+
+
+# --- a run stopped on changes to the workspace: the same list, accepted by the same command ----------------------
+
+@pytest.mark.spec("BLD-accept_changes", test="TST-console_server-a_stop_on_changes_is_offered_for_acceptance")
+def test_a_stop_on_changes_is_offered_for_acceptance():
+    """The stop's list reaches the console as an event the late-joining page sees too, until the next run starts; the
+    Accept button sends the code through the same command — `--accept-changes <code>` on its argv — and the server
+    refuses a code for a command that does not check, or anything that is not such a code."""
+    from cartographer.reporting import ChangesEvent, Reporter, WebSink
+    sink = WebSink()
+    Reporter([sink]).emit(ChangesEvent(phase="prep", command="plan", code="0123456789ab", lines=["  appeared, in x:"]))
+    _q, snap = sink.subscribe()
+    assert snap["changes"] == {"kind": "changes", "phase": "prep", "command": "plan", "code": "0123456789ab",
+                               "lines": ["  appeared, in x:"]}
+    sink.clear_changes()
+    assert sink.snapshot()["changes"] is None
+    assert server._accept_extra("prep", "plan", {"accept_changes": "0123456789ab"}) == (
+        ["--accept-changes", "0123456789ab"], None)
+    assert server._accept_extra("geotag", "finalize", {}) == ([], None)
+    assert server._accept_extra("prep", "prune-quarantine", {"accept_changes": "0123456789ab"})[1]
+    assert server._accept_extra("merge", "init-library", {"accept_changes": "0123456789ab"})[1]
+    assert server._accept_extra("prep", "plan", {"accept_changes": "; rm -rf /"})[1]
+    for phase, command in (("prep", "execute"), ("geotag", "finalize"), ("merge", "dry-run")):
+        assert callable(server._make_target(phase, command, ["--accept-changes", "0123456789ab"]))
+    js = server._asset("app.js").decode()
+    assert 'm.kind === "changes"' in js and "accept_changes: m.code" in js
+    html = server._asset("/").decode()
+    assert 'id="changes-overlay"' in html and 'id="changes-accept"' in html

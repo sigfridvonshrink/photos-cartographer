@@ -24,7 +24,7 @@ const GATE_WARN = {
   merge: "Moves files into the permanent library and seals the workspace. No-clobber enforced.",
 };
 let currentPhase = "prep";
-let planId = null;         // plan_id being reviewed in the gate
+let gatePlanId = null;     // plan_id of the plan the open gate shows — set only by openGate, never by a state poll
 let gatePhase = "prep";    // the phase the open gate is for (tab could change underneath)
 let currentJobLabel = null;// label of the running job (e.g. "prep execute"), for the Stop confirm
 let prevRunning = false;   // last poll's running flag — to detect a job just finishing
@@ -125,6 +125,7 @@ function applySnapshot(s) {
   (s.log || []).forEach(addLog);
   (s.progress || []).forEach(upsertProgress);
   setIdleIfEmpty();
+  if (s.changes) showChanges(s.changes);       // a stop on changes is offered until the next run starts
 }
 
 // --- live connection + server-down detection ------------------------------
@@ -149,6 +150,7 @@ es.onmessage = (ev) => {
   if (m.kind === "snapshot") applySnapshot(m);
   else if (m.kind === "log") addLog(m);
   else if (m.kind === "progress") upsertProgress(m);
+  else if (m.kind === "changes") showChanges(m);
 };
 
 // --- phase tabs + actions -------------------------------------------------
@@ -161,7 +163,8 @@ function renderActions() {
     b.textContent = label;
     b.dataset.cmd = cmd;
     b.onclick = kind === "gate" ? openGate : kind === "initlib" ? openInitLib
-      : kind === "prune" ? openPrune : () => trigger(cmd);
+      : kind === "prune" ? openPrune
+      : (currentPhase === "prep" && cmd === "plan") ? prepPlan : () => trigger(cmd);
     wrap.appendChild(b);
   }
 }
@@ -219,6 +222,7 @@ async function refreshState() {
   if (s.sealed) { lock.textContent = "● sealed"; lock.style.color = "var(--muted)"; }
   else if (!running && s.lock_owner) { lock.textContent = "● locked (another run)"; lock.style.color = "var(--warn)"; }
 
+  zoneQuestion = s.zone_table || null;
   const ph = (s.phases && s.phases[currentPhase]) || {};
   // status chip for the current phase (plan-exists / blockers / staleness / ready)
   const ps = $("#phase-status");
@@ -226,7 +230,6 @@ async function refreshState() {
   else if (ph.blockers) { ps.textContent = `plan · ${ph.blockers} blocker(s)`; ps.className = "chip"; }
   else if (ph.stale) { ps.textContent = "plan stale — re-plan"; ps.className = "chip"; }
   else { ps.textContent = "plan ✓ ready"; ps.className = "chip ok"; }
-  planId = ph.plan_id || null;
 
   // button enablement from the server's per-command affordance (precondition + staleness + sealed/lock)
   const acts = s.actions || {};
@@ -253,41 +256,133 @@ async function stopRun() {
   if (isExec && !confirm(
         "Interrupt this execute? It mutates originals, but the run is journalled and resumable — "
         + "nothing is left partially applied, and you can rerun to finish.")) return;
+  let res = null;
   try {
-    await fetch("/api/cancel", {
+    res = await fetch("/api/cancel", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ confirm: isExec }),
     });
   } catch { /* state poll will reflect reality */ }
+  await logRefusal(res, "stop");
   await refreshState();
   pollWhileRunning();
 }
 $("#stop-btn").onclick = stopRun;
 
-async function trigger(command) {
+// A request the server refused (409/400/403 with its error: a gate's stale or changed plan, a blocker, the prune
+// guard, a bad accept code, a run already in progress) is said in the log pane, as the CLI says why it stops — never
+// dropped, the buttons' state after the next poll left as the only trace. Nothing is decided here: the refusal holds.
+async function logRefusal(res, what) {
+  if (!res || res.ok) return;
+  let why = `HTTP ${res.status}`;
+  try { why = (await res.json()).error || why; } catch { /* no JSON body: the status says it */ }
+  addLog({ level: "error", msg: `${what} refused: ${why}` });
+}
+
+// Start a run. The body is remembered per command, so that "Accept these" (below) sends a checking command's run
+// again — an execute's confirmation and reviewed plan id included — with the code its stop printed.
+const lastRun = {};        // "phase/command" -> the body of its last run
+async function postRun(body) {
+  lastRun[`${body.phase}/${body.command}`] = body;
+  hideChanges();
+  let res = null;
   try {
-    await fetch("/api/run", {
+    res = await fetch("/api/run", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ phase: currentPhase, command, jobs: jobsValue() }),
+      body: JSON.stringify(body),
     });
   } catch { /* state poll will reflect reality */ }
+  await logRefusal(res, `${body.phase} ${body.command}`);
   await refreshState();
   pollWhileRunning();
 }
 
+async function trigger(command) {
+  await postRun({ phase: currentPhase, command, jobs: jobsValue() });
+}
+
+// --- prep plan: the question of the table of countries ----------------------
+// Where the host's zone database has no table of countries and the workspace has not answered, prep plan asks before
+// downloading one; the console asks the same question here and sends the answer with the run — the CLI's
+// `--download-zone-table` (BLD-zone_table_question; docs/design/decisions.md). Cancel runs nothing.
+let zoneQuestion = null;   // { question } while the workspace has it unanswered, from the last state poll
+const zoneOverlay = $("#zone-overlay");
+async function prepPlan() {
+  await refreshState();
+  if (!zoneQuestion) return trigger("plan");
+  $("#zone-question").textContent = zoneQuestion.question;
+  zoneOverlay.hidden = false;
+}
+function closeZone() { zoneOverlay.hidden = true; }
+async function answerZone(answer) {
+  closeZone();
+  await postRun({ phase: "prep", command: "plan", zone_table: answer, jobs: jobsValue() });
+}
+$("#zone-cancel").onclick = closeZone;
+$("#zone-no").onclick = () => answerZone("no");
+$("#zone-yes").onclick = () => answerZone("yes");
+zoneOverlay.onclick = (e) => { if (e.target === zoneOverlay) closeZone(); };
+
+// --- a run stopped on changes to the workspace -----------------------------
+// Every checking command first compares the workspace with the state the last execution left it in, and stops on a
+// change nobody is expected to make (RUL-unexpected_change_stops), printing the list and the code that accepts it.
+// The console shows the same list, and "Accept these" sends that code through the same command — the phase's own
+// check accepts exactly the list it printed (docs/design/decisions.md). Nothing is decided here.
+const changesOverlay = $("#changes-overlay");
+let pendingChanges = null;   // the stop's event: { phase, command, code, lines }
+function showChanges(m) {
+  pendingChanges = m;
+  $("#changes-title").textContent = `${m.phase} ${m.command} stopped: the workspace is not as the last run left it`;
+  $("#changes-list").textContent = (m.lines || []).join("\n");
+  $("#changes-cmd").textContent = `Accept these runs: photos-cartographer ${m.phase} ${m.command} --accept-changes ${m.code}`;
+  changesOverlay.hidden = false;
+}
+function hideChanges() { pendingChanges = null; changesOverlay.hidden = true; }
+async function acceptChanges() {
+  const m = pendingChanges;
+  if (!m) return;
+  const prev = lastRun[`${m.phase}/${m.command}`];
+  if (!prev && m.command === "execute") {
+    // No execute remembered by this page (reloaded, or another tab): its confirmation was never given here, so the
+    // execute gate opens on the saved plan, the code attached — never a confirmation made up for it.
+    hideChanges();
+    return openGate(m.phase, m.code);
+  }
+  await postRun({ ...(prev || { phase: m.phase, command: m.command, jobs: jobsValue() }), accept_changes: m.code });
+}
+$("#changes-close").onclick = hideChanges;
+$("#changes-accept").onclick = acceptChanges;
+
 // --- execute confirm gate (prep) ------------------------------------------
 const overlay = $("#gate-overlay");
 
-async function openGate() {
-  const phase = currentPhase;
+// `accept`: the code of a stop on changes to the workspace, sent with the execute once confirmed ("Accept these" with
+// no execute remembered by this page, above); none from the Execute button.
+let gateAccept = null;
+async function openGate(phase = currentPhase, accept = null) {
+  if (typeof phase !== "string") phase = currentPhase;    // opened by the Execute button: its click event
   let s;
   try { s = await (await fetch(`/api/plan-summary?phase=${encodeURIComponent(phase)}`)).json(); } catch { return; }
-  if (!s.exists || (s.blockers && s.blockers.length)) { await refreshState(); return; }
+  // A plan the server would refuse to execute opens no gate, and the log says why (as logRefusal does for a refused
+  // request): none saved, a blocker, or stale against what it was made from.
+  const why = !s.exists ? "no saved plan — run plan first"
+    : (s.blockers && s.blockers.length) ? `the plan has ${s.blockers.length} blocker(s): ${s.blockers[0]}`
+    : (s.stale && s.stale.length) ? `the plan is stale (${s.stale[0]}) — plan again`
+    : null;
+  if (why) {
+    addLog({ level: "error", msg: `${phase} execute: ${why}` });
+    await refreshState();
+    return;
+  }
   gatePhase = phase;
-  planId = s.plan_id;
-  $("#gate-title").textContent = `Confirm ${phase} execute`;
+  gateAccept = accept;
+  // The id of the plan this gate shows, sent with the confirmation as the plan reviewed. Kept apart from the state
+  // polls (heartbeat, focus, visibility), which run while the gate is open: a plan made again in a terminal meanwhile
+  // must meet the server's "plan changed since you reviewed it" refusal, never be executed under the old summary.
+  gatePlanId = s.plan_id;
+  $("#gate-title").textContent = `Confirm ${phase} execute` + (accept ? ", accepting the listed changes" : "");
   $("#gate-sum").textContent = `Plan ${s.plan_id}\n${(s.lines || []).join("\n")}`;
   $("#gate-warn").textContent = GATE_WARN[phase] || "This mutates workspace state.";
   $("#gate-go").textContent = `Execute ${s.operations} operation${s.operations === 1 ? "" : "s"}`;
@@ -298,15 +393,8 @@ function closeGate() { overlay.hidden = true; }
 
 async function confirmExecute() {
   closeGate();
-  try {
-    await fetch("/api/run", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ phase: gatePhase, command: "execute", confirm: true, plan_id: planId, jobs: jobsValue() }),
-    });
-  } catch { /* state poll reflects reality */ }
-  await refreshState();
-  pollWhileRunning();
+  await postRun({ phase: gatePhase, command: "execute", confirm: true, plan_id: gatePlanId, jobs: jobsValue(),
+                  ...(gateAccept ? { accept_changes: gateAccept } : {}) });
 }
 
 $("#gate-cancel").onclick = closeGate;
@@ -320,15 +408,7 @@ function closeInitLib() { initOverlay.hidden = true; }
 async function confirmInitLib() {
   const path = $("#initlib-path").value.trim();
   closeInitLib();
-  try {
-    await fetch("/api/run", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ phase: "merge", command: "init-library", path: path || undefined, jobs: jobsValue() }),
-    });
-  } catch { /* state poll reflects reality */ }
-  await refreshState();
-  pollWhileRunning();
+  await postRun({ phase: "merge", command: "init-library", path: path || undefined, jobs: jobsValue() });
 }
 $("#initlib-cancel").onclick = closeInitLib;
 $("#initlib-go").onclick = confirmInitLib;
@@ -351,14 +431,7 @@ async function runPrune(deleteFlag) {
   const prune = _pruneSel(deleteFlag);
   if (deleteFlag && !prune.plan_ids && !prune.all) { $("#prune-err").textContent = "select plan id(s) or 'all' to delete"; return; }
   closePrune();
-  try {
-    await fetch("/api/run", {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ phase: "prep", command: "prune-quarantine", confirm: deleteFlag, prune, jobs: jobsValue() }),
-    });
-  } catch { /* state poll reflects reality */ }
-  await refreshState();
-  pollWhileRunning();
+  await postRun({ phase: "prep", command: "prune-quarantine", confirm: deleteFlag, prune, jobs: jobsValue() });
 }
 $("#prune-cancel").onclick = closePrune;
 $("#prune-dry").onclick = () => { $("#prune-err").textContent = ""; runPrune(false); };

@@ -227,3 +227,18 @@ def test_the_build_and_its_checkout_have_one_fingerprint(tmp_path):
     assert run(str(pyz)) == run(root) == utils.code_fingerprint()
     pyz.write_bytes(build.build_pyz_bytes(version="9.9.9"))
     assert run(str(pyz)) != utils.code_fingerprint()
+
+
+@pytest.mark.spec("RUL-prep_journal_kept", "BLD-history_kept", test="TST-stale_plan-a_plan_executed_again_keeps_the_earlier_journal")
+def test_a_plan_executed_again_keeps_the_earlier_journal(tmp_path):
+    """A plan executed a second time, after an attempt that did not finish, sets the first attempt's journal aside
+    under -NNN before it starts its own: the record of what that attempt did is kept."""
+    path = tmp_path / "journal-p1.json"
+    first = prep.JournalWriter(str(path))
+    first.start_journal("p1")
+    first.finish_journal("failed")
+    earlier = path.read_text()
+    again = prep.JournalWriter(str(path))
+    again.start_journal("p1")
+    assert (tmp_path / "journal-p1-001.json").read_text() == earlier
+    assert json.loads(path.read_text())["status"] == "started"

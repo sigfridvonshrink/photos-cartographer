@@ -82,12 +82,18 @@ def test_container_materialized_with_no_offset_cells(tmp_path):
 
 @pytest.mark.spec("RUL-container_never_waits", test="TST-geotag_containers-containers_never_block")
 def test_containers_never_block(tmp_path):
+    # Nothing below waiting for a zone, a container asks for nothing: no zone, no offset, no fallback.
     wf = _wf(tmp_path)
     files = [_tfile(f"{BYDEST}/Trip/Day1/a.arw", f"{BYDEST}/Trip/Day1")]
-    art, _ = wf.build_time_decisions(files, GROUPS, None, _gpx())
+    prior = {"destinations": {f"{BYDEST}/Trip/Day1": {"destination_timezone":
+             {"user_decision": {"manual_iana_timezone": "Asia/Tokyo"}}}}}
+    art, _ = wf.build_time_decisions(files, GROUPS, prior, _gpx())
     trip = art["destinations"][f"{BYDEST}/Trip"]
     assert trip["destination_timezone"]["requires_user_input"] is False
+    assert "asked_for" not in trip["destination_timezone"]
     assert trip["camera_group_time_decisions"] == {}         # no offset cell to block on
+    gps, _ = wf.build_gps_decisions([_gfile(f"{BYDEST}/Trip/Day1/a.jpg", f"{BYDEST}/Trip/Day1")], [], _gpx(), None, "rfp")
+    assert gps["destinations"][f"{BYDEST}/Trip"]["folder_fallback"]["requires_user_input"] is False
 
 
 # --- auto-resolve + propagation ----------------------------------------------
@@ -97,15 +103,15 @@ def test_containers_never_block(tmp_path):
                   test="TST-geotag_containers-the_default_zone_is_proposed_and_an_answer_cascades")
 def test_the_default_zone_is_proposed_and_an_answer_cascades(tmp_path):
     # The configured default is the user's usual zone, true of no trip in particular: it is proposed, never applied —
-    # a trip folder is no exception, a container asks nothing; once answered at the trip, everything beneath
-    # inherits it without asking.
+    # a folder holding a trip is no exception, asked as the destination waiting in it is; once answered there,
+    # everything beneath inherits it without asking.
     utils.CONFIG["camera_time_and_timezone_policy"]["default_folder_timezone"] = "Europe/Brussels"
     wf = _wf(tmp_path)
     files = [_tfile(f"{BYDEST}/Trip/Day1/a.arw", f"{BYDEST}/Trip/Day1")]
     art, _ = wf.build_time_decisions(files, GROUPS, None, _gpx())
     trip = art["destinations"][f"{BYDEST}/Trip"]["destination_timezone"]
     assert trip["proposal_source"] == "config_default" and trip["effective_iana_timezone"] == ""
-    assert trip["requires_user_input"] is False                           # a container asks nothing
+    assert trip["requires_user_input"] is True and trip["asked_for"] == [f"{BYDEST}/Trip/Day1"]
     leaf = art["destinations"][f"{BYDEST}/Trip/Day1"]["destination_timezone"]
     assert leaf["proposal_source"] == "config_default" and leaf["requires_user_input"] is True
     prior = {"destinations": {f"{BYDEST}/Trip": {"destination_timezone":
@@ -114,6 +120,7 @@ def test_the_default_zone_is_proposed_and_an_answer_cascades(tmp_path):
     leaf = art["destinations"][f"{BYDEST}/Trip/Day1"]["destination_timezone"]
     assert leaf["effective_iana_timezone"] == "Asia/Tokyo" and leaf["decision_mode"] == "auto_resolved"
     assert leaf["requires_user_input"] is False
+    assert not any(d["destination_timezone"]["requires_user_input"] for d in art["destinations"].values())
 
 
 @pytest.mark.spec("RUL-timezone_from_nearest", "BLD-timezone_cell", "RUL-no_timezone_to_inherit_waits",
@@ -159,6 +166,26 @@ def test_moved_photo_takes_its_new_destinations_offset(tmp_path):
     assert f"{BYDEST}/A" not in art["destinations"]                        # nothing of A remains
 
 
+@pytest.mark.spec("RUL-moved_photo_decided_anew", test="TST-geotag_containers-moved_into_a_new_destination_takes_nothing_of_the_old")
+def test_a_photo_moved_into_a_new_destination_takes_nothing_of_the_old(tmp_path):
+    """A photo moved from A, where its camera's offset was written, into C, a destination no record knows: C is decided
+    anew — it asks — and does not take A's offset."""
+    wf = _wf(tmp_path)
+    prior = {"destinations": {
+        f"{BYDEST}/A": {"camera_group_time_decisions": {CAM: {"user_decision": {"manual_offset_seconds": -3600}}}}}}
+    art, _ = wf.build_time_decisions([_tfile(f"{BYDEST}/A/x.arw", f"{BYDEST}/A")], GROUPS, prior, _gpx())
+    assert art["destinations"][f"{BYDEST}/A"]["camera_group_time_decisions"][CAM]["effective_time_anchor"] == \
+        {"offset_seconds": -3600, "source": "manual"}
+    prior = {"destinations": {f"{BYDEST}/A": art["destinations"][f"{BYDEST}/A"]}}      # A's record, alone
+    art, _ = wf.build_time_decisions([_tfile(f"{BYDEST}/C/x.arw", f"{BYDEST}/C")], GROUPS, prior, _gpx())
+    cell = art["destinations"][f"{BYDEST}/C"]["camera_group_time_decisions"][CAM]
+    assert cell["effective_time_anchor"] == "" and cell["requires_user_input"]
+    assert cell["user_decision"].get("manual_offset_seconds") in ("", None)
+    rows = {r["relative_path"]: r for r in cal.compute_resolved_utc([_tfile(f"{BYDEST}/C/x.arw", f"{BYDEST}/C")],
+                                                                    GROUPS, art)}
+    assert rows[f"{BYDEST}/C/x.arw"].get("utc_offset_used") != -3600
+
+
 @pytest.mark.spec("RUL-offset_per_camera_destination_day", "RUL-offset_from_own_evidence", test="TST-geotag_containers-child_offset_decision_is_not_pooled_upward")
 def test_child_offset_decision_is_not_pooled_upward(tmp_path):
     wf = _wf(tmp_path)
@@ -186,9 +213,8 @@ def test_container_fallback_propagates_to_children(tmp_path):
     assert d[f"{BYDEST}/Trip"]["gps_decisions"]["summary"]["files_total"] == 0
     assert d[f"{BYDEST}/Trip"]["folder_fallback"]["effective_fallback"] == {"lat": 50.0, "lon": 4.0}
     child = d[f"{BYDEST}/Trip/Day1"]["folder_fallback"]
-    assert child["proposal"]["proposal_source"] == "inherited"
-    assert child["proposal"]["inherited_from"] == f"{BYDEST}/Trip"
-    assert child["proposal"]["proposed_fallback"] == {"lat": 50.0, "lon": 4.0}
+    assert child["fallback_source"] == "inherited" and child["inherited_from"] == f"{BYDEST}/Trip"
+    assert child["effective_fallback"] == {"lat": 50.0, "lon": 4.0}
 
 
 def test_determinism_with_containers(tmp_path):
@@ -199,3 +225,73 @@ def test_determinism_with_containers(tmp_path):
     a1, _ = wf.build_time_decisions(files, GROUPS, None, _gpx())
     a2, _ = wf.build_time_decisions(files, GROUPS, a1, _gpx())
     assert json.dumps(a1, sort_keys=True) == json.dumps(a2, sort_keys=True)
+
+
+# --- a timezone asked at every level (RUL-zone_asked_at_every_level) ------------------------------------------------
+
+PHONE = "Apple|iPhone 15|"
+
+
+def _tz(zone):
+    return {"destination_timezone": {"user_decision": {"manual_iana_timezone": zone}}}
+
+
+def _asking(art):
+    """{destination: asked_for or True} for each timezone cell that asks, by its path below the by-dest root."""
+    out = {}
+    for d, v in art["destinations"].items():
+        c = v["destination_timezone"]
+        if c["requires_user_input"]:
+            out[d[len(BYDEST) + 1:] or "."] = [a[len(BYDEST) + 1:] for a in c["asked_for"]] if "asked_for" in c else True
+    return out
+
+
+@pytest.mark.spec("RUL-zone_asked_at_every_level", "RUL-zone_not_asked_where_one_reaches", "BLD-zone_asked_at_containers",
+                  "RUL-container_never_waits",
+                  test="TST-geotag_containers-a_zone_is_asked_at_every_level")
+def test_a_zone_is_asked_at_every_level(tmp_path):
+    """Every folder with no zone above a destination waiting for one asks for it, naming the destinations an answer
+    there would reach; answered at any of them, everything below takes it and nothing there asks again — answered at
+    every destination, no folder above asks."""
+    wf = _wf(tmp_path)
+    files = [_tfile(f"{BYDEST}/Japan/Kyoto/a.arw", f"{BYDEST}/Japan/Kyoto"),
+             _tfile(f"{BYDEST}/Japan/Tokyo/b.arw", f"{BYDEST}/Japan/Tokyo"),
+             _tfile(f"{BYDEST}/Italy/Rome/c.arw", f"{BYDEST}/Italy/Rome")]
+    art, blk = wf.build_time_decisions(files, GROUPS, None, _gpx())
+    assert blk == []
+    assert _asking(art) == {".": ["Italy/Rome", "Japan/Kyoto", "Japan/Tokyo"], "Japan": ["Japan/Kyoto", "Japan/Tokyo"],
+                            "Italy": ["Italy/Rome"], "Japan/Kyoto": True, "Japan/Tokyo": True, "Italy/Rome": True}
+    # answered on the country's folder: nothing in it asks; the folder above asks for what still waits
+    art, _ = wf.build_time_decisions(files, GROUPS, {"destinations": {f"{BYDEST}/Japan": _tz("Asia/Tokyo")}}, _gpx())
+    assert _asking(art) == {".": ["Italy/Rome"], "Italy": ["Italy/Rome"], "Italy/Rome": True}
+    # answered on the destination itself: the folders above it ask no more
+    prior = {"destinations": {f"{BYDEST}/Japan": _tz("Asia/Tokyo"), f"{BYDEST}/Italy/Rome": _tz("Europe/Rome")}}
+    art, _ = wf.build_time_decisions(files, GROUPS, prior, _gpx())
+    assert _asking(art) == {}
+    # answered at the top: everything takes it
+    art, _ = wf.build_time_decisions(files, GROUPS, {"destinations": {BYDEST: _tz("Europe/Brussels")}}, _gpx())
+    assert _asking(art) == {}
+    assert {v["destination_timezone"]["effective_iana_timezone"] for v in art["destinations"].values()} == {"Europe/Brussels"}
+
+
+@pytest.mark.spec("RUL-zone_asked_at_every_level", "RUL-zone_not_asked_where_one_reaches", "BLD-zone_asked_at_containers",
+                  "RUL-country_of_several_gives_none",
+                  test="TST-geotag_containers-a_zone_is_asked_only_where_an_answer_reaches")
+def test_a_zone_is_asked_only_where_an_answer_reaches(tmp_path):
+    """A folder where a country of several timezones is said is not asked — a zone there passes to nothing — nor is
+    any folder above it for what lies inside; the asking goes on inside it. A destination below a zone written lower
+    down, waiting on its own photos, is no question for the folders above that zone."""
+    wf = _wf(tmp_path)
+    groups = dict(GROUPS, **{PHONE: {"camera_group_class": "smartphone"}})
+    files = [_tfile(f"{BYDEST}/US/California/LA/a.arw", f"{BYDEST}/US/California/LA"),
+             _tfile(f"{BYDEST}/US/California/SF/b.arw", f"{BYDEST}/US/California/SF"),
+             dict(_tfile(f"{BYDEST}/Trip/Belgium/Ghent/p.jpg", f"{BYDEST}/Trip/Belgium/Ghent", key=PHONE),
+                  source_time_tag="EXIF:DateTimeOriginal", raw_times={"OffsetTimeOriginal": "+09:00"})]
+    prior = {"destinations": {f"{BYDEST}/US": {"destination_timezone": {"user_decision": {"country": "US"}}},
+                              f"{BYDEST}/Trip/Belgium": _tz("Europe/Brussels")}}
+    art, blk = wf.build_time_decisions(files, groups, prior, _gpx())
+    assert blk == []
+    ghent = art["destinations"][f"{BYDEST}/Trip/Belgium/Ghent"]["destination_timezone"]
+    assert ghent["requires_user_input"] is True and ghent["contradicted_by"]["recorded_offset_seconds"] == 9 * 3600
+    assert _asking(art) == {"US/California": ["US/California/LA", "US/California/SF"],
+                            "US/California/LA": True, "US/California/SF": True, "Trip/Belgium/Ghent": True}

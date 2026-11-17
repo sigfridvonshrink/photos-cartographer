@@ -79,7 +79,12 @@ A save is refused, and **nothing is saved**, when:
   edits again;
 - **the workspace is sealed.**
 
-A successful save names the files it wrote and reminds you to run `geotag plan` and reload.
+A successful save names the files it wrote and reminds you to run `geotag plan` and reload. Each record
+it changes is first copied beside itself under the next free `-NNN` number — `photos-23-gps-decisions-002.json`,
+say — in the same series a re-plan's copies are in, so an answer lost to a mistaken save can be found again. The
+configuration, when a save writes a camera's class into it, keeps no copy. The records are written one after
+another — photos-21, photos-22, photos-23, then photos-25 and the configuration — so a save cut short (a power cut,
+the editor killed) leaves the earlier ones saved and the later ones as they were: save again to finish it.
 
 **Coming from 2.0.0:** an offset you accepted under 2.0.0 didn't record which offset it accepted, so
 `geotag plan` now stops on it. Open the editor: the decision says it was accepted for another proposal —
@@ -87,9 +92,11 @@ accept it again (or set the offset yourself), save, and re-plan.
 
 ---
 
-## The three views, and why they're gated
+## The views, and why they're gated
 
-The header toggles between **Time → Drift → GPS**, in that order — and the order is enforced:
+The header toggles between **Time → Drift → GPS**, in that order — and the order is enforced — with
+**Cameras** before them, for a camera geotag has not met ([below](#cameras-view)), and **Execute** after,
+for what `geotag execute` asks ([below](#execute-view)):
 
 - **Time gates Drift** — the Drift view waits until every time decision is answered and geotag has been
   re-run (drift checks offsets that must already exist).
@@ -106,6 +113,28 @@ haven't saved is badged **edited**, an invalid one **✗ invalid**.
 
 ---
 
+## Cameras view
+
+The first time `geotag plan` meets a camera it stops, before it writes any decision, and prints the two
+`device_groups` lists to paste into `photos-00-config.json`. The editor opens on the **Cameras** view
+while there is such a camera: one row per camera group (its make and model, how many photos, a preview
+on hover), and two choices — **a phone** (its clock is the network's, and it records its offset with each
+photo) or **a camera with a clock set by hand** (its offset is found per day). Save writes your answer
+into `camera_time_and_timezone_policy.device_groups` in `photos-00-config.json` — the same as pasting
+the printed lists, every other setting left as it is — then re-run `geotag plan`. Pasting by hand still
+works as before.
+
+Below them, under **Cameras with a hand-set clock**, the view lists every camera with a hand-set clock among your
+photos, each **one camera** (the default) or **several bodies**. Two bodies of one model that write no serial number
+are one camera group: nothing in their photos tells them apart. Mark such a group as several bodies and an offset
+its GPS gives is always a proposal for you to accept, noted as perhaps one body's; its days in different
+destinations are decided apart; and its photos that disagree with the offset are never offered as wrong positions.
+To tell the bodies apart, move one body's photos into a sub-folder and re-run prep — each folder then has offsets
+of its own. Save writes the group into `camera_time_and_timezone_policy.several_bodies_groups` (or takes it out);
+by hand, edit that list.
+
+---
+
 ## Time view
 
 A recursive tree of your destinations. For each one you settle its timezone, and for each camera on each
@@ -118,10 +147,25 @@ they never block; you answer on them only to pass a value down.
 input" now applies itself unless the destination's photos speak against it, and the panel now also
 offers an "In country" choice.*
 
+### The table of countries
+
+On a host whose zone database has no table of countries, while the workspace has not yet answered whether to download
+the current one, the Time view opens with a row **The table of countries**. Pick *download it* or *keep the carried
+copy* and Save: the answer is recorded in `photos-02-zone-table.json` exactly as `prep plan --download-zone-table
+yes|no` records it, and *download it* fetches the table then. Unanswered, it holds nothing up — the copy carried
+inside photos-cartographer is used. The answer can also be written by hand: `{"download": "declined"}` keeps the
+carried copy, `{"download": "accepted"}` has the next `prep plan` download it.
+
 ### Timezone
 
 A destination has **one timezone** for all its photos. You answer it once, high in the tree; everything
 beneath inherits it.
+
+Where a destination has no zone, every folder above it with none asks too, naming the destinations inside that wait:
+answer at whichever level the zone is true — the country, a region, the place itself. An answer passes down to
+everything below, so the questions it settles there turn **resolved** at once, before any re-run; answer each
+destination instead and the folders above stop asking. A folder said to be in a country of several timezones is not
+asked (a zone there would reach nothing), and the folders inside it are.
 
 - **Inherited** — a destination with no zone of its own takes the one of its nearest ancestor that has
   one, badged `inherited ⟵ <ancestor>`. It applies itself; the badge updates live as you edit
@@ -129,14 +173,18 @@ beneath inherits it.
 - **In country** — say which country a folder is in (whatever the folder is called; it needn't be the
   country's own folder). A country with **one** timezone gives it to everything inside. A country with
   **several** gives none and lets none through from above: each destination inside answers for itself,
-  and the **Manual timezone** list only offers that country's zones. A country is said **once, at the
+  and the **Manual timezone** list only offers that country's zones — unless its phone photos settle it:
+  where exactly one of the country's zones had, at each photo's time, the offset the photo records, that
+  zone applies itself, badged `from its photos`. A country is said **once, at the
   top of its tree**: below a folder that has one, the choice is locked and says where it was made, and
   choosing a country on a folder removes any country chosen inside it (the editor says which). The
-  choice appears only when the host's timezone database lists countries.
+  countries are the host's timezone database's own table — or, on a host without one, a copy downloaded for the
+  workspace when `prep plan` asked, else the copy carried inside photos-cartographer.
 - **The configured default** (`default_folder_timezone`) is only **offered**: a destination with nothing
-  to inherit shows it with a **use** button, but it never applies by itself — so a trip abroad is never
+  to inherit shows it with a **use** button, but it never applies by itself — so a place abroad is never
   timed in your home zone. Inside a country, it is offered only if it is one of that country's zones.
-- **Manual timezone** — pick an IANA zone from the dropdown. It overrides an inherited one and
+- **Manual timezone** — pick an IANA zone from the dropdown: the zones of the machine geotag runs on, so one
+  your browser knows and that machine does not is never offered. It overrides an inherited one and
   **re-roots the chain**: every destination beneath inherits it (until one of them overrides in turn).
 
 **When the photos disagree with the zone.** Phone photos record the offset from UTC they were taken at.
@@ -150,13 +198,19 @@ arriving later with yet another offset asks again.
 ### Clock offset
 
 One offset decision per camera group per destination — per **day** when the group spans more than one
-day there, since a camera reset each morning has a per-day offset. Phones get none: their time is
-resolved per file. Offsets **never inherit** — each day stands alone, so no inherited badge appears on
+day there, since a camera reset each morning has a per-day offset. A phone gets one (its row says
+**phone**) only for a day whose own GPS reads its clock otherwise than its photos are read — see below. Offsets **never inherit** — each day stands alone, so no inherited badge appears on
 them. See [why grouping is per-day](concepts.md#why-grouping-is-per-day-within-a-destination).
 
 Days of one group with the same proposal are collapsed into one row (e.g. "3 Jul 2024 … 9 Jul 2024
-(7 days)"); an answer there applies to every day in it. Click **▸** to show each day and answer one
-separately.
+(7 days)"); an answer there applies to every day in it. A day that takes an answer otherwise — one clock read two
+ways that day, a guess far from all evidence, a phone kept as it records itself — is a row of its own. Click **▸** to show each day and answer one
+separately. A camera gets a heading of its own only where its days need different answers and the
+destination has other cameras; a destination with one camera lists its days directly.
+
+Only the cameras that ask, or that you answered, are listed open. The cameras whose photos settle their
+offset themselves — an offset their own GPS fixed as configured, nothing for you to answer — fold into one
+line, **Offset · settled by the photos (<cameras>)**; open it to see them, or to answer one anyway.
 
 You answer in one of two ways:
 
@@ -165,7 +219,12 @@ You answer in one of two ways:
   the proposal was X; it is now Y — accept it again, or set the offset."
 - **manual offset** — your own value (camera time + offset = real UTC), set on the h/m/s spinner (scroll
   or ↑/↓ over a unit), in seconds in the box beside it, or — for a proposal found from GPS — as the
-  **anchor real-UTC** of the proposal's example photo.
+  **anchor real-UTC** of the proposal's example photo. Otherwise, as the **true time of a photo**: the
+  decision's earliest photo is named (with a thumbnail) beside its camera time; type when it was really
+  taken, in the destination's local time (UTC while the destination has no timezone), and the editor
+  works out the offset from it. A time the destination's clocks skipped or showed twice at a
+  daylight-saving change gives no single offset and is refused — use another photo's time or the offset.
+  This is how a clock reset to its factory date is answered: no need to count the seconds since 2000.
 
 An **Impact** line shows what the offset does to a photo: its camera time → the corrected local time (and
 UTC). **clear** removes your answer.
@@ -182,27 +241,132 @@ What the proposal panel shows depends on where the offset came from:
     the day you were there;
   - **the tracks stood still** — the GPS says where the photos were but not when; the offset shown is
     one that fits. Accepting it sends it through the Drift view to check;
-  - **photos that agree with no group** — named. Scattered, their own positions are off: accept. The last
-    of the day: the camera's clock changed — move them into a sub-folder and re-run.
+  - **photos that agree with no group** — named. Where they come one after the other at one end of the day,
+    the camera's clock changed: the split is offered (below). Otherwise accept the offset most agree on: a photo
+    whose own position it contradicts is then offered the track's position in the GPS view. For a group marked
+    several bodies, they are likely the other body's: move that body's photos into a sub-folder.
 
   Photos skipped for having a track only outside the plausible time window, or none nearby, are counted.
+- **The camera's clock changed this day** — the camera's GPS (on the tracks, or its fixes' times) shows two runs of
+  photos, one after the other, each agreeing on an offset of its own: the clock was set between them (to local time
+  at lunch, say). The panel names both runs and offers **split the day where the clock changed** — one tick settles
+  the day, each part corrected by its own photos. Runs are told apart by when the GPS says the photos were taken, so
+  a clock set back an hour, whose camera times repeat, is found too. For each photo without GPS that either part
+  could have taken (or neither), pick **before** or **after** the change; the others go to their part unasked. If
+  the clock did not change, answer the day's offset as usual instead. A split accepted for a change the next run no
+  longer finds is kept, stale, and offered **clear the split**. By hand: `accept_clock_change`,
+  `accepted_change_offsets_seconds` and `photo_parts` in the day's cell.
+- **From the GPS fixes' own times** — no track passes the photos' places, but their GPS fixes recorded
+  the UTC they were taken at: each, less the camera time, is a reading of the offset. The panel lists a few
+  ("camera 10:00:00 · fix 00:59:30Z → −9h 00m 30s"). Two or more that agree applied themselves (status
+  **auto**); a single one waits for **accept proposal** — a stale fix repeats an old time. Where two fixes
+  recorded the same time at different camera times (a stale fix), or their offsets lie too far apart, the
+  fixes are not read, and a note says so.
 - **Shared from the same day elsewhere** — no photo here has its own position, but the camera's GPS fixed
-  its clock that day in another destination. Where it applied itself there it applies here too;
-  otherwise accept it here or set another. If the camera's GPS gives two different offsets on one day in
+  its clock that day in another destination — by itself, by your acceptance, or as the group of its GPS
+  you picked there. Where it applied itself there it applies here too; otherwise accept it here or set
+  another. If the camera's GPS gives two different offsets on one day in
   two destinations, neither takes effect: both are shown, and you set the right offset by hand in the
-  one that is wrong.
+  one that is wrong. There, **accept** reads **use the proposal as your own offset**: an acceptance would
+  be withheld again, so the editor writes the proposal as your own offset (`manual_offset_seconds`) —
+  by hand, write the same. A group you picked from the camera's GPS is held against an offset its GPS fixed by
+  itself elsewhere that day the same way: if they differ, both are shown and the one fixed by itself
+  waits for you, while your pick keeps its effect.
+- **The day next to it** — no photo of this day has its own position here, but the camera's GPS fixed its clock the
+  day before (or after) in this destination: its midnight fell mid-outing, say. Asked once, like the timezone's
+  guess: with tracks by the photos there is nothing to accept here — confirm it in the Drift view, on the tracks; with
+  none, **accept proposal** if the clock was not set in between.
+- **The offset the photos record** — no GPS evidence, but the camera wrote, with each photo's time, the
+  UTC offset its clock was set to, and they all agree (e.g. "2 photos record +01:00 from UTC"): the clock
+  offset is its negative. Accept it only if the camera's time was right in that zone — a clock set to the
+  wrong hour keeps its zone. Where GPX tracks cover these photos, it goes to the Drift view instead, like a
+  local-time proposal. Where the photos record **different** offsets, none is proposed from them: the
+  decision lists each offset with a photo of it — the camera's zone setting changed that day, or the tag
+  is wrong — and you set the offset, or move the photos of each setting into a sub-folder and re-run.
 - **Derived from the local time** — no GPS evidence, so the offset assumes the camera clock showed the
   destination's local time (daylight-saving aware, so summer and winter days differ). Accept it only if
   the camera really tracked local time — a camera left on home time would be wrong. Where GPX tracks
   cover these photos, there is **nothing to accept here**: the decision says to confirm it in the Drift
   view, against the tracks, once.
+- **Too far from everything** — a local-time, recorded-offset or GPS-fix-time proposal that would put every photo of the
+  day farther than a clock may be wrong (`gpx_anchor_max_clock_error_seconds`, two days by default) from
+  every track point and from every photo another device took in this destination. The note says how far
+  (e.g. "26.3 years from the nearest photo another device took here"): most likely the camera's clock
+  was reset. **accept proposal** is greyed out — accepting would not take effect — so give the true time
+  of one of its photos, or set the offset.
 - **No proposal** — set the destination's timezone and re-run to get a local-time proposal, or enter the
   offset yourself. No local-time proposal is made when the photos' time falls at a **daylight-saving
   change** in that zone (a time that happened twice, or never): the zone gives two offsets there, and the
   proposal shows `timezone_ambiguous` with both. Set the offset yourself.
 
-(A phone photo or other file whose own time falls at a daylight-saving change stops `geotag plan`
-outright, naming the photo — that is fixed outside the editor; the terminal message says how.)
+- **A phone's day** — the phone's photos with their own position put its clock elsewhere than their
+  offset tags (or the zone) read it: say a phone set by hand an hour wrong. The note names both offsets
+  and how many photos the day holds. Several photos agreeing applied it themselves (**auto**); one
+  photo's waits for **accept proposal**. If the track is someone else's, tick **keep this phone as its
+  photos record themselves** — its GPS here is set aside.
+
+- **A phone's photos with no offset tag** — where the phone's tagged photos that day record the zone's
+  offset, they are read by the zone and nothing asks. Else the phone's own GPS reads them (applied by
+  itself), or — with none — the decision proposes the offset its tagged photos record, or the zone's:
+  confirm it in the Drift view where tracks lie by them, or accept it here. The note says which photos.
+
+### Files naming no camera
+
+A destination holding screenshots, scans or stripped photos that record no offset gets one row, **Files
+naming no camera** ("2 files"). Tick **read them as local time in `<zone>`** — the answer names the zone
+and holds for such files arriving later, until the destination's zone changes. Or move them out, or give
+them their offset, and run prep again. By hand: `unidentified_files.user_decision` in photos-21 (see the
+[decision-JSON reference](../cartographer/editor/decision-json-reference.md)).
+
+### Date fallback
+
+A destination holding photos that record **no time** — scanned prints, above all — gets a row **Date fallback**
+("2 photos with no time"), and so does every folder above it, so you can answer once for a whole tree of scans. Type
+the date, as much as you know: a year (`1985`), a month (`1985-06`) or a day (`1985-06-14`); a month or day left
+out is the first. The date given on the nearest folder up covers a photo, its own folder included — it applies itself,
+nothing to accept (an **inherited ⟵** badge says from where); one written lower down overrides it. **clear** takes it
+back. As for a timezone, the date rows a date covers turn **resolved** as soon as you write it, before any re-run.
+
+It times only the photos with no recorded time; a photo with a time keeps it. Each takes the day's midnight, local to
+its destination, written into it and named by it — several of one date in the order of their current file names, the
+order they came from the scanner. The tracks never place them by it (that time is not when they were taken): give
+their folder a GPS fallback, or each a position, in the GPS view. Until a date covers every such photo, `geotag plan`
+stops after the time decisions, naming them. Or move them back to `2-missing-metadata/`. By hand: `date` in the
+destination's `date_fallback.user_decision` in photos-21 (see the
+[decision-JSON reference](../cartographer/editor/decision-json-reference.md)).
+
+### A time at a clock change
+
+A photo read by its destination's zone whose time falls at a **daylight-saving change** — 02:30 on the
+night the clocks went back (it happened twice) or forward (it never happened) — gets a row of its own,
+**Time at a clock change**, under its destination, with its thumbnail. Pick which of the two readings it
+was (each shown with its UTC instant); for a time that never happened you may type another offset
+(`+01:00`). Until each is answered, the time decisions are not complete. By hand, the same answer is
+`utc_offset_seconds` in the photo's entry of `local_time_readings` (see the
+[decision-JSON reference](../cartographer/editor/decision-json-reference.md)).
+
+### A time changed since geotag wrote it
+
+A photo geotag has written to whose time (`DateTimeOriginal` or its offset) was changed afterwards — in
+another tool, or by a slip — gets a row of its own, **Time changed since geotag**, under its destination,
+with its thumbnail. The panel names the time it holds, the one geotag wrote and the photo's own from
+before geotag. Choose:
+
+- **keep the time it holds** — this is the true local time. Geotag reads it by the destination's
+  timezone and applies no camera clock offset to it, now or on any later run; the photo is placed and named
+  by it, and its other time fields (`CreateDate`, `XMP:DateCreated`, IPTC) and its offset tag are written to
+  match. It is not used to work out the camera's clock offset. A time the timezone shows twice, or never
+  (at a daylight-saving change), is then asked like any other. If the photo's offset tag says another
+  offset than the timezone's at that time, the panel says so: kept, the timezone wins, so a time set in
+  another zone would be off by the difference — answer otherwise, or fix the time first;
+- **take back geotag's time** — geotag writes its time again, as it decided it before the change.
+
+The answer is for the time the photo holds now: change the photo's time again and it asks again. Until
+answered, the time decisions are not complete. A kept time stays answered in the panel after `geotag execute`;
+clear the answer to withdraw it, and the question is asked again — nothing is written back to the photo until you
+answer it. By hand: `keep` (`"new"` or `"geotag"`) and `answered_for`
+(a copy of `held_time`) in the photo's entry of `changed_times` (see the
+[decision-JSON reference](../cartographer/editor/decision-json-reference.md)).
 
 ---
 
@@ -220,12 +384,25 @@ Each row shows the camera group, where its offset came from, the offset and the 
   **scroll the wheel** over the map to step one track point per notch, or press **`[` / `]`** (one point)
   and **`{` / `}`** (ten). Each step sets the corrected offset for every photo in the bucket and
   confirms it; **clear — offset was right** takes the correction back.
+- **corrected offset (seconds)**, or the **true time** of the bucket's photo (the one the Photo tab
+  shows, typed in the destination's local time, UTC while it has none) — the correction typed rather than
+  scrubbed: an offset you know, or the only way to give one where no track lies by the photos. Either
+  confirms the bucket with that correction, as a scrub does. By hand: `corrected_offset_seconds` in the
+  bucket's `user_decision`, with `confirmed`, `confirmed_offset_seconds` and `confirmed_against_tracks`
+  (see the [decision-JSON reference](../cartographer/editor/decision-json-reference.md)).
 - **confirm this bucket (offset is right as shown)** — the "don't move" answer. You **must** actively
   tick it: an untouched bucket **blocks** the run; inaction is never read as "no change."
 
 A confirmation names the offset it confirmed. If that offset changes — you edit the Time decision, or a
 re-run proposes another — the bucket asks again: "Confirmed for X; the offset is now Y — check it on the
 track and confirm again."
+
+It names the tracks it was made against too — the GPX files shown for the bucket, each by the SHA-256 of its
+contents. Take one of them out of the tracks folder (it was a companion's) or replace it with another export of
+the day, and the next run asks again: the photos would otherwise be placed on a track nobody looked at them
+against. A track merely added beside the ones you saw leaves the confirmation standing. A bucket shown with no
+track at all can still be confirmed; that holds only while no track lies by its photos. Your earlier answer is
+kept as you wrote it until you confirm again.
 
 Confirming refines the offset without altering your Time decision; the corrected offset feeds the
 recomputed times on the next run.
@@ -236,22 +413,47 @@ recomputed times on the next run.
 
 ## GPS view
 
-Per destination: a **folder fallback**, a worklist of only the photos nothing automatic could place, and
-a summary line — files in total, how many keep their own GPS (`preserve`), are placed on or between
-track points (`interp`), past a track's end (`extrap`), by the folder fallback, or still blocked. Geotag
-marks every position it writes from the tracks as `matched`, `interpolated` or `extrapolated` in the
+The destination tree, as in the Time view. Each destination's first row is its **folder fallback** — its
+point, badged **own** or **inherited ⟵ <destination>** — and under it its photos in at most two buckets:
+
+- **Fallback** — the photos the folder fallback placed, grouped by why the tracks missed them (away from the
+  tracks, in a gap, where the track jumps, tracks disagree, no tracks, a time from a date fallback);
+- **Placed** — the rest, grouped by how they were placed: **camera GPS** (their own position), **camera GPS
+  its offset doubts**, **track point**, **between points**, **past track end**, **set by hand**.
+
+Where no fallback is in effect here or above, the photos nothing places are listed as **Unplaced** instead
+of Fallback — open and first, since geotag waits on them. Write a fallback, here or above, and they — and the
+fallback rows below it — turn **resolved** at once, before any re-run. The settled buckets are folded. A bucket or group
+of one kind says it in its title (**Placed (212) · between points**), and a group of one photo is no group:
+the photo is listed with its kind beside it.
+
+When every photo of one camera's day in a destination fell to the fallback (or waits unplaced), though the
+tracks had points that day, the bucket names that camera day — **<camera> · <day> — check its offset** —
+and a click opens its offset in the Time view: a whole day the tracks missed is more likely a wrong clock
+offset than a folder without tracks.
+
+Geotag marks every position it writes from the tracks as `matched`, `interpolated` or `extrapolated` in the
 photo itself, so a rough position is never taken for a precise one.
 
 Photos are placed in this order: the photo's own GPS → a coordinate you set for it → the tracks → the
-folder fallback → left unlocated, if you said so → otherwise blocked.
+folder fallback → otherwise blocked. No photo leaves geotag without a position: a blocked photo waits —
+no plan is made — until you give its folder a fallback or it a coordinate, and finalize and merge refuse a
+photo that holds none.
+
+**A blocked photo** offers its **folder's fallback first**: **set the folder's fallback** opens that
+destination's fallback, and one coordinate there places every photo of the folder nothing else places —
+and of the folders inside it, which inherit it. Below it, **or a position for this photo alone**.
 
 **Folder GPS fallback** — a single coordinate that places any photo in that destination nothing above
-it could. It cascades downward like the timezone (badged `inherited ⟵ <ancestor>`), but unlike the
-timezone it is **never applied by itself and never blocks**: an inherited fallback is a proposal you
-*may* take with **accept inherited**. A fallback you set **re-roots the chain** for the destinations
-beneath. Photos it places are marked as such (`manual_fallback`), so it's always clear the position
-wasn't measured. **clear** takes a fallback back (to *no fallback*; destinations beneath then inherit
-from above again).
+it could. It cascades downward like the timezone and, like it, **applies itself**: a destination with no
+fallback of its own takes the one written at the nearest destination above it, badged
+`inherited ⟵ <destination>`, and follows it when it changes — there is nothing to accept. Where the
+inherited one is wrong, write this destination's own: every photo here the fallback places takes it, in
+one go, and the destinations beneath inherit it. **back to the inherited** takes your own away again (or
+**clear**, with nothing above). There is no "no fallback here" — a photo the fallback did not place would be
+left with no position. It **never blocks**. Photos it places are marked as such (`manual_fallback`), so
+it's always clear the position wasn't measured; `geotag plan` says, per destination, how many it placed
+and whose fallback it was.
 
 ![GPS view — a per-destination folder fallback](screenshots/carto-25-geotag-edit-gps-fallback.png)
 
@@ -266,6 +468,15 @@ your lead to the fix before you reach for the map:
   apart, and nothing says which one the camera was with. Take the track that isn't this trip's out of the
   tracks folder and re-run.
 
+**An own position the camera's offset contradicts.** A photo with its own GPS position that agrees with none of
+its camera's other photos, once their agreed offset is in effect, is set against the track at its corrected time:
+farther apart than an anchor may be, it is listed (`own_position_contradicted`), with both positions and how far
+apart. It **asks nothing** — the photo keeps its own position — but most likely its GPS was wrong (a stale fix,
+jitter): **take the track's position**, or set another; **keep its own position** takes it back — where your answer
+was already written, the next run writes the photo's own position back into it. By hand: write
+`manual_lat`/`manual_lon`. Where no track covers its corrected time, nothing is proposed: it keeps its own, and
+photos-23 notes it (`contradicted_without_track`).
+
 **Placing individual photos** on the map beside the photo (a thumbnail sits in the decision box; hover a
 name in the worklist for a larger preview):
 
@@ -277,8 +488,20 @@ name in the worklist for a larger preview):
 - **Copy / paste a location** between photos — "copy location" stashes the coordinate (and writes
   `lat, lon` to your system clipboard); "paste" applies it to the current photo. The next photo opens
   centred where you last placed one.
-- **leave unlocated (accept no GPS)** — the photo stays without a position. It only counts where no
-  folder fallback applies.
+- **Click a placed photo's row** (in **Fallback** or **Placed**) to copy where it is placed, the same way: then
+  "paste", or paste it into the coordinate field of another photo. A photo the tracks or the fallback place also
+  opens on the map, at that place and pinned, where you can set its position by hand. A photo with a position of
+  its own opens on the map too, to look at only: geotag keeps a photo's own position.
+- **Undo a position you set**: **reset** before you save; after, **back to the tracks** / **back to the fallback** on
+  a placed photo, **remove this position** on one you placed by hand, **keep its own position** on a contradicted
+  one. Save and re-run `geotag plan`: the photo is placed again as if you had never set it.
+
+**A photo the tracks or the fallback already place** can be given a position of its own: in the
+**Fallback** and **Placed** buckets each such photo has **set position**. A coordinate set there is that
+photo's alone and outranks both; it stays while it is set,
+whatever tracks or fallback come to cover the photo later (**back to the tracks** / **back to the fallback**
+takes it away). Saved, it is written as the entry you would write by hand: a `chosen_by_user` review item. Emptied
+after a run, the photo is placed as before it was set — by the tracks or its fallback — which the panel previews.
 
 ![GPS view — placing a photo on the interactive map beside it](screenshots/carto-26-geotag-edit-gps-per-photo.png)
 
@@ -289,11 +512,25 @@ starts a fresh selection — runs never cross destinations.)
 
 ---
 
+## Execute view
+
+When `geotag execute` writes a photo's tags it takes the photo's content fingerprint again. If the pixels
+are no longer what the plan pinned — or no fingerprint can be taken — the photo's writes are not
+confirmed, its rename waits, and the run ends **partial**. The Execute view lists each such photo from
+`photos-25-execution-summary.json`, with its preview (hover a row, or open it) and the two fingerprints.
+Look at it: if it is right as it is, tick **accept this photo's content as it is now**, save, and run
+`geotag execute` again — that run takes the new content as the photo's and goes on with it. An acceptance
+holds for the content you saw: if the photo changes again, it asks again. By hand, the same answer is
+`"accept_fingerprint_change": true` in the photo's entry of `fingerprint_mismatches` (see the
+[decision-JSON reference](../cartographer/editor/decision-json-reference.md)).
+
+---
+
 ## How edits reset things
 
 Two reset behaviors worth knowing (both take effect on the next run):
 
-- **Re-rooting** — setting a manual **timezone** or **folder fallback** on a folder makes it the new
+- **Re-rooting** — setting a manual **timezone**, **date fallback** or **folder fallback** on a folder makes it the new
   basis its descendants inherit, replacing whatever flowed from higher up. A descendant that set its own
   value keeps it (it overrides). A **country** works the same way, but only once per tree: a country
   chosen inside another country's folder is removed by the next run, which says so in the terminal and
@@ -302,9 +539,10 @@ Two reset behaviors worth knowing (both take effect on the next run):
   computed from it (the corrected times, the GPS decisions, the executable plan) out of date;
   `geotag plan` recomputes it. Your decisions are **kept** while what they decide about is unchanged:
   a day's offset is found again by its day, a photo's coordinate by the photo itself, even after geotag
-  renamed it. An answer whose question has changed is never silently applied to the new one — it is
+  renamed it. A photo you move to another folder (or whose folder you rename) is asked again: its
+  coordinate was given for the folder it was in. An answer whose question has changed is never silently applied to the new one — it is
   marked **stale** and asked again: an acceptance of an offset no longer proposed, a confirmation of an
-  offset no longer in effect, an inherited fallback that no longer exists, a zone kept for photos when
+  offset no longer in effect or made on a track since taken out or changed, a zone kept for photos when
   one arrives recording yet another offset.
 
 ---
@@ -319,6 +557,7 @@ Two reset behaviors worth knowing (both take effect on the next run):
 | Save refused: records changed | reload the page, make the edits again |
 | Say which country a folder is in | Time view → timezone → **In country** (once, at the top of its tree) |
 | Answer a clock offset | **accept proposal**, a group's **use this**, or a manual offset |
+| Date photos with no time (scans) | Time view → **Date fallback** on their folder, or one above: `1985`, `1985-06` or `1985-06-14` |
 | Step a photo along the track (Drift) | scroll wheel, or `[` `]` (Shift `{` `}` for ×10) |
 | Confirm an offset as it is (Drift) | tick **confirm this bucket** |
 | Set a coordinate (GPS) | paste `lat, lon`, place-name search, or pan + "use map center" |

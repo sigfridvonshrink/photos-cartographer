@@ -40,10 +40,10 @@ from .photos_utils import (
     validate_config, sha256_file, sha256_text, media_class_for_ext, folder_name,
     folders_fingerprint, media_extensions_fingerprint,
     selected_gpx_root, is_gpx_file, FIELD_SET_VERSION, CAMERA_GROUP_KEY_VERSION, FOLDER_ROLES,
-    parse_naive_time,
+    parse_naive_time, has_own_position, NO_IDENTITY_KEY, OTHER_TIME_FIELDS,
     missing_managed_folders, by_dest_reprep_pending,
     json_dependency, verify_json_dependency, handoff_content_fingerprint, write_json_artifact, write_versioned_json, db_path, ensure_control_dir,
-    journal_path, ContentHasher, _move_no_clobber, allocate_suffix, carries_stem, track_memo_db_path,
+    journal_path, ContentHasher, _move_no_clobber, allocate_suffix, allocate_stem, carries_stem,
     prep_log_path, write_db_snapshot, take_zfs_snapshot,
     WorkspaceLock, ProgressCoordinator,
 )
@@ -59,6 +59,14 @@ __all__ = [
     'from_originals',
     'device_method',
     'held_values',
+    'TIME_PAIR',
+    'held_other_times',
+    'changed_time_blocker',
+    'changed_time',
+    'keep_true_time',
+    'kept_tag_disagreement',
+    'utc_offset_text',
+    'CHANGED_TIME_ANSWERS',
     'POSITION_MARKERS',
     'TIME_FIXED_SUFFIX',
     'geotag_marker',
@@ -67,12 +75,20 @@ __all__ = [
     'haversine',
     'GPXPoint',
     'GPXIndex',
+    'window_union',
+    'valid_window',
+    'around',
+    'open_track_record',
     '_valid_iana',
     '_offsets_against_zone',
+    '_zone_from_photos',
     '_ZONE_WAITS',
     '_valid_offset',
     '_parse_camera_naive',
     '_naive_date',
+    'date_fallback_day',
+    'untimed',
+    'date_fallback_time',
     '_parse_utc',
     '_equirect_xy',
     '_point_to_segment',
@@ -81,13 +97,25 @@ __all__ = [
     '_frame_skip_reason',
     '_timezone_naive_offset',
     '_zone_ambiguity',
-    'ambiguous_time_blockers',
+    'unreadable_offset_tag',
+    'AMBIGUOUS_RULES',
     'infer_anchor_proposal',
+    'contradicted_frames',
+    'clock_change_proposal',
+    'offset_cell_key',
+    'gps_readings',
     '_parse_iso_offset',
     '_local_to_utc',
     'drift_offset_overrides',
     'OFFSET_TAG_FOR',
+    'clock_group_key',
     '_own_offset',
+    '_read_offset',
+    'recorded_offset_proposal',
+    'gps_fix_utc',
+    'gps_time_proposal',
+    'GPS_TIMES_SHOWN',
+    'far_from_evidence',
     'compute_resolved_utc',
     'resolved_utc_fingerprint',
     '_interp',
@@ -97,15 +125,19 @@ __all__ = [
     '_GPS_PLACE_CATEGORY',
     'classify_gps',
     'held_pre_state',
+    'holds_no_fix',
     'held_time_pre_state',
     '_coordinate_tags',
     '_CLEARED_POSITION',
     '_walk_ancestors',
     '_nearest_ancestor',
     '_expand_destinations',
+    '_ask_zone_at_containers',
     '_dest_label',
     'destination_local_basename',
     'plan_renames',
+    'plan_set_aside_rename',
+    'recorded_sub_second',
     '_GPS_OP_ORIGIN',
     '_GPS_OP_MARKER',
     '_TRACK_MARKER',
@@ -114,6 +146,7 @@ __all__ = [
     'plan_file_ops',
     'build_complete_log',
     'geotag_execution_status',
+    'repeated_write_failures',
 ]
 
 def haversine(lat1, lon1, lat2, lon2):
@@ -142,33 +175,223 @@ class GPXPoint:
         self.segment = segment
 
 
-_REL = "\x00rel\x00"            # stands for the file's path in a memoized warning: the memo is keyed by bytes
-GPX_PARSE_VERSION = "gpx-parse-v3"   # bump when the parse below changes what it yields: a memo of another
-                                     # version is never read, and is replaced as each file is parsed again
+_EARTH_RADIUS_M = 6371000.0
+_GRID_PER_DEGREE = 200                    # a grid cell is 1/200 degree a side: some 550 m north to south
+_GRID_COLUMNS = 360 * _GRID_PER_DEGREE
+_GRID_MAX_CELLS = 64                      # a point or segment reaching over more cells is looked at from everywhere
+
+
+def _grid_cell(lat, lon):
+    """The grid cell of a place, its longitude in [-180, 180]."""
+    return math.floor(lat * _GRID_PER_DEGREE), math.floor(lon * _GRID_PER_DEGREE) % _GRID_COLUMNS
+
+
+def _grid_enter(cells, i, lat0, lat1, lon0, lon1):
+    """Enter `i` in every cell the box [lat0, lat1] x [lon0, lon1] (degrees; longitude unwrapped) reaches into;
+    False, entering nothing, when that is more than `_GRID_MAX_CELLS`."""
+    r0, r1 = math.floor(lat0 * _GRID_PER_DEGREE), math.floor(lat1 * _GRID_PER_DEGREE)
+    c0, c1 = math.floor(lon0 * _GRID_PER_DEGREE), math.floor(lon1 * _GRID_PER_DEGREE)
+    if (r1 - r0 + 1) * (c1 - c0 + 1) > _GRID_MAX_CELLS:
+        return False
+    for r in range(r0, r1 + 1):
+        for c in range(c0, c1 + 1):
+            hits = cells.setdefault((r, c % _GRID_COLUMNS), [])
+            if not hits or hits[-1] != i:
+                hits.append(i)
+    return True
+
+
+def _on_globe(*pts):
+    return all(math.isfinite(p.lat) and math.isfinite(p.lon) and -90.0 <= p.lat <= 90.0 for p in pts)
+
+
+def _proximity_grid(pts, pt_max, seg_max):
+    """`(cells, wide)` for one track's points in time order: `cells` maps a grid cell to the sorted indices `i`
+    whose point lies within `pt_max` metres — by `haversine` — of some place in the cell, or whose segment to point
+    `i + 1` of the same `<trkseg>` within `seg_max` — by `_point_to_segment` — of one; `wide`, the sorted indices of
+    the points and segments too wide to enter, which every place may touch. Each box is a bound the measure cannot
+    exceed, widened past rounding: a place a point or segment is within reach of is always in a cell it entered."""
+    cells, wide = {}, []
+    widen, pad = 1.001, 1e-7
+    half = pt_max / (2.0 * _EARTH_RADIUS_M)
+    sin_half = math.sin(half) if 0.0 <= half <= math.pi / 2 else None
+    dlat_pt = math.degrees(pt_max / _EARTH_RADIUS_M) * widen + pad
+    dlat_seg = math.degrees(seg_max / _EARTH_RADIUS_M) * widen + pad
+    for i, p in enumerate(pts):
+        ok = sin_half is not None and _on_globe(p)
+        if ok:
+            # haversine within pt_max: the latitudes differ by at most dlat_pt, and
+            # cos(lat1)·cos(lat2)·sin²(Δlon/2) <= sin²(pt_max / 2R), each cosine at least that of |lat| + dlat_pt
+            top = abs(p.lat) + dlat_pt
+            cos_top = math.cos(math.radians(top)) if top < 90.0 else 0.0
+            ok = cos_top > 0.0 and sin_half / cos_top < 1.0
+            if ok:
+                dlon = math.degrees(2.0 * math.asin(sin_half / cos_top)) * widen + pad
+                lon = _wrap_lon(p.lon)
+                ok = _grid_enter(cells, i, p.lat - dlat_pt, p.lat + dlat_pt, lon - dlon, lon + dlon)
+        if not ok:
+            wide.append(i)
+        if i + 1 < len(pts) and pts[i + 1].segment == p.segment:
+            b = pts[i + 1]
+            ok = seg_max >= 0.0 and _on_globe(p, b)
+            if ok:
+                # in the plane about p, a place within seg_max of the segment is within seg_max of a point of it
+                # on each axis: its latitude, and its longitude scaled by cos(p.lat)
+                cos_a = math.cos(math.radians(p.lat))
+                ok = cos_a > 1e-3
+                if ok:
+                    dlon = math.degrees(seg_max / (_EARTH_RADIUS_M * cos_a)) * widen + pad
+                    step, lon = _lon_delta(p.lon, b.lon), _wrap_lon(p.lon)
+                    ok = _grid_enter(cells, i, min(p.lat, b.lat) - dlat_seg, max(p.lat, b.lat) + dlat_seg,
+                                     lon + min(0.0, step) - dlon, lon + max(0.0, step) + dlon)
+            if not ok and (not wide or wide[-1] != i):
+                wide.append(i)
+    return cells, wide
+
+
+_REL = "\x00rel\x00"            # stands for the file's path in a parse's warnings: a parse is of bytes, wherever they lie
+GPX_PARSE_VERSION = "gpx-parse-v3"   # bump when the parse below changes what it yields: a track file kept under
+                                     # another version is read and parsed again, as a new entry of the catalogue
+
+# Every instant there is, in seconds: the window of an index built without one.
+ALL_TIME = [(-(2 ** 62), 2 ** 62)]
+
+
+def window_union(*windows):
+    """The union of windows — each a list of (start, end), whole seconds since the epoch in UTC, both ends in it —
+    as one sorted list of disjoint spans (BLD-track_window)."""
+    out = []
+    for a, b in sorted((int(a), int(b)) for w in windows for a, b in (w or ()) if a <= b):
+        if out and a <= out[-1][1]:
+            out[-1] = (out[-1][0], max(out[-1][1], b))
+        else:
+            out.append((a, b))
+    return out
+
+
+def window_minus(window, kept):
+    """The parts of `window` outside `kept` (both unions), their ends included."""
+    out = []
+    for a, b in window:
+        cur = a
+        for c, d in kept:
+            if d < cur or c > b:
+                continue
+            if c > cur:
+                out.append((cur, c))
+            cur = max(cur, d)
+            if cur >= b:
+                break
+        if cur < b:
+            out.append((cur, b))
+    return out
+
+
+def window_intersect(a, b):
+    """The instants in both `a` and `b` (both unions), as a union."""
+    out = []
+    for x, y in a:
+        for c, d in b:
+            lo, hi = max(x, c), min(y, d)
+            if lo <= hi:
+                out.append((lo, hi))
+    return window_union(out)
+
+
+def around(t, reach):
+    """The span `reach` seconds each side of the instant `t` (an aware datetime), widened to whole seconds."""
+    x = t.timestamp()
+    return (math.floor(x - reach), math.ceil(x + reach))
+
+
+def _within(window, x):
+    """Whether the instant `x` (seconds since the epoch) lies in `window`, a union."""
+    i = bisect.bisect_right(window, (x, float("inf"))) - 1
+    return i >= 0 and window[i][0] <= x <= window[i][1]
+
+
+def valid_window(w):
+    """`w` as a union, when it is a list of [start, end] whole seconds with start <= end; else None."""
+    if not isinstance(w, list):
+        return None
+    out = []
+    for span in w:
+        if not (isinstance(span, (list, tuple)) and len(span) == 2
+                and all(isinstance(x, int) and not isinstance(x, bool) for x in span) and span[0] <= span[1]):
+            return None
+        out.append(tuple(span))
+    return window_union(out)
+
+
+_TRACK_TABLES = (
+    # the catalogue (BLD-track_catalogue): one entry per track file as it was read — its path under gpx_root, the
+    # folder directly under gpx_root it is filed in (its rank's), the size, modification time and inode it was read
+    # at, the SHA-256 of its bytes, the parse that read it, the first and last of its points' times, the window its
+    # kept points cover, its warnings, why it could not be parsed (none: it was), and whether it is withdrawn
+    "CREATE TABLE IF NOT EXISTS gpx_track_files (track_id INTEGER PRIMARY KEY, path TEXT NOT NULL, "
+    "rank_folder TEXT NOT NULL, size INTEGER, mtime_ns INTEGER, inode INTEGER, sha256 TEXT NOT NULL, "
+    "parse_version TEXT NOT NULL, first_utc TEXT, last_utc TEXT, covered TEXT NOT NULL, warnings TEXT NOT NULL, "
+    "unreadable TEXT, withdrawn INTEGER NOT NULL DEFAULT 0, UNIQUE (path, sha256, parse_version))",
+    # the points of each entry that fall in the window it covers, as decided on
+    "CREATE TABLE IF NOT EXISTS gpx_track_points (track_id INTEGER NOT NULL, point_index INTEGER NOT NULL, "
+    "time_utc TEXT NOT NULL, lat REAL NOT NULL, lon REAL NOT NULL, track INTEGER NOT NULL, "
+    "segment INTEGER NOT NULL, PRIMARY KEY (track_id, point_index))",
+    # the entries each executed plan placed or timed photos by, with the window it was made in
+    # (BLD-withdrawn_track_points): their points in it stay whatever later windows reach (BLD-track_catalogue)
+    "CREATE TABLE IF NOT EXISTS gpx_track_use (plan_id TEXT NOT NULL, track_id INTEGER NOT NULL, "
+    "window TEXT NOT NULL, PRIMARY KEY (plan_id, track_id))",
+)
+
+
+def open_track_record(record):
+    """A connection to the track region of the database of record (BLD-track_catalogue), its tables made; `record`
+    None is a database of no file, gone with the connection."""
+    conn = sqlite3.connect(record or ":memory:")
+    conn.row_factory = sqlite3.Row
+    for ddl in _TRACK_TABLES:
+        conn.execute(ddl)
+    conn.commit()
+    return conn
+
+
+def _epoch(iso):
+    return datetime.fromisoformat(iso).timestamp()
 
 
 class GPXIndex:
-    """Deterministically ordered, fingerprinted index of all GPX track points under gpx_root.
+    """The track points geotag decides by — those in its window (BLD-track_window) — and their fingerprint.
 
-    Availability is recorded in `status` (disabled / missing / empty / usable). The `fingerprint`
-    is a SHA-256 over the root, each file's bytes, and each parsed point — it becomes an upstream
-    dependency of the time/GPS artifacts in later phases (RUL-tracks_in_dependencies).
+    Availability is recorded in `status` (disabled / missing / unlisted / unreadable / empty / usable / kept). The
+    `fingerprint` is a SHA-256 over the ranking and each point in the window (BLD-gpx_fingerprint) — it becomes an
+    upstream dependency of the time/GPS artifacts (RUL-tracks_in_dependencies), and tracks of other times leave it as
+    it is (RUL-tracks_elsewhere_restale_nothing).
 
-    Every file is read whole on every build — its bytes are what the fingerprint checks — but with a
-    `memo_path` a file whose bytes were parsed before is not parsed again: its points come from the
-    track memo (RUL-other_databases_scratch), which yields exactly what parsing would."""
+    The record keeps a catalogue of every track file under gpx_root and the points of each in the window
+    (BLD-track_catalogue): a file whose size, modification time and inode are as the catalogue has them is not read
+    again, unless the window has grown into its span; a new or changed one is read and parsed. `record` None keeps
+    nothing past the build: every file is read."""
 
-    def __init__(self, gpx_root, memo_path=None):
+    def __init__(self, gpx_root, record=None, precedence=()):
         self.gpx_root = gpx_root
-        self.memo_path = memo_path
+        self.record = record
+        # the folders under gpx_root, best device first (RUL-tracks_ranked_by_folder)
+        self.precedence = list(precedence or ())
         self.points = []
         self.fingerprint = None
         self.status = "disabled"
         self.warnings = []
-        self.parsed = self.reused = 0      # files parsed this build / taken from the memo
+        self.window = []
+        self.read = 0                      # track files read this build
+        self.catalogued = False            # whether this build kept the catalogue over its window
         self._tracks = None
+        self._grids = None                 # (key, [(cells, wide)] per track) — see nearby()
+        self._any_points = False
         self.file_sha = {}                 # each track file's SHA-256, by its path under gpx_root
         self.unreadable = []               # [(file, why)] of the track files that could not be read or parsed
+        self.unlisted = []                 # [(folder, why)] of the folders under gpx_root that could not be listed
+        self.gone = []                     # the track files the catalogue had and gpx_root no longer holds
+        self.told = []                     # the warnings named each one, never under a cap: a link not followed,
+        #                                    a ranked folder not there, a track file gone (RUL-gone_track_told)
 
     def tracks(self):
         """The points as separate tracks — `[(file, points in time order, their times)]`, by file name, then by
@@ -184,10 +407,62 @@ class GPXIndex:
                             [(f, pts, [p.time_utc for p in pts]) for (f, _t), pts in sorted(by_track.items())])
         return self._tracks[1]
 
-    def build(self, coordinator=None):
+    def nearby(self, lat, lon, pt_max, seg_max, spans=None):
+        """For each track of `tracks()`, in its order, the sorted indices of its points a photo at (`lat`, `lon`)
+        can touch — a point within `pt_max` metres of it, a segment from one point to the next within `seg_max` —
+        and the indices on either side, within that track's `(lo, hi)` of `spans` (None: all its points); every
+        index left out it touches nothing at. None when the place is no place on the globe: then any index can.
+        Read from a grid of each track's points and segments, built once per radius pair, so an anchor search
+        measures only what passes by the photo's place, not every point of its window (BLD-anchor_matching)."""
+        if not (math.isfinite(lat) and math.isfinite(lon) and -90.0 <= lat <= 90.0):
+            return None
+        tracks = self.tracks()
+        key = (self._tracks[0], pt_max, seg_max)
+        if self._grids is None or self._grids[0] != key:
+            self._grids = (key, [_proximity_grid(pts, pt_max, seg_max) for _f, pts, _t in tracks])
+        cell = _grid_cell(lat, _wrap_lon(lon))
+        out = []
+        for k, (cells, wide) in enumerate(self._grids[1]):
+            lo, hi = spans[k] if spans is not None else (0, len(tracks[k][1]))
+            near = set()
+            for hits in (cells.get(cell, ()), wide):
+                # one index either side of the span: its neighbour inside may be the one touched
+                near.update(hits[bisect.bisect_left(hits, lo - 1):bisect.bisect_right(hits, hi)])
+            out.append(sorted({j for i in near for j in (i - 1, i, i + 1) if lo <= j < hi}))
+        return out
+
+    def rank(self, rel):
+        """The rank of the track file at `rel` under gpx_root (RUL-tracks_ranked_by_folder): the place of the
+        folder directly under gpx_root it is filed in among `precedence`, 0 the best; a file in no ranked
+        folder ranks below every ranked one, all such files alike."""
+        top = rel.split("/", 1)[0] if "/" in rel else None
+        return self.precedence.index(top) if top in self.precedence else len(self.precedence)
+
+    def ranked(self):
+        """True when the tracks are of more than one rank — where precedence matters at all."""
+        return len({self.rank(f) for f, _p, _t in self.tracks()}) > 1
+
+    def build(self, coordinator=None, window=None, keep=True, read=True):
+        """Index the points in `window` (a list of (start, end) whole seconds; None: every point). `keep` False
+        leaves the record as it was: execute checks the tracks, planning keeps them. `read` False reads nothing
+        under gpx_root — the points are those the record keeps (finalize, RUL-sealing_needs_no_tracks)."""
+        self.window = window_union(window) if window is not None else list(ALL_TIME)
+        self.points, self.warnings, self.file_sha, self.unreadable, self.unlisted = [], [], {}, [], []
+        self.told = []
+        self.read, self._any_points, self.catalogued = 0, False, False
         if not self.gpx_root:
             self.status = "disabled"
             self.fingerprint = hashlib.sha256(b"gpx-disabled-v1").hexdigest()
+            return self
+        if not read:
+            conn = open_track_record(self.record)
+            try:
+                for row in conn.execute("SELECT * FROM gpx_track_files WHERE withdrawn = 0 ORDER BY path").fetchall():
+                    self._take(conn, dict(row))
+            finally:
+                conn.close()
+            self._finish()
+            self.status = "kept"
             return self
         if not os.path.isdir(self.gpx_root):
             self.status = "missing"
@@ -195,128 +470,225 @@ class GPXIndex:
             self.fingerprint = hashlib.sha256(("gpx-missing|" + self.gpx_root).encode()).hexdigest()
             return self
 
+        # a ranked folder that is not there ranks nothing, and is said (RUL-ranked_folder_missing_told)
+        self._tell(f"gpx_track_precedence names {name!r}, which is not a folder directly under gpx_root: "
+                   f"no track ranks by it" for name in self.precedence
+                   if not os.path.isdir(os.path.join(self.gpx_root, name))
+                   or os.path.islink(os.path.join(self.gpx_root, name)))
         gpx_files, linked = [], []
-        for r, dirs, files in os.walk(self.gpx_root):
+
+        def unlisted(e):
+            where = os.path.relpath(e.filename, self.gpx_root) if getattr(e, "filename", None) else "."
+            self.unlisted.append((where, e.strerror or str(e)))
+        for r, dirs, files in os.walk(self.gpx_root, onerror=unlisted):
+            # a link — to a folder or to a track file — is never followed: what it leads to is not read, and that
+            # is said (RUL-track_link_never_followed, RUL-track_link_named)
             gpx_files.extend((os.path.relpath(os.path.join(r, f), self.gpx_root), os.path.join(r, f))
-                             for f in files if is_gpx_file(f))
-            # the walk never follows a linked folder: the tracks in it are not read, and that is said
-            # (RUL-unreadable_tracks_stop_geotag)
-            linked.extend(os.path.relpath(os.path.join(r, d), self.gpx_root) for d in dirs
-                          if os.path.islink(os.path.join(r, d)))
+                             for f in files if is_gpx_file(f) and not os.path.islink(os.path.join(r, f)))
+            linked.extend(os.path.relpath(os.path.join(r, n), self.gpx_root) for n in dirs + files
+                          if os.path.islink(os.path.join(r, n)) and (n in dirs or is_gpx_file(n)))
+        if self.unlisted:
+            # a folder of the tracks that cannot be listed: what is in it cannot be checked, and counts as changed
+            # (RUL-unlisted_tracks_stop_geotag) — nothing in the record is withdrawn for not being seen
+            self.status = "unlisted"
+            self.warnings.extend(f"Could not list {where!r} under gpx_root: {why}" for where, why in self.unlisted)
+            self.fingerprint = hashlib.sha256(("gpx-unlisted|" + self.gpx_root).encode()).hexdigest()
+            return self
         gpx_files.sort()
-        self.warnings.extend(f"Linked folder under gpx_root not followed — any tracks in it were not read: {rel}"
-                             for rel in sorted(linked))
+        self._tell(f"Link under gpx_root not followed — no track behind it was read: {rel}" for rel in sorted(linked))
 
-        memo = self._open_memo()
-        seen = set()
-        if coordinator:                       # per-file progress (count + %), named by GPX file
-            coordinator.start_phase("loading GPX tracks", len(gpx_files))
-        h = hashlib.sha256()
-        h.update(self.gpx_root.encode("utf-8"))
-        h.update(b"gpx-index-v1")
-        for rel, abs_path in gpx_files:
+        conn = open_track_record(self.record)
+        try:
+            current = {row["path"]: dict(row) for row in
+                       conn.execute("SELECT * FROM gpx_track_files WHERE withdrawn = 0").fetchall()}
+            if coordinator:                       # per-file progress (count + %), named by GPX file
+                coordinator.start_phase("loading GPX tracks", len(gpx_files))
+            taken = {}
+            for rel, abs_path in gpx_files:
+                if coordinator:
+                    coordinator.set_detail(rel)
+                entry = self._file(conn, rel, abs_path, current.get(rel))
+                if entry is not None:
+                    taken[rel] = entry["track_id"]
+                    self._take(conn, entry)
+                if coordinator:
+                    coordinator.increment_completed(1)
             if coordinator:
-                coordinator.set_detail(rel)
-            h.update(rel.encode("utf-8"))
-            try:
-                with open(abs_path, "rb") as f:
-                    data = f.read()
-            except OSError as e:
-                self.warnings.append(f"Could not read GPX file {rel}: {e}")
-                self.unreadable.append((rel, str(e)))
-                data = None
-            if data is not None:
-                digest = hashlib.sha256(data).digest()
-                h.update(digest)
-                seen.add(digest.hex())
-                self.file_sha[rel] = digest.hex()
-                parsed = self._memo_get(memo, digest.hex())
-                if parsed is None:
-                    parsed = self._parse_bytes(data)
-                    self._memo_put(memo, digest.hex(), parsed)
-                    self.parsed += 1
-                else:
-                    self.reused += 1
-                points, warnings, malformed = parsed
-                if malformed is not None:
-                    self.unreadable.append((rel, malformed))
-                self.points.extend(GPXPoint(lat, lon, datetime.fromisoformat(t), rel, idx, trk, seg)
-                                   for lat, lon, t, idx, trk, seg in points)
-                self.warnings.extend(w.replace(_REL, rel) for w in warnings)
-            if coordinator:
-                coordinator.increment_completed(1)
-        if coordinator:
-            coordinator.finish_phase()
-        self._close_memo(memo, seen)
+                coordinator.finish_phase()
+            listed = {rel for rel, _a in gpx_files}
+            for rel, row in sorted(current.items()):
+                if taken.get(rel) != row["track_id"]:
+                    self._retire(conn, row, gone=rel not in listed)
+            if keep:
+                conn.commit()
+                self.catalogued = True        # the record is the tracks' as they are, over this window
+            else:
+                conn.rollback()
+        finally:
+            conn.close()
+        self._finish()
+        # Track files there, and not one of them read: the tracks are not there to plan by, whatever
+        # "no tracks" would plan (RUL-unreadable_tracks_stop_geotag). A folder of no track file at all is empty.
+        self.status = ("unreadable" if gpx_files and len(self.unreadable) == len(gpx_files) else
+                       "usable" if self._any_points else "empty")
+        return self
 
+    def _finish(self):
+        """Order the points and take their fingerprint (BLD-gpx_fingerprint)."""
         self.points.sort(key=lambda p: (p.time_utc, p.source_file, p.point_index))
+        h = hashlib.sha256(b"gpx-window-v1")
+        # the ranking decides which track places and anchors: a change to it is a change to the tracks
+        # (RUL-track_ranking_in_dependencies)
+        h.update(("precedence|" + json.dumps(self.precedence)).encode("utf-8"))
         for p in self.points:
             h.update(p.time_utc.isoformat().encode("utf-8"))
             h.update(f"{p.lat}|{p.lon}|{p.source_file}|{p.point_index}|{p.track}|{p.segment}".encode("utf-8"))
         self.fingerprint = h.hexdigest()
-        # Track files there, and not one of them read: the tracks are not there to plan by, whatever
-        # "no tracks" would plan (RUL-unreadable_tracks_stop_geotag). A folder of no track file at all is empty.
-        self.status = ("usable" if self.points else
-                       "unreadable" if gpx_files and len(self.unreadable) == len(gpx_files) else "empty")
-        return self
 
-    # --- the track memo: scratch, so any failure only means parsing again -----------------
+    # --- the catalogue (BLD-track_catalogue) -----------------------------------------------------------------
 
-    def _open_memo(self):
-        if not self.memo_path:
-            return None
-        for attempt in (1, 2):                 # a memo that is not a database is replaced: it is scratch
-            conn = None
-            try:
-                conn = sqlite3.connect(self.memo_path)
-                conn.execute("CREATE TABLE IF NOT EXISTS track_memo (sha256 TEXT PRIMARY KEY, "
-                             "parse_version TEXT, parsed_json TEXT)")
-                return conn
-            except sqlite3.Error:
-                if conn is not None:
-                    conn.close()
-                if attempt == 2:
-                    return None
-                try:
-                    os.remove(self.memo_path)
-                except OSError:
-                    return None
+    def _wants(self, row):
+        """Whether the window reaches into the entry's span past the window its kept points cover."""
+        if not row["first_utc"]:
+            return False
+        first, last = math.floor(_epoch(row["first_utc"])), math.ceil(_epoch(row["last_utc"]))
+        return any(a <= last and b >= first
+                   for a, b in window_minus(self.window, valid_window(json.loads(row["covered"])) or []))
+
+    def _file(self, conn, rel, abs_path, row):
+        """The catalogue's entry for the track file at `rel` as it is now — read and parsed when it is new or
+        changed, or when the window reaches into its span past what is kept — or None when it cannot be read."""
+        try:
+            st = os.stat(abs_path)
+        except OSError as e:
+            return self._cannot_read(rel, e)
+        stamp = (st.st_size, st.st_mtime_ns, st.st_ino)
+        if row is not None and row["parse_version"] == GPX_PARSE_VERSION \
+                and (row["size"], row["mtime_ns"], row["inode"]) == stamp \
+                and (row["unreadable"] is not None or not self._wants(row)):
+            return row                        # as it was read: not read again
+        try:
+            with open(abs_path, "rb") as f:
+                data = f.read()
+        except OSError as e:
+            return self._cannot_read(rel, e)
+        self.read += 1
+        sha = hashlib.sha256(data).hexdigest()
+        found = conn.execute("SELECT * FROM gpx_track_files WHERE path = ? AND sha256 = ? AND parse_version = ?",
+                             (rel, sha, GPX_PARSE_VERSION)).fetchone()
+        return self._keep(conn, rel, sha, stamp, self._parse_bytes(data), dict(found) if found else None)
+
+    def _cannot_read(self, rel, e):
+        self.warnings.append(f"Could not read GPX file {rel}: {e}")
+        self.unreadable.append((rel, str(e)))
         return None
 
-    @staticmethod
-    def _memo_get(conn, sha):
-        if conn is None:
-            return None
-        try:
-            row = conn.execute("SELECT parsed_json FROM track_memo WHERE sha256 = ? AND parse_version = ?",
-                               (sha, GPX_PARSE_VERSION)).fetchone()
-            return tuple(json.loads(row[0])) if row else None
-        except (sqlite3.Error, ValueError):
-            return None
+    def _keep(self, conn, rel, sha, stamp, parsed, entry):
+        """Keep the parse of the bytes `sha` of the file at `rel` as its current entry: its points in the window
+        the entry covered, grown by this build's."""
+        points, warnings, malformed = parsed
+        times = sorted((_epoch(p[2]), p[2]) for p in points)
+        covered = window_union(valid_window(json.loads(entry["covered"])) if entry else [], self.window)
+        values = (rel.split("/", 1)[0] if "/" in rel else "", stamp[0], stamp[1], stamp[2],
+                  times[0][1] if times else None, times[-1][1] if times else None,
+                  json.dumps(covered), json.dumps(warnings), malformed)
+        if entry:
+            tid = entry["track_id"]
+            conn.execute("UPDATE gpx_track_files SET rank_folder = ?, size = ?, mtime_ns = ?, inode = ?, first_utc = ?, "
+                         "last_utc = ?, covered = ?, warnings = ?, unreadable = ?, withdrawn = 0 WHERE track_id = ?",
+                         values + (tid,))
+            conn.execute("DELETE FROM gpx_track_points WHERE track_id = ?", (tid,))
+        else:
+            tid = conn.execute("INSERT INTO gpx_track_files (rank_folder, size, mtime_ns, inode, first_utc, last_utc, "
+                               "covered, warnings, unreadable, path, sha256, parse_version) "
+                               "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                               values + (rel, sha, GPX_PARSE_VERSION)).lastrowid
+        conn.executemany("INSERT INTO gpx_track_points VALUES (?, ?, ?, ?, ?, ?, ?)",
+                         [(tid, idx, t, lat, lon, trk, seg) for lat, lon, t, idx, trk, seg in points
+                          if _within(covered, _epoch(t))])
+        return dict(conn.execute("SELECT * FROM gpx_track_files WHERE track_id = ?", (tid,)).fetchone())
 
-    @staticmethod
-    def _memo_put(conn, sha, parsed):
-        if conn is None:
+    def _take(self, conn, entry):
+        """Index the entry's kept points in the window, with its SHA-256 and its warnings."""
+        rel = entry["path"]
+        self.file_sha[rel] = entry["sha256"]
+        self.warnings.extend(w.replace(_REL, rel) for w in json.loads(entry["warnings"] or "[]"))
+        if entry["unreadable"] is not None:
+            self.unreadable.append((rel, entry["unreadable"]))
             return
+        self._any_points = self._any_points or bool(entry["first_utc"])
+        for idx, t, lat, lon, trk, seg in conn.execute(
+                "SELECT point_index, time_utc, lat, lon, track, segment FROM gpx_track_points WHERE track_id = ?",
+                (entry["track_id"],)).fetchall():
+            at = datetime.fromisoformat(t)
+            if _within(self.window, at.timestamp()):
+                self.points.append(GPXPoint(lat, lon, at, rel, idx, trk, seg))
+
+    def _retire(self, conn, row, gone):
+        """An entry no longer the file's: kept, withdrawn, where an executed plan placed or timed photos by it
+        (RUL-withdrawn_track_points_kept); else taken out of the record with its points. A file gone is told
+        (RUL-gone_track_told)."""
+        used = conn.execute("SELECT 1 FROM gpx_track_use WHERE track_id = ? LIMIT 1", (row["track_id"],)).fetchone()
+        if used:
+            conn.execute("UPDATE gpx_track_files SET withdrawn = 1 WHERE track_id = ?", (row["track_id"],))
+        else:
+            conn.execute("DELETE FROM gpx_track_points WHERE track_id = ?", (row["track_id"],))
+            conn.execute("DELETE FROM gpx_track_files WHERE track_id = ?", (row["track_id"],))
+        if gone:
+            self.gone.append(row["path"])
+            self._tell([f"Track file gone from gpx_root, no longer used: {row['path']}"
+                        + (" — its points stay in the record, withdrawn: an executed plan placed or "
+                           "timed photos by it" if used else "")])
+
+    def _tell(self, warnings):
+        """Warnings each named to the user, whatever the cap on the others (RUL-gone_track_told,
+        RUL-track_link_named, RUL-ranked_folder_missing_told)."""
+        for w in warnings:
+            self.warnings.append(w)
+            self.told.append(w)
+
+    def prune(self):
+        """Take out of the record the kept points outside this build's window, the planning's last: the record holds
+        the points the decisions rest on (BLD-track_catalogue). An entry's points an executed plan used, in the
+        window that plan was made in, stay — evidence of what was written into the photos — and a withdrawn entry's
+        all stay (RUL-withdrawn_track_points_kept). Only after a build that kept the catalogue; the window's own
+        points, and so the fingerprint, are untouched."""
+        if not (self.record and self.catalogued):
+            return
+        conn = open_track_record(self.record)
         try:
             with conn:
-                conn.execute("INSERT OR REPLACE INTO track_memo VALUES (?, ?, ?)",
-                             (sha, GPX_PARSE_VERSION, json.dumps(parsed)))
-        except sqlite3.Error:
-            pass
+                for row in conn.execute("SELECT track_id, covered FROM gpx_track_files WHERE withdrawn = 0").fetchall():
+                    tid = row["track_id"]
+                    used = [valid_window(json.loads(w)) or [] for (w,) in
+                            conn.execute("SELECT window FROM gpx_track_use WHERE track_id = ?", (tid,)).fetchall()]
+                    keep = window_union(self.window, *used)
+                    covered = valid_window(json.loads(row["covered"])) or []
+                    narrowed = window_intersect(covered, keep)
+                    if narrowed == covered:
+                        continue
+                    drop = [(tid, idx) for idx, t in conn.execute(
+                        "SELECT point_index, time_utc FROM gpx_track_points WHERE track_id = ?", (tid,)).fetchall()
+                        if not _within(keep, _epoch(t))]
+                    conn.executemany("DELETE FROM gpx_track_points WHERE track_id = ? AND point_index = ?", drop)
+                    conn.execute("UPDATE gpx_track_files SET covered = ? WHERE track_id = ?",
+                                 (json.dumps(narrowed), tid))
+        finally:
+            conn.close()
 
     @staticmethod
-    def _close_memo(conn, seen):
-        """Drop the entries of tracks no longer under gpx_root, so the memo follows the tracks."""
-        if conn is None:
-            return
+    def mark_used(record, plan_id, paths, window):
+        """Record that the plan `plan_id`, executed, placed or timed photos by the track files at `paths` — by
+        their current entries — with the window it was made in (BLD-withdrawn_track_points)."""
+        conn = open_track_record(record)
         try:
             with conn:
-                for (sha,) in conn.execute("SELECT sha256 FROM track_memo").fetchall():
-                    if sha not in seen:
-                        conn.execute("DELETE FROM track_memo WHERE sha256 = ?", (sha,))
-        except sqlite3.Error:
-            pass
+                for rel in sorted(set(paths)):
+                    row = conn.execute("SELECT track_id FROM gpx_track_files WHERE path = ? AND withdrawn = 0",
+                                       (rel,)).fetchone()
+                    if row is not None:
+                        conn.execute("INSERT OR IGNORE INTO gpx_track_use VALUES (?, ?, ?)",
+                                     (plan_id, row["track_id"], json.dumps(window_union(window))))
         finally:
             conn.close()
 
@@ -419,6 +791,39 @@ def _naive_date(s):
     return dt.strftime("%Y-%m-%d") if dt else None
 
 
+# A destination's date fallback as photos-21 holds it (BLD-date_fallback_cell): a year, a year and month, or a day.
+_DATE_FALLBACK = re.compile(r"([0-9]{4})(?:-([0-9]{2})(?:-([0-9]{2}))?)?")
+
+
+def date_fallback_day(value):
+    """The day a date fallback stands for — `YYYY`, `YYYY-MM` or `YYYY-MM-DD`, the month and day it leaves out taken as
+    the first (RUL-date_fallback_fills_to_a_day) — as a naive datetime at midnight; None where `value` is no such
+    date: another form, or a day the calendar has not (RUL-date_fallback_checked)."""
+    m = _DATE_FALLBACK.fullmatch(value) if isinstance(value, str) else None
+    if m is None:
+        return None
+    try:
+        return datetime(int(m[1]), int(m[2] or 1), int(m[3] or 1))
+    except ValueError:
+        return None
+
+
+def untimed(f):
+    """Whether photo `f` carries no recorded time (DEF-recorded_time): the one kind of photo a date fallback times
+    (RUL-date_fallback_only_untimed)."""
+    return not f.get("has_timestamp", True)
+
+
+def date_fallback_time(f, d):
+    """The time the date fallback in effect at destination record `d` gives photo `f` — its day at midnight, local to
+    the destination (RUL-date_fallback_times_untimed) — or None: a photo with a recorded time of its own is never timed
+    by one (RUL-date_fallback_only_untimed), and one no fallback covers has none."""
+    if not untimed(f):
+        return None
+    eff = (d.get("date_fallback") or {}).get("effective_date")
+    return date_fallback_day(eff.get("date")) if isinstance(eff, dict) else None
+
+
 def _parse_utc(s):
     """An ISO-8601 UTC datetime (trailing Z accepted) as an aware datetime, or None."""
     try:
@@ -493,12 +898,17 @@ def frame_candidates(frame, gpx, cfg):
     window = cfg["gpx_anchor_max_clock_error_seconds"]
     naive_utc = naive.replace(tzinfo=timezone.utc)
     out = []
-    for src, pts, times in gpx.tracks():
-        # only the stretch of the track inside the window
-        lo = bisect.bisect_left(times, naive_utc - timedelta(seconds=window))
-        hi = bisect.bisect_right(times, naive_utc + timedelta(seconds=window))
+    tracks = gpx.tracks()
+    # only the stretch of each track inside the window
+    spans = [(bisect.bisect_left(times, naive_utc - timedelta(seconds=window)),
+              bisect.bisect_right(times, naive_utc + timedelta(seconds=window))) for _s, _p, times in tracks]
+    # and of it only the points by the place and those either side: at any other point there is no pass to
+    # extend or end, so the walk below does nothing there
+    nearby = gpx.nearby(flat, flon, pt_max, seg_max, spans)
+    for k, (src, pts, times) in enumerate(tracks):
+        lo, hi = spans[k]
         passes, run = [], []                          # a pass: [(gpx time, rank, distance, segment duration)]
-        for i in range(lo, hi):
+        for i in (nearby[k] if nearby is not None else range(lo, hi)):
             p = pts[i]
             d = haversine(flat, flon, p.lat, p.lon)
             near = d <= pt_max
@@ -534,8 +944,20 @@ def frame_candidates(frame, gpx, cfg):
             as_close = [m[0] for m in r if m[2] <= dist + stay_dist]
             out.append(_candidate("gpx_point_match" if rank == 0 else "gpx_segment_interpolation", gt, dist, src,
                                   naive, dur, (max(as_close) - min(as_close)).total_seconds()))
+    if out and gpx.ranked():
+        # a lower-ranked track anchors only at a time no higher-ranked one recorded
+        # (RUL-lower_track_anchors_where_higher_absent)
+        out = [c for c in out if not any(gpx.rank(f) < gpx.rank(c["gpx_file"]) and _covers(p, t, c["gpx_time"], cfg)
+                                         for f, p, t in tracks)]
     out.sort(key=lambda c: (c["gpx_time"], c["gpx_file"] or ""))
     return out
+
+
+def _covers(pts, times, instant, cfg):
+    """True when one track has a point at `instant`, or two around it a photo could be placed between, within the
+    placement limits (BLD-track_placement) — the track recorded where its device was then."""
+    p, _why = _place_on_track(pts, times, instant, cfg)
+    return p is not None and p["method"] != "extrapolated"
 
 
 def _frame_skip_reason(frame, gpx, cfg):
@@ -547,7 +969,13 @@ def _frame_skip_reason(frame, gpx, cfg):
     if ng.get("lat") is None or ng.get("lon") is None or naive is None or not gpx.points:
         return "no_nearby_track"
     flat, flon, pt_max = float(ng["lat"]), float(ng["lon"]), cfg["gpx_anchor_max_point_distance_meters"]
-    if any(haversine(flat, flon, p.lat, p.lon) <= pt_max for p in gpx.points):
+    nearby = gpx.nearby(flat, flon, pt_max, cfg["gpx_anchor_max_segment_distance_meters"])
+    if nearby is None:
+        near = any(haversine(flat, flon, p.lat, p.lon) <= pt_max for p in gpx.points)
+    else:                                   # only the points by the place can be within reach
+        near = any(haversine(flat, flon, pts[i].lat, pts[i].lon) <= pt_max
+                   for (_s, pts, _t), idx in zip(gpx.tracks(), nearby) for i in idx)
+    if near:
         return "outside_time_window"
     return "no_nearby_track"
 
@@ -606,6 +1034,14 @@ def infer_anchor_proposal(frames, gpx, cfg):
     clock error is recommended, for review. Within the chosen cluster the representative is its best match
     (point before segment, then closest). Frames with no in-window match are summarized as `skipped`; the
     clusters as `groups` for a collapsed editor view."""
+    by_frame, skipped = _anchor_candidates(frames, gpx, cfg)
+    return _anchor_consensus(by_frame, skipped, cfg)
+
+
+def _anchor_candidates(frames, gpx, cfg):
+    """Each anchoring frame's candidates (`frame_candidates`), as (by_frame, skipped): by_frame a list, one entry per
+    frame that matched a pass, of its candidates — each knowing its frame's index, path, position and camera time; and
+    the frames that matched none, counted by reason, with up to three examples."""
     by_frame, skipped = [], {"no_nearby_track": 0, "outside_time_window": 0, "examples": []}
     for f in frames:
         cs = frame_candidates(f, gpx, cfg)
@@ -618,6 +1054,11 @@ def infer_anchor_proposal(frames, gpx, cfg):
             skipped[reason] += 1
             if len(skipped["examples"]) < 3:
                 skipped["examples"].append({"source_file": f.get("relative_path"), "reason": reason})
+    return by_frame, skipped
+
+
+def _anchor_consensus(by_frame, skipped, cfg):
+    """The proposal `infer_anchor_proposal` makes from frames' candidates (`_anchor_candidates`), or None for none."""
     if not by_frame:
         return None
     spread = cfg["gpx_anchor_offset_spread_max_seconds"]
@@ -648,13 +1089,12 @@ def infer_anchor_proposal(frames, gpx, cfg):
     tied = len(order) > 1 and len(clusters[order[1]]["frames"]) == len(g["frames"])
     best = g["rep"]
     support = g["frames"]
-    supporting_count = len(support) - 1
     conflicting = sorted({cs[0]["source_file"] or "" for n, cs in enumerate(by_frame) if n not in support})
     conflicting_count = len(by_frame) - len(support)        # frames no pass of which agrees
     imprecise = best["time_span_seconds"] if vague(best) else 0     # no photo fixes the offset within the stay
     if conflicting_count or tied or imprecise:
         confidence = "review_required"
-    elif supporting_count or best["match_type"] == "gpx_point_match":
+    elif len(support) > 1 or best["match_type"] == "gpx_point_match":
         confidence = "high"
     else:
         confidence = "medium"
@@ -683,16 +1123,164 @@ def infer_anchor_proposal(frames, gpx, cfg):
         "proposed_offset_seconds": best["offset_seconds"],
         "proposed_real_utc": best["gpx_time"].strftime("%Y-%m-%dT%H:%M:%SZ"),
         "confidence": confidence,
-        "rank": "recommended",
-        "recommended_gpx_match": {"match_type": best["match_type"], "gpx_file": best["gpx_file"],
-                                  "distance_m": best["distance_m"],
-                                  "segment_duration_seconds": best["segment_duration_seconds"]},
-        "anchor_count": len(by_frame), "supporting_count": supporting_count,
+        "anchor_count": len(by_frame),
         "conflicting_count": conflicting_count, "conflicting_files": conflicting, "tied": tied,
         "imprecise_seconds": imprecise,
         "acceptance_tolerance_seconds": cfg["gpx_anchor_decision_tolerance_seconds"], "anchors": anchors,
         "groups": groups, "skipped": skipped,
     }
+
+
+def contradicted_frames(frames, gpx, cfg, offset):
+    """The paths of the frames whose own position the clock offset `offset` contradicts (BLD-contradicted_position):
+    each matched a pass of the tracks by its place (`frame_candidates`), and no pass agrees with the offset — within
+    `gpx_anchor_offset_spread_max_seconds`, and the stay as well for a pass the tracks stood still on, as clustering
+    agrees (`infer_anchor_proposal`). A frame no pass matches says nothing of the offset."""
+    spread, stay_max = cfg["gpx_anchor_offset_spread_max_seconds"], cfg["gpx_anchor_stay_max_seconds"]
+    out = []
+    for f in frames:
+        cs = frame_candidates(f, gpx, cfg)
+        if cs and not any(abs(c["offset_seconds"] - offset)
+                          <= (c["time_span_seconds"] if c["time_span_seconds"] > stay_max else 0) + spread for c in cs):
+            out.append(f.get("relative_path"))
+    return sorted(p for p in out if p)
+
+
+def _reindexed(by_frame):
+    """Frames' candidates (`_anchor_candidates`) numbered again from 0, for a consensus over some of them."""
+    return [[dict(c, frame=n) for c in cs] for n, cs in enumerate(by_frame)]
+
+
+def _naive_key(time_text, path):
+    """A photo's place in camera-time order: its camera time, then its path."""
+    return (_parse_camera_naive(time_text) or datetime.min, path or "")
+
+
+def clock_change_proposal(frames, photos, gpx, cfg):
+    """Where the camera's clock was changed during the day (BLD-clock_change_split): the photos its own GPS anchors —
+    on the tracks (`infer_anchor_proposal`), else by their fixes' times (`gps_readings`) — taken in the order of the
+    true time their GPS gives each — the track time its anchor matched, else its fix's time — form two consecutive
+    runs, each agreeing within itself on an offset of its own — a run on the tracks proposing with no photo against it,
+    no tie and no stay; a run of fix times within `gpx_anchor_offset_spread_max_seconds` of each other, the first's
+    offset the run's — the two offsets farther apart than that spread. A clock set back, its two runs interleaved in
+    camera time, shows so as one set forward does. Nothing changes where the day's photos already agree, where no split, or more than one, makes two
+    such runs, as three or more alternating runs never do, or where the runs, each photo at the true time its own run's
+    offset gives it, do not follow one another a second or more apart.
+
+    Returns None, or (proposal, settled). The proposal: `evidence` (`gpx_self_anchor` or `gps_time`), `runs` — each its
+    `offset_seconds`, `photos` (how many) and its `first` and `last` in true time (`source_file`,
+    `camera_source_naive_time`, `real_utc`) — `unsettled` — each of `photos` that is none of the runs' and whose part
+    the runs do not settle, in camera-time order — and `acceptance_tolerance_seconds`. `settled` gives the part, 1 or 2,
+    of every other photo of `photos` holding a camera time: a run's photo its run's; another the one part that could
+    have taken it — the first where the first run's offset puts it before the second run's first photo, the second
+    where the second run's offset puts it after the first run's last; a photo either part could have taken, or
+    neither, is unsettled."""
+    spread = cfg["gpx_anchor_offset_spread_max_seconds"]
+    by_frame, skipped = _anchor_candidates(frames, gpx, cfg) if gpx is not None and gpx.points else ([], None)
+    if by_frame:
+        whole = _anchor_consensus(by_frame, skipped, cfg)
+        if not (whole["conflicting_count"] or whole["tied"]):
+            return None                                 # the day's photos agree: no change
+        none = {"no_nearby_track": 0, "outside_time_window": 0, "examples": []}
+
+        def true_times(proposal):
+            # each anchor's true time: the track time it matched — its camera time and its offset
+            return {a["source_file"]: _parse_camera_naive(a["camera_source_naive_time"])
+                    + timedelta(seconds=a["proposed_offset_seconds"]) for a in proposal["anchors"]}
+        matched = true_times(whole)
+        items = sorted(by_frame, key=lambda cs: (matched[cs[0]["source_file"]], cs[0]["source_file"] or ""))
+        path = lambda cs: cs[0]["source_file"]
+        naive_text = lambda cs: cs[0]["camera_source_naive_time"]
+
+        def agreed(run):
+            p = _anchor_consensus(_reindexed(run), none, cfg)
+            return None if p["conflicting_count"] or p["tied"] or p["imprecise_seconds"] else p["proposed_offset_seconds"]
+
+        def placed(run):
+            # each photo of a run at the track time of its pass that agrees with the run's offset
+            return true_times(_anchor_consensus(_reindexed(run), none, cfg))
+        evidence = "gpx_self_anchor"
+    else:
+        readings = gps_readings(frames)
+        offs = [r["offset_seconds"] for r in readings]
+        fix_times = [r["gps_utc"] for r in readings]
+        if len(readings) < 2 or len(set(fix_times)) < len(fix_times) or max(offs) - min(offs) <= spread:
+            return None                                 # a stale fix, or readings that agree: no change seen
+        fix = lambda r: _parse_utc(r["gps_utc"]).replace(tzinfo=None)
+        items = sorted(readings, key=lambda r: (fix(r), r["source_file"]))
+        path = lambda r: r["source_file"]
+        naive_text = lambda r: r["camera_source_naive_time"]
+
+        def agreed(run):
+            o = [r["offset_seconds"] for r in run]
+            return o[0] if max(o) - min(o) <= spread else None
+
+        def placed(run):
+            return {r["source_file"]: fix(r) for r in run}
+        evidence = "gps_time"
+    splits = []
+    for k in range(1, len(items)):
+        a, b = agreed(items[:k]), agreed(items[k:])
+        if a is not None and b is not None and abs(a - b) > spread:
+            splits.append((k, a, b))
+    if len(splits) != 1:
+        return None                                     # no two runs, or no one place they meet
+    k, a, b = splits[0]
+    sides = (items[:k], items[k:])
+    at = [placed(side) for side in sides]
+    lo, hi = max(at[0].values()), min(at[1].values())   # the first run's last photo, the second's first, in true time
+    if hi <= lo:
+        return None                                     # the runs do not follow one another: no change between them
+    # each photo the runs' GPS places, by its run: a reading of the fixes' times stands for every photo giving it
+    run_of = {path(x): n + 1 for n, side in enumerate(sides) for x in side}
+    if evidence == "gps_time":
+        reading = {(r["gps_utc"], _parse_camera_naive(r["camera_source_naive_time"])): run_of[r["source_file"]]
+                   for r in items}
+        for f in frames:
+            gps, naive = _parse_utc(f.get("gps_utc")), _parse_camera_naive(f.get("source_naive_time"))
+            if f.get("has_native_gps") and gps is not None and naive is not None:
+                n = reading.get((gps.strftime("%Y-%m-%dT%H:%M:%SZ"), naive))
+                if n is not None:
+                    run_of.setdefault(f["relative_path"], n)
+    settled, unsettled = {}, []
+    for f in photos:
+        rel, t = f["relative_path"], _parse_camera_naive(f.get("source_naive_time"))
+        if rel in run_of:
+            settled[rel] = run_of[rel]
+            continue
+        if t is None:
+            continue
+        could = [n for n, fits in ((1, t + timedelta(seconds=a) < hi), (2, t + timedelta(seconds=b) > lo)) if fits]
+        if len(could) == 1:
+            settled[rel] = could[0]                     # only one part could have taken it
+        else:
+            unsettled.append({"source_file": rel, "camera_source_naive_time": f.get("source_naive_time")})
+    unsettled.sort(key=lambda x: _naive_key(x["camera_source_naive_time"], x["source_file"]))
+
+    def run(off, side, times):
+        ordered = sorted(side, key=lambda x: (times[path(x)], path(x) or ""))
+        end = lambda x: {"source_file": path(x), "camera_source_naive_time": naive_text(x),
+                         "real_utc": times[path(x)].strftime("%Y-%m-%dT%H:%M:%SZ")}
+        return {"offset_seconds": off, "photos": len(side), "first": end(ordered[0]), "last": end(ordered[-1])}
+    proposal = {"evidence": evidence, "runs": [run(a, sides[0], at[0]), run(b, sides[1], at[1])],
+                "unsettled": unsettled, "acceptance_tolerance_seconds": cfg["gpx_anchor_decision_tolerance_seconds"]}
+    return proposal, settled
+
+
+def offset_cell_key(cells, group, naive_text, path=None):
+    """The key of the offset cell a camera's photo `path` of `group` at camera time `naive_text` is read by, among a
+    destination's `cells` (BLD-offset_buckets): `<group>@<date>` where the destination has one for its date, else
+    `<group>`; and where that day's cell is split at a clock change (BLD-clock_change_split), the part the split gives
+    the photo (`effective_split.photo_parts`) — none given, the day's own, which offsets nothing."""
+    cells = cells or {}
+    date = _naive_date(naive_text)
+    key = f"{group}@{date}" if f"{group}@{date}" in cells else group
+    split = ((cells.get(key) or {}).get("clock_change") or {}).get("effective_split")
+    if isinstance(split, dict):
+        n = (split.get("photo_parts") or {}).get(path)
+        if n in (1, 2):
+            key = split["parts"][n - 1]
+    return key
 
 
 # ============================================================================
@@ -722,32 +1310,65 @@ def _parse_iso_offset(s):
 _ZONE_WAITS = "\x00waits"
 
 
+def _recorded_readings(files, groups):
+    """The photos of `files` read by the offset recorded with their time — a phone's, a file's naming no camera; never
+    a camera's, whose offset tag says what its clock was set to, not where it was; nor one geotag corrected, nor a
+    kept true time, read by the zone, its tag told apart (BLD-changed_time_kept_not_anchor) — as (path, camera time,
+    offset), by path."""
+    for f in sorted(files, key=lambda x: x["relative_path"]):
+        if (groups.get(f["camera_group_key"]) or {}).get("camera_group_class") == "camera" or f.get("geotag_marker") \
+                or f.get("true_time"):
+            continue
+        naive, own = _parse_camera_naive(f.get("source_naive_time")), _own_offset(f)
+        if naive is not None and own is not None:
+            yield f["relative_path"], naive, own
+
+
+def _zone_offset_there(zone, naive, own):
+    """`zone`'s UTC offset, in whole seconds, at the instant a photo whose camera time is `naive` recorded with offset
+    `own` was taken; None where that instant is out of range."""
+    try:
+        return int((naive - timedelta(seconds=own)).replace(tzinfo=timezone.utc).astimezone(zone).utcoffset()
+                   .total_seconds())
+    except OverflowError:
+        return None
+
+
 def _offsets_against_zone(files, groups, tz):
     """What a destination's own photos say against the timezone `tz` it would inherit: the photos read by
-    the offset recorded with their time (a phone's, a file's naming no camera — never a camera's, whose
-    offset tag says what its clock was set to, not where it was) whose offset is not `tz`'s at that time.
+    the offset recorded with their time (`_recorded_readings`) whose offset is not `tz`'s at that time.
     None when none speaks against it; else how many, and one of them."""
     if not _valid_iana(tz):
         return None
     zone, out = zoneinfo.ZoneInfo(tz), []
-    for f in sorted(files, key=lambda x: x["relative_path"]):
-        if (groups.get(f["camera_group_key"]) or {}).get("camera_group_class") == "camera" or f.get("geotag_marker"):
-            continue
-        naive, own = _parse_camera_naive(f.get("source_naive_time")), _own_offset(f)
-        if naive is None or own is None:
-            continue
-        try:
-            there = (naive - timedelta(seconds=own)).replace(tzinfo=timezone.utc).astimezone(zone).utcoffset()
-        except OverflowError:
-            continue
-        if round(there.total_seconds() / 60) * 60 != own:
-            out.append((f["relative_path"], own, int(there.total_seconds())))
+    for rel, naive, own in _recorded_readings(files, groups):
+        there = _zone_offset_there(zone, naive, own)
+        if there is not None and round(there / 60) * 60 != own:
+            out.append((rel, own, there))
     if not out:
         return None
     rel, own, there = out[0]
     return {"photos": len(out), "example": rel, "recorded_offset_seconds": own,
             "recorded_offsets": sorted({o for _r, o, _t in out}),
             "timezone": tz, "timezone_offset_seconds": there}
+
+
+def _zone_from_photos(files, groups, zones):
+    """The one zone of `zones` — a country's — whose offset at each photo's time is the offset the photo records with
+    it (`_recorded_readings`), or None: where no photo records one, or none or several of the zones fit them all
+    (RUL-zone_from_photos_in_country, BLD-zone_from_photos_in_country)."""
+    readings = list(_recorded_readings(files, groups))
+    if not readings:
+        return None
+    fit = []
+    for tz in zones:
+        if not _valid_iana(tz):
+            continue
+        zone = zoneinfo.ZoneInfo(tz)
+        if all((there := _zone_offset_there(zone, naive, own)) is not None and round(there / 60) * 60 == own
+               for _rel, naive, own in readings):
+            fit.append(tz)
+    return fit[0] if len(fit) == 1 else None
 
 
 def _local_to_utc(naive, tz):
@@ -758,42 +1379,39 @@ def _local_to_utc(naive, tz):
 
 # The rule of a photo whose local time the zone repeats or skips (RUL-ambiguous_local_time_never_guessed): unresolved.
 _AMBIGUOUS_RULES = {"repeated": "local_time_repeated", "skipped": "local_time_skipped"}
+AMBIGUOUS_RULES = _AMBIGUOUS_RULES
 
 
-def _resolve_by_zone(naive, tz):
-    """A photo's local time read through its destination's zone, as (resolved UTC, status, rule suffix): the one
-    instant it names, or (None, "unresolved", the case's rule) for a time the zone repeats or skips — never one of
-    its two readings guessed (RUL-ambiguous_local_time_never_guessed)."""
+def _resolve_by_zone(naive, tz, answer=None):
+    """A photo's local time read through its destination's zone, as (resolved UTC, status, rule suffix, offset used):
+    the one instant it names; for a time the zone repeats or skips, the reading the user answered for the photo in
+    photos-21 (`answer`, its UTC offset, BLD-local_time_readings: rule `local_time_answered`), else (None,
+    "unresolved", the case's rule) — never one of its readings guessed (RUL-ambiguous_local_time_never_guessed)."""
     amb = _zone_ambiguity(naive, tz)
     if amb is not None:
-        return None, "unresolved", _AMBIGUOUS_RULES[amb["case"]]
-    return _local_to_utc(naive, tz), "valid", None
+        if _valid_offset(answer) and not isinstance(answer, bool):
+            return naive - timedelta(seconds=int(answer)), "valid", "local_time_answered", int(answer)
+        return None, "unresolved", _AMBIGUOUS_RULES[amb["case"]], None
+    return _local_to_utc(naive, tz), "valid", None, None
 
 
-def ambiguous_time_blockers(rows):
-    """One blocker per resolved-UTC row left unresolved because its local time is repeated or skipped by its zone
-    (RUL-ambiguous_local_time_never_guessed): the photo, its time, the zone, the two readings, and the way out."""
-    out = []
-    for r in rows:
-        if r.get("time_rule_used") not in _AMBIGUOUS_RULES.values():
-            continue
-        naive, tz = _parse_camera_naive(r.get("source_naive_time")), r.get("destination_timezone")
-        amb = _zone_ambiguity(naive, tz) or {"case": "", "offsets_seconds": []}
-        readings = " or ".join(
-            f"{_fmt_offset(o)} ({(naive - timedelta(seconds=o)).strftime('%Y-%m-%dT%H:%M:%SZ')})"
-            for o in amb["offsets_seconds"])
-        what = ("happened twice there — the clocks went back" if amb["case"] == "repeated"
-                else "never happened there — the clocks went forward over it")
-        out.append(f"{r['relative_path']}: its time {r.get('source_naive_time')} {what} in {tz}, so it reads as "
-                   f"{readings}, and geotag will not choose. Give the photo's time its offset (e.g. "
-                   "`exiftool -OffsetTimeOriginal=+01:00 <photo>`), then re-run prep and geotag — or move it out "
-                   f"of {folder_name('photos_by_dest')}/.")
-    return out
+def _reading_answer(f, d):
+    """The UTC offset the user answered for photo `f`'s time, which its zone skips or repeats, as photos-21 holds it in
+    effect for its destination `d` (BLD-local_time_readings), or None."""
+    cell = (d.get("local_time_readings") or {}).get(f["relative_path"]) or {}
+    eff = cell.get("effective_utc_offset_seconds")
+    return eff if _valid_offset(eff) and eff != "" else None
 
 
-def _fmt_offset(seconds):
-    minutes = round(seconds / 60)
-    return f"{'-' if minutes < 0 else '+'}{abs(minutes) // 60:02d}:{abs(minutes) % 60:02d}"
+def unreadable_offset_tag(f):
+    """The offset field paired with the one `f`'s time was read from, where it holds something that is no offset
+    (BLD-unreadable_offset_tags): (field, value as text), else None. Read as no tag (`_own_offset`); a blank one is
+    no tag at all."""
+    tag = OFFSET_TAG_FOR.get((f.get("source_time_tag") or "").rsplit(":", 1)[-1])
+    v = (f.get("raw_times") or {}).get(tag) if tag else None
+    if v is None or (isinstance(v, str) and not v.strip()):
+        return None
+    return None if _parse_iso_offset(v) is not None else (tag, str(v))
 
 
 def drift_offset_overrides(drift_artifact):
@@ -815,6 +1433,17 @@ OFFSET_TAG_FOR = {"DateTimeOriginal": "OffsetTimeOriginal", "CreateDate": "Offse
                   "ModifyDate": "OffsetTime"}
 
 
+def clock_group_key(f):
+    """The camera group `f`'s time is solved under (BLD-modified_time_files): prep's, unless its time was read from
+    `ModifyDate` — the editing computer's clock, not the camera's — then `NO_IDENTITY_KEY`, solved on its own as a
+    file naming no camera is (RUL-modified_time_solved_alone). `CreateDate` is the camera's clock still. A photo with
+    no recorded time reads no clock at all: `NO_IDENTITY_KEY` too, in no camera's offset or class question
+    (RUL-date_fallback_no_clock_evidence)."""
+    if untimed(f) or (f.get("source_time_tag") or "").rsplit(":", 1)[-1] == "ModifyDate":
+        return NO_IDENTITY_KEY
+    return f["camera_group_key"]
+
+
 def _own_offset(f):
     """The offset, in seconds, recorded with the field `f`'s time was read from, or None. Prep names the field
     with its group (`EXIF:DateTimeOriginal`, BLD-metadata_extraction); the offset is the paired field's, from its own
@@ -828,6 +1457,144 @@ def _own_offset(f):
             return within
     tag = OFFSET_TAG_FOR.get((f.get("source_time_tag") or "").rsplit(":", 1)[-1])
     return _parse_iso_offset((f.get("raw_times") or {}).get(tag)) if tag else None
+
+
+def _read_offset(f, tz):
+    """The clock offset a phone's photo `f` is read by without a cell of its own (BLD-phone_offset_cell): −(the offset
+    recorded with its time), else −(its destination zone `tz`'s at its time); None with neither, or at a time the zone
+    skips or repeats."""
+    own = _own_offset(f)
+    if own is not None:
+        return -own
+    z = _timezone_naive_offset(f.get("source_naive_time"), tz) if _valid_iana(tz) else None
+    return z[0] if z else None
+
+
+def recorded_offset_proposal(photos, rep_naive):
+    """A camera bucket's offset from the offset its photos record with their times (BLD-recorded_offset_proposal), as
+    (proposal, differ). The offset is the one recorded with the field each photo's time was read from (`_own_offset`;
+    a value that is no offset is none). Every photo recording one recording the same: its clock was on that UTC
+    offset, so the proposal is −(it) — `differ` None. Photos recording different ones propose nothing: `differ` holds
+    each offset recorded, its count and one photo. No photo recording one: (None, None)."""
+    seen = {}
+    for f in sorted(photos, key=lambda x: x["relative_path"]):
+        own = _own_offset(f)
+        if own is not None:
+            seen.setdefault(own, []).append(f["relative_path"])
+    if not seen:
+        return None, None
+    if len(seen) > 1:
+        return None, [{"recorded_offset_seconds": o, "photos": len(seen[o]), "example": seen[o][0]}
+                      for o in sorted(seen)]
+    (own, paths), = seen.items()
+    proposal = {"proposal_source": "recorded_offset", "proposed_offset_seconds": -own,
+                "recorded_offset_seconds": own, "recorded_by": len(paths), "example": paths[0],
+                "confidence": "review_required"}
+    naive = _parse_camera_naive(rep_naive)
+    if naive is not None:
+        try:
+            proposal["proposed_real_utc"] = (naive - timedelta(seconds=own)).strftime("%Y-%m-%dT%H:%M:%SZ")
+        except OverflowError:
+            pass                                # a time at the calendar's edge: no instant to name
+    return proposal, None
+
+
+_GPS_TIME_RE = re.compile(r"^(\d{4}:\d\d:\d\d \d\d:\d\d:\d\d)(?:\.\d+)?(Z|[+-]\d\d:?\d\d)?$")
+_GPS_CLOCK_RE = re.compile(r"^(\d{1,2}):(\d{1,2}):(\d{1,2})(?:\.\d+)?$")
+
+
+def gps_fix_utc(parsed):
+    """The UTC time the photo's GPS fix recorded (BLD-gps_time_proposal), as 'YYYY-MM-DDTHH:MM:SSZ', or None: its
+    `GPSDateTime` (exiftool's composite of the two fields below, or XMP's own), else `GPSDateStamp` with
+    `GPSTimeStamp`. A fix's time is UTC; a fraction of a second is dropped. A value that is no time is none."""
+    v = parsed.get("GPSDateTime")
+    if isinstance(v, str) and (m := _GPS_TIME_RE.match(v.strip())):
+        t = parse_naive_time(m.group(1))
+        off = _parse_iso_offset(m.group(2)) if m.group(2) else 0
+        if t is not None and off is not None:
+            try:
+                return (t - timedelta(seconds=off)).strftime("%Y-%m-%dT%H:%M:%SZ")
+            except OverflowError:
+                return None
+    d, c = parsed.get("GPSDateStamp"), parsed.get("GPSTimeStamp")
+    if isinstance(d, str) and isinstance(c, str) and (m := _GPS_CLOCK_RE.match(c.strip())):
+        h, mi, s = (int(x) for x in m.groups())
+        t = parse_naive_time(f"{d.strip()[:10]} {h:02d}:{mi:02d}:{s:02d}")
+        if t is not None:
+            return t.strftime("%Y-%m-%dT%H:%M:%SZ")
+    return None
+
+
+def gps_time_proposal(frames, cfg):
+    """A clock offset from the times the frames' own GPS fixes recorded (BLD-gps_time_proposal), as (proposal,
+    set_aside). Each frame holding its own position and a fix time gives the fix's UTC less its camera time; frames
+    giving the same fix time and the same camera time are one reading (a burst). The readings count only while
+    their fix times all differ — a stale fix repeats its time while the camera's moves on — and their offsets agree
+    within `gpx_anchor_offset_spread_max_seconds`: then the proposal is the earliest reading's offset (`gps_time`);
+    else nothing is proposed, `set_aside` saying why. No frame with a fix time: (None, None)."""
+    rows = gps_readings(frames)
+    if not rows:
+        return None, None
+    fix_times = [r["gps_utc"] for r in rows]
+    offs = [r["offset_seconds"] for r in rows]
+    if len(set(fix_times)) < len(fix_times):
+        twice = next(r for r in rows if fix_times.count(r["gps_utc"]) > 1)
+        return None, {"reason": "repeated_gps_time", "gps_time_count": len(rows), "example": twice["source_file"]}
+    if max(offs) - min(offs) > cfg["gpx_anchor_offset_spread_max_seconds"]:
+        far = max(rows, key=lambda r: abs(r["offset_seconds"] - offs[0]))
+        return None, {"reason": "offsets_disagree", "gps_time_count": len(rows), "example": far["source_file"],
+                      "offsets_seconds": [min(offs), max(offs)]}
+    rep = rows[0]
+    return {"proposal_source": "gps_time", "proposed_offset_seconds": rep["offset_seconds"],
+            "proposed_real_utc": rep["gps_utc"], "gps_time_count": len(rows),
+            "confidence": "high" if len(rows) > 1 else "review_required",
+            "acceptance_tolerance_seconds": cfg["gpx_anchor_decision_tolerance_seconds"],
+            "gps_times": rows[:GPS_TIMES_SHOWN]}, None
+
+
+def gps_readings(frames):
+    """The readings of the clock the frames' own GPS fixes give (BLD-gps_time_proposal), in camera-time order: each
+    frame holding its own position and a fix time gives `{source_file, camera_source_naive_time, gps_utc,
+    offset_seconds}` — the fix's UTC less its camera time — frames giving the same fix time and the same camera time
+    being one reading (a burst)."""
+    readings = {}
+    for f in sorted(frames, key=lambda x: x["relative_path"]):
+        gps, naive = _parse_utc(f.get("gps_utc")), _parse_camera_naive(f.get("source_naive_time"))
+        if not f.get("has_native_gps") or gps is None or naive is None:
+            continue
+        readings.setdefault((gps, naive), f)
+    ordered = sorted(readings.items(), key=lambda kv: (kv[0][1], kv[1]["relative_path"]))
+    return [{"source_file": f["relative_path"], "camera_source_naive_time": f.get("source_naive_time"),
+             "gps_utc": gps.strftime("%Y-%m-%dT%H:%M:%SZ"),
+             "offset_seconds": int(round((gps.replace(tzinfo=None) - naive).total_seconds()))}
+            for (gps, naive), f in ordered]
+
+
+# How many of a GPS-time proposal's readings its record lists (the count says how many there are).
+GPS_TIMES_SHOWN = 20
+
+
+def far_from_evidence(times, others, track_times, bound):
+    """Whether a guessed offset leaves a cell's photos where nothing else was (BLD-offset_far_from_evidence): None
+    where there is no other device's photo to tell (`others` empty), or a photo of the cell at `times` lies within
+    `bound` seconds of one of `others` [(path, aware UTC)] or of a track point (`track_times`, sorted). Else the
+    reason: how far the nearest of each lies."""
+    if not others or not times:
+        return None
+    other_times = sorted((t, p) for p, t in others)
+    keys = [t for t, _p in other_times]
+
+    def nearest(sorted_times, t):
+        i = bisect.bisect_left(sorted_times, t)
+        return min((abs((sorted_times[j] - t).total_seconds()), j) for j in (i - 1, i) if 0 <= j < len(sorted_times))
+    near_other = min(nearest(keys, t) for t in times)
+    near_track = min((nearest(track_times, t)[0] for t in times), default=None) if track_times else None
+    if near_other[0] <= bound or (near_track is not None and near_track <= bound):
+        return None
+    return {"max_clock_error_seconds": bound, "other_photos": len(others),
+            "nearest_other_photo": other_times[near_other[1]][1],
+            "nearest_other_photo_seconds": int(near_other[0]),
+            "nearest_track_seconds": int(near_track) if near_track is not None else ""}
 
 
 def compute_resolved_utc(files, groups, artifact, offset_overrides=None):
@@ -869,14 +1636,31 @@ def _resolve_one(f, d, cls, naive, tz, key, dest, overrides):
     compute_resolved_utc."""
     resolved, status, rule, offset_used, prov = None, "unresolved", "missing_timestamp", None, None
     scope = key
-    if naive is not None and f.get("geotag_marker"):
+    fill = date_fallback_time(f, d) if naive is None else None
+    if fill is not None:
+        # no recorded time: its destination's date fallback, its day at midnight, read by the zone like any local
+        # time — a midnight it skips or repeats as the user answered (BLD-date_fallback_cell) — never by a clock offset
+        if tz:
+            resolved, status, amb_rule, offset_used = _resolve_by_zone(fill, tz, _reading_answer(f, d))
+            rule, prov = amb_rule or "date_fallback", tz
+        else:
+            status, rule = "unresolved", "timezone_missing"
+    elif naive is not None and f.get("true_time"):
+        # the user kept this time as the photo's true one, local to its destination (BLD-changed_time_kept): read by the
+        # zone — a time it skips or repeats as the user answered — never by a clock offset
+        if tz:
+            resolved, status, amb_rule, offset_used = _resolve_by_zone(naive, tz, _reading_answer(f, d))
+            rule, prov = amb_rule or "kept_true_time", tz
+        else:
+            status, rule = "unresolved", "timezone_missing"
+    elif naive is not None and f.get("geotag_marker"):
         # geotag corrected this time already: it is destination-local, offset tag beside it
         own_off = _own_offset(f)
         if own_off is not None:
             offset_used, resolved = own_off, naive - timedelta(seconds=own_off)
             status, rule = "valid", "geotag_corrected"
         elif tz:
-            resolved, status, amb_rule = _resolve_by_zone(naive, tz)
+            resolved, status, amb_rule, offset_used = _resolve_by_zone(naive, tz, _reading_answer(f, d))
             rule, prov = amb_rule or "geotag_corrected", tz
         else:
             status, rule = "unresolved", "timezone_missing"
@@ -885,8 +1669,7 @@ def _resolve_one(f, d, cls, naive, tz, key, dest, overrides):
             # per-date offset bucket: a destination split over >1 naive date keys cells
             # `group@YYYY-MM-DD`; the single-date common case keeps the bare `group` key.
             cells = d.get("camera_group_time_decisions") or {}
-            date = _naive_date(f.get("source_naive_time"))
-            bucket_key = f"{key}@{date}" if f"{key}@{date}" in cells else key
+            bucket_key = offset_cell_key(cells, key, f.get("source_naive_time"), f["relative_path"])   # a split day: its part
             scope = bucket_key                         # the cell this photo's offset comes from
             cell = cells.get(bucket_key) or {}
             eff = cell.get("effective_time_anchor")
@@ -902,12 +1685,44 @@ def _resolve_one(f, d, cls, naive, tz, key, dest, overrides):
                 status, rule = "unresolved", "offset_missing"
         elif cls in ("smartphone", "unidentified"):   # a phone, or a file naming no camera, each solved on its own
             native_off = _own_offset(f)
-            if native_off is not None:
+            cells = (d.get("camera_group_time_decisions") or {}) if cls == "smartphone" else {}
+            bucket_key = f"{key}@{_naive_date(f.get('source_naive_time'))}"
+            bucket_key = bucket_key if bucket_key in cells else key
+            cell = cells.get(bucket_key) or {}
+            eff = cell.get("effective_time_anchor")
+            applies = (cell.get("phone") or {}).get("applies_to")
+            if cell and (applies == "every_photo" or (applies == "untagged_photos" and native_off is None)) \
+                    and not (isinstance(eff, dict) and eff.get("source") == "as_recorded"):
+                # the phone's own GPS says its clock was otherwise that day here (BLD-phone_offset_cell)
+                scope = bucket_key
+                by_zone = isinstance(eff, dict) and eff.get("source") in ("timezone_accepted", "timezone_unconfirmed")
+                if by_zone and overrides.get((dest, bucket_key), eff.get("offset_seconds")) == eff.get("offset_seconds"):
+                    # the zone's reading accepted, or confirmed as it stood: each photo by the zone at its own time — a
+                    # phone's clock follows a daylight-saving change (BLD-phone_offset_cell)
+                    resolved, status, amb_rule, offset_used = _resolve_by_zone(naive, tz, _reading_answer(f, d)) \
+                        if tz else (None, "unresolved", "timezone_missing", None)
+                    rule, prov = amb_rule or "destination_timezone", eff.get("source")
+                elif (dest, bucket_key) in overrides:
+                    offset_used = overrides[(dest, bucket_key)]
+                    resolved = naive + timedelta(seconds=offset_used)
+                    status, rule, prov = "valid", "camera_group_offset", "gps_drift_validated"
+                elif isinstance(eff, dict) and "offset_seconds" in eff:
+                    offset_used = eff["offset_seconds"]
+                    resolved = naive + timedelta(seconds=offset_used)
+                    status, rule, prov = "valid", "camera_group_offset", eff.get("source")
+                else:
+                    status, rule = "unresolved", "offset_missing"
+            elif native_off is not None:
                 offset_used, resolved = native_off, naive - timedelta(seconds=native_off)
                 status = "valid"
                 rule = "unidentified_native_offset" if cls == "unidentified" else "smartphone_native_offset"
+            elif cls == "unidentified" and not tz:
+                status, rule = "unresolved", "timezone_missing"
+            elif cls == "unidentified" and (d.get("unidentified_files") or {}).get("effective_iana_timezone") != tz:
+                # read as local time only once the user said so for the destination (BLD-unidentified_files_question)
+                status, rule = "unresolved", "local_time_unconfirmed"
             elif tz:
-                resolved, status, amb_rule = _resolve_by_zone(naive, tz)
+                resolved, status, amb_rule, offset_used = _resolve_by_zone(naive, tz, _reading_answer(f, d))
                 rule, prov = amb_rule or "destination_timezone", tz
             else:
                 status, rule = "unresolved", "timezone_missing"
@@ -1009,36 +1824,55 @@ _METHOD_RANK = {"direct_match": 0, "interpolated": 1, "extrapolated": 2}
 
 def place_gps(target_utc, gpx, cfg, why=None):
     """Place a photo at its resolved UTC against the GPX tracks (BLD-track_placement), or None when no reliable
-    placement exists. Each track places it on its own (_place_on_track) and the closest evidence wins: a point at its
-    time before the place between two, before a projection past an end; then the track nearest in time.
-    Tracks that cover the instant and put the photo in different places — farther apart than
-    `gpx_tracks_agree_max_distance_meters` — are two devices in two places, and nothing here says which carried the camera: the
-    photo is not placed. `why`, a dict, is filled with the reason when nothing places it."""
+    placement exists. Each track places it on its own (_place_on_track). A projection past one track's end is no
+    witness against a track that covers the instant, so the projections count only where no track covers it. Of
+    those that count, the highest-ranked tracks decide (RUL-highest_ranked_track_places), and of them the closest
+    evidence wins: a point at its time before the place between two, before a projection past an end; then the
+    track nearest in time. Tracks of that rank that put the photo in different places — farther apart than
+    `gpx_tracks_agree_max_distance_meters` — are two devices in two places, and nothing here says which carried the
+    camera: the photo is not placed (RUL-disagreeing_tracks_place_nothing). A lower-ranked track never stops it; how
+    far each put it is kept with the placement, as `lower_tracks` (RUL-lower_track_distance_recorded). `why`, a
+    dict, is filled with the reason when nothing places it."""
     placed, missed = [], []
-    for _src, pts, times in gpx.tracks():
+    for src, pts, times in gpx.tracks():
         p, w = _place_on_track(pts, times, target_utc, cfg)
-        (placed if p is not None else missed).append(p if p is not None else w)
+        if p is not None:
+            p["rank"] = gpx.rank(src)
+            placed.append(p)
+        else:
+            missed.append(w)
     if not placed:
         if why is not None:
             why.update(min(missed, key=lambda w: w["seconds_from_track"]) if missed else {"reason": "no_tracks"})
             if "seconds_from_track" in why:
                 why["seconds_from_track"] = round(why["seconds_from_track"])
         return None
-    placed.sort(key=lambda p: (_METHOD_RANK[p["method"]], p["seconds_from_track"], p["gpx_file"], p["gpx_track"]))
-    best = placed[0]
-    # a projection past one track's end is no witness against a track that covers the instant
-    rivals = [p for p in placed[1:] if (p["method"] == "extrapolated") == (best["method"] == "extrapolated")]
-    for p in rivals:
-        apart = haversine(best["lat"], best["lon"], p["lat"], p["lon"])
-        if apart > cfg["gpx_tracks_agree_max_distance_meters"]:
-            if why is not None:
-                # two tracks of one file are named by their place in it (RUL-track_is_one_trk)
-                same = best["gpx_file"] == p["gpx_file"]
-                name = lambda q: f"{q['gpx_file']} (track {q['gpx_track'] + 1})" if same else q["gpx_file"]
-                why.update({"reason": "tracks_disagree", "gpx_files": sorted((name(best), name(p))),
-                            "apart_meters": round(apart)})
-            return None
-    return {k: v for k, v in best.items() if k not in ("seconds_from_track", "gpx_track")}
+    pool = [p for p in placed if p["method"] != "extrapolated"] or placed
+    top = min(p["rank"] for p in pool)
+    ranked = sorted((p for p in pool if p["rank"] == top),
+                    key=lambda p: (_METHOD_RANK[p["method"]], p["seconds_from_track"], p["gpx_file"], p["gpx_track"]))
+    best = ranked[0]
+    # every two of them, not each against the best only: two that agree with a third may lie apart from each other
+    for i, a in enumerate(ranked):
+        for p in ranked[i + 1:]:
+            apart = haversine(a["lat"], a["lon"], p["lat"], p["lon"])
+            if apart > cfg["gpx_tracks_agree_max_distance_meters"]:
+                if why is not None:
+                    # two tracks of one file are named by their place in it (RUL-track_is_one_trk)
+                    same = a["gpx_file"] == p["gpx_file"]
+                    name = lambda q: f"{q['gpx_file']} (track {q['gpx_track'] + 1})" if same else q["gpx_file"]
+                    why.update({"reason": "tracks_disagree", "gpx_files": sorted((name(a), name(p))),
+                                "apart_meters": round(apart)})
+                return None
+    out = {k: v for k, v in best.items() if k not in ("seconds_from_track", "gpx_track", "rank")}
+    lower = sorted((p for p in pool if p["rank"] > top), key=lambda p: (p["gpx_file"], p["gpx_track"]))
+    if lower:
+        files = [p["gpx_file"] for p in lower]
+        out["lower_tracks"] = [{"gpx_file": (f"{p['gpx_file']} (track {p['gpx_track'] + 1})"
+                                             if files.count(p["gpx_file"]) > 1 else p["gpx_file"]),
+                                "apart_meters": round(haversine(best["lat"], best["lon"], p["lat"], p["lon"]))}
+                               for p in lower]
+    return out
 
 
 def _valid_coord(lat, lon):
@@ -1052,25 +1886,34 @@ _GPS_PLACE_CATEGORY = {"direct_match": "gpx_interpolation", "interpolated": "gpx
                        "extrapolated": "gpx_extrapolation"}
 
 
-def classify_gps(file, resolved_utc, gpx, cfg, effective_fallback, file_decision, why=None):
-    """The seven-option GPS decision for one file (BLD-placement_order), as (category, coord|None). Resolves in
+def classify_gps(file, resolved_utc, gpx, cfg, effective_fallback, file_decision, why=None, replace_own=False):
+    """The GPS decision for one file (BLD-placement_order), as (category, coord|None). Resolves in
     priority order: preserve native -> per-file manual lock -> GPX interpolation/extrapolation at the
-    resolved UTC -> the destination's effective folder fallback -> accept-unlocated -> blocked.
+    resolved UTC -> the destination's effective folder fallback -> blocked: a photo none of these places waits for
+    the user (RUL-unplaced_photo_waits), never left without a position. A photo's own
+    position gives way only to a position the user set for it, where `replace_own` says its review item is of an own
+    position its clock offset contradicts (RUL-own_position_replaced_on_answer).
     Authored coordinates are assumed already range-validated by the caller (RUL-checked_positions_and_times)."""
     fd = file_decision or {}
-    if file.get("has_native_gps"):
-        return "preserve_native", None
     mlat, mlon = fd.get("manual_lat", ""), fd.get("manual_lon", "")
-    if mlat not in (None, "") and mlon not in (None, ""):
+    manual = mlat not in (None, "") and mlon not in (None, "")
+    if file.get("has_native_gps"):
+        if replace_own and manual:
+            return "manual_locked", {"lat": mlat, "lon": mlon}
+        return "preserve_native", None
+    if manual:
         return "manual_locked", {"lat": mlat, "lon": mlon}
-    if resolved_utc is not None:
+    if untimed(file):
+        # timed by its folder's date fallback: that time is not when it was taken, so no track places it by it
+        # (RUL-date_fallback_never_placed_by_tracks)
+        if why is not None:
+            why["reason"] = "time_from_date_fallback"
+    elif resolved_utc is not None:
         p = place_gps(resolved_utc, gpx, cfg, why)
         if p is not None:
             return _GPS_PLACE_CATEGORY[p["method"]], p
     if effective_fallback is not None:
         return "manual_fallback", effective_fallback
-    if fd.get("accept_unlocated"):
-        return "no_change", None
     return "blocked", None
 
 
@@ -1082,6 +1925,14 @@ def held_pre_state(file):
         return {"present": True, "GPSLatitude": h["lat"], "GPSLongitude": h["lon"],
                 "GPSProcessingMethod": h.get("method") or ""}
     return {"present": False}
+
+
+def holds_no_fix(file):
+    """Whether `file` holds a position that is none of its own — latitude 0 and longitude 0
+    (RUL-null_island_is_no_position): a position written over it is logged with it
+    (RUL-log_records_null_island_replaced)."""
+    h = held_values(file)
+    return h.get("lat") is not None and h.get("lon") is not None and not has_own_position(h["lat"], h["lon"])
 
 
 def _coordinate_tags(lat, lon):
@@ -1146,6 +1997,30 @@ def _expand_destinations(by_dest):
     return ordered, containers
 
 
+def _ask_zone_at_containers(destinations, containers, stops):
+    """Ask a timezone at every container destination with none, written or inherited, above a destination that waits
+    for one a zone written at the container would reach (RUL-zone_asked_at_every_level, BLD-zone_asked_at_containers):
+    the container's cell names those destinations in `asked_for` and requires input while it names any. A zone written
+    there stops at a folder in `stops` — one with a zone written, or a country chosen — and passes nothing from a
+    container where a country of several timezones is chosen. Answered there, or each destination answered below, the
+    question is gone on the next run. Mutates the cells of `destinations`."""
+    for c in containers:
+        cell = destinations[c]["destination_timezone"]
+        if cell["effective_iana_timezone"] or c in stops:
+            continue                     # a zone reaches it, or one written or a country chosen here answers for it
+        asked = []
+        for d, v in destinations.items():
+            if (d in containers or not d.startswith(c + "/")
+                    or not v["destination_timezone"]["requires_user_input"]):
+                continue
+            way = [d] + [a for a in _walk_ancestors(d) if a.startswith(c + "/")]
+            if not any(a in stops for a in way):
+                asked.append(d)
+        if asked:
+            cell["asked_for"] = sorted(asked)
+            cell["requires_user_input"] = True
+
+
 def _dest_label(dest):
     """A destination's path relative to the by-dest root (the root itself shows as '(root)') — the
     progress label, so the heavy destination currently being worked on is recognizable."""
@@ -1170,29 +2045,132 @@ def destination_local_basename(resolved_utc, tz, fmt, ext):
     return _parse_utc(resolved_utc).astimezone(zoneinfo.ZoneInfo(tz)).strftime(fmt) + (ext or "")
 
 
+# The mark of the temporary name a rename that changes only the case of a name passes through (BLD-case_rename_via).
+CASE_RENAME_MARK = ".carto-case"
+
+
+# The field that holds the fraction of a second beside each recorded-time field, as prep reads them.
+_SUB_SECOND_FIELD = {"DateTimeOriginal": "SubSecTimeOriginal", "CreateDate": "SubSecTimeDigitized",
+                     "ModifyDate": "SubSecTime"}
+
+
+def recorded_sub_second(parsed):
+    """The fraction of a second a photo records with its recorded time, as a number below 1, or None where it records
+    none (RUL-suffix_in_capture_order): the fraction written in the recorded time itself, else the digits of the
+    sub-second field beside that time (`SubSecTimeOriginal`, `"045"` is .045) (BLD-sub_second_read)."""
+    value = parsed.get("selected_source_naive_timestamp")
+    tag = (parsed.get("selected_source_timestamp_tag") or "").rsplit(":", 1)[-1]
+    frac = re.match(r"\.(\d+)", str(value)[19:]) if parse_naive_time(value) else None
+    sub = parsed.get(_SUB_SECOND_FIELD.get(tag, ""))
+    if frac is None and sub is not None:
+        frac = re.fullmatch(r"(\d+)", str(sub).strip())
+    return float("0." + frac.group(1)) if frac else None
+
+
 def plan_renames(files, fmt):
     """Plan no-clobber timestamp renames for the files of ONE destination (BLD-rename_planning). Returns
-    {relative_path, current_name, planned_name, rename} per file, in relative_path order. EVERY
+    {relative_path, current_name, planned_name, rename[, via]} per file, in relative_path order. EVERY
     file's current name is seeded as permanently occupied and never freed — a name a file will
     vacate is still treated as taken, so two files that would trade timestamps both land on distinct
-    suffixed names rather than risking a clobber. A file with no positionable timestamp keeps its
-    name (no rename); the unplaceable case is surfaced as a blocker by the executable-plan stage."""
+    suffixed names rather than risking a clobber. Every planned name ends with its extension in lowercase
+    (RUL-geotag_extension_lowercase): a name already carrying its timestamp keeps it, its extension alone
+    lowercased. A rename that changes only the case of the name carries `via`, a free temporary name it
+    passes through (BLD-case_rename_via). A file with no positionable timestamp keeps its
+    name (no rename); the unplaceable case is surfaced as a blocker by the executable-plan stage.
+
+    The photos given a new name of one timestamp take its suffixes in the order they were taken
+    (RUL-suffix_in_capture_order): by true time, then by the fraction of a second they record (`sub_second`, where
+    they record one), then by the suffix their names already hold — none first. Photos sharing a name, extension aside
+    (a RAW and its JPEG), and given one timestamp are named as one: one name, one suffix, each its own extension
+    (RUL-pair_named_as_one)."""
     occupied = {os.path.basename(f["relative_path"]).lower() for f in files}
-    out = []
+    # every name held, its extension aside: a new name is free only where no photo holds it under any extension, so a
+    # photo never lands beside another photo's RAW or JPEG (RUL-pair_named_as_one)
+    stems = {os.path.splitext(n)[0] for n in occupied}
+    held = {}                                         # each name, case folded: how many photos hold it
+    for f in files:
+        k = os.path.basename(f["relative_path"]).lower()
+        held[k] = held.get(k, 0) + 1
+    rows, groups = {}, {}
     for f in sorted(files, key=lambda x: x["relative_path"]):
         rel = f["relative_path"]
         name = os.path.basename(rel)
-        ext = os.path.splitext(name)[1]
+        ext = os.path.splitext(name)[1].lower()
         base = destination_local_basename(f.get("resolved_utc"), f.get("destination_timezone"), fmt, ext)
-        # A name already carrying the timestamp keeps its suffix: renaming it to another suffix of the
-        # same time would change nothing, and on the next run back again.
-        if base is None or carries_stem(name, os.path.splitext(base)[0]):
-            out.append({"relative_path": rel, "current_name": name, "planned_name": name, "rename": False})
+        stem = None if base is None else os.path.splitext(base)[0]
+        if base is None or (carries_stem(name, stem) and name.endswith(ext)):
+            # A name already carrying the timestamp keeps its suffix: renaming it to another suffix of the
+            # same time would change nothing, and on the next run back again.
+            rows[rel] = {"relative_path": rel, "current_name": name, "planned_name": name, "rename": False}
             continue
-        # The first free name, by the one rule prep also uses (RUL-suffix_choice_by_phase).
-        planned = allocate_suffix(os.path.splitext(base)[0], ext.lstrip("."), occupied, bare_first=True)
-        out.append({"relative_path": rel, "current_name": name, "planned_name": planned, "rename": True})
-    return out
+        if carries_stem(name, stem) and held[name.lower()] == 1:
+            rows[rel] = _rename_row(f, os.path.splitext(name)[0] + ext, occupied)   # its own name, extension lowercased
+            continue
+        # To be given the first free name of its timestamp, with the photos it shares a name with, extension aside.
+        groups.setdefault((stem, os.path.splitext(name)[0].lower()), []).append(f)
+    named = []
+    for (stem, _own), members in groups.items():
+        exts = [os.path.splitext(f["relative_path"])[1].lower() for f in members]
+        # one name for photos of different extensions only: two of one extension are two photos
+        named.extend([(stem, members)] if len(set(exts)) == len(exts) else [(stem, [f]) for f in members])
+    for stem, members in sorted(named, key=lambda g: (g[0],) + _capture_order(g[1], fmt)):
+        # The first free name, by the one rule prep also uses (RUL-suffix_choice_by_phase): free under every extension.
+        new = allocate_stem(stem, [""], stems, bare_first=True)
+        for f in members:
+            planned = new + os.path.splitext(f["relative_path"])[1].lower()
+            occupied.add(planned.lower())
+            rows[f["relative_path"]] = _rename_row(f, planned, occupied)
+    return [rows[rel] for rel in sorted(rows)]
+
+
+def _rename_row(f, planned, occupied):
+    """The rename of `f` to `planned`: through a temporary name where only the case changes (BLD-case_rename_via)."""
+    name = os.path.basename(f["relative_path"])
+    ext = os.path.splitext(name)[1].lower()
+    row = {"relative_path": f["relative_path"], "current_name": name, "planned_name": planned, "rename": True}
+    if planned.lower() == name.lower():
+        # Only the case changes: on a filesystem that ignores case the new name is the file's own, and a
+        # no-clobber move refuses it — so it goes by a temporary name free here and in the plan.
+        row["via"] = allocate_suffix(os.path.splitext(planned)[0] + CASE_RENAME_MARK, ext.lstrip("."),
+                                     occupied, bare_first=True)
+    return row
+
+
+def _capture_order(members, fmt):
+    """The key that orders photos given new names of one timestamp as they were taken (RUL-suffix_in_capture_order):
+    the true time, then the fraction of a second recorded — a photo recording none after those that do — then the
+    suffix its name holds after the timestamp prep named it by (`source_naive_time`), none first, then its path."""
+    def held_suffix(f):
+        name = os.path.splitext(os.path.basename(f["relative_path"]))[0]
+        t = parse_naive_time(f.get("source_naive_time"))
+        stem = t.strftime(fmt) if t is not None else None
+        rest = name[len(stem) + 1:] if stem and carries_stem(name, stem) and name.lower() != stem.lower() else ""
+        return int(rest) if rest.isdigit() else 0
+    utcs = [_parse_utc(f.get("resolved_utc")) for f in members]
+    subs = [f.get("sub_second") for f in members if f.get("sub_second") is not None]
+    return (min(u for u in utcs if u is not None), not subs, min(subs) if subs else 0,
+            min(held_suffix(f) for f in members), min(f["relative_path"] for f in members))
+
+
+def plan_set_aside_rename(raw_rel, raw_name, jpeg, taken, follows=None):
+    """The rename of a JPEG prep set aside beside the RAW at `raw_rel` to that RAW's name `raw_name`, extension aside,
+    the JPEG's own extension in lowercase — a rename only, naming its RAW (`with_raw`): the new name the RAW's rename
+    operation `follows` gives, which it is applied after (BLD-set_aside_renamed_with_raw); with none, the name the RAW
+    holds since an earlier run renamed it without the JPEG (BLD-set_aside_jpeg_catches_up). None where the JPEG holds
+    that name already, or where a file in redundant JPEGs holds it or is given it (`taken`, case folded, the name
+    added once given): the JPEG is then left as it is."""
+    rel = jpeg["relative_path"]
+    name = os.path.basename(rel)
+    to = os.path.splitext(raw_name)[0] + os.path.splitext(name)[1].lower()
+    if to.lower() == name.lower() or to.lower() in taken:
+        return None
+    taken.add(to.lower())
+    pre = {"content_fingerprint": jpeg.get("content_fingerprint"),
+           "size": jpeg.get("size"), "mtime_ns": jpeg.get("mtime_ns")}
+    semantic = {"from": name, "to": to, "with_raw": raw_rel}
+    if follows:
+        semantic["follows"] = follows
+    return _make_op("rename_no_clobber", rel, "renamed with its RAW", semantic, pre)
 
 
 # ============================================================================
@@ -1212,9 +2190,10 @@ _GPS_OP_MARKER = {"gpx_interpolation": "interpolated", "gpx_extrapolation": "ext
 # (`extrapolated`). Keyed by place_gps's method.
 _TRACK_MARKER = {"direct_match": "matched", "interpolated": "interpolated", "extrapolated": "extrapolated"}
 # What geotag records in GPSProcessingMethod. A bare position marker means geotag set the position
-# and so fixed the time too; a re-run ignores the position and places the file again. The suffix,
-# appended to whatever the field held (the device's own value, or nothing), means geotag fixed the
-# time and kept the device's GPS or has set none. Anything else is the device's own: GPS native.
+# at the photo's true time — written, or already held; a re-run ignores the position and places the file again.
+# The suffix, appended to whatever the field held (the device's own value, or nothing), means geotag wrote the
+# time and kept the device's GPS or has set none — never on a photo whose time it did not write
+# (RUL-only_corrected_time_marked). Anything else is the device's own: GPS native.
 POSITION_MARKERS = ("matched", "interpolated", "extrapolated", "manual_locked", "manual_fallback")
 TIME_FIXED_SUFFIX = "+carto-time"   # EXIF sets no length on the field; a JPEG's whole EXIF block is 64 KB
 
@@ -1242,9 +2221,14 @@ def device_method(processing_method):
     return v[:-len(TIME_FIXED_SUFFIX)] if v.endswith(TIME_FIXED_SUFFIX) else v
 
 
-# What the original-values ledger pins of a file before geotag first writes to it (BLD-original_values_pinned).
+# What the original-values ledger pins of a file before geotag first writes to it (BLD-original_values_pinned): its
+# recorded time, and each time field geotag writes that a phone's time is resolved by, with its offset.
 ORIGINAL_KEYS = ("selected_source_naive_timestamp", "selected_source_timestamp_tag", "DateTimeOriginal",
-                 "OffsetTimeOriginal", "GPSLatitude", "GPSLongitude", "GPSProcessingMethod", "has_native_gps")
+                 "OffsetTimeOriginal", "CreateDate", "OffsetTimeDigitized", "GPSLatitude", "GPSLongitude",
+                 "GPSProcessingMethod", "has_native_gps")
+_PINNED_TIMES = ("DateTimeOriginal", "OffsetTimeOriginal", "CreateDate", "OffsetTimeDigitized")
+# The time a photo holds, as a re-plan compares it with its own and with what geotag wrote (BLD-changed_time_blocks).
+TIME_PAIR = ("DateTimeOriginal", "OffsetTimeOriginal")
 
 
 def own_values(parsed):
@@ -1256,19 +2240,20 @@ def own_values(parsed):
 def from_originals(file, original):
     """`file` decided from its pinned `original` values — as the device left it, before geotag's first
     write — while `held` keeps what it holds now, for the comparison. Pure; returns a new dict."""
-    f = dict(file, held=held_values(file), from_originals=True)
-    rt = {k: v for k, v in (file.get("raw_times") or {}).items() if k not in ("DateTimeOriginal", "OffsetTimeOriginal")}
-    for k in ("DateTimeOriginal", "OffsetTimeOriginal"):
+    f = dict(file, held=held_values(file), from_originals=True, own_time={k: original.get(k) for k in TIME_PAIR})
+    rt = {k: v for k, v in (file.get("raw_times") or {}).items() if k not in _PINNED_TIMES}
+    for k in _PINNED_TIMES:
         if original.get(k) is not None:
             rt[k] = original[k]
     method = original.get("GPSProcessingMethod")
-    # A pin is taken only of a file carrying no geotag mark (BLD-original_values_pinned): its position is the device's.
-    has_gps = bool(original.get("has_native_gps"))
+    # A pin is taken only of a file carrying no geotag mark (BLD-original_values_pinned): its position is the
+    # device's — its own by the one test (BLD-own_position_test), latitude 0 and longitude 0 being none.
+    has_gps = has_own_position(original.get("GPSLatitude"), original.get("GPSLongitude"))
     f.update(raw_times=rt, source_naive_time=original.get("selected_source_naive_timestamp"),
              source_time_tag=original.get("selected_source_timestamp_tag"),
              has_timestamp=original.get("selected_source_naive_timestamp") is not None,
              native_gps=({"lat": original.get("GPSLatitude"), "lon": original.get("GPSLongitude"),
-                          "processing_method": method} if original.get("has_native_gps") else None),
+                          "processing_method": method} if has_gps else None),
              has_native_gps=has_gps, geotag_marker=geotag_marker(method), processing_method=method)
     return f
 
@@ -1281,7 +2266,100 @@ def held_values(file):
         return file["held"]
     rt, ng = file.get("raw_times") or {}, file.get("native_gps") or {}
     return {"DateTimeOriginal": rt.get("DateTimeOriginal"), "OffsetTimeOriginal": rt.get("OffsetTimeOriginal"),
-            "lat": ng.get("lat"), "lon": ng.get("lon"), "method": file.get("processing_method")}
+            "lat": ng.get("lat"), "lon": ng.get("lon"), "method": file.get("processing_method"),
+            **(file.get("other_times") or {})}
+
+
+def held_other_times(parsed):
+    """The other time fields a photo holds, by their group (BLD-other_time_fields_read): those geotag rewrites
+    to the corrected time when it writes one."""
+    return {k: parsed[k] for k in OTHER_TIME_FIELDS if parsed.get(k) is not None}
+
+
+def _time_text(pair):
+    """A time and its offset as a person reads them."""
+    if not pair or pair.get("DateTimeOriginal") is None:
+        return "no time"
+    off = pair.get("OffsetTimeOriginal")
+    return f"{pair['DateTimeOriginal']} {off}" if off else f"{pair['DateTimeOriginal']} with no offset"
+
+
+# The answers to a time changed since geotag wrote it (BLD-changed_time_question): keep the time the photo holds — its
+# true local time (BLD-changed_time_kept) — or take back geotag's.
+CHANGED_TIME_ANSWERS = ("new", "geotag")
+
+
+def changed_time(file):
+    """What `file` holds of a time changed since geotag wrote it, or None (BLD-changed_time_blocks): a photo geotag wrote
+    to — its own values pinned — holding a time and offset which are neither its own from before geotag's first write
+    (the true time kept for it, where its pin keeps one: BLD-changed_time_kept_pinned) nor one geotag wrote.
+    {"held_time", "geotag_wrote" (the last pair geotag wrote, or None), "own_time"}, each a
+    {DateTimeOriginal, OffsetTimeOriginal}. A photo with no pin was never written by geotag here, and is not concerned."""
+    if not file.get("from_originals"):
+        return None
+    h = held_values(file)
+    held = {k: h.get(k) for k in TIME_PAIR}
+    written = file.get("times_written") or []
+    own = {k: (file.get("true_time") or file.get("own_time") or {}).get(k) for k in TIME_PAIR}
+    if held == own or held in written:
+        return None
+    return {"held_time": held, "geotag_wrote": dict(written[-1]) if written else None, "own_time": own}
+
+
+def keep_true_time(file, pair):
+    """`file` decided from `pair` — a time the user kept as the photo's true time, local to its destination
+    (BLD-changed_time_kept): its recorded time read from that DateTimeOriginal, with that offset tag, and `true_time`
+    set, so it is resolved by its destination's zone, no clock offset applied, and kept out of its camera's evidence
+    (BLD-changed_time_kept_not_anchor). Its own pinned values stay. Pure; returns a new dict."""
+    pair = {k: pair.get(k) for k in TIME_PAIR}
+    tag = file.get("source_time_tag") or ""
+    tag = tag if tag.rsplit(":", 1)[-1] == "DateTimeOriginal" else "EXIF:DateTimeOriginal"
+    rt = dict(file.get("raw_times") or {}, **{k: v for k, v in pair.items() if v is not None})
+    if pair.get("OffsetTimeOriginal") is None:
+        rt.pop("OffsetTimeOriginal", None)
+    return dict(file, true_time=pair, raw_times=rt, source_naive_time=pair["DateTimeOriginal"], source_time_tag=tag,
+                has_timestamp=_parse_camera_naive(pair["DateTimeOriginal"]) is not None)
+
+
+def kept_tag_disagreement(pair, tz):
+    """Where `pair` — a time the user is asked whether to keep as the true local time — holds an offset tag that its
+    destination's zone `tz` does not give at that time (BLD-changed_time_kept_tag_noted): {"recorded_offset_seconds",
+    "timezone", "timezone_offsets_seconds"} — the zone's offset there, or its two at a time it skips or repeats —
+    else None. A tag holding no offset, or no time or zone to set it against, disagrees with nothing."""
+    pair = pair or {}
+    naive, own = _parse_camera_naive(pair.get("DateTimeOriginal")), _parse_iso_offset(pair.get("OffsetTimeOriginal"))
+    if naive is None or own is None or not _valid_iana(tz):
+        return None
+    amb = _zone_ambiguity(naive, tz)
+    if amb is not None:
+        offsets = amb["offsets_seconds"]
+    else:
+        try:
+            offsets = [int(_local_to_utc(naive, tz).astimezone(zoneinfo.ZoneInfo(tz)).utcoffset().total_seconds())]
+        except OverflowError:
+            return None
+    if any(round(o / 60) * 60 == own for o in offsets):
+        return None
+    return {"recorded_offset_seconds": own, "timezone": tz, "timezone_offsets_seconds": offsets}
+
+
+def changed_time_blocker(file):
+    """Why the plan stops on `file`, or None (BLD-changed_time_blocks): a photo holding a time changed since geotag wrote
+    it (`changed_time`) that the user has not answered for in photos-21 (BLD-changed_time_question). Geotag neither
+    writes its own time back over it nor takes it as the photo's recorded time unasked. One kept is decided from its
+    new time as its true local time; one whose answer is geotag's time is planned to have it written back."""
+    if (file.get("changed_time") or {}).get("answer") in CHANGED_TIME_ANSWERS:
+        return None
+    ch = changed_time(file)
+    if ch is None:
+        return None
+    held, written = ch["held_time"], file.get("times_written") or []
+    wrote = _time_text(written[-1]) if written else "no time"
+    return (f"{file['relative_path']}: holds the time {_time_text(held)}, but geotag wrote {wrote} to it, and its "
+            f"own time before geotag was {_time_text(ch['own_time'])}. Its time was changed since geotag "
+            "wrote to it: geotag neither writes its time back nor takes this one as the photo's unasked. Say which "
+            "it keeps in photos-21 (changed_times, or the decision editor) and run `geotag plan` again — or put "
+            "one of those back into the photo, then run `prep plan`, `prep execute` and `geotag plan` again.")
 
 
 def _local_time_and_offset(resolved_utc, tz):
@@ -1294,8 +2372,13 @@ def _local_time_and_offset(resolved_utc, tz):
     local = dt.astimezone(zoneinfo.ZoneInfo(tz))
     # The offset field holds hours and minutes. A zone's offset before it kept standard time has seconds
     # (Amsterdam in 1935: +00:19:32): it is written to the nearest minute, the local time exact.
-    minutes = round(local.utcoffset().total_seconds() / 60)
-    return local.strftime("%Y:%m:%d %H:%M:%S"), f"{'-' if minutes < 0 else '+'}{abs(minutes) // 60:02d}:{abs(minutes) % 60:02d}"
+    return local.strftime("%Y:%m:%d %H:%M:%S"), utc_offset_text(local.utcoffset().total_seconds())
+
+
+def utc_offset_text(seconds):
+    """A UTC offset in seconds as the offset field writes it, '+HH:MM' — to the nearest minute."""
+    minutes = round(seconds / 60)
+    return f"{'-' if minutes < 0 else '+'}{abs(minutes) // 60:02d}:{abs(minutes) % 60:02d}"
 
 
 def _make_op(typ, rel, reason, semantic, preconditions):
@@ -1308,15 +2391,36 @@ def _make_op(typ, rel, reason, semantic, preconditions):
 
 
 def time_fixed_marker_op(file, method, clear_position=False):
-    """The marker write recording that geotag fixed `file`'s time and wrote no position: `method`, the
-    device's own GPSProcessingMethod with the suffix appended. With `clear_position`, the position an
-    earlier geotag run wrote is cleared too."""
+    """The marker write of `file` to which geotag writes no position: `method`, the device's own
+    GPSProcessingMethod — with the suffix appended where geotag corrected its time. With `clear_position`, the position
+    an earlier geotag run wrote is cleared too."""
     pre = {"content_fingerprint": file.get("content_fingerprint"),
            "size": file.get("size"), "mtime_ns": file.get("mtime_ns")}
     writes = {"GPSProcessingMethod": method}
     if clear_position:
         writes = {**_CLEARED_POSITION, **writes}
     return _make_op("gps_marker_write", file["relative_path"], "time provenance", {"writes": writes}, pre)
+
+
+def _other_time_writes(held, dto, off):
+    """The corrected local time `dto` with its offset `off`, for each other field recording the photo's making
+    that the photo already holds (BLD-other_time_fields_written), each in its own format — never a field it does
+    not hold. ModifyDate and OffsetTime are the last edit's, and stay. A sub-second field stays too: a clock offset
+    is whole seconds, so the fraction beside the time is still right — and one within XMP's value is kept in it."""
+    w = {}
+    if held.get("EXIF:CreateDate") is not None:
+        w["EXIF:CreateDate"] = dto
+        if held.get("EXIF:OffsetTimeDigitized") is not None:
+            w["EXIF:OffsetTimeDigitized"] = off
+    xmp = held.get("XMP:DateCreated")
+    if xmp is not None:
+        frac = re.match(r"\.\d+", str(xmp)[19:]) if parse_naive_time(xmp) else None
+        w["XMP:DateCreated"] = dto + (frac.group(0) if frac else "") + off
+    if held.get("IPTC:DateCreated") is not None:
+        w["IPTC:DateCreated"] = dto[:10]
+    if held.get("IPTC:TimeCreated") is not None:
+        w["IPTC:TimeCreated"] = dto[11:] + off
+    return w
 
 
 def plan_file_ops(file, resolved_utc, tz, gps_category, gps_coord, rename):
@@ -1329,14 +2433,23 @@ def plan_file_ops(file, resolved_utc, tz, gps_category, gps_coord, rename):
     ops = []
 
     held = held_values(file)                      # what the file holds now: the comparison side
-    marker = file.get("geotag_marker")            # the decision side: geotag's mark on the basis values
-    time_corrected = bool(marker)                 # geotag wrote this file's time on an earlier run
+    # Corrected is the time geotag writes, never merely the one resolved (DEF-corrected_time): marked only when this
+    # plan writes it, or when the field the photo holds already carries geotag's mark from an earlier run. A photo
+    # holding its true time already is decided from its own values again on a re-run, with the same result: nothing
+    # to write (RUL-only_corrected_time_marked). A position marker says only that geotag wrote the position: on a
+    # pinned photo the time it holds is corrected only where it is one geotag wrote (BLD-time_written_recorded).
+    held_mark = geotag_marker(held.get("method"))
+    if held_mark in POSITION_MARKERS and file.get("from_originals"):
+        time_corrected = {k: held.get(k) for k in TIME_PAIR} in (file.get("times_written") or [])
+    else:
+        time_corrected = held_mark is not None
     dto, off = _local_time_and_offset(resolved_utc, tz)
     if dto is not None:
         writes = {"DateTimeOriginal": dto, "OffsetTimeOriginal": off}   # a local time always comes with its offset
-        time_corrected = True
+        writes.update(_other_time_writes(held, dto, off))
         if any(held.get(k) != v for k, v in writes.items()):         # already held -> nothing to write
             ops.append(_make_op("metadata_time_write", rel, "corrected capture time", {"writes": writes}, pre))
+            time_corrected = True
 
     if gps_category in _GPS_OP_ORIGIN and gps_coord is not None:
         new_marker = _TRACK_MARKER.get(gps_coord.get("method")) or _GPS_OP_MARKER[gps_category]
@@ -1350,16 +2463,35 @@ def plan_file_ops(file, resolved_utc, tz, gps_category, gps_coord, rename):
                                  "gps_origin": _GPS_OP_ORIGIN[gps_category]}, pre))
             ops.append(_make_op("gps_marker_write", rel, "gps provenance",
                                 {"writes": {"GPSProcessingMethod": new_marker}}, pre))
+    elif held_mark in POSITION_MARKERS:
+        # A position geotag wrote that the decision no longer places — a withdrawn manual position: undone, as if it
+        # had never been written (RUL-withdrawal_undoes). The field goes back to the device's own value, marked only
+        # where the time is corrected (RUL-only_corrected_time_marked).
+        method = device_method(file.get("processing_method"))
+        target = with_time_fixed(method) if time_corrected else method
+        if gps_category == "preserve_native":
+            # written over the photo's own — a withdrawn answer to a contradicted own position: its own, pinned before
+            # geotag's first write, is given back (RUL-own_position_kept)
+            own = file.get("native_gps") or {}
+            if not (isinstance(held.get("lat"), (int, float)) and isinstance(held.get("lon"), (int, float))
+                    and round(held["lat"], 6) == round(own["lat"], 6) and round(held["lon"], 6) == round(own["lon"], 6)):
+                ops.append(_make_op("metadata_gps_write", rel, "gps:own_position_restored",
+                                    {"writes": _coordinate_tags(own["lat"], own["lon"]), "gps_origin": "restore_own"},
+                                    pre))
+            ops.append(_make_op("gps_marker_write", rel, "gps provenance", {"writes": {"GPSProcessingMethod": target}},
+                                pre))
+        else:
+            ops.append(time_fixed_marker_op(file, target, clear_position=True))   # geotag's old fix: not kept
     elif time_corrected:
         target = with_time_fixed(device_method(file.get("processing_method")))
-        if geotag_marker(held.get("method")) in POSITION_MARKERS:
-            ops.append(time_fixed_marker_op(file, target, clear_position=True))   # geotag's old fix: not kept
-        elif (held.get("method") or "").strip() != target:
+        if (held.get("method") or "").strip() != target:
             ops.append(time_fixed_marker_op(file, target))
 
     if rename and rename.get("rename"):
-        ops.append(_make_op("rename_no_clobber", rel, "destination-local timestamp name",
-                            {"from": rename["current_name"], "to": rename["planned_name"]}, pre))
+        semantic = {"from": rename["current_name"], "to": rename["planned_name"]}
+        if rename.get("via"):
+            semantic["via"] = rename["via"]           # a change of case alone: by a temporary name
+        ops.append(_make_op("rename_no_clobber", rel, "destination-local timestamp name", semantic, pre))
     return ops
 
 
@@ -1383,9 +2515,7 @@ def offset_decision_pointer(row, dest, cells):
     """Where the clock offset applied to a photo was decided: its exact (camera group, destination[,
     day]) cell in photos-21, or — when the drift check's validated offset replaced it — the matching
     confirmation in photos-22 (BLD-log_format)."""
-    group = row.get("camera_group")
-    date = _naive_date(row.get("source_naive_time"))
-    bucket = f"{group}@{date}" if f"{group}@{date}" in (cells or {}) else group
+    bucket = offset_cell_key(cells, row.get("camera_group"), row.get("source_naive_time"), row.get("relative_path"))
     if row.get("resolved_utc_provenance") == "gps_drift_validated":
         return f"photos-22 destinations.{dest}.drift_decisions.{bucket}"
     return f"photos-21 destinations.{dest}.camera_group_time_decisions.{bucket}"
@@ -1393,13 +2523,12 @@ def offset_decision_pointer(row, dest, cells):
 
 def manual_gps_pointer(category, dest, rel, fallback_cell):
     """Where a manual position was decided: the photo's own pin among photos-23's review items, or the
-    destination's folder fallback (with the destination it was inherited from, when accepted from one)."""
+    destination's folder fallback (with the destination it is inherited from, when inherited — BLD-log_format)."""
     if category == "manual_locked":
         return f"photos-23 destinations.{dest}.gps_decisions.review_items[{os.path.basename(rel)}]"
     p = f"photos-23 destinations.{dest}.folder_fallback"
-    prop = (fallback_cell or {}).get("proposal") or {}
-    if prop.get("proposal_source") == "inherited" and ((fallback_cell or {}).get("user_decision") or {}).get("accept_proposal"):
-        p += f" (accepted from {prop.get('inherited_from')})"
+    if (fallback_cell or {}).get("fallback_source") == "inherited":
+        p += f" (inherited from {fallback_cell.get('inherited_from')})"
     return p
 
 
@@ -1421,11 +2550,11 @@ def _with_record_hashes(steps, plan):
     return steps
 
 
-def held_time_pre_state(file):
-    """The time `file` holds now and the offset beside it, in the shape the log records beside the write
-    that replaces them (BLD-geotag_log_steps)."""
+def held_time_pre_state(file, writes):
+    """What `file` holds now in each field of a time write, `writes` — its time, the offset beside it and every
+    other time field the write replaces — in the shape the log records beside it (BLD-geotag_log_steps)."""
     h = held_values(file)
-    return {"DateTimeOriginal": h.get("DateTimeOriginal"), "OffsetTimeOriginal": h.get("OffsetTimeOriginal")}
+    return {k: h.get(k) for k in writes}
 
 
 def _time_written_step(time_op):
@@ -1441,9 +2570,33 @@ def _time_written_step(time_op):
     return step
 
 
+def _true_time_steps(plan):
+    """{fingerprint: step} of the times the user kept as their photos' true times in `plan` (BLD-geotag_log_steps), each
+    naming the photos-21 entry that kept it (BLD-log_format)."""
+    out = {}
+    for rel, kept in sorted((plan.get("true_times_kept") or {}).items()):
+        if isinstance(kept, dict) and kept.get("content_fingerprint"):
+            out[kept["content_fingerprint"]] = {
+                "phase": "geotag", "action": "true_time_kept", "value": kept.get("DateTimeOriginal"),
+                "because": f"photos-21 destinations.{os.path.dirname(rel)}.changed_times[{rel}]"}
+    return out
+
+
+def _date_fallback_steps(time_op):
+    """The log's step for a time a date fallback gave a photo with none of its own (BLD-geotag_log_steps): the fallback
+    as the user gave it (`value`, such as "1985-06"), the day it was filled to, and the photos-21 cell it was given in —
+    from the provenance of the plan's time write. [] for any other time."""
+    df = ((time_op or {}).get("provenance") or {}).get("date_fallback")
+    if not isinstance(df, dict):
+        return []
+    return [{"phase": "geotag", "action": "date_fallback_applied", "value": df.get("date"), "filled": df.get("filled"),
+             "because": time_op["provenance"].get("because")}]
+
+
 def _earlier_pass_steps(plan, confirmed):
     """{fingerprint: [steps]} for one earlier executed pass: what its confirmed operations did to each
-    photo, matched by the fingerprint the operation was planned against, each step naming the run."""
+    photo, matched by the fingerprint the operation was planned against, and the true times it kept, each step
+    naming the run."""
     run = plan.get("plan_id")
     ops_by_fp = {}
     for dd in (plan.get("destinations") or {}).values():
@@ -1451,9 +2604,11 @@ def _earlier_pass_steps(plan, confirmed):
             fp = (op.get("preconditions") or {}).get("content_fingerprint")
             if fp and op.get("operation_id") in confirmed:
                 ops_by_fp.setdefault(fp, []).append(op)
+    kept = _true_time_steps(plan)
     out = {}
-    for fp, ops in ops_by_fp.items():
-        steps = []
+    for fp in sorted(set(ops_by_fp) | set(kept)):
+        ops = ops_by_fp.get(fp) or []
+        steps = [dict(kept[fp])] if fp in kept else []
         time_op = next((o for o in ops if o["type"] == "metadata_time_write"), None)
         if time_op is not None:
             prov = time_op.get("provenance") or {}
@@ -1461,6 +2616,7 @@ def _earlier_pass_steps(plan, confirmed):
                 steps.append({"phase": "geotag", "action": "clock_offset_applied", "offset_seconds": prov["utc_offset_used"],
                               "offset_description": describe_offset(prov["utc_offset_used"]),
                               "because": prov.get("because")})
+            steps += _date_fallback_steps(time_op)
             if prov.get("resolved_utc"):
                 steps.append({"phase": "geotag", "action": "resolved_utc", "value": prov["resolved_utc"]})
             if prov.get("destination_timezone"):
@@ -1482,7 +2638,7 @@ def _gps_and_rename_steps(ops, native):
         step = {"phase": "geotag", "action": "gps_written", "lat": w.get("GPSLatitude"),
                 "lon": w.get("GPSLongitude"), "origin": gps_op.get("gps_origin"),
                 "gps_processing_method": (marker.get("writes") or {}).get("GPSProcessingMethod") if marker else None}
-        if gps_op.get("gps_origin") == "apply_manual" and gps_op.get("pre_state") is not None:
+        if gps_op.get("pre_state") is not None:     # a manual position's, or one written over no fix
             step["pre_state"] = gps_op["pre_state"]
         if (gps_op.get("provenance") or {}).get("because"):
             step["because"] = gps_op["provenance"]["because"]
@@ -1512,7 +2668,6 @@ def build_complete_log(prep_photos, files, resolved_rows, time_artifact, plan, e
     The prep file itself is never edited."""
     photos = json.loads(json.dumps(prep_photos or {}))            # deep copy; never touch the prep file
     row_by_rel = {r["relative_path"]: r for r in resolved_rows}
-    unlocated = {}
     for dd in (plan.get("destinations") or {}).values():
         for op in dd.get("operations") or []:
             # The rows are keyed by each photo's path when the plan was made; a prep run since records the
@@ -1520,8 +2675,6 @@ def build_complete_log(prep_photos, files, resolved_rows, time_artifact, plan, e
             if op.get("type") == "rename_no_clobber" and op["relative_path"] in row_by_rel:
                 row_by_rel.setdefault(os.path.join(os.path.dirname(op["relative_path"]), op["to"]),
                                       row_by_rel[op["relative_path"]])
-        for u in dd.get("left_unlocated") or []:
-            unlocated[u.get("content_fingerprint")] = u
     t_dests = (time_artifact or {}).get("destinations") or {}
     ops_by_fp = {}
     fp_by_rel = {f["relative_path"]: f.get("content_fingerprint") for f in files}
@@ -1530,6 +2683,7 @@ def build_complete_log(prep_photos, files, resolved_rows, time_artifact, plan, e
             fp = (op.get("preconditions") or {}).get("content_fingerprint") or fp_by_rel.get(op["relative_path"])
             ops_by_fp.setdefault(fp, []).append(op)
     earlier = [_earlier_pass_steps(p, confirmed) for p, confirmed in earlier_passes]
+    kept = _true_time_steps(plan)
     run = plan.get("plan_id")
 
     for f in sorted(files, key=lambda x: x["relative_path"]):
@@ -1545,6 +2699,8 @@ def build_complete_log(prep_photos, files, resolved_rows, time_artifact, plan, e
         ops = ops_by_fp.get(fp) or []
         start = len(steps)
 
+        if fp in kept:                          # the user's own answer: this is the photo's true time
+            steps.append(dict(kept[fp]))
         if row.get("time_rule_used") == "camera_group_offset" and row.get("utc_offset_used") is not None:
             cells = (t_dests.get(dest) or {}).get("camera_group_time_decisions") or {}
             steps.append({"phase": "geotag", "action": "clock_offset_applied",
@@ -1552,6 +2708,8 @@ def build_complete_log(prep_photos, files, resolved_rows, time_artifact, plan, e
                           "offset_description": describe_offset(row["utc_offset_used"]),
                           "because": offset_decision_pointer(dict(row, camera_group=row.get("camera_group") or group),
                                                              dest, cells)})
+        time_op = next((o for o in ops if o["type"] == "metadata_time_write"), None)
+        steps += _date_fallback_steps(time_op)
         if row.get("resolved_utc"):
             steps.append({"phase": "geotag", "action": "resolved_utc", "value": row["resolved_utc"]})
         tz = ((t_dests.get(dest, {}).get("destination_timezone")) or {}).get("effective_iana_timezone")
@@ -1559,11 +2717,8 @@ def build_complete_log(prep_photos, files, resolved_rows, time_artifact, plan, e
             steps.append({"phase": "geotag", "action": "timezone_resolved", "value": tz,
                           "because": f"photos-21 destinations.{dest}.destination_timezone"})
 
-        time_op = next((o for o in ops if o["type"] == "metadata_time_write"), None)
         if time_op is not None:
             steps.append(_time_written_step(time_op))
-        if fp in unlocated:                    # the user's own answer: no position, and where that was decided
-            steps.append({"phase": "geotag", "action": "left_unlocated", "because": unlocated[fp]["because"]})
         steps.extend(_gps_and_rename_steps(ops, native=f.get("has_native_gps")))
         if not f.get("from_originals") and geotag_marker(held_values(f).get("method")):
             # geotag's mark is on the photo, but this workspace never held its own values: its time was
@@ -1581,6 +2736,29 @@ def build_complete_log(prep_photos, files, resolved_rows, time_artifact, plan, e
         renamed = [s["to"] for s in steps if s.get("phase") == "geotag" and s.get("action") == "final_rename"
                    and s.get("to")]
         entry["geotag_path"] = os.path.join(os.path.dirname(rel), renamed[-1]) if renamed else rel
+
+    # A JPEG set aside beside its RAW and renamed with it: its renames, this pass's and the earlier ones', in its own
+    # record (BLD-set_aside_renamed_with_raw).
+    in_model = {f.get("content_fingerprint") for f in files}
+    aside = {}
+    for p in [p for p, _confirmed in earlier_passes] + [plan]:
+        for dd in (p.get("destinations") or {}).values():
+            for op in dd.get("operations") or []:
+                fp = (op.get("preconditions") or {}).get("content_fingerprint")
+                if op.get("with_raw") and fp and fp not in in_model:
+                    aside[fp] = op["relative_path"]
+    for fp, rel in sorted(aside.items()):
+        entry = photos.setdefault(fp, {"content_fingerprint": fp, "journey": []})
+        steps = entry.setdefault("journey", [])
+        for past in earlier:
+            steps.extend(past.get(fp) or [])
+        start = len(steps)
+        steps.extend(_gps_and_rename_steps(ops_by_fp.get(fp) or [], native=False))
+        if run:
+            steps[start:] = [dict(s, run=run) for s in steps[start:]]
+        renamed = [s["to"] for s in steps if s.get("phase") == "geotag" and s.get("action") == "final_rename"]
+        if renamed:
+            entry["geotag_path"] = os.path.join(os.path.dirname(rel), renamed[-1])
     return photos
 
 
@@ -1595,5 +2773,27 @@ def geotag_execution_status(newly, skipped_n, failures, mismatches, blockers):
     if mismatches or newly > 0 or skipped_n > 0:
         return "partial"
     return "failed"
+
+
+_WRITE_OP_TYPES = ("metadata_time_write", "metadata_gps_write", "gps_marker_write")
+
+
+def repeated_write_failures(failures, prior_failures):
+    """The photos whose metadata write failed in this execution as in the previous execution of the same plan — the
+    same operation kinds, the same reason (BLD-repeated_write_failure) — each with the way out: running again will not
+    mend it, so the photo goes back into photos by date, a move the workspace check passes (`moved_back`,
+    BLD-workspace_check), and prep and geotag are planned again without it."""
+    def by_photo(fs):
+        out = {}
+        for f in fs:
+            if f.get("type") in _WRITE_OP_TYPES and f.get("error"):
+                out.setdefault(f.get("relative_path"), set()).add((f["type"], f["error"]))
+        return out
+    now, before = by_photo(failures), by_photo(prior_failures)
+    way_out = (f"move it from {folder_name('photos_by_dest')} into {folder_name('photos_by_date')}, then run "
+               "`prep plan`, `prep execute` and `geotag plan` again")
+    return [{"relative_path": rel, "types": sorted(t for t, _ in kinds), "error": sorted(e for _, e in kinds)[0],
+             "way_out": way_out}
+            for rel, kinds in sorted(now.items()) if before.get(rel) == kinds]
 
 

@@ -108,7 +108,7 @@ def test_managed_folder_leftover_is_quarantined(tmp_path, monkeypatch):
     assert not any(s.endswith("_exiftool_tmp") for s in strays)
 
 
-@pytest.mark.spec("RUL-write_leftovers_by_dest_warned",
+@pytest.mark.spec("RUL-write_leftovers_by_dest_warned", "RUL-write_leftover_in_by_dest_warned", "BLD-write_leftover_quarantined",
                   test="TST-exiftool_leftovers-bydest_leftover_left_untouched_with_warning")
 def test_bydest_leftover_left_untouched_with_warning(tmp_path, monkeypatch):
     _mock(monkeypatch)

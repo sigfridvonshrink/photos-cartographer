@@ -18,6 +18,8 @@ Destination-local filename computation + the deterministic suffix allocator that
 on-disk and already-planned name as permanently occupied. Safety-critical naming, so full branch
 coverage. Pure functions, unit-tested directly. From conftest.py.
 """
+import os
+
 import pytest
 
 import photos_2_geotag as cal
@@ -58,7 +60,7 @@ def test_local_basename_unpositionable_is_none():
 
 # --- the shared first-free allocation geotag uses ----------------------------------------------------------
 
-@pytest.mark.spec("RUL-suffix_choice_by_phase")
+@pytest.mark.spec("RUL-suffix_choice_by_phase", test="TST-geotag_rename_planning-allocate_name_suffix_progression")
 def test_allocate_name_suffix_progression():
     occ = set()
     assert utils.allocate_suffix("2024-07-03--14-00-00", "jpg", occ, bare_first=True) == "2024-07-03--14-00-00.jpg"
@@ -154,12 +156,45 @@ def test_case_insensitive_collision_suffixes():
     assert len(targets) == 2                                                          # case-insensitively distinct
 
 
+@pytest.mark.spec("RUL-geotag_extension_lowercase", "BLD-rename_planning", "BLD-case_rename_via",
+                  "RUL-uncorrected_keeps_its_name",
+                  test="TST-geotag_rename_planning-every_planned_name_ends_with_a_lowercase_extension")
+def test_every_planned_name_ends_with_a_lowercase_extension():
+    """A photo put in photos by destination by hand keeps the `.JPG` its camera wrote, prep leaving that folder as it
+    finds it: geotag lowercases it. One whose name already carries its timestamp is renamed for its extension alone —
+    by a temporary name, the change being one of case only — and one whose lowercase name another photo there holds
+    (two names differing in case, on a filesystem that tells them apart) takes the next free suffix."""
+    T = "6-photos-by-dest/T/"
+    rows = {r["relative_path"]: r for r in cal.plan_renames([
+        _f(T + "IMG_1.JPG", "2024-07-03T10:00:00Z"),                 # renamed for its time: lowercase too
+        _f(T + "2024-07-03--14-00-00.JPG", "2024-07-03T12:00:00Z"),  # its time right: the extension alone
+        _f(T + "2024-07-03--15-00-00.jpg", "2024-07-03T13:00:00Z"),  # nothing to do
+        _f(T + "2024-07-03--16-00-00.ARW", "2024-07-03T14:00:00Z"),  # a case twin with...
+        _f(T + "2024-07-03--16-00-00.arw", "2024-07-03T14:00:00Z"),  # ...the lowercase name already
+    ], FMT)}
+    assert rows[T + "IMG_1.JPG"]["planned_name"] == "2024-07-03--12-00-00.jpg" and "via" not in rows[T + "IMG_1.JPG"]
+    own = rows[T + "2024-07-03--14-00-00.JPG"]
+    assert own["rename"] and own["planned_name"] == "2024-07-03--14-00-00.jpg"
+    assert own["via"] == "2024-07-03--14-00-00.carto-case.jpg"
+    assert not rows[T + "2024-07-03--15-00-00.jpg"]["rename"] and not rows[T + "2024-07-03--16-00-00.arw"]["rename"]
+    twin = rows[T + "2024-07-03--16-00-00.ARW"]
+    assert twin["planned_name"] == "2024-07-03--16-00-00-001.arw" and "via" not in twin
+    names = [r["planned_name"] for r in rows.values()] + [own["via"]]
+    assert len({n.lower() for n in names}) == len(names)                             # all distinct, case folded
+    assert all(os.path.splitext(n)[1] == os.path.splitext(n)[1].lower() for n in names)
+    # the change of case alone reaches the plan as one rename by the temporary name
+    f = {"relative_path": T + "2024-07-03--14-00-00.JPG", "content_fingerprint": "fp"}
+    (op,) = [o for o in cal.plan_file_ops(f, None, "Europe/Brussels", None, None, own) if o["type"] == "rename_no_clobber"]
+    assert (op["from"], op["to"], op["via"]) == ("2024-07-03--14-00-00.JPG", "2024-07-03--14-00-00.jpg",
+                                                 "2024-07-03--14-00-00.carto-case.jpg")
+
+
 def test_unpositionable_file_keeps_name():
     rows = cal.plan_renames([_f("6-photos-by-dest/T/x.jpg", None)], FMT)              # no resolved UTC
     assert _names(rows) == [("x.jpg", "x.jpg", False)]
 
 
-@pytest.mark.spec("BLD-format_recorded")
+@pytest.mark.spec("BLD-format_recorded", test="TST-geotag_rename_planning-extension_preserved_in_rename")
 def test_extension_preserved_in_rename():
     rows = cal.plan_renames([_f("6-photos-by-dest/T/raw.arw", "2024-07-03T12:00:00Z")], FMT)
     assert rows[0]["planned_name"] == "2024-07-03--14-00-00.arw"
@@ -191,8 +226,109 @@ def test_suffixes_do_not_depend_on_the_order_photos_are_met():
         return {r["relative_path"]: r["planned_name"] for r in cal.plan_renames(list(order), FMT)}
     first = names(files)
     assert first == {"6-photos-by-dest/T/2024-07-03--14-00-00.jpg": "2024-07-03--15-00-00.jpg",
-                     "6-photos-by-dest/T/B.JPG": "2024-07-03--14-00-00-001.JPG",
+                     "6-photos-by-dest/T/B.JPG": "2024-07-03--14-00-00-001.jpg",     # its extension lowercased
                      "6-photos-by-dest/T/a.jpg": "2024-07-03--14-00-00-002.jpg",
                      "6-photos-by-dest/T/c.jpg": "2024-07-03--14-00-00-003.jpg"}
     for order in itertools.permutations(files):
         assert names(order) == first, [f["relative_path"] for f in order]
+
+
+# --- the order and the pairs among photos of one second --------------------------------------------------------------
+
+CAMERA = "2024-07-03--13-00-00"              # prep's name: the camera's clock, an hour behind Brussels
+TRUE = "2024-07-03--14-00-00"                # the corrected local time at the destination
+
+
+def _burst(name, sub=None, utc="2024-07-03T12:00:00Z"):
+    return dict(_f("6-photos-by-dest/T/" + name, utc), source_naive_time="2024:07:03 13:00:00", sub_second=sub)
+
+
+def _planned(files):
+    return {r["current_name"]: r["planned_name"] for r in cal.plan_renames(files, FMT)}
+
+
+@pytest.mark.spec("RUL-suffix_in_capture_order", "BLD-rename_planning",
+                  test="TST-geotag_rename_planning-burst_keeps_its_order_by_the_suffix_held")
+def test_burst_keeps_its_order_by_the_suffix_held():
+    """A burst prep named T, T-001, T-002 keeps that order under its corrected time — never path order, where `-`
+    sorts before `.` and the bare name would come last."""
+    assert _planned([_burst(f"{CAMERA}.jpg"), _burst(f"{CAMERA}-001.jpg"), _burst(f"{CAMERA}-002.jpg")]) == {
+        f"{CAMERA}.jpg": f"{TRUE}.jpg", f"{CAMERA}-001.jpg": f"{TRUE}-001.jpg", f"{CAMERA}-002.jpg": f"{TRUE}-002.jpg"}
+
+
+@pytest.mark.spec("RUL-suffix_in_capture_order", "BLD-rename_planning",
+                  test="TST-geotag_rename_planning-sub_second_orders_first")
+def test_sub_second_orders_first():
+    """Where the photos record a fraction of a second, it orders them before the suffix they hold; a photo recording
+    none comes after those that do. Photos of one local second an hour apart — the hour a zone repeats — go by their
+    true time first."""
+    assert _planned([_burst(f"{CAMERA}.jpg", 0.9), _burst(f"{CAMERA}-001.jpg", 0.1),
+                     _burst(f"{CAMERA}-002.jpg", 0.5), _burst(f"{CAMERA}-003.jpg")]) == {
+        f"{CAMERA}-001.jpg": f"{TRUE}.jpg", f"{CAMERA}-002.jpg": f"{TRUE}-001.jpg", f"{CAMERA}.jpg": f"{TRUE}-002.jpg",
+        f"{CAMERA}-003.jpg": f"{TRUE}-003.jpg"}
+    # 00:30 UTC and 01:30 UTC on the night clocks go back both read 02:30 in Brussels: the earlier takes the bare name
+    late, early = (dict(_f(f"6-photos-by-dest/T/{n}.jpg", u), sub_second=0.1 if n == "b" else 0.9)
+                   for n, u in (("b", "2024-10-27T01:30:00Z"), ("a", "2024-10-27T00:30:00Z")))
+    assert _planned([late, early]) == {"a.jpg": "2024-10-27--02-30-00.jpg", "b.jpg": "2024-10-27--02-30-00-001.jpg"}
+
+
+@pytest.mark.spec("RUL-pair_named_as_one", "BLD-rename_planning",
+                  test="TST-geotag_rename_planning-a_pair_takes_one_name")
+def test_a_pair_takes_one_name():
+    """A RAW and its JPEG, a HEIC and another of its stem, take one name with one suffix, each its own extension —
+    the first name no other photo holds under any extension, so a photo never lands beside another photo's RAW or
+    JPEG. Two photos of one extension sharing a stem are two photos; members whose corrected times differ are each
+    named by their own."""
+    files = [_burst(f"{CAMERA}.jpg", 0.2),                     # a lone JPEG, taken first: the bare name
+             _burst(f"{CAMERA}-001.arw", 0.5), _burst(f"{CAMERA}-001.jpg", 0.5),     # a pair
+             _burst(f"{CAMERA}-002.heic", 0.7), _burst(f"{CAMERA}-002.dng", 0.7)]
+    assert _planned(files) == {
+        f"{CAMERA}.jpg": f"{TRUE}.jpg",
+        f"{CAMERA}-001.arw": f"{TRUE}-001.arw", f"{CAMERA}-001.jpg": f"{TRUE}-001.jpg",
+        f"{CAMERA}-002.heic": f"{TRUE}-002.heic", f"{CAMERA}-002.dng": f"{TRUE}-002.dng"}
+    # the bare name is held by another photo as a .jpg: neither half of the pair takes it, nor does a lone RAW
+    files = [_burst(f"{CAMERA}.arw", 0.5), _burst(f"{CAMERA}.jpg", 0.5), _burst("DSC_9.arw", 0.6),
+             dict(_f(f"6-photos-by-dest/T/{TRUE}.jpg", "2024-07-03T12:00:00Z"))]     # already so named, kept
+    assert _planned(files) == {f"{CAMERA}.arw": f"{TRUE}-001.arw", f"{CAMERA}.jpg": f"{TRUE}-001.jpg",
+                               "DSC_9.arw": f"{TRUE}-002.arw", f"{TRUE}.jpg": f"{TRUE}.jpg"}
+    # a pair of two cameras whose clocks are corrected differently: each takes the name of its own time
+    assert _planned([_burst("IMG_1.arw"), _burst("IMG_1.jpg", utc="2024-07-03T12:00:05Z")]) == {
+        "IMG_1.arw": f"{TRUE}.arw", "IMG_1.jpg": "2024-07-03--14-00-05.jpg"}
+    # two photos of one extension whose names differ only in case are two photos, not a pair
+    twins = _planned([_burst("IMG_2.JPG"), _burst("img_2.jpg")])
+    assert sorted(twins.values()) == [f"{TRUE}-001.jpg", f"{TRUE}.jpg"]
+
+
+@pytest.mark.spec("RUL-names_local_in_repeated_hour", "RUL-geotag_name_final", "BLD-geotag_final_name",
+                  test="TST-geotag_rename_planning-repeated_hour_names_sort_by_local_time")
+def test_repeated_hour_names_sort_by_local_time():
+    """In the hour Brussels repeats as its clocks go back, names are its local time: a photo taken at 00:45 UTC
+    (02:45 summer time) is named after one taken half an hour later at 01:15 UTC (02:15 winter time), and sorts
+    after it. The true order is in the metadata."""
+    first = _f("6-photos-by-dest/T/first.jpg", "2024-10-27T00:45:00Z")
+    second = _f("6-photos-by-dest/T/second.jpg", "2024-10-27T01:15:00Z")
+    planned = _planned([first, second])
+    assert planned == {"first.jpg": "2024-10-27--02-45-00.jpg", "second.jpg": "2024-10-27--02-15-00.jpg"}
+    assert sorted(planned, key=planned.get) == ["second.jpg", "first.jpg"]
+
+
+@pytest.mark.spec("RUL-suffix_in_capture_order", "BLD-sub_second_read",
+                  test="TST-geotag_rename_planning-sub_second_read_from_the_record")
+def test_sub_second_read_from_the_record():
+    """The fraction of a second is read from prep's record: written in the recorded time itself, else from the
+    EXIF sub-second field beside it — its digits; none where neither holds one."""
+    rec = {"selected_source_naive_timestamp": "2024:07:03 12:00:00",
+           "selected_source_timestamp_tag": "EXIF:DateTimeOriginal"}
+    assert cal.recorded_sub_second(dict(rec, SubSecTimeOriginal="045")) == 0.045
+    assert cal.recorded_sub_second(dict(rec, SubSecTimeOriginal=7)) == 0.7
+    assert cal.recorded_sub_second(dict(rec, selected_source_naive_timestamp="2024:07:03 12:00:00.25",
+                                        SubSecTimeOriginal="9")) == 0.25
+    created = dict(rec, selected_source_timestamp_tag="EXIF:CreateDate")
+    assert cal.recorded_sub_second(dict(created, SubSecTimeDigitized="6", SubSecTimeOriginal="9")) == 0.6
+    assert cal.recorded_sub_second(dict(created, SubSecTime="9")) is None              # ModifyDate's, not this one's
+    assert cal.recorded_sub_second(dict(rec, selected_source_timestamp_tag="QuickTime:ModifyDate",
+                                        SubSecTime=" 25 ")) == 0.25
+    assert cal.recorded_sub_second(dict(created, SubSecTimeDigitized="2024:07:03 12:00:00.6")) is None  # no digits
+    assert cal.recorded_sub_second(rec) is None
+    assert cal.recorded_sub_second(dict(rec, SubSecTimeOriginal="")) is None
+    assert cal.recorded_sub_second({}) is None

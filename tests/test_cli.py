@@ -75,7 +75,7 @@ def test_plan_saves_canonical_and_locks(tmp_path, monkeypatch, capsys):
 
 @pytest.mark.parametrize("command", ["plan", "dry-run", "execute"])
 @pytest.mark.parametrize("defect", ["misplaced", "link", "missing"])
-@pytest.mark.spec("RUL-shape_checked_first", "INV-undisturbed_shape",
+@pytest.mark.spec("RUL-shape_checked_first", "INV-undisturbed_shape", "RUL-missing_folder_never_recreated",
                   test="TST-cli-prep_stops_on_a_disturbed_shape_before_it_scans")
 def test_prep_stops_on_a_disturbed_shape_before_it_scans(tmp_path, monkeypatch, capsys, command, defect):
     """An initialized workspace whose top level was disturbed: every prep command stops at once, naming what is
@@ -161,16 +161,16 @@ def test_prep_dry_run_validates_the_saved_plan(tmp_path, monkeypatch, capsys):
     cfg_p = ws / ".photos-ingest" / "photos-00-config.json"
     cfg = cfg_p.read_text()
     cfg_p.write_text(cfg + "\n")                               # a dependency changed after planning
-    assert _main(monkeypatch, ws, "dry-run") == 1
+    assert _main(monkeypatch, ws, "dry-run") == 2
     assert "workspace config changed" in capsys.readouterr().err
     cfg_p.write_text(cfg)
 
     doctored = json.loads(saved)
     doctored["blockers"] = ["a blocker written into the saved plan"]
     open(pp, "w").write(json.dumps(doctored))                  # the saved plan itself no longer passes
-    assert _main(monkeypatch, ws, "dry-run") == 1
+    assert _main(monkeypatch, ws, "dry-run") == 2
     assert "a blocker written into the saved plan" in capsys.readouterr().err
-    assert _main(monkeypatch, ws, "execute") == 1              # the plan execute would refuse too
+    assert _main(monkeypatch, ws, "execute") == 2              # the plan execute would refuse too
     assert (ws / "0-sources" / "note.txt").exists()
     open(pp, "w").write(saved)
     assert _main(monkeypatch, ws, "dry-run") == 0
@@ -208,7 +208,7 @@ def test_prep_takes_no_snapshot_before_the_plan_is_validated(tmp_path, monkeypat
     cfg_p = ws / ".photos-ingest" / "photos-00-config.json"
     cfg = cfg_p.read_text()
     cfg_p.write_text(cfg + "\n")                               # a dependency changed after planning
-    assert _main(monkeypatch, ws, "execute") == 1
+    assert _main(monkeypatch, ws, "execute") == 2
     assert events == [("validate", pid)]                       # refused, and no snapshot taken
     assert (ws / "0-sources" / "note.txt").exists()
 
@@ -219,7 +219,8 @@ def test_prep_takes_no_snapshot_before_the_plan_is_validated(tmp_path, monkeypat
     assert not (ws / "0-sources" / "note.txt").exists()        # and the plan was carried out
 
 
-@pytest.mark.spec("RUL-snapshot_under_lock", test="TST-cli-prep_snapshot_is_taken_while_the_lock_is_held")
+@pytest.mark.spec("RUL-snapshot_under_lock", "RUL-lock_through_the_run",
+                  test="TST-cli-prep_snapshot_is_taken_while_the_lock_is_held")
 def test_prep_snapshot_is_taken_while_the_lock_is_held(tmp_path, monkeypatch, capsys):
     """Prep's snapshot is taken while the workspace lock is held: probed, from a file descriptor of its own, at the
     moment the snapshot is asked for."""
@@ -260,7 +261,7 @@ def test_prune_quarantine_dry_run_and_delete(tmp_path, monkeypatch, capsys):
 
 # --- sealed-workspace guard --------------------------------------------------
 
-@pytest.mark.spec("RUL-sealed_refuses")
+@pytest.mark.spec("RUL-sealed_refuses", test="TST-cli-sealed_workspace_refuses_and_releases_lock")
 def test_sealed_workspace_refuses_and_releases_lock(tmp_path, monkeypatch, capsys):
     ws = _ws(tmp_path)
     (ws / ".photos-ingest" / "photos-00-sealed.json").write_text('{"sealed": true}')
@@ -312,7 +313,7 @@ def test_prune_quarantine_is_the_sole_op_allowed_on_a_sealed_workspace(tmp_path,
     assert not qd.exists()                                       # delete worked on the sealed ws
 
 
-@pytest.mark.spec("RUL-sealed_refuses")
+@pytest.mark.spec("RUL-sealed_refuses", test="TST-cli-seal_refuses_all_three_phases_except_prune_quarantine")
 def test_seal_refuses_all_three_phases_except_prune_quarantine(tmp_path, monkeypatch, capsys):
     """RUL-sealed_refuses / RUL-sealed_prune_allowed: once a workspace is SEALED, every media-mutating phase refuses
     on it — prep plan, geotag plan, AND merge plan all hard-stop with exit 2 — with the SOLE exception of prep
@@ -380,6 +381,53 @@ def test_prune_quarantine_preserves_managed_folders(tmp_path, monkeypatch, capsy
     assert (ws / "6-photos-by-dest" / "Trip" / "keep.jpg").read_bytes() == b"keep"
 
 
+@pytest.mark.spec("RUL-prune_only_quarantine", test="TST-cli-a_prune_changes_nothing_but_the_quarantine_and_its_records")
+def test_a_prune_changes_nothing_but_the_quarantine_and_its_records(tmp_path, monkeypatch, capsys):
+    """A deleting prune, every managed folder and the control directory full, changes nothing but the quarantine run
+    it removes, its own record of what it removed (photos-16) and the workspace's record, from which it takes what it
+    removed: every other file and folder of the workspace, and every other table of the database, byte for byte as
+    it was."""
+    import sqlite3
+    ws = _ws(tmp_path)
+    for i, d in enumerate(("0-sources", "1-strays", "2-missing-metadata", "3-redundant-jpgs",
+                           "4-videos-by-date", "5-photos-by-date", "6-photos-by-dest")):
+        (ws / d / "sub").mkdir()
+        (ws / d / "sub" / f"f{i}.jpg").write_bytes(b"photo %d" % i)
+        (ws / d / f"top{i}.txt").write_bytes(b"note %d" % i)
+    (ws / "1-strays" / "20260101T000000Z-aaaaaa").mkdir()            # a strays run, as prep files them
+    (ws / "1-strays" / "20260101T000000Z-aaaaaa" / "notes.txt").write_bytes(b"stray")
+    ctl = ws / ".photos-ingest"
+    for name in ("photos-10-prep-plan.json", "photos-11-handoff.json", "photos-15-prep-log.json"):
+        (ctl / name).write_text(json.dumps({"artifact": name}))
+    qbase = ws / ".photos-ingest-quarantine"
+    for run in ("20260101T000000Z-abc123", "20260202T000000Z-def456"):
+        (qbase / run / "0-sources").mkdir(parents=True)
+        (qbase / run / "0-sources" / "dup.jpg").write_bytes(run.encode())
+        (qbase / run / "manifest.json").write_text("[]")
+    utils.write_workspace_record(str(ws))
+    gone = os.path.join(".photos-ingest-quarantine", "20260101T000000Z-abc123")
+
+    def state():
+        tree = {}
+        for dp, dns, fns in os.walk(ws):
+            for n in dns + fns:
+                rel = os.path.relpath(os.path.join(dp, n), ws)
+                if rel.endswith(".lock") or rel.startswith(os.path.join(".photos-ingest", "photos-16-prune-record")) \
+                        or rel == os.path.relpath(utils.db_path(str(ws)), ws):
+                    continue
+                tree[rel] = open(os.path.join(dp, n), "rb").read() if n in fns else None
+        conn = sqlite3.connect(utils.db_path(str(ws)))
+        tables = {t: sorted(conn.execute(f"SELECT * FROM {t}").fetchall())
+                  for (t,) in conn.execute("SELECT name FROM sqlite_master WHERE type = 'table'")
+                  if t != "workspace_record"}
+        conn.close()
+        return tree, tables
+    tree, tables = state()
+    assert _main(monkeypatch, ws, "prune-quarantine", "--plan-id", "20260101T000000Z-abc123", "--yes") == 0
+    assert os.path.exists(utils.prune_record_path(str(ws)))
+    assert state() == ({k: v for k, v in tree.items() if k != gone and not k.startswith(gone + os.sep)}, tables)
+
+
 # --- error exits -------------------------------------------------------------
 
 def test_locked_workspace_fails_fast(tmp_path, monkeypatch, capsys):
@@ -394,7 +442,7 @@ def test_locked_workspace_fails_fast(tmp_path, monkeypatch, capsys):
         fcntl.flock(fd, fcntl.LOCK_UN); os.close(fd)
 
 
-@pytest.mark.spec("RUL-prep_dry_run_changes_nothing", test="TST-cli-dry_run_mutates_nothing_on_disk")
+@pytest.mark.spec("RUL-prep_dry_run_changes_nothing", "RUL-dry_run_changes_nothing", test="TST-cli-dry_run_mutates_nothing_on_disk")
 def test_dry_run_mutates_nothing_on_disk(tmp_path, monkeypatch, capsys):
     """Dry-run is validation, not simulation, and is strictly read-only: it loads the saved plan,
     validates it against an in-memory DB, and prints a summary. Snapshot the whole control dir + a
@@ -442,7 +490,7 @@ _EVERY_COMMAND = [("prep", "plan"), ("prep", "dry-run"), ("prep", "execute"),
 
 @pytest.mark.parametrize("command", _EVERY_COMMAND, ids=[" ".join(c[:2]) + (" <path>" if "<library>" in c else "")
                                                          for c in _EVERY_COMMAND])
-@pytest.mark.spec("RUL-every_command_locks", "RUL-one_workspace_lock",
+@pytest.mark.spec("RUL-every_command_locks", "RUL-one_workspace_lock", "RUL-lock_refusal_says_locked",
                   test="TST-cli-every_command_waits_for_the_one_workspace_lock")
 def test_every_command_waits_for_the_one_workspace_lock(tmp_path, monkeypatch, capsys, command):
     """Every command of every phase, and the editor's save, takes the workspace's lock — the one lock, the same for
@@ -555,7 +603,7 @@ def test_execute_without_saved_plan_exits_nonzero(tmp_path, monkeypatch, capsys)
     assert "run `plan` first" in capsys.readouterr().err
 
 
-@pytest.mark.spec("RUL-config_validated_before_use")
+@pytest.mark.spec("RUL-config_validated_before_use", test="TST-cli-invalid_config_rejected_at_load")
 def test_invalid_config_rejected_at_load(tmp_path, monkeypatch, capsys):
     bad = {k: v for k, v in utils.CONFIG.items() if k != "jobs"}
     bad = dict(bad); bad["zfs"] = dict(bad["zfs"], enabled=False)

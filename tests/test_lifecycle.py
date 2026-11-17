@@ -25,6 +25,7 @@ import types
 
 import pytest
 
+from _handoff import recorded
 import photos_1_prep as prep
 import photos_utils as utils
 
@@ -79,7 +80,8 @@ def _guard(ws):
 
 # --- initialization ----------------------------------------------------------
 
-@pytest.mark.spec("RUL-structure_built_once", "RUL-init_moves_dump_to_inbox", "RUL-top_level_only_managed",
+@pytest.mark.spec("BLD-prep_execute_replays", "RUL-execution_only_the_plan",
+                  "RUL-structure_built_once", "RUL-init_moves_dump_to_inbox", "RUL-top_level_only_managed",
                   test="TST-lifecycle-init_creates_structure_and_moves_dump_structure_preserved")
 def test_init_creates_structure_and_moves_dump_structure_preserved(tmp_path, monkeypatch):
     _install(monkeypatch)
@@ -109,6 +111,104 @@ def test_init_creates_structure_and_moves_dump_structure_preserved(tmp_path, mon
     assert not _plan(ws).blockers
 
 
+@pytest.mark.spec("BLD-workspace_guard", test="TST-lifecycle-the_guard_names_the_run_that_initialized_the_workspace")
+def test_the_guard_names_the_run_that_initialized_the_workspace(tmp_path, monkeypatch):
+    """The guard holds the initializing plan's id, which is the workspace's identity in the archival package."""
+    _install(monkeypatch)
+    ws = _bare(tmp_path)
+    (ws / "photo.jpg").write_bytes(b"img")
+    plan = _plan(ws)
+    prep.PlanExecutor(str(ws)).execute(plan)
+    with open(_guard(ws)) as f:
+        assert json.load(f) == {"initialized": True, "tool": "photos-1-prep", "initialized_by_run": plan.plan_id}
+    assert utils.workspace_id(str(ws)) == plan.plan_id
+
+
+@pytest.mark.spec("BLD-json_written_alike", test="TST-lifecycle-the_guard_is_written_like_every_numbered_record")
+def test_the_guard_is_written_like_every_numbered_record(tmp_path, monkeypatch):
+    """The guard is a numbered JSON record: its bytes are the sorted, indented dump of what it holds."""
+    _install(monkeypatch)
+    ws = _bare(tmp_path)
+    (ws / "photo.jpg").write_bytes(b"img")
+    plan = _plan(ws)
+    prep.PlanExecutor(str(ws)).execute(plan)
+    with open(_guard(ws)) as f:
+        text = f.read()
+    assert text == json.dumps(json.loads(text), indent=2, sort_keys=True)
+
+
+@pytest.mark.spec("RUL-init_taken_place_suffixed", "BLD-init_move_suffix", test="TST-lifecycle-init_move_to_a_taken_inbox_path_is_suffixed")
+def test_init_move_to_a_taken_inbox_path_is_suffixed(tmp_path, monkeypatch):
+    # The inbox already holds MyDump/a.jpg (an interrupted first run moved it), and the dump holds another file
+    # there, and two files differing only by case: each later one is moved beside the first under a -NNN name,
+    # its folder kept, and no original is lost.
+    _install(monkeypatch)
+    ws = _bare(tmp_path)
+    (ws / "0-sources" / "MyDump").mkdir(parents=True)
+    (ws / "0-sources" / "MyDump" / "a.jpg").write_bytes(b"already-in")
+    (ws / "MyDump").mkdir()
+    (ws / "MyDump" / "a.jpg").write_bytes(b"still-at-top")
+    (ws / "B.jpg").write_bytes(b"upper")
+    (ws / "b.jpg").write_bytes(b"lower")
+    plan = _plan(ws)
+    assert not plan.blockers, plan.blockers
+    moves = {op.source: op.destination for op in plan.operations
+             if op.reason and "Initialize: move" in op.reason}
+    assert moves == {"MyDump/a.jpg": "0-sources/MyDump/a-001.jpg",
+                     "B.jpg": "0-sources/B.jpg", "b.jpg": "0-sources/b-001.jpg"}
+    prep.PlanExecutor(str(ws)).execute(plan)
+    kept = sorted(open(p, "rb").read() for p in glob.glob(str(ws / "5-photos-by-date" / "**" / "*.jpg"),
+                                                           recursive=True))
+    assert kept == sorted([b"already-in", b"still-at-top", b"upper", b"lower"])
+
+
+@pytest.mark.spec("RUL-init_taken_place_suffixed", "BLD-init_move_suffix",
+                  test="TST-lifecycle-init_move_takes_the_first_free_suffix_of_its_own_name")
+def test_init_move_takes_the_first_free_suffix_of_its_own_name(tmp_path, monkeypatch):
+    """The inbox holds `D/a.jpg` and `D/a-001.jpg`; the dump's `D/a.jpg` is moved in as `a-002.jpg` — the first free
+    `-NNN` of its own name — not under a suffix added to a suffix."""
+    _install(monkeypatch)
+    ws = _bare(tmp_path)
+    (ws / "0-sources" / "D").mkdir(parents=True)
+    (ws / "0-sources" / "D" / "a.jpg").write_bytes(b"in-1")
+    (ws / "0-sources" / "D" / "A-001.JPG").write_bytes(b"in-2")
+    (ws / "D").mkdir()
+    (ws / "D" / "a.jpg").write_bytes(b"at-top")
+    plan = _plan(ws)
+    assert not plan.blockers, plan.blockers
+    moves = {op.source: op.destination for op in plan.operations
+             if op.reason and "Initialize: move" in op.reason}
+    assert moves == {"D/a.jpg": "0-sources/D/a-002.jpg"}
+
+
+@pytest.mark.spec("RUL-duplicate_set_aside_as_found", "BLD-prep_stage_order", "BLD-init_move_suffix",
+                  test="TST-lifecycle-a_dump_duplicate_is_set_aside_from_its_dump_path")
+def test_a_dump_duplicate_is_set_aside_from_its_dump_path(tmp_path, monkeypatch):
+    """Two identical files in two dumps at the top level of a new workspace, the inbox place of the second taken: the
+    duplicate is set aside from its dump path, under the name the user gave it — never first moved into the inbox
+    and suffixed there — and no initializing move is planned for it."""
+    _install(monkeypatch)
+    ws = _bare(tmp_path)
+    (ws / "0-sources" / "dumpB").mkdir(parents=True)
+    (ws / "0-sources" / "dumpB" / "x.jpg").write_bytes(b"other")
+    for d in ("dumpA", "dumpB"):
+        (ws / d).mkdir()
+        (ws / d / "x.jpg").write_bytes(b"same")
+    plan = _plan(ws)
+    assert not plan.blockers, plan.blockers
+    (q,) = [op for op in plan.operations if op.type == "quarantine_move"]
+    assert q.source == "dumpB/x.jpg" and q.verification["original_path"] == "dumpB/x.jpg", q
+    moves = {op.source: op.destination for op in plan.operations
+             if op.reason and "Initialize: move" in op.reason}
+    assert moves == {"dumpA/x.jpg": "0-sources/dumpA/x.jpg"}
+    prep.PlanExecutor(str(ws)).execute(plan)
+    (manifest,) = glob.glob(str(ws / ".photos-ingest-quarantine" / "*" / "manifest.json"))
+    with open(manifest) as f:
+        (entry,) = json.load(f)
+    assert entry["original_path"] == "dumpB/x.jpg"
+    assert open(os.path.join(os.path.dirname(manifest), "dumpB", "x.jpg"), "rb").read() == b"same"
+
+
 @pytest.mark.spec("RUL-init_taken_up_again", "RUL-prep_replans", "RUL-initialized_marked_last", test="TST-lifecycle-guard_written_last_then_reentry_is_clean")
 def test_guard_written_last_then_reentry_is_clean(tmp_path, monkeypatch):
     _install(monkeypatch)
@@ -123,6 +223,39 @@ def test_guard_written_last_then_reentry_is_clean(tmp_path, monkeypatch):
     prep.PlanExecutor(str(ws)).execute(plan2)
     assert os.path.exists(_guard(ws))                          # re-written
     assert len(glob.glob(str(ws / "5-photos-by-date" / "**" / "*.jpg"), recursive=True)) == 1  # still organized, no dup
+
+
+@pytest.mark.spec("RUL-initialized_marked_last", "BLD-workspace_guard",
+                  test="TST-lifecycle-a_failed_initializing_execute_leaves_the_workspace_unmarked")
+def test_a_failed_initializing_execute_leaves_the_workspace_unmarked(tmp_path, monkeypatch):
+    """An initializing execute whose second move fails (its source gone after the preflight) writes no mark: the
+    workspace is still uninitialized, and the next plan initializes it again, moving what the dump still holds."""
+    _install(monkeypatch)
+    ws = _bare(tmp_path)
+    for name in ("a.jpg", "b.jpg", "c.jpg"):
+        (ws / name).write_bytes(name.encode())
+    plan = _plan(ws)
+    assert not plan.blockers, plan.blockers
+    moves = [op.source for op in plan.operations if op.reason and "Initialize: move" in op.reason]
+    assert len(moves) == 3
+    real_preflight = prep.PlanValidator.validate_plan_preflight
+
+    def preflight_then_lose_a_source(p, root):
+        real_preflight(p, root)
+        os.remove(os.path.join(root, moves[1]))               # the second move's source, gone after the preflight
+    with monkeypatch.context() as m:
+        m.setattr(prep.PlanValidator, "validate_plan_preflight", staticmethod(preflight_then_lose_a_source))
+        with pytest.raises(prep.ExecuteFailed):
+            prep.PlanExecutor(str(ws)).execute(plan)
+
+    assert not os.path.lexists(_guard(ws))                     # the mark is written only by a whole success
+    assert (ws / "0-sources" / moves[0]).exists()              # the first move was carried out
+    plan2 = _plan(ws)                                          # so the next run initializes again
+    assert not plan2.blockers, plan2.blockers
+    assert {(op.source, op.destination) for op in plan2.operations
+            if op.reason and "Initialize: move" in op.reason} == {(moves[2], "0-sources/" + moves[2])}
+    prep.PlanExecutor(str(ws)).execute(plan2)
+    assert os.path.exists(_guard(ws))
 
 
 @pytest.mark.spec("RUL-rewrite_in_place_atomic", test="TST-lifecycle-an_interrupted_guard_write_leaves_no_damaged_guard")
@@ -258,6 +391,7 @@ def _stale_plan(ws):
     (ctl / "photos-15-prep-log.json").write_text('{"photos": {}}')
     (ctl / "photos-11-handoff.json").write_text(json.dumps(
         {"files": [], "depends_on": {"prep_log": {"sha256": utils.sha256_file(str(ctl / "photos-15-prep-log.json"))}}}))
+    recorded(ws)                                     # and the state its execution recorded
 
 
 @pytest.mark.spec("RUL-unchecked_counts_as_changed", "BLD-prep_fast_stop_checks_log", test="TST-lifecycle-a_log_the_handoff_does_not_vouch_for_is_rewritten")
@@ -374,6 +508,7 @@ def test_execute_with_pending_by_dest_move_is_not_nothing_to_do(tmp_path, monkey
     dest = ws / "6-photos-by-dest" / "2026" / "Bruges"
     dest.mkdir(parents=True)
     (dest / "shot.jpg").write_bytes(b"img")             # an unrecorded by-dest photo -> move pending
+    recorded(ws)                                        # the hand change taken as the workspace's state
     ran = []
     monkeypatch.setattr(prep.Plan, "from_dict", staticmethod(lambda d: object()))
     monkeypatch.setattr(prep.PlanExecutor, "execute", lambda self, *a, **k: ran.append(1))
@@ -403,6 +538,7 @@ def test_execute_with_a_changed_by_dest_photo_is_not_nothing_to_do(tmp_path, mon
     (ws / ".photos-ingest" / "photos-11-handoff.json").write_text(json.dumps({"files": [
         {"relative_path": "6-photos-by-dest/2026/Bruges/shot.jpg", "media_class": "image",
          "size": st.st_size, "mtime_ns": st.st_mtime_ns - 1}]}))          # recorded before its last change
+    recorded(ws)                                        # the hand change taken as the workspace's state
     ran = []
     monkeypatch.setattr(prep.Plan, "from_dict", staticmethod(lambda d: object()))
     monkeypatch.setattr(prep.PlanExecutor, "execute", lambda self, *a, **k: ran.append(1))
@@ -516,6 +652,24 @@ def test_prep_builds_the_structure_once_and_never_removes_a_folder(tmp_path, mon
     assert any("2-missing-metadata" in b for b in blocked.blockers), blocked.blockers
     assert not any(op.type == "mkdir" and op.destination == "2-missing-metadata" for op in blocked.operations)
     assert not (ws / "2-missing-metadata").exists()
+
+
+@pytest.mark.spec("RUL-missing_folder_never_recreated",
+                  test="TST-lifecycle-a_folder_lost_between_plan_and_execute_is_not_recreated")
+def test_a_folder_lost_between_plan_and_execute_is_not_recreated(tmp_path, monkeypatch):
+    """A managed folder lost after the plan was made stops execute before its first operation: a move into it never
+    makes it again, and the media waiting to go there stays where it is."""
+    _install(monkeypatch)
+    ws = _initialized(tmp_path)
+    (ws / "0-sources" / "x.jpg").write_bytes(b"img")
+    plan = _plan(ws)
+    assert not plan.blockers, plan.blockers
+    assert any((op.destination or "").startswith("5-photos-by-date/") for op in plan.operations)
+    os.rmdir(ws / "5-photos-by-date")                          # lost out-of-band after planning
+    with pytest.raises(ValueError, match="5-photos-by-date"):
+        prep.PlanExecutor(str(ws)).execute(plan)
+    assert not (ws / "5-photos-by-date").exists()
+    assert (ws / "0-sources" / "x.jpg").exists()
 
 
 @pytest.mark.spec("RUL-more_dumps_until_merge", test="TST-lifecycle-new_dump_after_successful_geotag_is_organized")

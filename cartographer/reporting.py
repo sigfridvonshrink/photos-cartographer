@@ -80,10 +80,68 @@ class ProgressEvent:
         return self.state == FINISH
 
 
-def finished_line(label: str, duration: Optional[float]) -> str:
+def finished_line(label: str, duration: Optional[float], status: str = "ok") -> str:
     """The one rendering of a finished progress task: 'Finished <label> in <X>s'. Shared by the
-    terminal sink (inline) and the web sink (a log line) so the wording/format lives in one place."""
+    terminal sink (inline) and the web sink (a log line) so the wording/format lives in one place.
+    A task its body left by an exception (``status="aborted"``) is said to have stopped, never
+    'Finished' — the line is what the user reads as the task's outcome, and an interrupted or failed
+    step did not finish (the run's exit status and records carry the rest)."""
+    if status == "aborted":
+        return f"Stopped {label} after {(duration or 0.0):.2f}s, unfinished"
     return f"Finished {label} in {(duration or 0.0):.2f}s"
+
+
+def report_lines(r: dict, plan_summary: Optional[dict] = None) -> List[str]:
+    """The prep run report (RUL-prep_run_summarised) as labelled lines: one rendering, printed by the terminal sink and
+    logged by the web sink, so the console shows the summary the terminal prints."""
+    pc = (plan_summary or {}).get("performance_and_cache", {}) or {}
+    qf = r.get("quarantine_footprint", {}) or {}
+    _qr = r.get("quarantined_by_reason") or {}
+    return [
+        "",
+        "=== Prep run summary ===",
+        f"  Media operations planned/executed : {r.get('media_operations', 0)}  "
+        f"(cache ops: {r.get('cache_operations', 0)})",
+        f"  No-op / already-correct           : {r.get('no_op_already_correct', 0)}",
+        f"  Recognized moves (carried forward): {r.get('recognized_moves', 0)}",
+        f"  By-dest files scanned read-only   : {r.get('by_dest_files_scanned_read_only', 0)}",
+        f"  Duplicates -> quarantine          : {r.get('duplicates_against_mutable', 0)} vs mutable, "
+        f"{r.get('duplicates_against_by_dest', 0)} vs by-dest",
+        f"  Other files -> quarantine         : {_qr.get('exiftool_leftover', 0)} write leftover(s), "
+        f"{_qr.get('dump_dotfile', 0)} hidden dump file(s), "
+        f"{_qr.get('raw_culled', 0)} set-aside JPEG(s) of a culled RAW",
+        f"  Metadata reused/extracted/carried/failed : "
+        f"{r.get('metadata_reused', 0)}/{r.get('metadata_extracted', 0)}/"
+        f"{r.get('metadata_carried_forward', 0)}/{r.get('metadata_failed', 0)}  "
+        f"(extractor {r.get('extractor', '?')} {r.get('extractor_version', '?')}, "
+        f"field-set v{r.get('field_set_version', '?')})",
+        f"  Cache effects applied (upsert/remove): "
+        f"{pc.get('db_upserts_applied', 0)}/{pc.get('db_removes_applied', 0)}",
+        f"  Camera groups / native-GPS / missing-timestamp : "
+        f"{r.get('camera_groups_found', 0)} / {r.get('native_gps_files', 0)} / "
+        f"{r.get('missing_timestamp_files', 0)}",
+        f"  Blockers / warnings               : {r.get('blockers', 0)} / {r.get('warnings', 0)}",
+        f"  Dependency validation             : {pc.get('dependency_validation_status', 'n/a')}  "
+        f"(handoff written after validation: {pc.get('handoff_written_after_successful_validation', False)})",
+        f"  End-of-prep audit record          : prep-log {pc.get('prep_log_written', False)}, "
+        f"DB snapshot {pc.get('prep_db_snapshot_written', False)}",
+        f"  Quarantine footprint              : {qf.get('total_files', 0)} files, "
+        f"{qf.get('total_bytes', 0)} bytes across {qf.get('plan_id_dirs', 0)} plan(s) "
+        f"(never auto-deleted)",
+        "========================",
+    ]
+
+
+@dataclass
+class ChangesEvent:
+    """A command stopped on changes to the workspace that no command made (RUL-unexpected_change_stops): the list
+    exactly as printed, the code that accepts it, and the command it was printed for — so a sink can offer the
+    acceptance (the console's Accept button sends the same code through the same command). The terminal has the
+    printed lines already and ignores it."""
+    phase: str
+    command: str
+    code: str
+    lines: List[str] = field(default_factory=list)
 
 
 @dataclass
@@ -135,6 +193,9 @@ def event_to_dict(event) -> dict:
     if isinstance(event, SummaryEvent):
         return {"kind": "summary", "report": event.report, "plan_summary": event.plan_summary,
                 "counters": event.counters}
+    if isinstance(event, ChangesEvent):
+        return {"kind": "changes", "phase": event.phase, "command": event.command, "code": event.code,
+                "lines": list(event.lines)}
     return {"kind": "unknown"}
 
 
@@ -151,6 +212,7 @@ class WebSink(Sink):
         self._lock = threading.Lock()
         self._log = deque(maxlen=log_buffer)   # recent LogEvent dicts, for late join
         self._progress: dict = {}              # task_id -> latest progress dict (live tasks only)
+        self._changes = None                   # the last stop on unexpected changes, until the next run starts
         self._queue_max = queue_max
 
     def _fanout_locked(self, msg) -> None:
@@ -167,10 +229,17 @@ class WebSink(Sink):
 
     def handle(self, event) -> None:
         msg = event_to_dict(event)
-        finish_log = None
+        extra_logs = []
         with self._lock:
             if msg["kind"] == "log":
                 self._log.append(msg)
+            elif msg["kind"] == "changes":
+                self._changes = msg
+            elif msg["kind"] == "summary" and msg.get("report"):
+                # The prep run report the terminal prints (RUL-prep_run_summarised), as log lines in the same
+                # rendering — the console shows what the CLI shows, a late-joining page included.
+                extra_logs = [{"kind": "log", "msg": line, "level": "info", "stream": "stderr"}
+                              for line in report_lines(msg["report"], msg.get("plan_summary")) if line]
             elif msg["kind"] == "progress":
                 tid = msg["task_id"]
                 if msg["state"] == FINISH:
@@ -178,14 +247,15 @@ class WebSink(Sink):
                     # Record what happened to each progress task as a durable log line — CLI parity:
                     # TtySink prints the same on finish; the console pane lacked it. The duration was
                     # already stamped by Reporter.emit (one timer), and the wording is shared.
-                    finish_log = {"kind": "log", "msg": finished_line(msg["label"], msg.get("duration")),
-                                  "level": "info", "stream": "stderr"}
+                    extra_logs = [{"kind": "log", "msg": finished_line(msg["label"], msg.get("duration"),
+                                                                       msg.get("status", "ok")),
+                                   "level": "info", "stream": "stderr"}]
                 else:
                     self._progress[tid] = msg
             self._fanout_locked(msg)
-            if finish_log is not None:
-                self._log.append(finish_log)          # also visible in the late-join snapshot
-                self._fanout_locked(finish_log)
+            for line in extra_logs:
+                self._log.append(line)                # also visible in the late-join snapshot
+                self._fanout_locked(line)
 
     def clear_progress(self) -> None:
         """Finish any still-open progress tasks: emit a synthetic FINISH for each live task (so
@@ -197,13 +267,19 @@ class WebSink(Sink):
                 self._fanout_locked({**msg, "state": FINISH, "status": "ok"})
             self._progress.clear()
 
+    def clear_changes(self) -> None:
+        """Forget the last stop on unexpected changes — the console calls it as a run starts, so the list (and its
+        Accept button) is offered only for the run that printed it."""
+        with self._lock:
+            self._changes = None
+
     def subscribe(self):
         """Register a subscriber. Returns ``(q, snapshot)`` — a fresh queue of future events and the
         catch-up snapshot (recent log + live progress) to render before draining the queue."""
         q: "queue.Queue" = queue.Queue(maxsize=self._queue_max)
         with self._lock:
             self._subs.add(q)
-            snapshot = {"log": list(self._log), "progress": list(self._progress.values())}
+            snapshot = {"log": list(self._log), "progress": list(self._progress.values()), "changes": self._changes}
         return q, snapshot
 
     def unsubscribe(self, q) -> None:
@@ -212,7 +288,7 @@ class WebSink(Sink):
 
     def snapshot(self) -> dict:
         with self._lock:
-            return {"log": list(self._log), "progress": list(self._progress.values())}
+            return {"log": list(self._log), "progress": list(self._progress.values()), "changes": self._changes}
 
 
 class TtySink(Sink):
@@ -275,7 +351,7 @@ class TtySink(Sink):
                         print(f"{e.label}: {e.cur}/{total}{pct}{suffix} ...", file=self.stream)
             elif e.state == FINISH:
                 self._last_print.pop(e.task_id, None)
-                line = finished_line(e.label, e.duration)   # duration stamped by Reporter.emit
+                line = finished_line(e.label, e.duration, e.status)   # duration stamped by Reporter.emit
                 if self.is_tty:
                     print(f"\r\033[K{line}", file=self.stream)
                 else:
@@ -311,37 +387,8 @@ class TtySink(Sink):
 
     def _print_report(self, r, plan_summary=None) -> None:
         """Render the prep run report (RUL-prep_run_summarised) as labelled categories."""
-        pc = (plan_summary or {}).get("performance_and_cache", {}) or {}
-        qf = r.get("quarantine_footprint", {}) or {}
-        out = sys.stderr
-        print("\n=== Prep run summary ===", file=out)
-        print(f"  Media operations planned/executed : {r.get('media_operations', 0)}  "
-              f"(cache ops: {r.get('cache_operations', 0)})", file=out)
-        print(f"  No-op / already-correct           : {r.get('no_op_already_correct', 0)}", file=out)
-        print(f"  Recognized moves (carried forward): {r.get('recognized_moves', 0)}", file=out)
-        print(f"  By-dest files scanned read-only   : {r.get('by_dest_files_scanned_read_only', 0)}", file=out)
-        print(f"  Duplicates -> quarantine          : {r.get('duplicates_against_mutable', 0)} vs mutable, "
-              f"{r.get('duplicates_against_by_dest', 0)} vs by-dest", file=out)
-        print(f"  Metadata reused/extracted/carried/failed : "
-              f"{r.get('metadata_reused', 0)}/{r.get('metadata_extracted', 0)}/"
-              f"{r.get('metadata_carried_forward', 0)}/{r.get('metadata_failed', 0)}  "
-              f"(extractor {r.get('extractor', '?')} {r.get('extractor_version', '?')}, "
-              f"field-set v{r.get('field_set_version', '?')})", file=out)
-        print(f"  Cache effects applied (upsert/remove): "
-              f"{pc.get('db_upserts_applied', 0)}/{pc.get('db_removes_applied', 0)}", file=out)
-        print(f"  Camera groups / native-GPS / missing-timestamp : "
-              f"{r.get('camera_groups_found', 0)} / {r.get('native_gps_files', 0)} / "
-              f"{r.get('missing_timestamp_files', 0)}", file=out)
-        print(f"  Blockers / warnings               : {r.get('blockers', 0)} / {r.get('warnings', 0)}", file=out)
-        print(f"  Dependency validation             : {pc.get('dependency_validation_status', 'n/a')}  "
-              f"(handoff written after validation: {pc.get('handoff_written_after_successful_validation', False)})",
-              file=out)
-        print(f"  End-of-prep audit record          : prep-log {pc.get('prep_log_written', False)}, "
-              f"DB snapshot {pc.get('prep_db_snapshot_written', False)}", file=out)
-        print(f"  Quarantine footprint              : {qf.get('total_files', 0)} files, "
-              f"{qf.get('total_bytes', 0)} bytes across {qf.get('plan_id_dirs', 0)} plan(s) "
-              f"(never auto-deleted)", file=out)
-        print("========================", file=out)
+        for line in report_lines(r, plan_summary):
+            print(line, file=sys.stderr)
 
 
 # ---------------------------------------------------------------------------
@@ -481,11 +528,29 @@ def get_reporter() -> Reporter:
     return _REPORTER
 
 
+_NEXT_STEPS_MUTED = 0     # >0 while one phase runs another's commands: only the outer one says what to do next
+
+
 def emit_next_step(reporter, text: str) -> None:
     """Print the closing 'what to do next' guidance — the last line of a phase command, so the operator
     is never left guessing the next move. A single uniform `Next: …` line, on stdout, shared by the CLI
-    and the console (both drive the same phase `run()`)."""
+    and the console (both drive the same phase `run()`). Nothing while :func:`next_steps_muted` holds."""
+    if _NEXT_STEPS_MUTED:
+        return
     reporter.log(f"\nNext: {text}", stream="stdout")
+
+
+@contextmanager
+def next_steps_muted() -> Iterator[None]:
+    """Hold back every `Next: …` line printed inside — for a phase running another's commands as a step of its
+    own (geotag plan running prep's plan and execute), whose own `Next:` is the one that applies. A global like
+    the reporter, for the same reason: the whole-run lock serializes runs."""
+    global _NEXT_STEPS_MUTED
+    _NEXT_STEPS_MUTED += 1
+    try:
+        yield
+    finally:
+        _NEXT_STEPS_MUTED -= 1
 
 
 def set_reporter(reporter: Optional[Reporter]) -> Optional[Reporter]:

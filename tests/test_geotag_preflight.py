@@ -18,7 +18,7 @@ The lifecycle guards + by-dest scope/re-prep gates that must pass before geotag 
 JSON artifacts are produced. photos_2_geotag / photos_utils come from conftest.py.
 """
 import json
-from _handoff import match_disk
+from _handoff import match_disk, recorded, vouched
 import os
 import sys
 
@@ -53,7 +53,9 @@ def _ws(tmp_path, *, guard=True, sealed=False, config=True, handoff=True,
     if handoff:
         files = handoff_files if handoff_files is not None else \
             [{"relative_path": rel, "media_class": "image"} for rel in bydest]
-        (ctl / "photos-11-handoff.json").write_text(json.dumps({"filename_timestamp_format": utils.CONFIG["filename_timestamp_format"], "files": match_disk(ws, files), "depends_on": {"cache": {"fingerprint_algorithm_version": utils.FINGERPRINT_ALGORITHM_VERSION}}}))
+        (ctl / "photos-11-handoff.json").write_text(json.dumps(vouched(ctl.parent, {"filename_timestamp_format": utils.CONFIG["filename_timestamp_format"], "files": match_disk(ws, files), "depends_on": {"cache": {"fingerprint_algorithm_version": utils.FINGERPRINT_ALGORITHM_VERSION}}})))
+    if not config and (ctl / "photos-00-config.json").exists():
+        (ctl / "photos-00-config.json").unlink()        # gone since prep's run seeded it
     return ws
 
 
@@ -72,13 +74,13 @@ def test_clean_workspace_passes(tmp_path):
 
 # --- lifecycle guards --------------------------------------------------------
 
-@pytest.mark.spec("RUL-only_prep_builds_structure")
+@pytest.mark.spec("RUL-only_prep_builds_structure", test="TST-geotag_preflight-uninitialized_blocks")
 def test_uninitialized_blocks(tmp_path):
     blockers, _, _ = _pf(_ws(tmp_path, guard=False))
     assert any("Not an initialized workspace" in b for b in blockers), blockers
 
 
-@pytest.mark.spec("RUL-sealed_refuses")
+@pytest.mark.spec("RUL-sealed_refuses", test="TST-geotag_preflight-sealed_blocks_and_warns_on_dump")
 def test_sealed_blocks_and_warns_on_dump(tmp_path):
     ws = _ws(tmp_path, sealed=True)
     (ws / "0-sources" / "newdump.jpg").write_bytes(b"x")   # likely new dump
@@ -87,7 +89,7 @@ def test_sealed_blocks_and_warns_on_dump(tmp_path):
     assert any("new dump" in w.lower() for w in warnings), warnings
 
 
-@pytest.mark.spec("RUL-top_level_only_managed")
+@pytest.mark.spec("RUL-top_level_only_managed", test="TST-geotag_preflight-loose_root_file_blocks")
 def test_loose_root_file_blocks(tmp_path):
     ws = _ws(tmp_path)
     (ws / "stray.txt").write_text("loose")
@@ -139,12 +141,11 @@ def test_directory_symlink_at_root_blocks(tmp_path):
     assert any("Forbidden symlink at the workspace root" in b for b in blockers), blockers
 
 
-@pytest.mark.spec("RUL-time_before_gps", "RUL-untimed_photo_stops_geotag", "RUL-untimed_photo_named",
-                  test="TST-geotag_preflight-a_photo_with_no_recorded_time_stops_geotag")
-def test_a_photo_with_no_recorded_time_stops_geotag(tmp_path):
-    """A photo sorted into a destination by hand with no recorded time can never be resolved to its
-    true time: geotag stops before planning anything, naming it as belonging in missing metadata —
-    the photo with a time passes unnamed."""
+@pytest.mark.spec("BLD-geotag_untimed_gate", test="TST-geotag_preflight-untimed_photo_passes_the_preflight")
+def test_a_photo_with_no_recorded_time_passes_the_preflight(tmp_path):
+    """A photo sorted into a destination by hand with no recorded time passes the preflight: its folder's date
+    fallback may time it, and where none does photos-21 asks for one and geotag stops there
+    (test_geotag_date_fallback)."""
     rels = ("6-photos-by-dest/Trip/timed.jpg", "6-photos-by-dest/Trip/untimed.jpg")
     md = lambda t: {"has_timestamp": t, "camera_group_key_version": cal.CAMERA_GROUP_KEY_VERSION,
                     "field_set_version": cal.FIELD_SET_VERSION}
@@ -153,9 +154,7 @@ def test_a_photo_with_no_recorded_time_stops_geotag(tmp_path):
              {"relative_path": rels[1], "folder_class": "6-photos-by-dest", "media_class": "image",
               "metadata_status": md(0)}]
     blockers, _, _ = _pf(_ws(tmp_path, bydest=rels, handoff_files=files))
-    hit = [b for b in blockers if "no recorded time" in b]
-    assert len(hit) == 1 and "untimed.jpg" in hit[0] and "timed.jpg" not in hit[0].replace("untimed.jpg", "")
-    assert "2-missing-metadata" in hit[0]
+    assert not [b for b in blockers if "untimed.jpg" in b and "fingerprint" not in b], blockers
 
 
 # --- config / handoff --------------------------------------------------------
@@ -170,7 +169,8 @@ def test_missing_handoff_blocks(tmp_path):
     assert any("handoff" in b and "photos-cartographer prep" in b for b in blockers), blockers
 
 
-@pytest.mark.spec("RUL-camera_group_derivation_versioned", test="TST-geotag_preflight-handoff_of_another_derivation_version_blocks")
+@pytest.mark.spec("RUL-camera_group_derivation_versioned", "RUL-handoff_fields_of_this_build",
+                  "BLD-handoff_field_set_checked", test="TST-geotag_preflight-handoff_of_another_derivation_version_blocks")
 @pytest.mark.parametrize("field", ["camera_group_key_version", "field_set_version"])
 def test_handoff_of_another_derivation_version_blocks(tmp_path, field):
     rel = "6-photos-by-dest/Trip/a.jpg"
@@ -183,6 +183,17 @@ def test_handoff_of_another_derivation_version_blocks(tmp_path, field):
         {"relative_path": rel, "media_class": "image", "metadata_status": dict(md, **{field: 0})}]))
     assert any("another version of cartographer" in b and rel in b and "prep plan" in b
                for b in blockers), blockers
+
+
+@pytest.mark.spec("RUL-handoff_fields_of_this_build", "RUL-unchecked_counts_as_changed", "BLD-handoff_field_set_checked",
+                  test="TST-geotag_preflight-a_photo_s_record_with_no_metadata_is_of_another_version")
+def test_a_photo_s_record_with_no_metadata_is_of_another_version(tmp_path):
+    """A photo's record in the handoff holding no metadata at all cannot be checked for the version that read it: it
+    counts as another version's, and the plan stops, never taking it for this build's."""
+    rel = "6-photos-by-dest/Trip/a.jpg"
+    blockers, _, _ = _pf(_ws(tmp_path, handoff_files=[
+        {"relative_path": rel, "media_class": "image", "folder_class": "6-photos-by-dest"}]))
+    assert any("another version of cartographer" in b and rel in b for b in blockers), blockers
 
 
 @pytest.mark.spec("RUL-format_fixed_once_named", test="TST-geotag_preflight-filename_format_other_than_prep_s_blocks")
@@ -220,7 +231,8 @@ def test_a_photo_removed_or_changed_since_prep_stops_geotag(tmp_path):
     assert len(blockers) == 1 and "is out of date" in blockers[0] and "Trip/b.jpg" in blockers[0], blockers
 
 
-@pytest.mark.spec("RUL-database_regions_disjoint")
+@pytest.mark.spec("RUL-database_regions_disjoint",
+                  test="TST-geotag_preflight-reprep_gate_blocks_and_geotag_never_records_the_move")
 def test_reprep_gate_blocks_and_geotag_never_records_the_move(tmp_path):
     """Geotag does NO move recognition: a by-dest photo absent from the handoff (prep not re-run after
     the move) trips the re-prep gate. Geotag refuses and FIXES NOTHING — it never edits the handoff to
@@ -260,6 +272,17 @@ def test_dev_subfolder_blocks(tmp_path):
     assert any("Development has already started" in b for b in blockers), blockers
 
 
+@pytest.mark.spec("RUL-development_subfolder_any_case", "BLD-development_subfolder_case",
+                  test="TST-geotag_preflight-dev_subfolder_of_any_case_blocks")
+@pytest.mark.parametrize("name", ["JPG", "JpG", "Tif"])
+def test_dev_subfolder_of_any_case_blocks(tmp_path, name):
+    ws = _ws(tmp_path)
+    (ws / "6-photos-by-dest" / "Trip" / name).mkdir()
+    for execute in (False, True):
+        blockers, _, _ = cal.GeotagWorkflow(str(ws)).preflight(for_execute=execute)
+        assert any("Development has already started" in b and f"Trip/{name}" in b for b in blockers), blockers
+
+
 @pytest.mark.spec("BLD-loop_gates", "RUL-development_after_merge", test="TST-geotag_preflight-dev_subfolder_blocks_at_execute")
 def test_dev_subfolder_blocks_at_execute(tmp_path):
     # RUL-development_after_merge is presence-strict AND re-checked at execute/finalize: an empty jpg/tif subfolder
@@ -271,13 +294,89 @@ def test_dev_subfolder_blocks_at_execute(tmp_path):
     assert any("Development has already started" in b for b in blockers), blockers
 
 
-def test_execute_preflight_still_skips_planning_scope_gates(tmp_path):
-    # Over-blocking guard: only the dev-subfolder presence check was added to the execute path. A
-    # planning-only scope gate (a leftover in 0-sources) must NOT block execute.
+def _plan_renaming(ws, rel, to, via=None, write=False):
+    """A photos-24 whose one operation renames `rel` to `to` (by `via` for a change of case alone) — after writing its
+    position, with `write`."""
+    op = {"operation_id": "op1", "type": "rename_no_clobber", "relative_path": rel,
+          "from": os.path.basename(rel), "to": to}
+    if via:
+        op["via"] = via
+    ops = ([{"operation_id": "op0", "type": "gps_write", "relative_path": rel}] if write else []) + [op]
+    (ws / ".photos-ingest" / "photos-24-executable-plan.json").write_text(
+        json.dumps({"plan_id": "p1", "destinations": {"Trip": {"operations": ops}}}))
+
+
+@pytest.mark.spec("RUL-geotag_gates", "BLD-loop_gates", test="TST-geotag_preflight-execute_and_finalize_check_every_gate")
+@pytest.mark.parametrize("gate", ["inbox", "by_date", "non_photo", "unrecorded"])
+def test_execute_and_finalize_check_every_gate(tmp_path, gate):
+    """Execution and finalize stop on every gate, as planning does: a dump waiting in the inbox, a photo left in
+    photos by date, a file not a photo among the photos, and a photo prep has not recorded there."""
     ws = _ws(tmp_path)
-    (ws / "0-sources" / "leftover.jpg").write_bytes(b"x")
+    _plan_renaming(ws, "6-photos-by-dest/Trip/a.jpg", "2024-01-01--10-00-00.jpg")
+    assert cal.GeotagWorkflow(str(ws)).preflight(for_execute=True)[0] == []
+    said = {"inbox": "0-sources/ is not empty", "by_date": "5-photos-by-date/ still contains",
+            "non_photo": "must contain only photos", "unrecorded": "is out of date"}[gate]
+    target = {"inbox": "0-sources/leftover.jpg", "by_date": "5-photos-by-date/2023-01-01--00-00-00.jpg",
+              "non_photo": "6-photos-by-dest/Trip/notes.txt", "unrecorded": "6-photos-by-dest/Trip/new.jpg"}[gate]
+    (ws / target).write_bytes(b"x")
+    for needs_exiftool in (True, False):                 # execute, and finalize
+        blockers, _, _ = cal.GeotagWorkflow(str(ws)).preflight(for_execute=True, needs_exiftool=needs_exiftool)
+        assert any(said in b for b in blockers), blockers
+
+
+@pytest.mark.spec("RUL-sort_photos_only", "RUL-geotag_gates",
+                  test="TST-geotag_preflight-a_hidden_file_among_the_photos_stops_geotag")
+def test_a_hidden_file_among_the_photos_stops_geotag(tmp_path):
+    """A hidden file — or folder — in photos by destination is no photo: geotag stops on it at plan, execute and
+    finalize, naming it, as merge would, rather than pass it by for merge to find after the photos were written."""
+    ws = _ws(tmp_path)
+    _plan_renaming(ws, "6-photos-by-dest/Trip/a.jpg", "2024-01-01--10-00-00.jpg")
+    (ws / "6-photos-by-dest" / "Trip" / ".IMG_9.jpg").write_bytes(b"x")
+    (ws / "6-photos-by-dest" / "Trip" / ".thumbs").mkdir()
+    for kw in ({}, {"for_execute": True}, {"for_execute": True, "needs_exiftool": False}):
+        blockers, _, _ = cal.GeotagWorkflow(str(ws)).preflight(**kw)
+        assert any("hidden" in b and "6-photos-by-dest/Trip/.IMG_9.jpg" in b and "6-photos-by-dest/Trip/.thumbs" in b
+                   for b in blockers), blockers
+
+
+@pytest.mark.spec("RUL-geotag_gates", "BLD-loop_gates",
+                  test="TST-geotag_preflight-names_the_plan_gives_are_recorded_at_execute")
+def test_names_the_plan_gives_are_recorded_at_execute(tmp_path):
+    """A photo the plan renamed, under its new name or a case change's temporary one, is not an unrecorded photo to
+    execute's resume or to finalize; the leftover of a planned write beside it is the writer's, not a stray file."""
+    ws = _ws(tmp_path)
+    bd = ws / "6-photos-by-dest" / "Trip"
+    _plan_renaming(ws, "6-photos-by-dest/Trip/a.jpg", "A.jpg", via="a.jpg.tmp-case.jpg", write=True)
+    (bd / "a.jpg").rename(bd / "A.jpg")
+    assert cal.GeotagWorkflow(str(ws)).preflight(for_execute=True)[0] == []
+    (bd / "A.jpg").rename(bd / "a.jpg.tmp-case.jpg")
+    assert cal.GeotagWorkflow(str(ws)).preflight(for_execute=True)[0] == []
+    (bd / "a.jpg.tmp-case.jpg").rename(bd / "a.jpg")
+    (bd / "a.jpg_exiftool_tmp").write_bytes(b"partial")
+    assert cal.GeotagWorkflow(str(ws)).preflight(for_execute=True)[0] == []
+    # the same leftover beside a photo no operation writes stops the command, named, as at planning
+    # (BLD-own_leftover_cleared)
+    (bd / "a.jpg_exiftool_tmp").rename(bd / "b.jpg_exiftool_tmp")
     blockers, _, _ = cal.GeotagWorkflow(str(ws)).preflight(for_execute=True)
-    assert not any("0-sources/ is not empty" in b for b in blockers), blockers
+    assert any("interrupted metadata write" in b and "b.jpg_exiftool_tmp" in b for b in blockers), blockers
+
+
+@pytest.mark.spec("RUL-write_leftover_stops_geotag_plan", "BLD-own_leftover_cleared", "BLD-loop_gates",
+                  test="TST-geotag_preflight-a_leftover_beside_a_photo_only_renamed_stops_execute")
+def test_a_leftover_beside_a_photo_the_plan_only_renames_stops_execute(tmp_path):
+    """The plan renames the photo and writes nothing to it: a `_exiftool_tmp` beside it, under its name before or
+    after the rename, is no leftover of this plan's — it stops execute and finalize, named, and is left where it is,
+    never orphaned by the rename."""
+    ws = _ws(tmp_path)
+    bd = ws / "6-photos-by-dest" / "Trip"
+    _plan_renaming(ws, "6-photos-by-dest/Trip/a.jpg", "2024-01-01--10-00-00.jpg")
+    for name in ("a.jpg_exiftool_tmp", "2024-01-01--10-00-00.jpg_exiftool_tmp"):
+        (bd / name).write_bytes(b"someone else's")
+        for needs_exiftool in (True, False):
+            blockers, _, _ = cal.GeotagWorkflow(str(ws)).preflight(for_execute=True, needs_exiftool=needs_exiftool)
+            assert any("interrupted metadata write" in b and name in b for b in blockers), blockers
+        assert (bd / name).read_bytes() == b"someone else's"
+        (bd / name).unlink()
 
 
 @pytest.mark.spec("RUL-sort_photos_only", test="TST-geotag_preflight-video_in_by_dest_blocks")
@@ -353,7 +452,7 @@ def test_unrecorded_by_dest_photo_demands_reprep(tmp_path):
     assert any("is out of date" in b and "photos-cartographer prep" in b for b in blockers), blockers
 
 
-@pytest.mark.spec("RUL-prep_records_sort")
+@pytest.mark.spec("RUL-prep_records_sort", test="TST-geotag_preflight-missing_by_date_photo_demands_reprep")
 def test_missing_by_date_photo_demands_reprep(tmp_path):
     # The handoff still records a 5-photos-by-date photo that is now gone (moved into by-dest).
     files = [{"relative_path": "6-photos-by-dest/Trip/a.jpg", "media_class": "image"},
@@ -405,7 +504,8 @@ def _autoreprep(ws, monkeypatch, *, command="plan", jobs=4, fail=None, plan_ops=
     return calls, rep
 
 
-@pytest.mark.spec("BLD-geotag_auto_reprep")
+@pytest.mark.spec("BLD-geotag_auto_reprep",
+                  test="TST-geotag_preflight-auto_reprep_runs_prep_plan_then_execute_for_clean_move")
 def test_auto_reprep_runs_prep_plan_then_execute_for_clean_move(tmp_path, monkeypatch):
     """A clean by-dest move (0-sources empty + an unrecorded by-dest photo) makes geotag plan auto-run the
     REAL prep phases — plan then execute, in order — so the operator goes straight to geotag. prep does
@@ -446,12 +546,40 @@ def test_auto_reprep_runs_prep_for_a_photo_changed_since_prep(tmp_path, monkeypa
     assert any("is out of date" in m for m in rep.logs), rep.logs
 
 
+@pytest.mark.parametrize("fail", [None, "execute"])
+def test_auto_reprep_prints_only_geotag_s_next_step(tmp_path, monkeypatch, fail):
+    """When geotag plan runs prep's plan and execute itself, prep's own closing `Next:` lines are held back —
+    they name prep's next command where geotag goes on, or stops, by itself — and only geotag's is printed."""
+    import photos_1_prep as prep
+    from cartographer.reporting import emit_next_step
+    ws = _ws(tmp_path, bydest=("6-photos-by-dest/Trip/a.jpg",), handoff_files=[])   # a clean move to record
+
+    def fake_prep_run_locked(a, workspace_root, reporter):
+        emit_next_step(reporter, f"`prep {a.command}` said so")
+        if a.command == "plan":
+            _write_prep_plan(workspace_root, _RECORDS_ONLY)
+        if a.command == fail:
+            raise SystemExit(2)
+    monkeypatch.setattr(prep, "_run_locked", fake_prep_run_locked)
+    rep = _CollectRep()
+    if fail:
+        with pytest.raises(SystemExit):
+            cal._auto_reprep_for_clean_move(_types.SimpleNamespace(command="plan", jobs=4), str(ws), rep)
+    else:
+        cal._auto_reprep_for_clean_move(_types.SimpleNamespace(command="plan", jobs=4), str(ws), rep)
+    nexts = [m for m in rep.logs if m.lstrip("\n").startswith("Next:")]
+    assert not any("said so" in m for m in nexts), nexts
+    assert nexts == ([] if fail is None else ["\nNext: resolve what prep reported above, then re-run `geotag plan`."])
+    emit_next_step(rep, "after")                                        # held back only while prep runs
+    assert rep.logs[-1] == "\nNext: after"
+
+
 def test_auto_reprep_skips_when_nothing_pending(tmp_path, monkeypatch):
     calls, _ = _autoreprep(_ws(tmp_path), monkeypatch)               # a.jpg recorded → nothing pending
     assert calls == []
 
 
-@pytest.mark.spec("BLD-geotag_auto_reprep")
+@pytest.mark.spec("BLD-geotag_auto_reprep", test="TST-geotag_preflight-auto_reprep_skips_when_sources_nonempty")
 def test_auto_reprep_skips_when_sources_nonempty(tmp_path, monkeypatch):
     """0-sources holding a dump is the cheapest hard gate — auto-reprep must NOT silently ingest it; it
     bows out and leaves the in-lock scope gate to report the unprocessed dump."""
@@ -506,7 +634,9 @@ def test_auto_reprep_never_executes_a_plan_that_touches_media(tmp_path, monkeypa
     calls, rep = _autoreprep.last
     assert calls == ["plan"], calls                                   # prep's execute never ran
     said = "\n".join(rep.errors + rep.logs)
-    assert op["type"] in said and op["source"] in said, said
+    verb = {"move_no_clobber": "move", "rename_no_clobber": "rename", "quarantine_move": "quarantine"}[op["type"]]
+    assert f"would also {verb} 1 media file." in said and f"{verb} {op['source']} -> " in said, said
+    assert op["type"] not in said, said                                # the plan's own names stay in the plan
     assert "prep dry-run" in said and "prep execute" in said, said
     assert json.loads(open(utils.prep_plan_path(str(ws))).read())["operations"][-1] == op   # left for the user
 
@@ -577,6 +707,9 @@ def test_auto_reprep_with_real_prep_executes_only_a_recorded_sort(tmp_path, monk
     os.rename(day / names[1], ws / "6-photos-by-dest" / "Trip" / names[1])        # another sort ...
     copy = day / (os.path.splitext(names[2])[0] + "-001.jpg")
     copy.write_bytes((day / names[2]).read_bytes())                             # ... and a copy left by mistake
+    # A file put there by hand stops prep's check first (test_workspace_check); taken as the workspace's state here,
+    # what the re-prep does with it is what is under test.
+    recorded(ws)
     before = ho_p.read_bytes()
     rep = _CollectRep()
     with pytest.raises(SystemExit) as ei:
@@ -584,7 +717,7 @@ def test_auto_reprep_with_real_prep_executes_only_a_recorded_sort(tmp_path, monk
     assert ei.value.code == 2
     assert copy.exists() and (day / names[2]).exists()                          # nothing quarantined
     assert ho_p.read_bytes() == before                                            # prep's execute never ran
-    assert any("quarantine_move" in m for m in rep.errors + rep.logs), (rep.errors, rep.logs)
+    assert any("would also quarantine 1 media file." in m for m in rep.errors + rep.logs), (rep.errors, rep.logs)
     plan = json.loads(open(utils.prep_plan_path(str(ws))).read())
     assert any(o["type"] == "quarantine_move" for o in plan["operations"])        # saved, for the user to review
 
@@ -665,7 +798,7 @@ def test_a_handoff_of_another_fingerprint_method_stops_geotag(tmp_path, monkeypa
         del ho["depends_on"]["cache"]["fingerprint_algorithm_version"]
     else:
         ho["depends_on"]["cache"]["fingerprint_algorithm_version"] = recorded
-    (ctl / "photos-11-handoff.json").write_text(json.dumps(ho))
+    (ctl / "photos-11-handoff.json").write_text(json.dumps(vouched(ctl.parent, ho)))
     before = sorted(os.listdir(ctl))
     monkeypatch.chdir(ws)
     with pytest.raises(SystemExit) as ei:
@@ -934,6 +1067,8 @@ def test_a_missing_setting_stops_every_phase(tmp_path, monkeypatch):
     (lambda c: c["folders"].__setitem__("extra", "9-extra"), "folders.extra"),                     # a role of one's own
     (lambda c: c["zfs"].__setitem__("snapshot_required", True), "zfs.snapshot_required"),          # a misspelling
     (lambda c: c.__setitem__("gpx_rot", "/tmp"), "gpx_rot"),                                       # at the top level
+    (lambda c: c["camera_time_and_timezone_policy"].__setitem__("phone_gpx_max_distance_meters", 250),
+     "camera_time_and_timezone_policy.phone_gpx_max_distance_meters"),                             # one nothing read
 ])
 def test_an_unknown_setting_stops_every_phase(tmp_path, monkeypatch, edit, named):
     """A setting cartographer does not know is never ignored: prep's load, geotag and merge each stop,
@@ -949,3 +1084,17 @@ def test_an_unknown_setting_stops_every_phase(tmp_path, monkeypatch, edit, named
     assert named in str(ei.value) and "does not know" in str(ei.value)
     for blockers in (_pf(ws)[0], merge.MergeWorkflow(str(ws)).preflight()[0]):
         assert any("does not know" in b and named in b for b in blockers), blockers
+
+
+@pytest.mark.spec("RUL-handoff_fields_of_this_build", "BLD-handoff_field_set_checked",
+                  test="TST-geotag_preflight-the_field_set_version_follows_the_fields_read")
+def test_the_field_set_version_follows_the_fields_read():
+    """The handoff's field-set version names what prep reads from a photo: the fields, the order of the groups they are
+    looked for in, where the position's Composite value stands in it, and the other times kept. Pinned here with the
+    version they are read under — change any of them and this fails until FIELD_SET_VERSION is raised and the pin taken
+    again, so a handoff read by other fields is never taken for this build's."""
+    import hashlib
+    read = json.dumps([list(utils.METADATA_FIELDS), list(utils.METADATA_GROUP_ORDER), list(utils.OTHER_TIME_FIELDS),
+                       utils.POSITION_FIELDS], sort_keys=True)
+    assert (utils.FIELD_SET_VERSION, hashlib.sha256(read.encode()).hexdigest()) == \
+        (5, "2a0096f07fb55160d77e5e1364e845e73a1040227f6a58d93a87c4e19a9b12ad")

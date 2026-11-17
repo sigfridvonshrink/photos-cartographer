@@ -73,7 +73,7 @@ def _handoff(ws):
         return json.load(f)
 
 
-@pytest.mark.spec("RUL-handoff_deterministic")
+@pytest.mark.spec("RUL-handoff_deterministic", test="TST-handoff-execution_id_present_and_distinct")
 def test_execution_id_present_and_distinct(tmp_path, monkeypatch):
     _mock(monkeypatch)
     ws = _ws(tmp_path)
@@ -251,7 +251,7 @@ def test_the_configuration_classes_camera_groups_and_never_derives_them(tmp_path
     cfg_p.write_text(seeded)
 
 
-@pytest.mark.spec("RUL-handoff_deterministic")
+@pytest.mark.spec("RUL-handoff_deterministic", test="TST-handoff-handoff_written_sorted_and_deterministic")
 def test_handoff_written_sorted_and_deterministic(tmp_path, monkeypatch):
     """The handoff must be byte-deterministic for a given workspace state (RUL-handoff_deterministic):
     routed through write_json_artifact (sort_keys), so its SHA-256 — which geotag records as a
@@ -292,6 +292,24 @@ def test_handoff_content_fingerprint_ignores_run_metadata_and_audit():
     assert utils.handoff_content_fingerprint({**base, "cache_fingerprint": "CF2"}) != fp1   # inventory change
     assert utils.handoff_content_fingerprint(                            # group IDENTITY change still restales
         {**base, "camera_groups": [{"group_key": "g2", "cache_freshness": {"metadata_extracted_ok": 1}}]}) != fp1
+
+
+@pytest.mark.spec("BLD-handoff_content", "BLD-handoff_content_fingerprint", test="TST-handoff-a_files_inode_is_in_the_handoff_and_its_fingerprints")
+def test_a_files_inode_is_in_the_handoff_and_its_fingerprints(tmp_path, monkeypatch):
+    """Each file of the handoff carries its inode as its database row recorded it, and both the content fingerprint
+    and the inventory's fingerprint cover it: another inode alone, size, time and fingerprint the same, changes both."""
+    _mock(monkeypatch)
+    ws = _ws(tmp_path)
+    (ws / "0-sources" / "a.jpg").write_bytes(b"AAAA")
+    _run(ws)
+    h = _handoff(ws)
+    (f,) = [f for f in h["files"] if f["relative_path"].endswith(".jpg")]
+    assert f["inode"] == os.stat(ws / f["relative_path"]).st_ino
+    moved = json.loads(json.dumps(h))
+    (g,) = [g for g in moved["files"] if g["relative_path"] == f["relative_path"]]
+    g["inode"] += 1
+    assert utils.handoff_content_fingerprint(moved) != h["content_fingerprint"]
+    assert prep.OperationPlanner.compute_index_fingerprint(moved["files"]) != h["cache_fingerprint"]
 
 
 @pytest.mark.spec("RUL-run_only_refresh_restales_nothing", "RUL-handoff_deterministic", test="TST-handoff-handoff_content_fingerprint_stable_across_real_noop_rerun")
@@ -336,6 +354,30 @@ def test_handoff_is_rewritten_fresh_each_run_never_edited_in_place(tmp_path, mon
     assert h2["run_metadata"]["execution_id"] != exec1
     # The deterministic content is unchanged (no-op), proving a clean regeneration of the same state.
     assert h2["content_fingerprint"] == h1["content_fingerprint"]
+
+
+@pytest.mark.spec("RUL-prep_records_written_whole",
+                  test="TST-handoff-handoff_and_log_are_each_written_as_a_new_file")
+def test_handoff_and_log_are_each_written_as_a_new_file(tmp_path, monkeypatch):
+    """RUL-prep_records_written_whole: an execute writes the handoff and prep's log each as a new file put in the
+    earlier one's place — never written into the earlier file, never merged with what it held. A key put into the
+    log by hand is gone after the next run, and both files are new files (another inode)."""
+    _mock(monkeypatch)
+    ws = _ws(tmp_path)
+    (ws / "0-sources" / "a.jpg").write_bytes(b"AAAA")
+    _run(ws)
+    log_p, handoff_p = utils.prep_log_path(str(ws)), utils.handoff_path(str(ws))
+    with open(log_p) as f:
+        log = json.load(f)
+    with open(log_p, "w") as f:
+        json.dump({**log, "INJECTED_SENTINEL": "should-not-survive"}, f)
+    inodes = {p: os.stat(p).st_ino for p in (log_p, handoff_p)}
+
+    _run(ws)
+    with open(log_p) as f:
+        assert "INJECTED_SENTINEL" not in json.load(f)
+    for p, ino in inodes.items():
+        assert os.stat(p).st_ino != ino, p
 
 
 @pytest.mark.spec("RUL-handoff_read_back", test="TST-handoff-roundtrip_assertion_catches_unstable_fingerprint")

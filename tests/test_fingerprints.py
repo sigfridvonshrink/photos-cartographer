@@ -127,7 +127,8 @@ def test_a_file_whose_metadata_is_read_again_is_fingerprinted_again(tmp_path, mo
     assert _plan_counting(ws, monkeypatch) == 1
 
 
-@pytest.mark.spec("RUL-fingerprint_method_matches", "BLD-fingerprint", "BLD-fingerprint_method",
+@pytest.mark.spec("RUL-database_over_memo", "RUL-memo_never_changes_plan", "BLD-plan_memo",
+                  "RUL-fingerprint_method_matches", "BLD-fingerprint", "BLD-fingerprint_method",
                   "RUL-fingerprint_method_unrecorded_retaken",
                   test="TST-fingerprints-a_fingerprint_is_reused_only_from_this_method")
 def test_a_fingerprint_is_reused_only_from_this_method(tmp_path, monkeypatch):
@@ -155,6 +156,28 @@ def test_a_fingerprint_is_reused_only_from_this_method(tmp_path, monkeypatch):
     assert _plan_counting(ws, monkeypatch) == 1                     # a new ImageMagick restales the photo only
 
 
+@pytest.mark.parametrize("unrecorded", ["engine_version", "strategy"])
+@pytest.mark.spec("RUL-fingerprint_method_unrecorded_retaken", "BLD-fingerprint_method",
+                  test="TST-fingerprints-a_fingerprint_recording_no_method_is_taken_again")
+def test_a_fingerprint_recording_no_method_is_taken_again(tmp_path, monkeypatch, unrecorded):
+    """A photo's cached fingerprint that records no ImageMagick version, or no strategy, is taken again — though
+    its metadata, read for that very fingerprint, is fresh, so nothing else asks for it to be read again."""
+    _mock(monkeypatch)
+    monkeypatch.setattr(utils, "get_imagemagick_version", lambda: "t")
+    ws = _ws(tmp_path)
+    (ws / "0-sources" / "a.jpg").write_bytes(b"AAAA")
+    _run(ws)
+    assert _plan_counting(ws, monkeypatch) == 0
+    conn = sqlite3.connect(utils.db_path(str(ws)))
+    (path, ch), = conn.execute("SELECT relative_path, content_hash FROM file_cache").fetchall()
+    ch = json.dumps({k: v for k, v in json.loads(ch).items() if k != unrecorded})
+    conn.execute("UPDATE file_cache SET content_hash = ? WHERE relative_path = ?", (ch, path))
+    conn.execute("UPDATE metadata_cache SET content_hash = ? WHERE relative_path = ?", (ch, path))   # still fresh
+    conn.commit()
+    conn.close()
+    assert _plan_counting(ws, monkeypatch) == 1
+
+
 @pytest.mark.spec("BLD-prep_dependencies", "BLD-cache_versions",
                   test="TST-fingerprints-execute_writes_the_database_versions")
 def test_execute_writes_the_database_versions(tmp_path, monkeypatch):
@@ -171,7 +194,7 @@ def test_execute_writes_the_database_versions(tmp_path, monkeypatch):
     assert prep.WorkspaceCache(str(ws)).get_meta("fingerprint_algorithm_version") == prep.FINGERPRINT_ALGORITHM_VERSION
 
 
-@pytest.mark.spec("BLD-prep_dependencies")
+@pytest.mark.spec("BLD-prep_dependencies", test="TST-fingerprints-cache_meta_records_versions")
 def test_cache_meta_records_versions(tmp_path, monkeypatch):
     _mock(monkeypatch)
     ws = _ws(tmp_path)
@@ -189,11 +212,38 @@ def test_journal_is_version_stamped(tmp_path, monkeypatch):
     plan = _run(ws)
     with open(utils.journal_path(str(ws), plan.plan_id)) as f:
         dep = json.load(f)["depends_on"]
-    assert dep["tool"] == "photos-1-prep"
+    assert set(dep) == {"config_fingerprint", "plan_schema_version", "cache_schema_version",
+                        "fingerprint_algorithm_version"}
     assert dep["config_fingerprint"] == plan.config_fingerprint.value
     assert dep["plan_schema_version"] == prep.PLAN_SCHEMA_VERSION
     assert dep["cache_schema_version"] == prep.CACHE_SCHEMA_VERSION
     assert dep["fingerprint_algorithm_version"] == prep.FINGERPRINT_ALGORITHM_VERSION
+
+
+@pytest.mark.spec("BLD-prep_plan_contents", "BLD-prep_dependencies", "BLD-handoff_content", "BLD-workspace_database",
+                  test="TST-fingerprints-prep_records_hold_no_field_nothing_reads")
+def test_prep_records_hold_no_field_nothing_reads(tmp_path, monkeypatch):
+    """Prep's plan records no `workspace_root` and its database effects no `absolute_path`; its journal records no
+    `snapshots` and no tool or execution id among its dependencies; its handoff no `hash_algorithm`; and the database's
+    `file_cache` no `absolute_path`."""
+    _mock(monkeypatch)
+    ws = _ws(tmp_path)
+    (ws / "0-sources" / "a.jpg").write_bytes(b"AAAA")
+    plan = _run(ws)
+    saved = json.loads(plan.to_json())
+    assert "workspace_root" not in saved
+    effects = [fx for op in saved["operations"] for fx in op["database_effects_after_verification"]]
+    assert effects and all("absolute_path" not in (fx.get("data") or {}) for fx in effects)
+    with open(utils.journal_path(str(ws), plan.plan_id)) as f:
+        journal = json.load(f)
+    assert "snapshots" not in journal
+    assert not {"tool", "execution_id"} & set(journal["depends_on"])
+    with open(utils.handoff_path(str(ws))) as f:
+        assert "hash_algorithm" not in json.load(f)
+    con = sqlite3.connect(str(ws / ".photos-ingest" / "photos-00-ingest.db"))
+    cols = {r[1] for r in con.execute("PRAGMA table_info(file_cache)")}
+    con.close()
+    assert "relative_path" in cols and "absolute_path" not in cols
 
 
 @pytest.mark.spec("BLD-prep_dependencies", test="TST-fingerprints-handoff_depends_on_coverage")
@@ -256,6 +306,32 @@ def test_a_dependency_missing_or_unrecorded_stops_execution(tmp_path, monkeypatc
     assert (ws / "0-sources" / "a.jpg").exists()
 
 
+@pytest.mark.spec("RUL-engine_change_is_checked", "BLD-prep_dependencies",
+                  test="TST-fingerprints-a_plan_made_under_another_image_engine_is_refused")
+def test_a_plan_made_under_another_image_engine_is_refused(tmp_path, monkeypatch):
+    """A plan whose fingerprints were taken under one ImageMagick, executed under another, is refused before any
+    change: no handoff names an engine its fingerprints were not taken by. Under the same engine it executes, and the
+    handoff names the engine of the plan."""
+    _mock(monkeypatch)
+    prep.CONFIG["jobs"] = 1
+    ws = _ws(tmp_path)
+    (ws / "0-sources" / "a.jpg").write_bytes(b"AAAA")
+    monkeypatch.setattr(utils, "get_imagemagick_version", lambda: "engine-A")
+    cache = prep.WorkspaceCache(str(ws))
+    plan = prep.WorkspacePrepWorkflow(str(ws), cache).plan()
+    cache.close()
+    assert not plan.blockers, plan.blockers
+    monkeypatch.setattr(utils, "get_imagemagick_version", lambda: "engine-B")
+    with pytest.raises(prep.ExecuteRefused, match="Stale plan"):
+        prep.PlanExecutor(str(ws)).execute(plan)
+    assert (ws / "0-sources" / "a.jpg").exists()
+    assert not os.path.exists(utils.handoff_path(str(ws)))
+    monkeypatch.setattr(utils, "get_imagemagick_version", lambda: "engine-A")
+    prep.PlanExecutor(str(ws)).execute(plan)
+    with open(utils.handoff_path(str(ws))) as f:
+        assert json.load(f)["depends_on"]["cache"]["image_engine_version"] == "engine-A"
+
+
 # --- Phase D: fingerprint/hash terminology (RAT-fingerprint_and_hash_opposite_jobs) ---------------------------
 
 @pytest.mark.spec("RUL-fingerprint_survives_mutation", "BLD-hash", test="TST-fingerprints-media_carries_fingerprint_and_no_byte_hash")
@@ -286,7 +362,7 @@ def test_handoff_uses_fingerprint_status(tmp_path, monkeypatch):
 
 def test_transaction_commits_on_success(tmp_path):
     cache = prep.WorkspaceCache(str(tmp_path))
-    row = {"relative_path": "a", "absolute_path": "/a", "size": 1, "mtime_ns": 1,
+    row = {"relative_path": "a", "size": 1, "mtime_ns": 1,
            "inode": 1, "media_class": "image", "hash": "h", "content_hash": "ch",
            "last_seen_ns": 1}
     with cache.transaction():
@@ -296,7 +372,7 @@ def test_transaction_commits_on_success(tmp_path):
 
 def test_transaction_rolls_back_on_exception(tmp_path):
     cache = prep.WorkspaceCache(str(tmp_path))
-    row = {"relative_path": "b", "absolute_path": "/b", "size": 1, "mtime_ns": 1,
+    row = {"relative_path": "b", "size": 1, "mtime_ns": 1,
            "inode": 1, "media_class": "image", "hash": "h", "content_hash": "ch",
            "last_seen_ns": 1}
     try:
@@ -310,7 +386,7 @@ def test_transaction_rolls_back_on_exception(tmp_path):
 
 def test_default_writes_still_commit_per_op(tmp_path):
     cache = prep.WorkspaceCache(str(tmp_path))
-    row = {"relative_path": "c", "absolute_path": "/c", "size": 1, "mtime_ns": 1,
+    row = {"relative_path": "c", "size": 1, "mtime_ns": 1,
            "inode": 1, "media_class": "image", "hash": "h", "content_hash": "ch",
            "last_seen_ns": 1}
     cache.upsert_file(row)                     # no batch

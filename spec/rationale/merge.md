@@ -15,9 +15,30 @@ items it `justifies`, under the same section numbers. Where the two differ, the 
 Merge compares prep's fingerprint of a photo with one it takes now of the library file in its way. Taken by two
 versions of ImageMagick, two fingerprints of the same pixels may differ: the photo would be called new and placed again,
 renamed, beside itself — a duplicate in the library, which merge must never make. Taken again under the version now in
-use, prep's fingerprint is confirmed and the comparison holds. A photo whose fingerprint did change waits in photos by
-destination: what geotag recorded of it is keyed by the old value, and merging it would carry a record that names no
-photo into the library's history.
+use, prep's fingerprint is confirmed and the comparison holds. A photo whose fingerprint did change is compared by its
+new value, which is the one the library's files are fingerprinted under ({need}`RAT-changed_fingerprint_mapped`).
+:::
+
+:::{rat} The archive outlives any one ImageMagick
+:id: RAT-changed_fingerprint_mapped
+:status: ruled
+:forced: no
+:follows_from: RAT-one_version_per_comparison, RAT-new_version_may_change_nothing
+:justifies: RUL-merge_merges_changed_fingerprint, RUL-changed_fingerprint_mapping_recorded, RUL-merge_changed_fingerprint_unmerged
+
+What prep and geotag recorded of a photo is keyed by its fingerprint under the ImageMagick that prepped the workspace,
+and finalize sealed those records into the package. A newer ImageMagick may read the same photo to another value; held
+back for that alone, the photo could reach the library only under the version that prepped it, which in time is gone.
+The archive outlives any one ImageMagick. So merge does not rewrite what is sealed — geotag's records stay as finalize
+left them, keyed by the old value — and writes, in its own package, the old value beside the new, each with its
+version: the records stay readable from either side.
+
+A mapping is only as good as the proof that the two values are one photo's. Finalize's record of each photo's path,
+size and modification time proves the file merge reads is the one geotag treated, and a new value that no other photo
+holds, now or under prep's version, leaves every record pointing at one photo. Where two photos' values meet under the
+new version, or one's new value is another's old one, prep's duplicate decisions would not be the same under it: no
+mapping can settle which photo a value names, and those photos wait in photos by destination, as any photo merge
+cannot prove.
 :::
 
 ## 2. Preconditions
@@ -27,7 +48,7 @@ photo into the library's history.
 :status: ruled
 :forced: yes
 :follows_from: RAT-discrete_stages, RAT-non_destructive_core
-:justifies: RUL-merge_rechecks_gates
+:justifies: RUL-merge_rechecks_gates, RUL-merge_gates_leave_out_residue
 
 Geotag's gates held when geotag ran; merge runs later, often much later, and the user may have dropped a new dump into
 the inbox, moved a photo back to photos by date, or put a video or a development folder among the photos by
@@ -47,6 +68,54 @@ The library is the one place the pipeline cannot simply re-plan from: a photo ha
 claiming a merge that did not happen, would have to be found and undone by hand. Checking every precondition before
 the first change makes a refusal free — fix the cause, run merge again — and keeps merge's records describing only
 merges that ran.
+:::
+
+:::{rat} Without its fingerprints merge can settle nothing
+:id: RAT-merge_needs_its_fingerprints
+:status: ruled
+:forced: yes
+:follows_from: RAT-decoded_pixel_identity, RAT-library_is_evidence_of_move
+:justifies: RUL-imagemagick_absent_stops_merge
+
+A place merge finds taken is settled by fingerprinting the file there, and a photo gone from the workspace counts as
+merged only once its place is fingerprinted again. Without ImageMagick no fingerprint can be taken: every collision
+would block, no photo already moved could be confirmed, and a merge left half done could not be finished. Run so, it
+would turn a merge that could be whole into a partial one; stopped, it changes nothing until the tool is back.
+:::
+
+:::{rat} A library may lie across a network, and two machines merging at once is the user's to avoid
+:id: RAT-library_across_network
+:status: ruled
+:forced: no
+:follows_from: RAT-library_shared, RAT-live_lock_never_taken
+:justifies: RUL-library_network_allowed
+
+A library is often kept on a server, shared by the machines that read it; refusing one there would refuse the common
+case. Its lock then may guard the merges of one machine only, on some network filesystems, and which ones cannot be
+told reliably from a run. Running merges from two machines into one library at once is therefore the user's to avoid.
+What it would cost is bounded: every placement is a move that fails where its target exists, so a photo the other
+merge placed first under the same name is found there and settled by its content — the same photo already present,
+another one blocked — and never overwritten. The worst is one photo failing and staying in the workspace — its place
+taken by the other merge's photo, or its temporary copy cleared by the other merge as debris — or, where the two saw
+the library differently, a photo placed under two names.
+:::
+
+:::{rat} A library short of room is found before the first photo moves
+:id: RAT-library_room_before_moving
+:status: ruled
+:forced: no
+:follows_from: RAT-refused_merge_clean, RAT-safe_at_each_change
+:justifies: RUL-library_space_checked, RUL-library_space_short_stops, RUL-library_space_short_named, RUL-library_space_warned_at_plan, RUL-library_space_margin
+
+Into a library on another filesystem merge copies each photo before removing it from the workspace. A full disk is
+safe — the photo it fails stays in the workspace and the run ends partial — but the shortage shows late, one photo at a
+time, after part of the batch has moved. Comparing the free space with the batch first turns it into a refusal that
+says how much room is needed, before anything moved; the plan says it as a warning, since room can be made before
+execute. On the workspace's own filesystem a move is a rename and takes no room, so there is nothing to compare.
+
+The comparison asks for more than the photos' own size: a filesystem filled to its last byte slows and fragments, and
+the library is not merge's alone — digiKam writes its thumbnails and sidecars beside the photos. The owner, ruling it
+(2026-11-16): *"I think a safety margin is needed. Configurable, too, default say 5% on top of by-dest size?"*
 :::
 
 ## 4. Destination-to-library mapping
@@ -95,11 +164,40 @@ photo — a record the user would rely on to find it. Fingerprinting the place a
 a resume.
 :::
 
+:::{rat} A placed file is known by its bytes, which no ImageMagick reads differently
+:id: RAT-placed_bytes_outlive_engine
+:status: ruled
+:forced: no
+:follows_from: RAT-library_is_evidence_of_move, RAT-one_version_per_comparison
+:justifies: RUL-placed_bytes_confirm_place
+
+A merge left partial may be finished months later, and ImageMagick may be upgraded in between — the very case merge
+takes prep's fingerprints again for. A photo already placed is then fingerprinted under the new version and compared
+with the value the earlier plan recorded under the old; where the upgrade changed it, the photo would block as gone from
+its place, a reason that is not true, and the workspace could never seal while that version is in use. Merge placed the
+file itself, so it can know it by what no version reads differently: the digest of its bytes, taken as it lands. A
+place still holding those bytes holds the photo. Where no digest was recorded — a move that finished without its
+journal entry — or the library's copy has since been rewritten, the fingerprint is the evidence left, as before.
+:::
+
+:::{rat} A record that cannot be read is not an empty one
+:id: RAT-merge_unreadable_record_not_empty
+:status: ruled
+:forced: yes
+:follows_from: RAT-library_is_evidence_of_move, RAT-durable_record
+:justifies: RUL-merge_unreadable_record_stops
+
+Merge's earlier plans say where its photos went, and its journal what it confirmed. Read as empty, an earlier plan
+drops out and a photo it placed blocks for a reason that is not true — that no merge placed it; a journal read as
+empty is written over by the run's first confirmation, and what it held is gone. Stopped, merge names the file to
+repair or restore, and has lost nothing.
+:::
+
 :::{rat} Another library's photos are not in this one
 :id: RAT-merged_means_in_this_library
 :status: ruled
 :forced: no
-:follows_from: RAT-non_destructive_core
+:follows_from: RAT-non_destructive_core, RAT-library_is_evidence_of_move, RAT-seal_not_folder_state
 :justifies: RUL-earlier_place_in_this_library
 
 The seal says the workspace's photos are in the library it names. A photo placed where the setting used to point is somewhere else, and counting it would seal the workspace over a library that does not hold it.
@@ -118,6 +216,22 @@ The seal says the workspace's photos are in the library it names. A photo placed
 What the user does after a merge turns on how it ended: nothing after a whole success, a fix and another run after a
 partial one or a failed one, and after a refusal a fix with nothing to undo, the library untouched. Counts alone cannot
 tell a refusal from a run that found nothing to do; a recorded outcome says which, long after the terminal has gone.
+:::
+
+:::{rat} The summary records an execution
+:id: RAT-summary_records_an_execution
+:status: ruled
+:forced: no
+:follows_from: RAT-merge_outcome_decides_next, RAT-refused_merge_clean
+:justifies: RUL-merge_summary_only_for_execution
+
+The summary is the record of an execution: what it placed, what it left and how it ended. An execution that took its
+plan as current and then could not make its first move — no required snapshot, no room in the library — was refused for
+what the machine lacked, not for what the plan or the workspace held; its summary records the refusal and its reason, so
+a fix with nothing to undo is told from a run that found nothing to do. A run stopped at the door — its plan stale or
+unreadable, its preflight refused — executed nothing, and the terminal has said why; a summary written for it would put
+a record of nothing over that of the last merge that ran. An interrupted run reached no end to record: its journal holds
+what it confirmed, and the run that finishes it writes the summary.
 :::
 
 :::{rat} Merge is the step the user watches

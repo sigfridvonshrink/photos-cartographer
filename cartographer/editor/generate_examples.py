@@ -27,6 +27,7 @@ preservation/validation path).
 
 Run from the repo root:  python3 cartographer/editor/generate_examples.py
 """
+import hashlib
 import json
 import os
 import sys
@@ -66,6 +67,8 @@ def _pt(lat, lon, t, src="trip-2024-07-03.gpx"):
 def _gpx(points):
     idx = cal.GPXIndex("")
     idx.points = list(points)
+    # each track file's SHA-256, as GPXIndex.build would take it from the file's bytes — here from its name
+    idx.file_sha = {p.source_file: hashlib.sha256(p.source_file.encode()).hexdigest() for p in points}
     return idx
 
 
@@ -156,9 +159,10 @@ def scenario_trip():
         _file(f"{JP}/anchor-1.arw", CAM_A, "2024:07:03 14:00:00", gps={"lat": 50.0, "lon": 4.0}),
         _file(f"{JP}/anchor-2.arw", CAM_A, "2024:07:03 14:10:00", gps={"lat": 50.0, "lon": 4.002}),
         _file(f"{JP}/interp.arw", CAM_A, "2024:07:03 14:05:30"),                          # -> interpolation
+        _file(f"{JP}/interp-chosen.arw", CAM_A, "2024:07:03 14:06:30"),                   # -> a position chosen
         _file(f"{JP}/extrap.arw", CAM_A, "2024:07:03 14:11:30"),                          # -> extrapolation
         _file(f"{JP}/blocked-a.arw", CAM_A, "2024:07:03 22:00:00"),                       # -> review (manual)
-        _file(f"{JP}/blocked-b.arw", CAM_A, "2024:07:03 23:00:00"),                       # -> review (unlocated)
+        _file(f"{JP}/blocked-b.arw", CAM_A, "2024:07:03 23:00:00"),                       # -> review (folder fallback)
         _file(f"{BE}/bel-cam.arw", CAM_B, "2024:07:03 13:00:00"),                         # -> folder fallback
         _file(f"{BE}/bel-phone.jpg", PHONE, "2024:07:03 13:30:00",
               gps={"lat": 51.0, "lon": 4.3}, raw_times={"OffsetTimeOriginal": "+02:00"}),
@@ -196,23 +200,28 @@ def scenario_trip():
     # GPS is built on the completed-time resolved rows (geotag only reaches GPS once time is done).
     rows = cal.compute_resolved_utc(files, groups, time_comp)
     rfp = "example-resolved-utc-fingerprint"
-    gps_req, blk = wf.build_gps_decisions(files, rows, gpx, None, rfp)
+    gps_req, blk = wf.build_gps_decisions(files, rows, gpx, None, rfp, time_decisions=time_comp)
     assert not blk, blk
 
     def fill_gps(a):
         d = a["destinations"]
         d[BE]["folder_fallback"]["user_decision"]["fallback_lat"] = 50.8503      # manual fallback
         d[BE]["folder_fallback"]["user_decision"]["fallback_lon"] = 4.3517
-        d[BR]["folder_fallback"]["user_decision"]["accept_proposal"] = True       # inherit Belgium's
+        # Bruges, writing none of its own, inherits Belgium's: it applies itself (RUL-inherited_fallback_applies)
         for ri in d[JP]["gps_decisions"]["review_items"]:
             if ri["relative_path"].endswith("blocked-a.arw"):
                 ri["user_decision"]["manual_lat"] = 35.0116
                 ri["user_decision"]["manual_lon"] = 135.7681
-            elif ri["relative_path"].endswith("blocked-b.arw"):
-                ri["user_decision"]["accept_unlocated"] = True
+        # blocked-b by Japan's folder fallback (which blocked-a's own position outranks) ...
+        d[JP]["folder_fallback"]["user_decision"]["fallback_lat"] = 35.6762
+        d[JP]["folder_fallback"]["user_decision"]["fallback_lon"] = 139.6503
+        # ... and the tracks' position of interp-chosen.arw replaced by one chosen for it alone (BLD-chosen_position)
+        d[JP]["gps_decisions"]["review_items"].append(
+            {"relative_path": f"{JP}/interp-chosen.arw", "reason": "chosen_by_user",
+             "user_decision": {"manual_lat": 35.0, "manual_lon": 135.75}})
         return a
 
-    gps_comp, blk = wf.build_gps_decisions(files, rows, gpx, fill_gps(_copy(gps_req)), rfp)
+    gps_comp, blk = wf.build_gps_decisions(files, rows, gpx, fill_gps(_copy(gps_req)), rfp, time_decisions=time_comp)
     assert not blk, blk
     assert time_comp["status"] == "complete" and gps_comp["status"] == "complete", \
         (time_comp["status"], gps_comp["status"])
@@ -235,10 +244,12 @@ CAM_SEG = "CAM|segment|G"           # one segment anchor -> medium
 CAM_CONF = "CAM|conflict|C"         # two conflicting anchors -> review_required
 CAM_REV = "CAM|revisit|R"           # the same spot on two days' tracks -> tied; the other day picked
 P, S, C, R = f"{BD}/SinglePoint", f"{BD}/Segment", f"{BD}/Conflict", f"{BD}/Revisit"
+CAM_CLK = "FUJIFILM|X-T5|K"         # its clock set from home time to local time at lunch (BLD-clock_change_split)
+CK = f"{BD}/ClockChange"
 
 
 def scenario_offset_variants():
-    _set_policy(device_groups={"fixed_clock_cameras": [CAM_PT, CAM_SEG, CAM_CONF, CAM_REV], "phones": []},
+    _set_policy(device_groups={"fixed_clock_cameras": [CAM_PT, CAM_SEG, CAM_CONF, CAM_REV, CAM_CLK], "phones": []},
                 default_folder_timezone="Europe/Brussels")
     gpx = _gpx([
         # each camera's region is a track file of its own: one device is in one place at a time
@@ -247,6 +258,9 @@ def scenario_offset_variants():
         _pt(54.0, 8.0, _utc(12, 0, 0), "conflict-a.gpx"), _pt(55.0, 9.0, _utc(9, 0, 0), "conflict-b.gpx"),  # offsets disagree
         _pt(56.0, 10.0, _utc(12, 0, 0), "trip-2024-07-03.gpx"),          # Revisit: the spot on 3 July ...
         _pt(56.0, 10.0, datetime(2024, 7, 4, 12, 0, tzinfo=timezone.utc), "trip-2024-07-04.gpx"),  # ... and 4 July
+        # ClockChange: a walk, two photos on a clock at UTC+2, then two after it was set to UTC+1
+        _pt(57.0, 11.0, _utc(8, 0), "clock.gpx"), _pt(57.01, 11.0, _utc(8, 30), "clock.gpx"),
+        _pt(57.02, 11.0, _utc(12, 0), "clock.gpx"), _pt(57.03, 11.0, _utc(12, 30), "clock.gpx"),
     ])
     files = [
         _file(f"{P}/p.arw", CAM_PT, "2024:07:03 14:00:00", gps={"lat": 52.0, "lon": 6.0}),
@@ -255,8 +269,13 @@ def scenario_offset_variants():
         _file(f"{C}/c1.arw", CAM_CONF, "2024:07:03 14:00:00", gps={"lat": 54.0, "lon": 8.0}),
         _file(f"{C}/c2.arw", CAM_CONF, "2024:07:03 14:00:00", gps={"lat": 55.0, "lon": 9.0}),
         _file(f"{R}/r.arw", CAM_REV, "2024:07:04 14:00:00", gps={"lat": 56.0, "lon": 10.0}),
+        _file(f"{CK}/k1.raf", CAM_CLK, "2024:07:03 10:00:00", gps={"lat": 57.0, "lon": 11.0}),
+        _file(f"{CK}/k2.raf", CAM_CLK, "2024:07:03 10:30:00", gps={"lat": 57.01, "lon": 11.0}),
+        _file(f"{CK}/k-between.raf", CAM_CLK, "2024:07:03 11:30:00"),             # no GPS: either part could take it
+        _file(f"{CK}/k3.raf", CAM_CLK, "2024:07:03 13:00:00", gps={"lat": 57.02, "lon": 11.0}),
+        _file(f"{CK}/k4.raf", CAM_CLK, "2024:07:03 13:30:00", gps={"lat": 57.03, "lon": 11.0}),
     ]
-    groups = {k: {"camera_group_class": "camera"} for k in (CAM_PT, CAM_SEG, CAM_CONF, CAM_REV)}
+    groups = {k: {"camera_group_class": "camera"} for k in (CAM_PT, CAM_SEG, CAM_CONF, CAM_REV, CAM_CLK)}
 
     def fill(a):
         d = a["destinations"]
@@ -268,6 +287,12 @@ def scenario_offset_variants():
         rev = d[R]["camera_group_time_decisions"][CAM_REV]
         assert rev["proposal"]["tied"] is True, rev["proposal"]
         rev["user_decision"]["manual_offset_seconds"] = rev["proposal"]["groups"][1]["offset_seconds"]
+        # ClockChange: the split accepted, the photo without GPS in the hour the clock set back shows twice said to be
+        # the second part's
+        ck = d[CK]["camera_group_time_decisions"][CAM_CLK]
+        assert [u["source_file"] for u in ck["clock_change"]["unsettled"]] == [f"{CK}/k-between.raf"], ck
+        ck["user_decision"].update(accept_clock_change=True, photo_parts={f"{CK}/k-between.raf": 2},
+                                   accepted_change_offsets_seconds=[r["offset_seconds"] for r in ck["clock_change"]["runs"]])
         return a
 
     _, comp = _td(_wf(), files, groups, gpx, fill)
@@ -349,7 +374,8 @@ def scenario_drift_validation():
 
     def fill_drift(a):                                                   # confirm the bucket (zero scrub)
         cell = a["destinations"][DR]["drift_decisions"][CAM_DR]
-        cell["user_decision"].update(confirmed=True, confirmed_offset_seconds=cell["proposal"]["current_offset_seconds"])
+        cell["user_decision"].update(confirmed=True, confirmed_offset_seconds=cell["proposal"]["current_offset_seconds"],
+                                     confirmed_against_tracks=cell["proposal"]["tracks"])
         return a
 
     drift_comp, blk = wf.build_drift_validation(files, time_comp, rows0, gpx, fill_drift(_copy(drift_req)))
@@ -375,7 +401,10 @@ def _verify():
         '"source": "timezone_accepted"', '"source": "manual"', '"source": "gpx_anchor_chosen"', '"tied": true',
         '"confidence": "high"', '"confidence": "medium"', '"confidence": "review_required"',
         '"stale_user_decision": true',
-        '"reason": "no_reliable_gps_source"', '"reason": "manual_locked"', '"reason": "accepted_unlocated"',
+        '"reason": "no_reliable_gps_source"', '"reason": "manual_locked"',
+        '"placed_by": "tracks"', '"placed_by": "folder_fallback"', '"placed_by": "own_position"', '"camera_bucket"',
+        '"fallback_source": "own"', '"fallback_source": "inherited"', '"fallback_source": "none"',
+        '"effective_split"', '"clock_change_part"',
     ]
     missing = [m for m in required if m not in blob]
     # GPS automatic categories live in summary counts (>0 somewhere).

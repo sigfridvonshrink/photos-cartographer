@@ -18,7 +18,7 @@ SHA-256 dependency block (BLD-decision_record_envelope). The GPX offset inferenc
 """
 import json
 from _zone import answer_root_zone
-from _handoff import match_disk
+from _handoff import match_disk, vouched
 import os
 import sys
 from datetime import datetime, timezone
@@ -34,10 +34,12 @@ CAM = "SONY|ILCE-6400|123"
 PHONE = "APPLE|iPhone|p1"
 
 
-def _hfile(rel, *, key=CAM, dto="2024:07:03 14:12:08"):
+def _hfile(rel, *, key=CAM, dto="2024:07:03 14:12:08", offset=None):
     parsed = {"DateTimeOriginal": dto, "selected_source_naive_timestamp": dto,
               "selected_source_timestamp_tag": "DateTimeOriginal", "camera_group_key": key,
               "has_timestamp": True, "Make": "SONY", "Model": "ILCE-6400"}
+    if offset is not None:
+        parsed["OffsetTimeOriginal"] = offset
     return {"relative_path": rel, "media_class": "image", "folder_class": "6-photos-by-dest",
             "size": 100, "mtime_ns": 1,
             "content_hash": json.dumps({"value": "fp-" + rel, "status": "valid"}),
@@ -62,7 +64,7 @@ def _ws(tmp_path, *, files, device_groups, default_tz=""):
         answer_root_zone(ctl, default_tz)        # the default only proposes: the zone answered once at the root
     for rec in files:
         p = ws / rec["relative_path"]; p.parent.mkdir(parents=True, exist_ok=True); p.write_bytes(b"img")
-    (ctl / "photos-11-handoff.json").write_text(json.dumps({"filename_timestamp_format": utils.CONFIG["filename_timestamp_format"], "files": match_disk(ws, files), "depends_on": {"cache": {"fingerprint_algorithm_version": utils.FINGERPRINT_ALGORITHM_VERSION}}}))
+    (ctl / "photos-11-handoff.json").write_text(json.dumps(vouched(ctl.parent, {"filename_timestamp_format": utils.CONFIG["filename_timestamp_format"], "files": match_disk(ws, files), "depends_on": {"cache": {"fingerprint_algorithm_version": utils.FINGERPRINT_ALGORITHM_VERSION}}})))
     return ws
 
 
@@ -88,7 +90,7 @@ def _edit(ws, fn):
 
 # --- first run ---------------------------------------------------------------
 
-@pytest.mark.spec("BLD-timezone_cell")
+@pytest.mark.spec("BLD-timezone_cell", test="TST-geotag_time_decisions-first_run_writes_artifact_requiring_input")
 def test_first_run_writes_artifact_requiring_input(tmp_path, monkeypatch):
     ws = _ws(tmp_path, files=[_hfile("6-photos-by-dest/Brussels/a.jpg")],
              device_groups={"fixed_clock_cameras": [CAM], "phones": []})
@@ -105,7 +107,8 @@ def test_first_run_writes_artifact_requiring_input(tmp_path, monkeypatch):
 
 
 def test_smartphone_group_gets_no_offset_cell(tmp_path, monkeypatch):
-    ws = _ws(tmp_path, files=[_hfile("6-photos-by-dest/Kyoto/p.jpg", key=PHONE)],
+    # a phone's photo recording its offset, with no GPS of its own to check it by, is solved per file: no cell
+    ws = _ws(tmp_path, files=[_hfile("6-photos-by-dest/Kyoto/p.jpg", key=PHONE, offset="+09:00")],
              device_groups={"fixed_clock_cameras": [], "phones": [PHONE]})
     assert _run(monkeypatch, ws) == 0
     d = _artifact(ws)["destinations"]["6-photos-by-dest/Kyoto"]
@@ -196,7 +199,7 @@ def test_determinism_unchanged_rerun_is_byte_identical(tmp_path, monkeypatch):
 
 @pytest.mark.spec("RUL-invalid_decision_kept", "RUL-invalid_value_located", "INV-authored_values_checked",
                   "RUL-checked_timezones", "RUL-invalid_value_never_repaired", "RUL-invalid_decision_reported",
-                  test="TST-geotag_time_decisions-bad_timezone_blocks_and_leaves_artifact")
+                  "RUL-invalid_value_stops", test="TST-geotag_time_decisions-bad_timezone_blocks_and_leaves_artifact")
 def test_bad_timezone_blocks_and_leaves_artifact(tmp_path, monkeypatch, capsys):
     ws = _ws(tmp_path, files=[_hfile("6-photos-by-dest/Brussels/a.jpg")],
              device_groups={"fixed_clock_cameras": [CAM], "phones": []})
@@ -211,12 +214,13 @@ def test_bad_timezone_blocks_and_leaves_artifact(tmp_path, monkeypatch, capsys):
 
 @pytest.mark.spec("RUL-config_validated_before_use", "RUL-invalid_value_located", "RUL-checked_clock_offsets",
                   test="TST-geotag_time_decisions-bad_offset_blocks")
-def test_bad_offset_blocks(tmp_path, monkeypatch, capsys):
+@pytest.mark.parametrize("value", ["not-a-number", "3600"])     # a number written as text is not one either
+def test_bad_offset_blocks(tmp_path, monkeypatch, capsys, value):
     ws = _ws(tmp_path, files=[_hfile("6-photos-by-dest/Brussels/a.jpg")],
              device_groups={"fixed_clock_cameras": [CAM], "phones": []})
     _run(monkeypatch, ws)
     _edit(ws, lambda a: a["destinations"]["6-photos-by-dest/Brussels"]["camera_group_time_decisions"]
-          [CAM]["user_decision"].__setitem__("manual_offset_seconds", "not-a-number"))
+          [CAM]["user_decision"].__setitem__("manual_offset_seconds", value))
     assert _run(monkeypatch, ws) == 2
     assert "manual_offset_seconds" in capsys.readouterr().err
 
@@ -294,7 +298,8 @@ def _drift_gpx(points):
     return idx
 
 
-@pytest.mark.spec("BLD-drift_validation")
+@pytest.mark.spec("BLD-drift_validation",
+                  test="TST-geotag_time_decisions-build_drift_validation_leaves_photos21_byte_unmutated")
 def test_build_drift_validation_leaves_photos21_byte_unmutated(tmp_path):
     """BLD-drift_validation: building photos-22 (GPS-drift validation) refines a manual/tz-derived offset, but the
     validated drift offset is recorded in photos-22 — building it must NOT touch the photos-21
@@ -336,7 +341,7 @@ def test_build_drift_validation_leaves_photos21_byte_unmutated(tmp_path):
 def test_classifying_a_camera_again_restales_the_time_decisions(tmp_path, monkeypatch):
     # The record says what it is and what it was made from; classing the camera a phone changes that, and the
     # record follows: no offset cell, complete, nothing asked.
-    ws = _ws(tmp_path, files=[_hfile("6-photos-by-dest/Brussels/a.jpg")],
+    ws = _ws(tmp_path, files=[_hfile("6-photos-by-dest/Brussels/a.jpg", offset="+02:00")],
              device_groups={"fixed_clock_cameras": [CAM], "phones": []}, default_tz="Europe/Brussels")
     assert _run(monkeypatch, ws) == 0
     before = _artifact(ws)
@@ -359,13 +364,15 @@ def test_classifying_a_camera_again_restales_the_time_decisions(tmp_path, monkey
                   test="TST-geotag_time_decisions-a_file_naming_no_camera_is_solved_alone_never_asked")
 def test_a_file_naming_no_camera_is_solved_alone_never_asked(tmp_path, monkeypatch):
     # A screenshot or a stripped photo names no camera: geotag never asks to class it, gives it no clock offset,
-    # and resolves it by the offset recorded with its time, else by its destination's timezone.
-    ws = _ws(tmp_path, files=[_hfile("6-photos-by-dest/Brussels/shot.png", key=utils.NO_IDENTITY_KEY)],
+    # and resolves it by the offset recorded with its time, else by its destination's timezone once that is
+    # accepted for the destination's camera-less files (BLD-unidentified_files_question).
+    ws = _ws(tmp_path, files=[_hfile("6-photos-by-dest/Brussels/shot.png", key=utils.NO_IDENTITY_KEY, offset="+02:00")],
              device_groups={"fixed_clock_cameras": [], "phones": []}, default_tz="Europe/Brussels")
     assert _run(monkeypatch, ws) == 0                                         # not stopped as an unknown group
     art = _artifact(ws)
     assert art["destinations"]["6-photos-by-dest/Brussels"]["camera_group_time_decisions"] == {}
     assert art["status"] == "complete"
+    art["destinations"]["6-photos-by-dest/Brussels"]["unidentified_files"] = {"effective_iana_timezone": "Europe/Brussels"}
     wf = cal.GeotagWorkflow(str(ws))
     groups, unknown = wf.recognize_camera_groups([{"camera_group_key": utils.NO_IDENTITY_KEY}])
     assert groups[utils.NO_IDENTITY_KEY]["camera_group_class"] == "unidentified" and unknown == []
@@ -376,3 +383,77 @@ def test_a_file_naming_no_camera_is_solved_alone_never_asked(tmp_path, monkeypat
                                     groups, art)
     assert [(r["time_rule_used"], r["resolved_utc"]) for r in rows] == [
         ("destination_timezone", "2024-07-03T12:00:00Z"), ("unidentified_native_offset", "2024-07-03T11:00:00Z")]
+
+
+def _timed(rel, tag, value, *, key=CAM, offset=None):
+    """A by-dest photo whose recorded time is read from `tag` (`ModifyDate` only when neither field before it
+    holds one), with `offset` the offset recorded beside it."""
+    parsed = {tag: value, "selected_source_naive_timestamp": value, "selected_source_timestamp_tag": f"EXIF:{tag}",
+              "camera_group_key": key, "has_timestamp": True, "Make": "SONY", "Model": "ILCE-6400"}
+    if offset is not None:
+        parsed[cal.OFFSET_TAG_FOR[tag]] = offset
+    rec = _hfile(rel, key=key)
+    rec["metadata_status"]["parsed_json"] = json.dumps(parsed)
+    return rec
+
+
+@pytest.mark.spec("RUL-modified_time_solved_alone", "RUL-modified_time_opens_no_day", "BLD-modified_time_files",
+                  test="TST-geotag_time_decisions-a_photo_timed_by_its_modification_opens_no_day")
+def test_a_photo_timed_by_its_modification_opens_no_day(tmp_path, monkeypatch):
+    # An export of the camera's photo keeps the camera's make and model, but its time is the editing computer's: it
+    # opens no day of the camera's offsets, and a camera whose only photo here is such an export is never asked about.
+    other = "CANON|R5|9"
+    ws = _ws(tmp_path, files=[_hfile("6-photos-by-dest/Brussels/a.jpg"),                     # 2024:07:03
+                              _timed("6-photos-by-dest/Brussels/b.jpg", "ModifyDate", "2025:01:10 09:00:00"),
+                              _timed("6-photos-by-dest/Brussels/c.jpg", "ModifyDate", "2025:01:11 09:00:00",
+                                     key=other)],
+             device_groups={"fixed_clock_cameras": [CAM], "phones": []}, default_tz="Europe/Brussels")
+    assert _run(monkeypatch, ws) == 0                                # `other` is not stopped as an unknown group
+    d = _artifact(ws)["destinations"]["6-photos-by-dest/Brussels"]
+    assert sorted(d["camera_group_time_decisions"]) == [CAM]         # one day: the edit's date opens none
+
+
+@pytest.mark.spec("RUL-modified_time_opens_no_day", "BLD-modified_time_files", "RUL-recorded_time_order",
+                  test="TST-geotag_time_decisions-a_photo_timed_by_its_creation_is_the_camera_s")
+def test_a_photo_timed_by_its_creation_is_the_camera_s(tmp_path, monkeypatch):
+    # CreateDate is the camera's own clock still: a photo timed by it opens its day, as one timed by
+    # DateTimeOriginal does.
+    ws = _ws(tmp_path, files=[_hfile("6-photos-by-dest/Brussels/a.jpg"),
+                              _timed("6-photos-by-dest/Brussels/b.jpg", "CreateDate", "2025:01:10 09:00:00")],
+             device_groups={"fixed_clock_cameras": [CAM], "phones": []}, default_tz="Europe/Brussels")
+    assert _run(monkeypatch, ws) == 0
+    d = _artifact(ws)["destinations"]["6-photos-by-dest/Brussels"]
+    assert sorted(d["camera_group_time_decisions"]) == [f"{CAM}@2024-07-03", f"{CAM}@2025-01-10"]
+
+
+@pytest.mark.spec("RUL-modified_time_solved_alone", "RUL-modified_time_no_camera_offset", "BLD-modified_time_files",
+                  test="TST-geotag_time_decisions-a_photo_timed_by_its_modification_takes_no_camera_offset")
+def test_a_photo_timed_by_its_modification_takes_no_camera_offset(tmp_path):
+    # Its camera's offset is decided and in effect; the export is resolved by the offset recorded with its time,
+    # else its destination's timezone — never by the camera's offset.
+    dest = "6-photos-by-dest/Brussels"
+    wf = cal.GeotagWorkflow(str(tmp_path))
+    wf.handoff = {"filename_timestamp_format": utils.CONFIG["filename_timestamp_format"], "files": [
+        _hfile(f"{dest}/a.jpg"),
+        _timed(f"{dest}/b.jpg", "ModifyDate", "2024:07:03 18:00:00", offset="+01:00"),
+        _timed(f"{dest}/c.jpg", "ModifyDate", "2024:07:03 18:00:00")]}
+    files = wf.build_file_model()
+    assert [f["camera_group_key"] for f in files] == [CAM, utils.NO_IDENTITY_KEY, utils.NO_IDENTITY_KEY]
+    groups, unknown = wf.recognize_camera_groups(files)
+    assert groups[utils.NO_IDENTITY_KEY]["camera_group_class"] == "unidentified" and unknown == [CAM]
+    groups[CAM]["camera_group_class"] = "camera"                     # the camera, as the configuration classes it
+    art = {"destinations": {dest: {"destination_timezone": {"effective_iana_timezone": "Europe/Brussels"},
+                                   "unidentified_files": {"effective_iana_timezone": "Europe/Brussels"},
+                                   "camera_group_time_decisions": {CAM: {"camera_group": CAM, "effective_time_anchor": {
+                                       "offset_seconds": -3600, "source": "manual"}}}}}}
+    rows = {r["relative_path"]: r for r in cal.compute_resolved_utc(files, groups, art)}
+    assert (rows[f"{dest}/a.jpg"]["time_rule_used"], rows[f"{dest}/a.jpg"]["utc_offset_used"]) == \
+        ("camera_group_offset", -3600)
+    assert (rows[f"{dest}/b.jpg"]["time_rule_used"], rows[f"{dest}/b.jpg"]["resolved_utc"]) == \
+        ("unidentified_native_offset", "2024-07-03T17:00:00Z")
+    assert (rows[f"{dest}/c.jpg"]["time_rule_used"], rows[f"{dest}/c.jpg"]["resolved_utc"]) == \
+        ("destination_timezone", "2024-07-03T16:00:00Z")
+    # decided from pinned values, the pinned field decides: a pin read from ModifyDate is solved on its own too
+    pinned = cal.from_originals(files[0], {"selected_source_naive_timestamp": "2024:07:03 18:00:00",
+                                           "selected_source_timestamp_tag": "XMP:ModifyDate"})
+    assert cal.clock_group_key(pinned) == utils.NO_IDENTITY_KEY and cal.clock_group_key(files[0]) == CAM

@@ -135,19 +135,25 @@ def _stopping(stopped, names, stop_with):
 _STOPS = {"interrupted": KeyboardInterrupt, "failing": lambda: OSError(errno.EIO, "Input/output error")}
 
 
-@pytest.mark.spec("RUL-split_move_never_lost", test="TST-fallbacks-a_cross_fs_move_stopped_at_any_step_loses_nothing")
+@pytest.mark.spec("RUL-split_move_never_lost", "RUL-cross_fs_all_or_nothing",
+                  test="TST-fallbacks-a_cross_fs_move_stopped_at_any_step_loses_nothing")
 @pytest.mark.parametrize("stop_by", sorted(_STOPS))
 @pytest.mark.parametrize("step", ["copy", "halfway_through_the_copy", "copy_times", "compare", "sync",
                                   "rename", "sync_folder", "remove_source"])
 def test_a_cross_fs_move_stopped_at_any_step_loses_nothing(tmp_path, monkeypatch, step, stop_by):
     """Merge's move into a library on another filesystem — copy, check, sync, rename into place, sync the folder,
     remove the source — interrupted, or failing, at any of its steps or halfway through the copy, leaves the photo
-    whole under its old name, its new name or both: at the moment it stops, and once the stop has unwound."""
+    whole under its old name, its new name or both: at the moment it stops, and once the stop has unwound. Until the
+    rename into place, nothing at all is under the new name — the copy is made under a temporary one."""
     lib = tmp_path / "lib"; lib.mkdir()
     src = tmp_path / "s.jpg"; src.write_bytes(PHOTO)
     dest = lib / "x.jpg"
-    stopped = []
-    stop = _stopping(stopped, (str(src), str(dest)), _STOPS[stop_by])
+    stopped, dest_at_stop = [], []
+    stop_here = _stopping(stopped, (str(src), str(dest)), _STOPS[stop_by])
+
+    def stop(*a, **k):
+        dest_at_stop.append(os.path.lexists(dest))
+        return stop_here(*a, **k)
     real_unlink = os.unlink
 
     def half_copy(s, d, *a, **k):
@@ -169,6 +175,8 @@ def test_a_cross_fs_move_stopped_at_any_step_loses_nothing(tmp_path, monkeypatch
             pass                                                    # (copying the times may fail, and is let go)
     assert stopped == [True]
     _held_whole(str(src), str(dest))
+    if step not in ("sync_folder", "remove_source"):                    # stopped before the rename into place
+        assert dest_at_stop == [False]
 
 
 @pytest.mark.spec("RUL-split_move_never_lost",

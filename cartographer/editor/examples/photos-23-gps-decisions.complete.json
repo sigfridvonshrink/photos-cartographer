@@ -3,7 +3,7 @@
   "artifact_type": "gps_decisions",
   "decision_mode": "no_op_or_auto_resolved",
   "depends_on": {
-    "gps_policy_fingerprint": "e3e1e2845a43dd2da3a139f976622ac01901abdbac30bf52ebe974d18ea21290",
+    "gps_policy_fingerprint": "8e10036be79b05bf64794ab358fd73904d71eeea9c91c29ef9357283bc411967",
     "gpx_fingerprint": "example-gpx-fingerprint",
     "handoff": {
       "artifact_name": "photos-11-handoff.json",
@@ -18,27 +18,26 @@
       "destination_path": "6-photos-by-dest",
       "folder_fallback": {
         "effective_fallback": null,
-        "proposal": {
-          "proposal_source": "manual_required"
-        },
+        "fallback_source": "none",
+        "inherited_fallback": null,
         "requires_user_input": false,
-        "stale_user_decision": false,
         "user_decision": {
-          "accept_proposal": false,
           "fallback_lat": "",
           "fallback_lon": ""
         }
       },
       "gps_decisions": {
         "automatic_decision_summary": {
-          "confidence": "automatic",
-          "gpx_files_used": [],
-          "max_distance_to_track_m": 1000.0,
-          "max_interpolation_gap_seconds": 1800.0,
-          "notes": [
-            "Automatic decisions are summarized here; exact file-level write operations are listed only in photos-24-executable-plan.json."
-          ]
+          "gpx_files_used": []
         },
+        "placed_photos": [
+          {
+            "camera_bucket": "NIKON|D750|B",
+            "content_fingerprint": "fp-6-photos-by-dest/root-cam.arw",
+            "placed_by": "own_position",
+            "relative_path": "6-photos-by-dest/root-cam.arw"
+          }
+        ],
         "review_items": [],
         "summary": {
           "automatic_folder_fallback": 0,
@@ -48,7 +47,6 @@
           "files_total": 1,
           "manual_locked": 0,
           "manual_review_required": 0,
-          "no_gps_change_needed": 0,
           "preserve_native_gps": 1
         }
       }
@@ -60,27 +58,35 @@
           "lat": 50.8503,
           "lon": 4.3517
         },
-        "proposal": {
-          "proposal_source": "manual_required"
-        },
+        "fallback_source": "own",
+        "inherited_fallback": null,
         "requires_user_input": false,
-        "stale_user_decision": false,
         "user_decision": {
-          "accept_proposal": false,
           "fallback_lat": 50.8503,
           "fallback_lon": 4.3517
         }
       },
       "gps_decisions": {
         "automatic_decision_summary": {
-          "confidence": "automatic",
-          "gpx_files_used": [],
-          "max_distance_to_track_m": 1000.0,
-          "max_interpolation_gap_seconds": 1800.0,
-          "notes": [
-            "Automatic decisions are summarized here; exact file-level write operations are listed only in photos-24-executable-plan.json."
-          ]
+          "gpx_files_used": []
         },
+        "placed_photos": [
+          {
+            "camera_bucket": "NIKON|D750|B",
+            "content_fingerprint": "fp-6-photos-by-dest/Belgium/bel-cam.arw",
+            "placed_by": "folder_fallback",
+            "relative_path": "6-photos-by-dest/Belgium/bel-cam.arw",
+            "tracks": {
+              "reason": "outside_track",
+              "seconds_from_track": 6600
+            }
+          },
+          {
+            "content_fingerprint": "fp-6-photos-by-dest/Belgium/bel-phone.jpg",
+            "placed_by": "own_position",
+            "relative_path": "6-photos-by-dest/Belgium/bel-phone.jpg"
+          }
+        ],
         "review_items": [],
         "summary": {
           "automatic_folder_fallback": 1,
@@ -90,7 +96,6 @@
           "files_total": 2,
           "manual_locked": 0,
           "manual_review_required": 0,
-          "no_gps_change_needed": 0,
           "preserve_native_gps": 1
         }
       }
@@ -102,32 +107,31 @@
           "lat": 50.8503,
           "lon": 4.3517
         },
-        "proposal": {
-          "inherited_from": "6-photos-by-dest/Belgium",
-          "proposal_source": "inherited",
-          "proposed_fallback": {
-            "lat": 50.8503,
-            "lon": 4.3517
-          }
+        "fallback_source": "inherited",
+        "inherited_fallback": {
+          "from": "6-photos-by-dest/Belgium",
+          "lat": 50.8503,
+          "lon": 4.3517
         },
+        "inherited_from": "6-photos-by-dest/Belgium",
         "requires_user_input": false,
-        "stale_user_decision": false,
         "user_decision": {
-          "accept_proposal": true,
           "fallback_lat": "",
           "fallback_lon": ""
         }
       },
       "gps_decisions": {
         "automatic_decision_summary": {
-          "confidence": "automatic",
-          "gpx_files_used": [],
-          "max_distance_to_track_m": 1000.0,
-          "max_interpolation_gap_seconds": 1800.0,
-          "notes": [
-            "Automatic decisions are summarized here; exact file-level write operations are listed only in photos-24-executable-plan.json."
-          ]
+          "gpx_files_used": []
         },
+        "placed_photos": [
+          {
+            "camera_bucket": "NIKON|D750|B",
+            "content_fingerprint": "fp-6-photos-by-dest/Belgium/Bruges/bruges.arw",
+            "placed_by": "own_position",
+            "relative_path": "6-photos-by-dest/Belgium/Bruges/bruges.arw"
+          }
+        ],
         "review_items": [],
         "summary": {
           "automatic_folder_fallback": 0,
@@ -137,7 +141,6 @@
           "files_total": 1,
           "manual_locked": 0,
           "manual_review_required": 0,
-          "no_gps_change_needed": 0,
           "preserve_native_gps": 1
         }
       }
@@ -145,33 +148,47 @@
     "6-photos-by-dest/Belgium/Brussels": {
       "destination_path": "6-photos-by-dest/Belgium/Brussels",
       "folder_fallback": {
-        "effective_fallback": null,
-        "proposal": {
-          "inherited_from": "6-photos-by-dest/Belgium",
-          "proposal_source": "inherited",
-          "proposed_fallback": {
-            "lat": 50.8503,
-            "lon": 4.3517
-          }
+        "effective_fallback": {
+          "lat": 50.8503,
+          "lon": 4.3517
         },
+        "fallback_source": "inherited",
+        "inherited_fallback": {
+          "from": "6-photos-by-dest/Belgium",
+          "lat": 50.8503,
+          "lon": 4.3517
+        },
+        "inherited_from": "6-photos-by-dest/Belgium",
         "requires_user_input": false,
-        "stale_user_decision": false,
         "user_decision": {
-          "accept_proposal": false,
           "fallback_lat": "",
           "fallback_lon": ""
         }
       },
       "gps_decisions": {
         "automatic_decision_summary": {
-          "confidence": "automatic",
-          "gpx_files_used": [],
-          "max_distance_to_track_m": 1000.0,
-          "max_interpolation_gap_seconds": 1800.0,
-          "notes": [
-            "Automatic decisions are summarized here; exact file-level write operations are listed only in photos-24-executable-plan.json."
-          ]
+          "gpx_files_used": []
         },
+        "placed_photos": [
+          {
+            "camera_bucket": "SONY|ILCE-6400|A@2024-07-03",
+            "content_fingerprint": "fp-6-photos-by-dest/Belgium/Brussels/bru-summer-1.arw",
+            "placed_by": "own_position",
+            "relative_path": "6-photos-by-dest/Belgium/Brussels/bru-summer-1.arw"
+          },
+          {
+            "camera_bucket": "SONY|ILCE-6400|A@2024-07-04",
+            "content_fingerprint": "fp-6-photos-by-dest/Belgium/Brussels/bru-summer-2.arw",
+            "placed_by": "own_position",
+            "relative_path": "6-photos-by-dest/Belgium/Brussels/bru-summer-2.arw"
+          },
+          {
+            "camera_bucket": "SONY|ILCE-6400|A@2024-12-22",
+            "content_fingerprint": "fp-6-photos-by-dest/Belgium/Brussels/bru-winter.arw",
+            "placed_by": "own_position",
+            "relative_path": "6-photos-by-dest/Belgium/Brussels/bru-winter.arw"
+          }
+        ],
         "review_items": [],
         "summary": {
           "automatic_folder_fallback": 0,
@@ -181,7 +198,6 @@
           "files_total": 3,
           "manual_locked": 0,
           "manual_review_required": 0,
-          "no_gps_change_needed": 0,
           "preserve_native_gps": 3
         }
       }
@@ -189,69 +205,96 @@
     "6-photos-by-dest/Japan": {
       "destination_path": "6-photos-by-dest/Japan",
       "folder_fallback": {
-        "effective_fallback": null,
-        "proposal": {
-          "proposal_source": "manual_required"
+        "effective_fallback": {
+          "lat": 35.6762,
+          "lon": 139.6503
         },
+        "fallback_source": "own",
+        "inherited_fallback": null,
         "requires_user_input": false,
-        "stale_user_decision": false,
         "user_decision": {
-          "accept_proposal": false,
-          "fallback_lat": "",
-          "fallback_lon": ""
+          "fallback_lat": 35.6762,
+          "fallback_lon": 139.6503
         }
       },
       "gps_decisions": {
         "automatic_decision_summary": {
-          "confidence": "automatic",
           "gpx_files_used": [
             "trip-2024-07-03.gpx"
-          ],
-          "max_distance_to_track_m": 1000.0,
-          "max_interpolation_gap_seconds": 1800.0,
-          "notes": [
-            "Automatic decisions are summarized here; exact file-level write operations are listed only in photos-24-executable-plan.json."
           ]
         },
+        "placed_photos": [
+          {
+            "camera_bucket": "SONY|ILCE-6400|A",
+            "content_fingerprint": "fp-6-photos-by-dest/Japan/anchor-1.arw",
+            "placed_by": "own_position",
+            "relative_path": "6-photos-by-dest/Japan/anchor-1.arw"
+          },
+          {
+            "camera_bucket": "SONY|ILCE-6400|A",
+            "content_fingerprint": "fp-6-photos-by-dest/Japan/anchor-2.arw",
+            "placed_by": "own_position",
+            "relative_path": "6-photos-by-dest/Japan/anchor-2.arw"
+          },
+          {
+            "camera_bucket": "SONY|ILCE-6400|A",
+            "content_fingerprint": "fp-6-photos-by-dest/Japan/blocked-b.arw",
+            "placed_by": "folder_fallback",
+            "relative_path": "6-photos-by-dest/Japan/blocked-b.arw",
+            "tracks": {
+              "reason": "outside_track",
+              "seconds_from_track": 31800
+            }
+          },
+          {
+            "camera_bucket": "SONY|ILCE-6400|A",
+            "content_fingerprint": "fp-6-photos-by-dest/Japan/extrap.arw",
+            "method": "extrapolated",
+            "placed_by": "tracks",
+            "relative_path": "6-photos-by-dest/Japan/extrap.arw"
+          },
+          {
+            "camera_bucket": "SONY|ILCE-6400|A",
+            "content_fingerprint": "fp-6-photos-by-dest/Japan/interp.arw",
+            "method": "direct_match",
+            "placed_by": "tracks",
+            "relative_path": "6-photos-by-dest/Japan/interp.arw"
+          }
+        ],
         "review_items": [
           {
+            "camera_bucket": "SONY|ILCE-6400|A",
             "content_fingerprint": "fp-6-photos-by-dest/Japan/blocked-a.arw",
             "reason": "manual_locked",
             "relative_path": "6-photos-by-dest/Japan/blocked-a.arw",
             "requires_user_input": false,
             "stale_user_decision": false,
             "user_decision": {
-              "accept_unlocated": false,
               "manual_lat": 35.0116,
               "manual_lon": 135.7681
             }
           },
           {
-            "content_fingerprint": "fp-6-photos-by-dest/Japan/blocked-b.arw",
-            "reason": "accepted_unlocated",
-            "relative_path": "6-photos-by-dest/Japan/blocked-b.arw",
+            "camera_bucket": "SONY|ILCE-6400|A",
+            "content_fingerprint": "fp-6-photos-by-dest/Japan/interp-chosen.arw",
+            "reason": "manual_locked",
+            "relative_path": "6-photos-by-dest/Japan/interp-chosen.arw",
             "requires_user_input": false,
             "stale_user_decision": false,
-            "tracks": {
-              "reason": "outside_track",
-              "seconds_from_track": 31800
-            },
             "user_decision": {
-              "accept_unlocated": true,
-              "manual_lat": "",
-              "manual_lon": ""
+              "manual_lat": 35.0,
+              "manual_lon": 135.75
             }
           }
         ],
         "summary": {
-          "automatic_folder_fallback": 0,
+          "automatic_folder_fallback": 1,
           "automatic_gpx_extrapolation": 1,
           "automatic_gpx_interpolation": 1,
           "blocked": 0,
-          "files_total": 6,
-          "manual_locked": 1,
+          "files_total": 7,
+          "manual_locked": 2,
           "manual_review_required": 0,
-          "no_gps_change_needed": 1,
           "preserve_native_gps": 2
         }
       }
@@ -260,27 +303,25 @@
       "destination_path": "6-photos-by-dest/PhoneOnly",
       "folder_fallback": {
         "effective_fallback": null,
-        "proposal": {
-          "proposal_source": "manual_required"
-        },
+        "fallback_source": "none",
+        "inherited_fallback": null,
         "requires_user_input": false,
-        "stale_user_decision": false,
         "user_decision": {
-          "accept_proposal": false,
           "fallback_lat": "",
           "fallback_lon": ""
         }
       },
       "gps_decisions": {
         "automatic_decision_summary": {
-          "confidence": "automatic",
-          "gpx_files_used": [],
-          "max_distance_to_track_m": 1000.0,
-          "max_interpolation_gap_seconds": 1800.0,
-          "notes": [
-            "Automatic decisions are summarized here; exact file-level write operations are listed only in photos-24-executable-plan.json."
-          ]
+          "gpx_files_used": []
         },
+        "placed_photos": [
+          {
+            "content_fingerprint": "fp-6-photos-by-dest/PhoneOnly/phone-only.jpg",
+            "placed_by": "own_position",
+            "relative_path": "6-photos-by-dest/PhoneOnly/phone-only.jpg"
+          }
+        ],
         "review_items": [],
         "summary": {
           "automatic_folder_fallback": 0,
@@ -290,7 +331,6 @@
           "files_total": 1,
           "manual_locked": 0,
           "manual_review_required": 0,
-          "no_gps_change_needed": 0,
           "preserve_native_gps": 1
         }
       }

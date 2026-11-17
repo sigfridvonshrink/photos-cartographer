@@ -145,7 +145,18 @@ main { flex: 1; display: grid; grid-template-columns: var(--list-w, minmax(360px
 .gate-title { color: var(--fg); font-weight: 600; margin-bottom: 4px; }
 .gate.warn { border-left-color: var(--warn); }
 .group-title { padding: 10px 12px 4px; font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
-.summary { padding: 4px 12px 8px 24px; font: 11px var(--mono); color: var(--muted); }
+/* folds: a destination's photo buckets and their sub-groups (GPS view), the offsets its photos settle (Time view) —
+   folded when settled, open when they wait (docs/design/decisions.md) */
+details.fold > summary { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; padding: 4px 12px;
+  font: 11px var(--mono); color: var(--muted); cursor: pointer; list-style: none; }
+details.fold > summary::-webkit-details-marker { display: none; }
+details.fold > summary::before { content: "▸"; }
+details.fold[open] > summary::before { content: "▾"; }
+details.fold > summary:hover { color: var(--fg); }
+details.fold.waits > summary { color: var(--warn); }
+details.fold.sub { margin-left: 14px; }
+details.fold > .row { padding-left: 26px; }
+.chip.cam-link { border: 0; cursor: pointer; font: 11px var(--mono); }
 
 /* side panel */
 #panel h2 { font-size: 13px; margin: 0 0 2px; }

@@ -101,7 +101,7 @@ def test_journals_are_per_run_and_retained(tmp_path, monkeypatch):
     assert os.path.exists(utils.journal_path(str(ws), p2.plan_id))
 
 
-@pytest.mark.spec("RUL-config_writers")
+@pytest.mark.spec("RUL-config_writers", test="TST-control_dir-prep_seeds_config_once_then_never_rewrites_it")
 def test_prep_seeds_config_once_then_never_rewrites_it(tmp_path, monkeypatch):
     """RUL-config_writers: prep is the SOLE writer of photos-00-config.json and only SEEDS it once — it never edits
     it thereafter. After the first run seeds the config, a second prep run leaves the on-disk

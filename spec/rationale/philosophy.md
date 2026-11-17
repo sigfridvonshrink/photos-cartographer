@@ -113,8 +113,9 @@ a downstream expression of the "local, owned" ethos (P1, P2), not a structural d
 :status: ruled
 :forced: yes
 :follows_from: CHC-photos_matter
+:uses: DEF-own_values
 
-plan / validate / execute; atomic no-clobber; quarantine, not delete; original-values ledger.
+plan / validate / execute; atomic no-clobber; quarantine, not delete; a ledger of each photo's **own values**.
 :::
 
 :::{rat} No mutation outside a validated plan
@@ -123,7 +124,8 @@ plan / validate / execute; atomic no-clobber; quarantine, not delete; original-v
 :forced: yes
 :follows_from: RAT-non_destructive_core
 
-**plan → validate → execute**; the dry-run *is* the serialized plan; stale plans are rejected against current state.
+**plan → validate → execute**; the dry run validates the very serialized plan execution runs; stale plans are rejected
+against current state.
 :::
 
 :::{rat} Safety cannot rest on the plan being correct
@@ -149,9 +151,11 @@ Duplicates are **quarantined**, never removed; pruning is an explicit, separate 
 :status: ruled
 :forced: yes
 :follows_from: RAT-non_destructive_core
+:uses: DEF-own_values
 
-An **original-values ledger** keeps what each photo held before the tool first changed it, and every plan decides from
-it, so deleting a decision *restores* the prior state.
+A ledger of each photo's **own values** keeps what each photo held before the tool first changed it, and every plan
+decides from it, so deleting a decision *undoes* it: the photo is decided again from its own values, as if the
+decision had never been made.
 :::
 
 ### From F2 + P3 — drift makes the decisions intricate; P3 keeps them cheap
@@ -161,14 +165,21 @@ it, so deleting a decision *restores* the prior state.
 :status: ruled
 :forced: yes
 :follows_from: FCT-clocks_drift
+:justifies: RUL-offset_per_camera_destination_day
 
 Start with the fact. Because each camera's clock is wrong by its own amount, and that amount changes from day to day
 (F2), there is no single offset to discover — the correct answer is **per (camera group, destination, day)**. *That*
 granularity is the entire source of the decisions' "complexity": it is a consequence of real, time-varying drift, not a
 premise.
 
-The offset is **inferred and applied per (camera group, destination, day)**; corrections fall *between* destinations
-and between days, never within one destination's day — which is why **one destination = one coherent shoot**.
+A camera's clock drifts, and is set again — to local time, on a trip, often each morning. Destinations are where the
+user went, not when: one offset per camera, or per destination over several days, would be wrong for every day but one.
+A day in one place is the unit within which the error stays put, so it is the unit decided.
+
+The offset is **inferred per (camera group, destination, day)**: the day is the unit within which the error stays
+put. Where the camera's clock was set again during a day, the day is decided in parts; and the offset a camera's own
+positions gave on a day in one destination is offered to its photos of that day in the others, since a camera has
+one clock.
 :::
 
 :::{rat} Intricate, evidence-specific decisions are too error-prone to hand-edit
@@ -177,7 +188,7 @@ and between days, never within one destination's day — which is why **one dest
 :forced: yes
 :follows_from: FCT-clocks_drift
 
-**Format + editor split**: JSON is the record; the Time/Drift/GPS app is what writes it.
+**Format + editor split**: JSON is the record; the decision editor is what writes it.
 :::
 
 :::{rat} The record must stay an honest statement of *intent*, not a mutable scratchpad
@@ -186,7 +197,9 @@ and between days, never within one destination's day — which is why **one dest
 :forced: yes
 :follows_from: RAT-format_editor_split
 
-The editor writes **only the `user_decision` field** — never derived or evidence fields.
+The editor writes **only the user's answers** — the decision fields of geotag's records, a camera group's class
+and its naming as several bodies in the configuration, and the answer to whether to download the table of countries in
+its own record — never derived or evidence fields.
 :::
 
 :::{rat} Minimal, cascading asks
@@ -195,8 +208,8 @@ The editor writes **only the `user_decision` field** — never derived or eviden
 :forced: yes
 :follows_from: FCT-clocks_drift, CHC-ask_only_what_data_cannot_settle, CHC-local_folder_library
 
-Such intricacy would be brutal to enter by hand, so P3 (ask only what the data can't settle) governs how it is
-collected — and introduces the document's central trade.
+Clock drift makes the decisions intricate, and entered by hand they would be brutal; so P3 (ask only what the data
+can't settle) governs how they are collected — trading many short-reaching asks for a few far-reaching ones.
 :::
 
 :::{rat} Asking per-photo would be thousands of short-reaching chores
@@ -206,7 +219,8 @@ collected — and introduces the document's central trade.
 :follows_from: RAT-minimal_cascading_asks
 
 A place's decisions **cascade**: *one far-reaching choice high in the tree is traded for many short-reaching ones* — a
-timezone, a fallback position, set once at the top of a place's folders and inherited unless overridden, remembered across re-runs.
+timezone, a fallback position, set once on the folder of the place it holds for — a country, a city — and inherited by
+the places inside it unless overridden, remembered across re-runs.
 (This is where "far-reaching" comes from — a chosen trade, not an inherent property.) A clock offset does not: it is
 the camera's for that day, wherever its photos were sorted, and each day's is found from that day's own evidence.
 :::
@@ -227,8 +241,8 @@ inherit at all, and every value would fall back to per-photo entry.
 :forced: yes
 :follows_from: RAT-minimal_cascading_asks
 
-Timezone, clock offset, and GPS fallback are **piggybacked on the destination sort** one would do anyway for real albums
-(P2).
+Timezone and GPS fallback are **piggybacked on the destination sort** one would do anyway for real albums (P2), and
+the sort groups each camera's days for its clock offset.
 :::
 
 :::{rat} The tedious part of a judgment call should be pre-computed
@@ -338,8 +352,8 @@ interpolated between two, extrapolated past a track's end, set by hand for the p
 photo itself, so a rough pin is never mistaken for a precise one, in the library as in the workspace.
 
 *Why it is kept:* "I still want to be able to know, at a later date, how that GPS position was assigned - maybe I want
-to refine it by image/place recognition for example." A new track needs no tag: it changes the GPX folder, which makes
-the GPS decisions stale, and they are regenerated.
+to refine it by image/place recognition for example." A new track needs no tag: where it reaches a photo's time it makes
+the GPS decisions it bears on stale, and they are regenerated.
 
 *The traceability:* "every decision must be traced, and by incorporating the precision, I allow it even in the final
 library."
@@ -351,7 +365,7 @@ library."
 :id: RAT-multi_session_job
 :status: ruled
 :forced: yes
-:follows_from: FCT-large_batches, CHC-total_placement
+:follows_from: FCT-large_batches, CHC-total_placement, CHC-local_folder_library
 
 This is a **two-level chain**: a fact and a choice together force an intermediate consequence, and that consequence
 forces the record machinery. It is the part most easily mistaken for an arbitrary choice.
@@ -395,10 +409,12 @@ are **zero-cost benefits** that fall out of building for resumability.
 :status: ruled
 :forced: yes
 :follows_from: RAT-durable_record
+:uses: DEF-own_values
 
 Decisions are **idempotently re-read each run**, never kept in the fast store, **SQLite**: what it holds is derived
-and rebuildable — but for each photo's own values, pinned before the tool first wrote to it, which nothing else holds
-once it has, and which the archived image of the database keeps.
+and rebuildable — but for what nothing else holds once it is taken: each photo's own values, pinned before the tool
+first wrote to it, the track points its decisions rest on, and the state the last execution left — which the
+archived image of the database keeps.
 :::
 
 :::{rat} A choice made weeks earlier must still explain itself on return
@@ -451,7 +467,7 @@ robustness, but the spread thresholds, the tie-breaks, and the confidence grades
 :follows_from: RAT-destination_tree_is_a_hierarchy, CHC-local_folder_library
 
 **The downstream library, not the tree.** A *hierarchical* destination tree is **forced**, not chosen: the timezone /
-offset / GPS-fallback cascade rides on the folder nesting, so a flat or tag-based layout would make inheritance
+GPS-fallback cascade rides on the folder nesting, so a flat or tag-based layout would make inheritance
 impossible and drive the per-photo workload straight back up. What is actually free is only *which* folder-based
 library consumes the result — digiKam, or any other — and the cosmetic naming of the levels.
 :::

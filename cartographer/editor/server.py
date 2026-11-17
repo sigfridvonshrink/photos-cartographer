@@ -22,7 +22,8 @@ It launches nothing — it prints a clickable link using the machine's own IP an
 interface (default 0.0.0.0), so you can open the editor in your laptop's browser while SSH'd into the
 machine. Ctrl-C stops it cleanly (releasing the port).
 
-It reads `./.photos-ingest/photos-21*/photos-22*/photos-23*` decision JSON from the current-directory workspace
+It reads `./.photos-ingest/photos-21*/photos-22*/photos-23*` decision JSON, and the fingerprint mismatches of
+`photos-25*` (geotag's execution summary), from the current-directory workspace
 (refusing to run if the cwd is not an initialized workspace); `--demo` runs read-only on the bundled
 example fixtures instead. The app edits `user_decision` and saves it back
 (POST /api/save writes only `user_decision`, round-tripping the rest; disabled in demo). GET
@@ -44,6 +45,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
 
 from .. import photos_utils
+from .. import photos_2_geotag
 
 
 def _bind(host, port, handler):
@@ -78,6 +80,10 @@ CONTROL = ".photos-ingest"
 TIME_NAME = "photos-21-time-decisions.json"
 DRIFT_NAME = "photos-22-gps-drift-validation.json"
 GPS_NAME = "photos-23-gps-decisions.json"
+EXECUTION_NAME = "photos-25-execution-summary.json"   # its fingerprint_mismatches ask whether a changed photo stands
+CONFIG_NAME = "photos-00-config.json"           # a new camera group's class is written into its device_groups
+HANDOFF_NAME = "photos-11-handoff.json"         # prep's record: the photos whose camera groups geotag classes
+DEVICE_CLASSES = ("phones", "fixed_clock_cameras")   # the two arrays of camera_time_and_timezone_policy.device_groups
 GUARD_NAME = "photos-00-workspace-guard"        # root sentinel written once a workspace is initialized
 EDITOR_LOCK = "photos-00-decision-editor.lock"  # dotfile lives in CONTROL; flock, fail-fast
 
@@ -202,7 +208,9 @@ def _example_json(name):
         return {"_error": f"could not parse {name}: {e}"}
 
 
-_RECORDS = (("time", TIME_NAME), ("drift", DRIFT_NAME), ("gps", GPS_NAME))
+# The records whose `user_decision`s the editor answers (BLD-editor_answers_every_question): the three decision records,
+# and geotag's execution summary, whose fingerprint mismatches each ask whether the photo's changed content stands.
+_RECORDS = (("time", TIME_NAME), ("drift", DRIFT_NAME), ("gps", GPS_NAME), ("execution", EXECUTION_NAME))
 
 
 def _read_record(path):
@@ -224,18 +232,127 @@ def _parse_record(raw, name):
     if raw is None:
         return None
     try:
-        return json.loads(raw)
+        art = json.loads(raw)
     except ValueError as e:
         return {"_error": f"could not read {name}: {e}"}
+    kind = _DECISION_KINDS.get(name)
+    if kind is not None:
+        # A decision holding a field it does not have — a photo's `accept_unlocated` among them — is refused as geotag
+        # refuses it (RUL-unknown_decision_field_refused): shown as a record that cannot be read, named.
+        unknown = photos_2_geotag.unknown_decision_fields(art, kind)
+        if unknown:
+            return {"_error": f"could not read {name}: {' '.join(unknown)}"}
+    return art
+
+
+# The decision records, by the kind geotag checks each as (photos_2_geotag.DECISION_FIELDS).
+_DECISION_KINDS = {TIME_NAME: "time", DRIFT_NAME: "drift", GPS_NAME: "gps"}
+
+
+_HOST_ZONES = None
+
+
+def _host_zones():
+    """The timezone names geotag accepts on this host: every zone its zone database holds that
+    `valid_iana_timezone` takes — the very check geotag's plan makes (RUL-checked_timezones). The editor checks a
+    zone against this list, never the browser's own, which may know a name the host does not (`US/Eastern` on a
+    host without the legacy names) and so let a zone be saved that the plan then refuses."""
+    global _HOST_ZONES
+    if _HOST_ZONES is None:
+        import zoneinfo
+        _HOST_ZONES = sorted(z for z in zoneinfo.available_timezones() if photos_utils.valid_iana_timezone(z))
+    return _HOST_ZONES
+
+
+def _device_groups(cfg):
+    return ((cfg or {}).get("camera_time_and_timezone_policy") or {}).get("device_groups")
+
+
+def _camera_question(workspace, raw_config):
+    """The camera groups geotag stops on, not classed by the configuration (BLD-editor_lists_new_camera_groups): each with
+    its photos' count, the first three of them and the identity prep found, and a `user_decision.device_class` the
+    editor answers — `phones` or `fixed_clock_cameras`, the array of `device_groups` it is written into. Found from the
+    handoff's photos under photos by destination as geotag finds them (`unclassified_camera_groups`). {_error} when the
+    configuration or the handoff cannot be read, or the configuration fails the checks `load_config` makes — its
+    questions are built from it, and an authored value is checked before it is used (INV-authored_values_checked); no
+    groups without a handoff."""
+    if raw_config is None:
+        return {"groups": {}}
+    cfg = _checked_config(workspace, raw_config)
+    if "_error" in cfg:
+        return cfg
+    try:
+        handoff = _parse_record(_read_record(os.path.join(workspace, CONTROL, HANDOFF_NAME)), HANDOFF_NAME)
+    except OSError as e:
+        return {"_error": f"could not read {HANDOFF_NAME}: {e}"}
+    if isinstance(handoff, dict) and "_error" in handoff:
+        return handoff
+    facts = {g.get("group_key"): g for g in ((handoff or {}).get("camera_groups") or []) if isinstance(g, dict)}
+    groups, bodies = {}, {}
+    for key, paths in photos_2_geotag.unclassified_camera_groups(handoff, cfg).items():
+        groups[key] = {"files": len(paths), "examples": paths[:3],
+                       "identity": (facts.get(key) or {}).get("contributing_identity_fields") or {},
+                       "user_decision": {"device_class": ""}, "requires_user_input": True,
+                       "stale_user_decision": False}
+    # each fixed-clock camera group of the photos, and whether the configuration names it several bodies — a setting
+    # the user may change, never a question that waits (BLD-editor_marks_several_bodies)
+    several = set((cfg.get("camera_time_and_timezone_policy") or {}).get("several_bodies_groups") or [])
+    for key, paths in photos_2_geotag.camera_groups_of_class(handoff, cfg, "camera").items():
+        bodies[key] = {"files": len(paths), "examples": paths[:3],
+                       "identity": (facts.get(key) or {}).get("contributing_identity_fields") or {},
+                       "user_decision": {"several_bodies": key in several}, "requires_user_input": False,
+                       "stale_user_decision": False}
+    return {"groups": groups, "bodies": bodies}
+
+
+def _checked_config(workspace, raw_config):
+    """The workspace's configuration from its bytes, checked as `load_config` checks it (`check_config`), or
+    {_error: why} — one that does not parse, is not an object, or fails a check."""
+    cfg = _parse_record(raw_config, CONFIG_NAME)
+    if not isinstance(cfg, dict):
+        return {"_error": f"{CONFIG_NAME} must be a JSON object"}
+    if "_error" in cfg:
+        return cfg
+    try:
+        photos_utils.check_config(cfg, workspace)
+    except ValueError as e:
+        return {"_error": str(e)}
+    return cfg
+
+
+def _anchor_spread(workspace, raw_config):
+    """`gpx_anchor_offset_spread_max_seconds` of the workspace's checked configuration — how near one of a GPS
+    proposal's groups an offset the user sets must lie for the next plan to count it anchored by the camera's own GPS
+    (RUL-chosen_group_is_anchored), which the editor's preview says — or None where the configuration is missing or
+    fails its checks. The demo's is the built-in default's."""
+    if not workspace:
+        return photos_utils.DEFAULT_CONFIG["gpx_anchor_offset_spread_max_seconds"]
+    if raw_config is None:
+        return None
+    cfg = _checked_config(workspace, raw_config)
+    return None if "_error" in cfg else cfg["gpx_anchor_offset_spread_max_seconds"]
+
+
+def _zone_table_cell(workspace):
+    """The question of downloading the table of countries, while this workspace has it unanswered (the host's zone
+    database has no `zone.tab` and no answer is recorded): {"question": the words `prep plan` asks it in,
+    "user_decision": {"download": ""}} — answered `yes` or `no` here as by `prep plan --download-zone-table`
+    (BLD-editor_answers_zone_table). None where nothing is to be asked, and in the demo."""
+    if not workspace or not photos_utils.zone_table_question_pending(workspace):
+        return None
+    return {"question": photos_utils.zone_table_question(photos_utils.bundled_zone_table()["tzdata_version"]),
+            "user_decision": {"download": ""}, "requires_user_input": False, "stale_user_decision": False}
 
 
 def _load_artifacts(workspace):
-    """Return {workspace, demo, time, drift, gps, hashes}. `hashes` holds the SHA-256 of each record's bytes
+    """Return {workspace, demo, time, drift, gps, execution, cameras, zone_table, hashes, zones}. `hashes` holds the SHA-256 of each record's bytes
     as loaded (None for one absent); a save carries them back, so it is refused when a record has changed
-    since (RUL-save_only_what_was_shown). Demo mode loads requires-input fixtures."""
+    since (RUL-save_only_what_was_shown). `zones` is the host's list of timezones geotag accepts (`_host_zones`).
+    Demo mode loads requires-input fixtures."""
     if workspace:
         cd = os.path.join(workspace, CONTROL)
-        out = {"workspace": os.path.abspath(workspace), "demo": False, "hashes": {}}
+        out = {"workspace": os.path.abspath(workspace), "demo": False, "hashes": {}, "zones": _host_zones(),
+               "zone_table": _zone_table_cell(workspace)}
         for key, name in _RECORDS:
             try:
                 raw = _read_record(os.path.join(cd, name))
@@ -243,11 +360,23 @@ def _load_artifacts(workspace):
                 out[key], out["hashes"][key] = {"_error": f"could not read {name}: {e}"}, None
                 continue
             out[key], out["hashes"][key] = _parse_record(raw, name), _record_hash(raw)
+        # the configuration, as the class of a new camera group is written into it: its hash, like a record's
+        try:
+            raw = _read_record(os.path.join(cd, CONFIG_NAME))
+        except OSError as e:
+            out["cameras"], out["hashes"]["cameras"] = {"_error": f"could not read {CONFIG_NAME}: {e}"}, None
+            out["anchor_spread_seconds"] = None
+            return out
+        out["cameras"], out["hashes"]["cameras"] = _camera_question(workspace, raw), _record_hash(raw)
+        out["anchor_spread_seconds"] = _anchor_spread(workspace, raw)
         return out
-    return {"workspace": None, "demo": True, "hashes": {},
+    return {"workspace": None, "demo": True, "hashes": {}, "zones": _host_zones(),
+            "anchor_spread_seconds": _anchor_spread(None, None),
             "time": _example_json("photos-21-time-decisions.requires-input.json"),
             "drift": _example_json("photos-22-gps-drift-validation.requires-input.json"),
-            "gps": _example_json("photos-23-gps-decisions.requires-input.json")}
+            "gps": _example_json("photos-23-gps-decisions.requires-input.json"),
+            "execution": None,                          # no execution in the demo: nothing has been written
+            "cameras": {"groups": {}, "bodies": {}}, "zone_table": None}
 
 
 def _write_json(path, obj):
@@ -260,14 +389,26 @@ def _write_json(path, obj):
 
 def _edit_cell(art, e):
     """The cell of `art` the edit `e` is for, or None when the record holds no such cell."""
+    kind = e.get("kind")
+    if kind == "fingerprint":                   # photos-25: a photo whose content changed after a write, by its path
+        cell = next((m for m in (art or {}).get("fingerprint_mismatches") or []
+                     if isinstance(m, dict) and m.get("relative_path") == e.get("path")), None)
+        return cell if isinstance(cell, dict) else None
     d = ((art or {}).get("destinations") or {}).get(e.get("dest"))
     if not isinstance(d, dict):
         return None
-    kind = e.get("kind")
     if kind == "timezone":
         cell = d.get("destination_timezone")
+    elif kind == "date":                        # the destination's date fallback, for its photos with no time
+        cell = d.get("date_fallback")
     elif kind == "offset":
         cell = (d.get("camera_group_time_decisions") or {}).get(e.get("key"))
+    elif kind == "reading":                     # a photo's time at a daylight-saving change, keyed by its path
+        cell = (d.get("local_time_readings") or {}).get(e.get("key"))
+    elif kind == "unidentified":                # the destination's files naming no camera
+        cell = d.get("unidentified_files")
+    elif kind == "changed":                     # a photo's time changed since geotag wrote it, keyed by its path
+        cell = (d.get("changed_times") or {}).get(e.get("key"))
     elif kind == "drift":
         cell = (d.get("drift_decisions") or {}).get(e.get("key"))
     elif kind == "fallback":
@@ -275,6 +416,9 @@ def _edit_cell(art, e):
     elif kind == "review":
         cell = next((r for r in (d.get("gps_decisions") or {}).get("review_items") or []
                      if r.get("relative_path") == e.get("path")), None)
+    elif kind == "chosen":                      # a photo the tracks or the fallback place, by its path (placed_photos)
+        cell = next((r for r in (d.get("gps_decisions") or {}).get("placed_photos") or []
+                     if isinstance(r, dict) and r.get("relative_path") == e.get("path")), None)
     else:
         cell = None
     return cell if isinstance(cell, dict) else None
@@ -288,6 +432,8 @@ def _unapplicable_edits(art, edits):
 
 def _edit_label(e):
     what = e.get("path") or e.get("key")
+    if e.get("kind") == "fingerprint":
+        return f"fingerprint mismatch of {what}"
     return f"the {e.get('kind')} decision of {e.get('dest')}" + (f" ({what})" if what else "")
 
 
@@ -300,9 +446,73 @@ def _apply_edits(art, edits):
     for e in edits:
         cell = _edit_cell(art, e)
         if cell is not None and isinstance(e.get("user_decision"), dict):
+            if e.get("kind") == "chosen":
+                cell = _chosen_item(art, e, cell)
             cell["user_decision"] = e["user_decision"]
             applied += 1
     return applied
+
+
+def _chosen_item(art, e, placed):
+    """The review item a position chosen for a photo the tracks or the fallback place is written into
+    (BLD-chosen_position): the destination's `chosen_by_user` entry for that photo, added when it has none — the entry
+    the user would write by hand. The listed photo itself is left as geotag wrote it."""
+    items = art["destinations"][e["dest"]].setdefault("gps_decisions", {}).setdefault("review_items", [])
+    item = next((r for r in items if isinstance(r, dict) and r.get("relative_path") == e["path"]), None)
+    if item is None:
+        item = {"relative_path": e["path"], "content_fingerprint": placed.get("content_fingerprint"),
+                "reason": photos_2_geotag.GeotagWorkflow._CHOSEN, "user_decision": {},
+                "requires_user_input": False, "stale_user_decision": False}
+        items.append(item)
+    return item
+
+
+def _classed_config(workspace, raw, edits):
+    """(the configuration with each named camera group put in the array its edit gives and out of the other, None) — or
+    (None, why it is refused): a configuration that cannot be read, a group it classes already, a class that is not one
+    of the two arrays, or a result `load_config` would refuse (BLD-editor_writes_device_groups). That setting alone
+    changes (RUL-editor_classes_camera_group) — and, for an edit of kind `bodies`, whether a fixed-clock camera group of
+    the photos is named in `several_bodies_groups` (BLD-editor_marks_several_bodies, RUL-editor_marks_several_bodies)."""
+    cfg = _parse_record(raw, CONFIG_NAME)
+    if not isinstance(cfg, dict) or "_error" in cfg:
+        return None, f"cannot read {CONFIG_NAME} to class the camera group(s); nothing was saved"
+    dg = _device_groups(cfg)
+    if not isinstance(dg, dict) or not all(isinstance(dg.get(a), list) for a in DEVICE_CLASSES):
+        return None, f"{CONFIG_NAME} holds no device_groups with its two lists; nothing was saved"
+    question = _camera_question(workspace, raw)
+    if "_error" in question:                    # the configuration as loaded fails its checks: nothing is built on it
+        return None, f"{question['_error']} — nothing was saved"
+    unclassed, cameras = set(question.get("groups") or {}), set(question.get("bodies") or {})
+    pol = cfg.get("camera_time_and_timezone_policy")
+    for e in (e for e in edits if e.get("kind") == "bodies"):
+        # a fixed-clock camera group named, or no longer named, several bodies (BLD-editor_marks_several_bodies)
+        key, ud = e.get("key"), e.get("user_decision")
+        if key not in cameras:
+            return None, (f"{CONFIG_NAME} classes no camera group {key!r} of the photos as a camera with a hand-set "
+                          "clock — reload the editor; nothing was saved")
+        if not isinstance(ud, dict) or not isinstance(ud.get("several_bodies"), bool):
+            return None, f"whether camera group {key!r} is several bodies must be true or false; nothing was saved"
+        if not isinstance(pol, dict) or not isinstance(pol.get("several_bodies_groups"), list):
+            return None, f"{CONFIG_NAME} holds no several_bodies_groups list; nothing was saved"
+        named = [k for k in pol["several_bodies_groups"] if k != key]
+        pol["several_bodies_groups"] = named + [key] if ud["several_bodies"] else named
+    for e in (e for e in edits if e.get("kind") != "bodies"):
+        key, cls = e.get("key"), (e.get("user_decision") or {}).get("device_class") \
+            if isinstance(e.get("user_decision"), dict) else None
+        if e.get("kind") != "camera" or key not in unclassed:
+            return None, (f"{CONFIG_NAME} classes no new camera group {key!r} to answer (it may be classed "
+                          "already) — reload the editor; nothing was saved")
+        if cls not in DEVICE_CLASSES:
+            return None, f"the class of camera group {key!r} must be one of {', '.join(DEVICE_CLASSES)}; nothing was saved"
+        other = DEVICE_CLASSES[1 - DEVICE_CLASSES.index(cls)]
+        if key not in dg[cls]:
+            dg[cls].append(key)
+        dg[other] = [k for k in dg[other] if k != key]
+    try:
+        photos_utils.check_config(cfg, workspace)
+    except ValueError as e:
+        return None, f"{e} — nothing was saved"
+    return cfg, None
 
 
 def _save(workspace, payload):
@@ -310,23 +520,49 @@ def _save(workspace, payload):
     # A save changes the workspace, so it holds the workspace's lock (BLD-editor_save_locks): a geotag plan
     # running now reads these records and rewrites them, and would overwrite a save landing in between.
     # Fail-fast like every run; the editor's display reads stay unlocked (each file is replaced whole).
+    # The workspace's filesystem first, the lock included (RUL-local_filesystem_checked_first,
+    # RUL-filesystem_requirements_tried).
+    fs_err = photos_utils.workspace_filesystem_error(workspace)
+    if fs_err:
+        return {"ok": False, "error": fs_err}
     lock = photos_utils.WorkspaceLock(workspace, create=False)
-    if not lock.acquire():
+    try:
+        locked = lock.acquire()
+    except photos_utils.LockFileError as e:     # not "a run is in progress": no run holds it
+        return {"ok": False, "error": f"{e} Nothing was saved."}
+    if not locked:
         return {"ok": False, "error": "a run is in progress on this workspace — save again when it finishes"}
     try:
         if photos_utils.is_sealed(workspace):   # read under the lock; the console reaches here without serve()'s check
             return {"ok": False, "error": "workspace is sealed (already merged): decisions can no longer change"}
         cd = os.path.join(workspace, CONTROL)
+        cfg_path = os.path.join(cd, CONFIG_NAME)
         try:
             raws = {key: _read_record(os.path.join(cd, name)) for key, name in _RECORDS}
+            raw_cfg = _read_record(cfg_path)
         except OSError as e:
             return {"ok": False, "error": f"cannot read the decision records ({e}); nothing was saved"}
         current = {key: _record_hash(raw) for key, raw in raws.items()}
+        current["cameras"] = _record_hash(raw_cfg)      # the configuration, a camera group's class written into it
         edits = {key: (payload or {}).get(key) or [] for key, _name in _RECORDS}
-        if not any(edits.values()):
+        cameras = (payload or {}).get("cameras") or []
+        zone = (payload or {}).get("zone_table") or []
+        if not any(edits.values()) and not cameras and not zone:
             return {"ok": True, "written": [], "hashes": current}
+        # The answer to whether to download the table of countries, given where the question is still open
+        # (BLD-editor_answers_zone_table): one answered since — by `prep plan` or by hand — is not answered over.
+        answer = None
+        if zone:
+            ud = zone[0].get("user_decision") if len(zone) == 1 and isinstance(zone[0], dict) else None
+            answer = ud.get("download") if isinstance(ud, dict) else None
+            if answer not in ("yes", "no"):
+                return {"ok": False, "error": "the answer about the table of countries is yes or no; nothing was saved"}
+            if not photos_utils.zone_table_question_pending(workspace):
+                return {"ok": False, "error": f"{photos_utils.ZONE_TABLE_ARTIFACT} already holds an answer about "
+                                              "the table of countries (or cannot be read) — reload the editor; "
+                                              "nothing was saved"}
         # Save only what was shown (RUL-save_only_what_was_shown): the edits were made against the records as
-        # the editor loaded them. Each of the three is compared, under the lock, with the hash the page was
+        # the editor loaded them. Each of them is compared, under the lock, with the hash the page was
         # given for it before any is written — a geotag plan may have rewritten one since, and an edit made
         # against the old one would then land on decisions the user never saw.
         loaded = (payload or {}).get("hashes")
@@ -334,6 +570,10 @@ def _save(workspace, payload):
             return {"ok": False, "error": "this save does not say which decision records it was made from — "
                                           "reload the editor and make your edits again; nothing was saved"}
         changed = [name for key, name in _RECORDS if key not in loaded or loaded[key] != current[key]]
+        # A camera group's class is written into the configuration only over the one the editor showed; a
+        # configuration edited by hand since does not hold back a save of the decisions alone.
+        if cameras and loaded.get("cameras") != current["cameras"]:
+            changed.append(CONFIG_NAME)
         if changed:
             return {"ok": False, "error": f"{', '.join(changed)} changed since the editor loaded it (a geotag "
                                           "plan may have rewritten it) — reload the editor to see the decisions "
@@ -350,14 +590,43 @@ def _save(workspace, payload):
                 return {"ok": False, "error": f"{name} holds no {_edit_label(missing[0])} to save — reload the "
                                               "editor and make your edits again; nothing was saved"}
             arts[key] = art
+        cfg = None
+        if cameras:
+            cfg, why = _classed_config(workspace, raw_cfg, cameras)
+            if cfg is None:
+                return {"ok": False, "error": why}
         written = []
+        # One record after another, in `_RECORDS` order — photos-21, photos-22, photos-23, then photos-25 — and the
+        # configuration last, each replaced whole: each decision record's answers stand on the one before, so a save
+        # cut short leaves a leading part written and no answer on one left unsaved (RUL-save_writes_in_order,
+        # BLD-editor_save_order).
         for key, name in _RECORDS:
             if key in arts:
                 _apply_edits(arts[key], edits[key])
-                _write_json(os.path.join(cd, name), arts[key])
+                path = os.path.join(cd, name)
+                if json.dumps(arts[key], indent=2, sort_keys=True).encode() != raws[key]:
+                    # the record it replaces kept beside it first, in the -NNN series a re-plan's copies form
+                    # (RUL-save_keeps_the_replaced, BLD-editor_keeps_replaced_record)
+                    photos_utils.backup_existing_artifact(path)
+                _write_json(path, arts[key])
                 written.append(name)
-                current[key] = _record_hash(_read_record(os.path.join(cd, name)))
-        return {"ok": True, "written": written, "hashes": current}
+                current[key] = _record_hash(_read_record(path))
+        if cfg is not None:
+            # the configuration written whole, every other setting keeping its value (BLD-editor_writes_device_groups)
+            photos_utils.write_json_artifact(cfg_path, cfg)
+            written.append(CONFIG_NAME)
+            current["cameras"] = _record_hash(_read_record(cfg_path))
+        notes = []
+        if answer is not None:
+            # the answer recorded as `prep plan --download-zone-table` records it, `yes` downloading the table now
+            # (BLD-editor_answers_zone_table, BLD-zone_table_question): what it says is shown with the save
+            from ..reporting import CaptureSink, Reporter
+            cap = CaptureSink()
+            photos_utils.settle_zone_table(workspace, answer, Reporter([cap]))
+            notes = [e.msg for e in cap.logs()]
+            if os.path.exists(photos_utils.zone_table_path(workspace)):
+                written.append(photos_utils.ZONE_TABLE_ARTIFACT)
+        return {"ok": True, "written": written, "hashes": current, "notes": notes}
     finally:
         lock.release()
 
@@ -464,6 +733,12 @@ def serve(workspace, port=8765, host="0.0.0.0"):
         print(f"{os.path.abspath(workspace)} is not an initialized workspace "
               f"(no {CONTROL}/{GUARD_NAME}). Run `photos-cartographer prep plan` then `photos-cartographer prep execute` here first, "
               f"or use `photos-cartographer edit --demo` for a read-only fixtures tour.", file=sys.stderr)
+        sys.exit(2)
+    # The workspace's filesystem, before the editor's lock is taken (RUL-local_filesystem_checked_first,
+    # RUL-filesystem_requirements_tried): every save checks it again.
+    fs_err = workspace and photos_utils.workspace_filesystem_error(workspace)
+    if fs_err:
+        print(fs_err, file=sys.stderr)
         sys.exit(2)
     # A sealed (merged) workspace is final (RUL-editor_refuses_sealed): its decisions may no longer change.
     if workspace and photos_utils.is_sealed(workspace):

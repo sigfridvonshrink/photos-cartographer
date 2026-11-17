@@ -1657,8 +1657,8 @@
     }
   },
   "depends_on": {
-    "camera_group_key_version": 1,
-    "camera_time_policy_fingerprint": "c5ddb9a8cff5b9fab083365e33d50416226a3b21cb1301bee0ade319586c1e3d",
+    "camera_group_key_version": 2,
+    "camera_time_policy_fingerprint": "f32cbb4e29f6d500c1baf0db83e4334030093ec2c1ab54258e107316be72436c",
     "gpx_fingerprint": "example-gpx-fingerprint",
     "handoff": {
       "artifact_name": "photos-11-handoff.json",
@@ -1670,14 +1670,23 @@
   "destinations": {
     "6-photos-by-dest": {
       "camera_group_time_decisions": {},
-      "camera_groups_present": [],
+      "date_fallback": {
+        "effective_date": null,
+        "requires_user_input": false,
+        "stale_user_decision": false,
+        "user_decision": {
+          "date": ""
+        }
+      },
       "destination_path": "6-photos-by-dest",
       "destination_timezone": {
+        "asked_for": [
+          "6-photos-by-dest/Nowhere"
+        ],
         "effective_iana_timezone": "",
-        "proposal_confidence": "none",
         "proposal_source": "none",
         "proposed_iana_timezone": null,
-        "requires_user_input": false,
+        "requires_user_input": true,
         "stale_user_decision": false,
         "user_decision": {
           "confirmed_despite_recorded_offsets": [],
@@ -1697,6 +1706,10 @@
           "proposal": {
             "proposal_source": "manual_required"
           },
+          "representative": {
+            "camera_source_naive_time": "2024:07:03 14:00:00",
+            "source_file": "6-photos-by-dest/Nowhere/x.arw"
+          },
           "requires_user_input": true,
           "stale_user_decision": false,
           "user_decision": {
@@ -1706,13 +1719,17 @@
           }
         }
       },
-      "camera_groups_present": [
-        "SONY|ILCE-6400|A"
-      ],
+      "date_fallback": {
+        "effective_date": null,
+        "requires_user_input": false,
+        "stale_user_decision": false,
+        "user_decision": {
+          "date": ""
+        }
+      },
       "destination_path": "6-photos-by-dest/Nowhere",
       "destination_timezone": {
         "effective_iana_timezone": "",
-        "proposal_confidence": "none",
         "proposal_source": "none",
         "proposed_iana_timezone": null,
         "requires_user_input": true,
