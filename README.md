@@ -3,6 +3,7 @@
 [![Latest release](https://img.shields.io/github/v/release/sigfridvonshrink/photos-cartographer?label=release)](https://github.com/sigfridvonshrink/photos-cartographer/releases/latest)
 [![Download](https://img.shields.io/badge/download-latest%20build-blue)](https://github.com/sigfridvonshrink/photos-cartographer/releases/latest)
 [![License](https://img.shields.io/github/license/sigfridvonshrink/photos-cartographer)](LICENSE)
+[![Specification](https://img.shields.io/badge/specification-read%20online-brightgreen)](https://sigfridvonshrink.github.io/photos-cartographer/)
 
 **Put a whole photo library — or a single trip's dump — on the map, with the least manual work.**
 
@@ -41,6 +42,13 @@ cleanly into a permanent **folder-based photo library** (digiKam, or anything th
 Almost all of the code that writes time/GPS metadata into photo files — the geotag phase — is exercised by a thorough
 automated test suite, and every rule of the specification is named by a test that fails when it is broken (figures
 in [`COVERAGE.md`](COVERAGE.md)), so a change that would misbehave is caught before it can touch a photo.
+
+> **📖 [Read the specification online →](https://sigfridvonshrink.github.io/photos-cartographer/)** The surest way
+> to understand the tool: every rule it keeps, one obligation each, cross-linked to why it holds and to the test that
+> checks it — [what it guarantees](https://sigfridvonshrink.github.io/photos-cartographer/intent/shared.html) ·
+> [why](https://sigfridvonshrink.github.io/photos-cartographer/rationale/philosophy.html) ·
+> [how this build does it](https://sigfridvonshrink.github.io/photos-cartographer/build/shared.html) ·
+> [the tests](https://sigfridvonshrink.github.io/photos-cartographer/_generated/tests.html).
 
 > **Searches that might land here:** how to *geotag photos with no GPS from a GPX track*,
 > *correlate photos to a GPS track when the camera time is wrong*, *batch/bulk geotag thousands of RAW photos
@@ -152,6 +160,16 @@ browser instead. The **[quick start](docs/quickstart.md)** walks through each st
 
 ## Documentation
 
+- **[The specification, online](https://sigfridvonshrink.github.io/photos-cartographer/)** — the essential
+  reference, rendered and cross-linked: what each phase guarantees
+  ([shared](https://sigfridvonshrink.github.io/photos-cartographer/intent/shared.html),
+  [prep](https://sigfridvonshrink.github.io/photos-cartographer/intent/prep.html),
+  [geotag](https://sigfridvonshrink.github.io/photos-cartographer/intent/geotag.html),
+  [merge](https://sigfridvonshrink.github.io/photos-cartographer/intent/merge.html)),
+  [why](https://sigfridvonshrink.github.io/photos-cartographer/rationale/philosophy.html), how this build does it,
+  and [the tests that verify each rule](https://sigfridvonshrink.github.io/photos-cartographer/_generated/tests.html).
+  The guides below explain; the specification is what the tool actually promises. Its source is [`spec/`](spec/);
+  see *How it works (the detail)* below.
 - **[Is this for you? — and why it's built this way](docs/who-is-this-for.md)** — the seven roots (three
   facts about photos, four design choices) and the architecture they force. Read it **forward** to decide
   fit, or **down** to see the design rationale. Start here if you're weighing whether the tool matches your
@@ -166,12 +184,6 @@ browser instead. The **[quick start](docs/quickstart.md)** walks through each st
   placing GPS, shift-click multi-select, and how edits reset/cascade.
 - **[How this compares](docs/comparison.md)** — HoudahGeo, GeoSetter, gpscorrelate, darktable, exiftool and
   others, side by side.
-
-The authoritative behavioral specification lives in [`spec/`](spec/) and is published, rendered and
-cross-linked, at **[sigfridvonshrink.github.io/photos-cartographer](https://sigfridvonshrink.github.io/photos-cartographer/)** — what each phase guarantees
-([shared](https://sigfridvonshrink.github.io/photos-cartographer/intent/shared.html), [prep](https://sigfridvonshrink.github.io/photos-cartographer/intent/prep.html), [geotag](https://sigfridvonshrink.github.io/photos-cartographer/intent/geotag.html),
-[merge](https://sigfridvonshrink.github.io/photos-cartographer/intent/merge.html)), [why](https://sigfridvonshrink.github.io/photos-cartographer/rationale/philosophy.html), and
-[the tests that verify each rule](https://sigfridvonshrink.github.io/photos-cartographer/_generated/tests.html). See *How it works (the detail)* below.
 
 ## Decide in the browser
 
