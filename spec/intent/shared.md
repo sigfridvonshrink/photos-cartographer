@@ -2475,8 +2475,9 @@ photos as it found them, and the package, and recording the acceptance of change
 :verify: required
 :uses: DEF-archival_package, DEF-transformation_log, DEF-control_records
 
-The archival package SHALL hold every control record but the scratch ones and those a run holds only while it runs, archived together with its own list of
-them: the configuration that governed the workspace; every current decision and plan record, exactly as the pipeline
+The archival package SHALL hold every control record but the scratch ones, those a run holds only while it runs, and an
+earlier package, whose records the later one holds itself, archived together with its own list of them: the
+configuration that governed the workspace; every current decision and plan record, exactly as the pipeline
 validated it; the database, with each phase's database image; every phase's transformation log; and every
 plan's journal.
 :::
@@ -2929,7 +2930,9 @@ fingerprints match, by their bytes.
 :refines: RUL-collision_by_content
 :excepts: RUL-target_free_at_execute, RUL-execution_only_the_plan
 
-A taken place holding the photo itself, byte for byte, SHALL mean the photo is already in the library: nothing is written there.
+A taken place holding the photo itself, byte for byte — a file under the photo's name in another case taking its place,
+on every filesystem ({need}`RUL-target_free_ignores_case`) — SHALL mean the photo is already in the library: nothing is
+written there.
 :::
 
 :::{rul} The workspace's copy of a photo already in the library is removed

@@ -391,7 +391,7 @@ def test_finalize_records_each_photo_as_left(tmp_path, monkeypatch):
 def test_finalize_archives_the_whole_control_directory(tmp_path, monkeypatch):
     """The package is the whole control directory but its transient files — the drift record and every
     journal among it — listed with their hashes in the manifest and archived, manifest included, into
-    the control directory itself."""
+    the control directory itself; an earlier package lying there is not in it."""
     import hashlib
     import tarfile
     ws, ctl = _ready_ws(tmp_path, monkeypatch)
@@ -400,6 +400,7 @@ def test_finalize_archives_the_whole_control_directory(tmp_path, monkeypatch):
     (ctl / "photos-00-plan-memo.db").write_bytes(b"scratch")
     (ctl / "photos-15-prep-ingest.db").write_bytes(b"prep's database image")
     (ctl / "photos-00-workspace-guard").write_text('{"initialized": true, "initialized_by_run": "prep-init-1"}')
+    (ctl / "photos-26-archive-001.tar.gz").write_bytes(b"an earlier package")
     assert _run(monkeypatch, ws, "finalize") == 0
     manifest = json.load(open(ctl / "photos-26-archive-manifest.json"))
     assert manifest["workspace_id"] == "prep-init-1"              # the identity a renamed folder keeps
@@ -409,6 +410,7 @@ def test_finalize_archives_the_whole_control_directory(tmp_path, monkeypatch):
     assert any(n.startswith("journal-") for n in listed)
     assert not any(n.endswith(".lock") or n.startswith(".tmp-") for n in listed)
     assert "photos-00-plan-memo.db" not in listed and "photos-26-archive-manifest.json" not in listed
+    assert not any(n.endswith(".tar.gz") for n in listed)          # an earlier package is not nested in this one
     with tarfile.open(ctl / "photos-26-archive.tar.gz") as tar:
         archived = {m.name: tar.extractfile(m).read() for m in tar.getmembers()}
     assert set(archived) == {rec["path"] for rec in manifest["contents"].values()} | {
@@ -478,7 +480,8 @@ def test_finalize_sealed_workspace_blocks(tmp_path, monkeypatch):
     assert _run(monkeypatch, ws, "finalize") == 2                        # sealed -> preflight blocks
 
 
-@pytest.mark.spec("RUL-unchecked_counts_as_changed", "BLD-prep_log_checked", test="TST-geotag_finalize-finalize_refuses_a_prep_log_the_handoff_does_not_vouch_for")
+@pytest.mark.spec("RUL-unchecked_counts_as_changed", "BLD-prep_log_checked", "RUL-finalize_on_vouched_log",
+                  test="TST-geotag_finalize-finalize_refuses_a_prep_log_the_handoff_does_not_vouch_for")
 @pytest.mark.parametrize("damage", ["changed", "missing"])
 def test_finalize_refuses_a_prep_log_the_handoff_does_not_vouch_for(tmp_path, monkeypatch, capsys, damage):
     """Finalize copies prep's log only as the handoff records it, by hash: a log changed since — or gone,

@@ -255,6 +255,17 @@ The report of a library short of room SHALL name the space the photos need and t
 Merge's plan SHALL warn of a library its execution would find short of room, the plan written all the same.
 :::
 
+:::{rul} Merge runs only on the prep log the handoff vouches for
+:id: RUL-merge_on_vouched_log
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+:uses: RUL-unchecked_counts_as_changed
+
+Merge SHALL NOT plan, dry-run or execute while prep's log is not the one the handoff vouches for.
+:::
+
 ## Destination-to-library mapping
 
 :::{rul} The library mirrors the destination tree
@@ -266,8 +277,9 @@ Merge's plan SHALL warn of a library its execution would find short of room, the
 :uses: DEF-library, DEF-managed_folders
 
 Merge SHALL place each photo at the same path under the library as it holds under photos by destination — its folders
-as the user built them, its name the one geotag gave it — the name an incoming photo is given on a collision the only
-change.
+as the user built them, its name the one geotag gave it — the name an incoming photo is given on a collision, and the
+case of the name under which the library already holds the photo ({need}`RUL-collision_same_content`), the only
+changes.
 :::
 
 ## Idempotency, resume, and non-destructiveness

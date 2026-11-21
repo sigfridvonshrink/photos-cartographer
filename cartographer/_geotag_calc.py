@@ -250,7 +250,7 @@ def _proximity_grid(pts, pt_max, seg_max):
 
 
 _REL = "\x00rel\x00"            # stands for the file's path in a parse's warnings: a parse is of bytes, wherever they lie
-GPX_PARSE_VERSION = "gpx-parse-v3"   # bump when the parse below changes what it yields: a track file kept under
+GPX_PARSE_VERSION = "gpx-parse-v4"   # bump when the parse below changes what it yields: a track file kept under
                                      # another version is read and parsed again, as a new entry of the catalogue
 
 # Every instant there is, in seconds: the window of an index built without one.
@@ -356,6 +356,35 @@ def open_track_record(record):
 
 def _epoch(iso):
     return datetime.fromisoformat(iso).timestamp()
+
+
+# A track point's time as GPX writes it, an xsd:dateTime (BLD-track_time_parser): a date, `T`, a time, a fraction of a
+# second of any number of digits, and a zone — `Z` or ±hh:mm — which a time may lack, though geotag then cannot use it.
+_TRACK_TIME = re.compile(r"([0-9]{4})-([0-9]{2})-([0-9]{2})T([0-9]{2}):([0-9]{2}):([0-9]{2})(?:\.([0-9]+))?"
+                         r"(?:([Zz])|([+-])([0-9]{2}):([0-9]{2}))?")
+
+
+def _parse_track_time(text):
+    """The instant a track point's `<time>` states, as an aware datetime, or None where it states no zone
+    (RUL-track_time_never_guessed). A fraction of a second of any number of digits is cut to microseconds, never
+    rounded, so a time never moves forward; `24:00:00` is the next day's midnight. ValueError where `text` is no
+    xsd:dateTime, or names no real instant — whatever another ISO 8601 reader might take (BLD-track_time_parser)."""
+    m = _TRACK_TIME.fullmatch(text)
+    if m is None:
+        raise ValueError(f"not an xsd:dateTime: {text!r}")
+    year, month, day, hour, minute, second, frac, utc, sign, off_h, off_m = m.groups()
+    if utc is None and sign is None:
+        return None
+    if int(off_m or 0) > 59:
+        raise ValueError(f"zone offset minutes out of range: {text!r}")
+    zone = timezone.utc if utc else timezone((1 if sign == "+" else -1)
+                                             * timedelta(hours=int(off_h), minutes=int(off_m)))
+    micro = int((frac or "")[:6].ljust(6, "0"))
+    end_of_day = (hour, minute, second) == ("24", "00", "00") and not micro
+    if end_of_day:
+        hour = "00"
+    dt = datetime(int(year), int(month), int(day), int(hour), int(minute), int(second), micro, zone)
+    return dt + timedelta(days=1) if end_of_day else dt
 
 
 class GPXIndex:
@@ -742,13 +771,10 @@ class GPXIndex:
                     warnings.append(f"Out-of-range coordinate in {_REL} at trkpt {idx}")
                     idx += 1
                     continue
-                ts = time_elem.text.strip()
-                # xsd:dateTime: fractional seconds are optional (Garmin writes `...:SS.000Z`), and a
-                # `Z` suffix is spelled out as +00:00 so fromisoformat takes it on every Python 3.
-                if ts[-1:] in ("Z", "z"):
-                    ts = ts[:-1] + "+00:00"
-                dt = datetime.fromisoformat(ts)
-                if dt.tzinfo is None:
+                # xsd:dateTime, read the same on every Python: fractional seconds optional (Garmin writes
+                # `...:SS.000Z`), of any number of digits.
+                dt = _parse_track_time(time_elem.text.strip())
+                if dt is None:
                     warnings.append(f"GPX time without timezone in {_REL} at trkpt {idx}")
                     idx += 1
                     continue

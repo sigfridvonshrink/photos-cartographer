@@ -96,3 +96,43 @@ def test_by_dest_folder_whose_batch_failed_blocks(tmp_path, monkeypatch):
     assert plan.summary["metadata_plan_status"]["6-photos-by-dest/Rome/c.jpg"] == "extraction_failed"
     assert any("6-photos-by-dest/Rome/c.jpg" in b and "Metadata" in b for b in plan.blockers), plan.blockers
     assert not any("d.jpg" in b for b in plan.blockers)
+
+
+def _replan_with_failed_folder(monkeypatch, ws, folder, unread=()):
+    """Plan once with every read working but for `unread` (left out of its batch), so the plan memo keeps a record
+    still valid of each other file; then plan again with the whole batch of `folder` failing."""
+    _install(monkeypatch, missing=set(unread))
+    _plan(ws)
+    _install(monkeypatch, failed_folders={folder})
+    return _plan(ws)
+
+
+@pytest.mark.spec("RUL-metadata_failure_blocks", "BLD-metadata_failure_blocker",
+                  test="TST-metadata_failure-failed_folder_blocks_only_the_file_with_no_valid_record")
+def test_failed_folder_blocks_only_the_file_with_no_valid_record(tmp_path, monkeypatch):
+    """A folder whose batch failed, holding one photo of which prep keeps a record still valid and one of which it
+    keeps none: the plan blocks naming the second only; the first's record is reused."""
+    ws = _ws(tmp_path)
+    (ws / "6-photos-by-dest" / "Rome").mkdir()
+    (ws / "6-photos-by-dest" / "Rome" / "2023-01-02--03-04-05.jpg").write_bytes(b"pixels-kept")
+    (ws / "6-photos-by-dest" / "Rome" / "unread.jpg").write_bytes(b"pixels-unread")
+    plan = _replan_with_failed_folder(monkeypatch, ws, "Rome", unread={"unread.jpg"})
+    status = plan.summary["metadata_plan_status"]
+    assert status["6-photos-by-dest/Rome/2023-01-02--03-04-05.jpg"] == "reused_from_cache"
+    assert status["6-photos-by-dest/Rome/unread.jpg"] == "extraction_failed"
+    assert any("Rome/unread.jpg" in b and "Metadata" in b for b in plan.blockers), plan.blockers
+    assert not any("Rome/2023-01-02--03-04-05.jpg" in b for b in plan.blockers), plan.blockers
+
+
+@pytest.mark.spec("RUL-metadata_failure_blocks", "BLD-metadata_failure_blocker",
+                  test="TST-metadata_failure-failed_folder_of_valid_records_blocks_nothing")
+def test_failed_folder_of_valid_records_blocks_nothing(tmp_path, monkeypatch):
+    """A folder whose batch failed, whose every photo has a record still valid (the folder is read for a file of no
+    media class beside it): no metadata blocker, and the photo's record is reused."""
+    ws = _ws(tmp_path)
+    (ws / "0-sources" / "Rome").mkdir()
+    (ws / "0-sources" / "Rome" / "a.jpg").write_bytes(b"pixels-a")
+    (ws / "0-sources" / "Rome" / "notes.txt").write_bytes(b"a note")
+    plan = _replan_with_failed_folder(monkeypatch, ws, "Rome")
+    assert plan.summary["metadata_plan_status"]["0-sources/Rome/a.jpg"] == "reused_from_cache"
+    assert not any("Metadata" in b or "a.jpg" in b for b in plan.blockers), plan.blockers

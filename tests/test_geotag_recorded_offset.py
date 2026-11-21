@@ -182,3 +182,15 @@ def test_the_camera_s_own_gps_comes_before_the_recorded_offset(tmp_path):
     nara = _cell(art, other)
     assert nara["proposal"]["proposal_source"] == "same_day_elsewhere"
     assert nara["proposal"]["proposed_offset_seconds"] == -32400
+
+
+@pytest.mark.spec("RUL-recorded_offset_proposed", "BLD-recorded_offset_proposal",
+                  test="TST-geotag_recorded_offset-positions_on_no_track_leave_the_recorded_offset")
+def test_positions_on_no_track_leave_the_recorded_offset_proposed(tmp_path):
+    """A day whose photos hold positions of their own, none of them on a track and none recording a fix's time: the
+    camera's GPS gives no offset, so the offset the photos record is proposed, as for photos with no position."""
+    wf = _wf(tmp_path)
+    track = [_pt(35.0, 135.7, 8), _pt(35.1, 135.8, 9)]
+    files = [_photo("a.arw", "2024:07:03 10:00:00", gps=(-33.9, 18.4)), _photo("b.arw", "2024:07:03 11:00:00", gps=(-33.8, 18.5))]
+    p = _cell(_build(wf, files, _gpx(track)))["proposal"]
+    assert p["proposal_source"] == "recorded_offset" and p["proposed_offset_seconds"] == -3600

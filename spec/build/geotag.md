@@ -243,18 +243,18 @@ file and the point's index, as is a file that cannot be read or parsed. `geotag 
 the first `GPX_WARNINGS_SHOWN`, with the number of the rest. A point keeps the index of its `<trk>` and of its `<trkseg>`: the points of one `<trk>` of one file are one track. A file that cannot be opened, or is not well-formed, is unreadable; a folder holding track files all of them unreadable stops the plan, each named with why, and a link under `gpx_root` — to a folder or to a track file — is named in a warning and not followed, what it leads to never read.
 :::
 
-:::{bld} Track times are read as the host's Python reads them
+:::{bld} Track times are read as xsd:dateTime
 :id: BLD-track_time_parser
 :status: ruled
 :realises: RUL-track_time_never_guessed, RUL-unreadable_point_reported
 :uses: BLD-track_points
 
-A track point's `<time>` SHALL be parsed by the host Python's `datetime.fromisoformat`, a final `Z` or `z` first
-written `+00:00`, and a time it takes with no offset skipped as naive ({need}`BLD-track_points`): on Python 3.11 and
-later it takes, beside every `xsd:dateTime`, the other ISO 8601 forms it knows — a space for the `T`, the basic format,
-a week date, a time without seconds; on 3.9 and 3.10 it refuses a fraction of a second of other than three or six
-digits, whose point is skipped as unparseable. Which points a track gives therefore depends on the Python the
-executable runs on.
+A track point's `<time>` SHALL be parsed by `_parse_track_time` as an `xsd:dateTime` alone — `YYYY-MM-DDThh:mm:ss`, a
+fraction of a second of any number of digits cut, never rounded, to microseconds, and a zone `Z`, `z` or `±hh:mm` of
+minutes below 60, `24:00:00` taken as the next day's midnight — a time of that form with no zone skipped as naive
+({need}`BLD-track_points`), and any other text, an ISO 8601 form beside `xsd:dateTime` (a space for the `T`, the basic
+format, a week date, a time without seconds) included, skipped as unparseable, on every Python; a change to what the
+parse yields bumps `GPX_PARSE_VERSION`, so a track file catalogued under the old one is parsed again.
 :::
 
 :::{bld} Tracks kept apart, and a root that is not there

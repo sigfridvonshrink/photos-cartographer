@@ -1479,14 +1479,16 @@ def test_library_takes_a_second_workspace_after_the_first_is_sealed(tmp_path):
 @pytest.mark.spec("RUL-package_contents", test="TST-merge_execute-reseal_archives_the_control_directory_with_merges_records")
 def test_reseal_archives_the_control_directory_with_merges_records(tmp_path):
     """Merge's re-seal makes the package again: the whole control directory, merge's own records among
-    it, listed in photos-35's manifest and archived with it."""
+    it, listed in photos-35's manifest and archived with it — but geotag's package, whose records it holds itself."""
     import tarfile
     ws, lib = _ws(tmp_path, [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"}])
+    ctl = ws / ".photos-ingest"
+    (ctl / "photos-26-archive.tar.gz").write_bytes(b"geotag's package")
     assert merge._run_locked_workflow("plan", str(ws)) == 0
     assert merge._run_locked_workflow("execute", str(ws)) == 0
-    ctl = ws / ".photos-ingest"
     manifest = json.loads((ctl / "photos-35-archive-manifest.json").read_text())
     assert {"photos-31-merge-summary.json", "photos-35-merge-log.json", "photos-26-complete-log.json"} <= set(manifest["contents"])
+    assert not any(n.endswith(".tar.gz") for n in manifest["contents"])     # no earlier package nested in it
     with tarfile.open(ctl / "photos-35-archive.tar.gz") as tar:
         names = set(tar.getnames())
     assert names == {rec["path"] for rec in manifest["contents"].values()} | {".photos-ingest/photos-35-archive-manifest.json"}
