@@ -260,15 +260,16 @@ Merge also takes a lock on the library it writes into, so that two merges into o
 
 ## A snapshot before changing, optionally
 
+A phase that changes files may first take a snapshot of what it is about to change, from which the whole change can be
+rolled back.
+
 :::{rul} A snapshot is optional, and nothing rests on it
 :id: RUL-snapshot_optional
 :status: ruled
 :criticality: med
 :verify: required
 
-A phase that changes files MAY first take a snapshot of what it is about to change, from which the whole change can be
-rolled back. Cartographer SHALL be complete and safe without one, no guarantee depending on a snapshot having been
-taken.
+Cartographer SHALL be complete and safe without a snapshot, no guarantee depending on one having been taken.
 :::
 
 :::{rul} No snapshot unless configured
@@ -1024,9 +1025,20 @@ placement, not structure.
 :uses: DEF-quarantine, DEF-dump
 
 The top level of an initialized workspace SHALL hold only the managed folders, the control records' place, the
-quarantine and hidden entries, hidden files as much as hidden folders: any other entry — a file, a folder, a link, an
-entry of any other kind — is a misplaced dump, whose only place is the
-inbox, and blocks every phase alike.
+quarantine and hidden entries, hidden files as much as hidden folders.
+:::
+
+:::{rul} A misplaced top-level entry blocks every phase
+:id: RUL-misplaced_entry_blocks
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+:refines: RUL-top_level_only_managed
+:uses: DEF-dump, DEF-managed_folders
+
+Any other entry at an initialized workspace's top level — a file, a folder, a link, an entry of any other kind — SHALL
+block every phase alike, its only place the inbox.
 :::
 
 :::{rul} A new workspace's first dump is at its top level
@@ -2350,7 +2362,17 @@ the level of the decisions.
 
 Withdrawing a decision SHALL undo its effect, not merely stop asserting it: a manual position withdrawn gives the file
 the position it would have had without it — its own, one from the tracks or its folder's fallback, or none, the
-photo then waiting ({need}`RUL-unplaced_photo_waits`); a position derived by the tool is derived again.
+photo then waiting ({need}`RUL-unplaced_photo_waits`).
+:::
+
+:::{rul} A position the tool derived is derived again
+:id: RUL-withdrawn_derived_position_derived_again
+:status: ruled
+:criticality: med
+:verify: required
+:refines: RUL-withdrawal_undoes
+
+A position the tool derived SHALL be derived again when the decision it rested on is withdrawn.
 :::
 
 :::{rul} After a withdrawal the time and the name are recomputed in place
@@ -3155,8 +3177,8 @@ A library lock left by a merge that died SHALL be recognisable as stale, and rec
 :refines: RUL-library_lock
 
 Merge SHALL take the workspace's lock first, then check the library's place and its mark, and only then take the
-library's lock, so that no lock is ever left in a folder that is not a library — a merge stopped at any of these steps
-having changed nothing in the library.
+library's lock, so that no lock is ever left in a folder that is not a library ({need}`RUL-merge_blocked_changes_nothing`
+says what a merge stopped there leaves).
 :::
 
 :::{rul} Merge moves, not copies
@@ -3320,7 +3342,17 @@ Whether a workspace is finished SHALL be read from its seal alone, never from th
 In a sealed workspace prep's plan, dry run and execution, geotag, and merge's plan, dry run and execution, and its
 library setup given a path, SHALL stop as they start, changing nothing
 but the owner record of the workspace lock; pruning the quarantine is the exception ({need}`RUL-sealed_prune_allowed`).
-Its records MAY still be read.
+:::
+
+:::{rul} A sealed workspace's records stay readable
+:id: RUL-sealed_records_readable
+:status: ruled
+:criticality: high
+:verify: required
+:refines: RUL-sealed_refuses
+:uses: DEF-sealed_workspace, DEF-control_records
+
+A sealed workspace's records SHALL stay readable.
 :::
 
 :::{rul} The decision editor refuses a sealed workspace

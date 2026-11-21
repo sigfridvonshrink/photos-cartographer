@@ -246,7 +246,8 @@ def test_missing_managed_folder_block_tells_to_restore_and_run_again(tmp_path):
     assert "Restore the 0-6 structure" in block[0] and "before merging" in block[0], block[0]
 
 
-@pytest.mark.spec("RUL-top_level_only_managed", test="TST-merge_preflight-loose_root_file_blocks")
+@pytest.mark.spec("RUL-top_level_only_managed", "RUL-misplaced_entry_blocks",
+                  test="TST-merge_preflight-loose_root_file_blocks")
 def test_loose_root_file_blocks(tmp_path):
     ws, _ = _make(tmp_path)
     (ws / "stray.txt").write_text("loose")
@@ -271,7 +272,8 @@ def test_root_hidden_file_allowed(tmp_path):
     assert not any("Misplaced entry" in b for b in blockers), blockers
 
 
-@pytest.mark.spec("RUL-top_level_only_managed", test="TST-merge_preflight-every_misplaced_root_entry_named")
+@pytest.mark.spec("RUL-top_level_only_managed", "RUL-misplaced_entry_blocks",
+                  test="TST-merge_preflight-every_misplaced_root_entry_named")
 def test_every_misplaced_root_entry_named(tmp_path):
     """Any other top-level entry blocks, whatever its kind — a named pipe too — and the block names
     every one, not only the first."""

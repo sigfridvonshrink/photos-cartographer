@@ -255,7 +255,7 @@ what it confirmed, and the run that finishes it writes the summary.
 :status: ruled
 :forced: no
 :follows_from: RAT-remainder_worklist, RAT-workspace_not_recycled
-:justifies: RUL-merge_run_reported
+:justifies: RUL-merge_run_reported, RUL-merge_reports_left_with_why, RUL-merge_reports_sealed
 
 Merge is the step that puts photos where the user will look for them, and the one that ends the workspace. Its report
 is the moment the user learns whether the batch is in, which photos are not and what to fix — without opening the

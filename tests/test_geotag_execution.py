@@ -709,7 +709,7 @@ def test_own_leftover_cleared_where_the_journal_shows_the_write_begun(tmp_path, 
 
 
 @pytest.mark.spec("RUL-other_write_leftover_holds_photo", "RUL-write_leftovers_by_dest_warned", "BLD-own_leftover_cleared",
-                  "RUL-geotag_clears_own_leftover",
+                  "RUL-geotag_clears_own_leftover", "RUL-other_write_leftover_named",
                   test="TST-geotag_execution-another_leftover_holds_its_photo_back")
 def test_another_leftover_holds_its_photo_back(tmp_path, monkeypatch):
     """A leftover beside a photo whose write the journal does not show begun is not geotag's to remove — it may be the

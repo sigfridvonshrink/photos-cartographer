@@ -210,7 +210,7 @@ leaves the inbox.
 
 A media file outside the inbox SHALL stay in the folder it is in, unless prep sets it aside as a duplicate
 ({need}`RUL-duplicates_quarantined`) or as the JPEG of a culled RAW ({need}`RUL-culled_raw_takes_its_jpeg`), it is a
-dated file outside its day folder ({need}`RUL-by_date_in_day_folder`) or with no recorded time
+dated file outside its day folder ({need}`RUL-by_date_moved_to_day_folder`) or with no recorded time
 ({need}`RUL-by_date_untimed_to_missing_metadata`), or it lies in missing metadata and has gained a recorded time
 ({need}`RUL-time_given_filed_on`).
 :::
@@ -220,12 +220,22 @@ dated file outside its day folder ({need}`RUL-by_date_in_day_folder`) or with no
 :status: ruled
 :criticality: med
 :verify: required
-:excepts: RUL-filed_file_stays
 :uses: DEF-managed_folders, DEF-recorded_time
 
 Each file in photos by date or videos by date SHALL lie in the folder of its recorded time's day, directly under its
-band — one with no recorded time ({need}`RUL-by_date_untimed_to_missing_metadata`) excepted; prep moves one that does
-not into it.
+band — one with no recorded time ({need}`RUL-by_date_untimed_to_missing_metadata`) excepted.
+:::
+
+:::{rul} Prep moves a dated file into its day folder
+:id: RUL-by_date_moved_to_day_folder
+:status: ruled
+:criticality: med
+:verify: required
+:refines: RUL-by_date_in_day_folder
+:excepts: RUL-filed_file_stays
+:uses: DEF-prep, DEF-managed_folders, DEF-recorded_time
+
+Prep SHALL move a file of photos by date or videos by date that lies outside its recorded time's day folder into it.
 :::
 
 :::{rul} A dated folder's file with no recorded time goes to missing metadata

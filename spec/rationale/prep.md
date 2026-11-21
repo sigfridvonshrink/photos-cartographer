@@ -203,7 +203,7 @@ set apart for having none, and its RAW culled when it is the JPEG set aside besi
 :status: ruled
 :forced: no
 :follows_from: RAT-piggyback_on_the_destination_sort, CHC-local_folder_library
-:justifies: RUL-by_date_in_day_folder
+:justifies: RUL-by_date_in_day_folder, RUL-by_date_moved_to_day_folder
 
 The user sorts photos by date into destinations, and a day is the unit they think in: a day's folder holds what was
 shot that day and nothing else. A file's day comes from its recorded time, so a file moved by hand out of its day's

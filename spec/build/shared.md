@@ -532,7 +532,7 @@ hash ({need}`DEF-archival_package`), never the dependency check.
 :::{bld} The workspace's top level
 :id: BLD-top_level_entries
 :status: ruled
-:realises: RUL-top_level_only_managed, RUL-first_dump_at_top_level
+:realises: RUL-top_level_only_managed, RUL-misplaced_entry_blocks, RUL-first_dump_at_top_level
 
 The top level of an initialized workspace SHALL hold exactly the managed folders `0-sources`…`6-photos-by-dest` and
 `.photos-ingest/`, `.photos-ingest-quarantine/`, `.git` and other dotfiles and dot-directories, the inbox being
@@ -543,7 +543,7 @@ The top level of an initialized workspace SHALL hold exactly the managed folders
 :::{bld} One check of the top level for all three phases
 :id: BLD-one_top_level_check
 :status: ruled
-:realises: RUL-top_level_only_managed
+:realises: RUL-top_level_only_managed, RUL-misplaced_entry_blocks
 
 Prep, geotag and merge SHALL find a workspace's misplaced top-level entries with the one function they share,
 `photos_utils.misplaced_top_level_entries`, so the three cannot disagree on what belongs there.
@@ -1120,7 +1120,7 @@ same way ({need}`BLD-merge_journal_resume`, {need}`BLD-merge_records`).
 :::{bld} Every plan decides from a photo's own values
 :id: BLD-decided_from_own_values
 :status: ruled
-:realises: RUL-withdrawal_undoes, RUL-decision_revisable, RUL-wrong_choice_needs_no_hand_repair
+:realises: RUL-withdrawal_undoes, RUL-withdrawn_derived_position_derived_again, RUL-decision_revisable, RUL-wrong_choice_needs_no_hand_repair
 
 Every plan SHALL decide about a photo from its own values, pinned before geotag first wrote to it
 ({need}`BLD-original_values_pinned`), so a withdrawn manual position is undone like any decision: the photo is placed
@@ -1563,10 +1563,12 @@ in order, write `photos-35-merge-log.json`, `photos-35-fingerprint-map.json`, `p
 :::{bld} The seal
 :id: BLD-seal_marker
 :status: ruled
-:realises: RUL-seal_is_authority
+:realises: RUL-seal_is_authority, RUL-sealed_records_readable
 
 The seal SHALL be `photos-00-sealed.json` in the control directory, its own file beside the workspace guard — which only
 prep writes — recording `sealed`, the merge run id (`merged_run_id`) and `library_root`; its presence alone seals.
+`write_sealed_marker` writes it and nothing else, the control directory's records and the archival package left in
+place as they were written.
 :::
 
 :::{bld} The phases check the seal first

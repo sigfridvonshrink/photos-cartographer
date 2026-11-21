@@ -304,7 +304,8 @@ def test_an_interrupted_guard_write_leaves_no_damaged_guard(tmp_path, monkeypatc
 
 # --- root-file block (initialized) -------------------------------------------
 
-@pytest.mark.spec("RUL-top_level_only_managed", test="TST-lifecycle-loose_root_file_blocks_initialized")
+@pytest.mark.spec("RUL-top_level_only_managed", "RUL-misplaced_entry_blocks",
+                  test="TST-lifecycle-loose_root_file_blocks_initialized")
 def test_loose_root_file_blocks_initialized(tmp_path, monkeypatch):
     _install(monkeypatch)
     ws = _initialized(tmp_path)
@@ -322,7 +323,8 @@ def test_nonmanaged_root_dir_blocks_initialized(tmp_path, monkeypatch):
     assert any("Misplaced entry at workspace root" in b and "MyDump" in b for b in plan.blockers), plan.blockers
 
 
-@pytest.mark.spec("RUL-top_level_only_managed", test="TST-lifecycle-named_pipe_at_root_blocks_initialized")
+@pytest.mark.spec("RUL-top_level_only_managed", "RUL-misplaced_entry_blocks",
+                  test="TST-lifecycle-named_pipe_at_root_blocks_initialized")
 def test_named_pipe_at_root_blocks_initialized(tmp_path, monkeypatch):
     """A top-level entry of any other kind — a named pipe — is misplaced like a file or a folder."""
     _install(monkeypatch)

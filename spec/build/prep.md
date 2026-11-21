@@ -456,9 +456,12 @@ that no move explains and whose path no planned move fills again — that row is
 :::{bld} A day's folder is named `YYYY-MM-DD`
 :id: BLD-day_folder_name
 :status: ruled
-:realises: RUL-by_date_in_day_folder
+:realises: RUL-by_date_in_day_folder, RUL-by_date_moved_to_day_folder
 
 A day's folder SHALL be named `YYYY-MM-DD` from its recorded time's date, whatever `filename_timestamp_format` is.
+Prep's organization stage (`_plan_organize`) takes a timed file of `5-photos-by-date` or `4-videos-by-date` that lies
+anywhere but directly in its band's folder of that name with the inbox's files to be filed, moving it there by a
+`move_no_clobber` of reason `Chronological Organization`.
 :::
 
 :::{bld} Prep names by the time as recorded

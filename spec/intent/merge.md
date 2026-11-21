@@ -149,11 +149,23 @@ Merge SHALL NOT plan, dry-run or execute while the image engine, by which it fin
 :status: ruled
 :criticality: high
 :verify: required
-:uses: DEF-merge, DEF-library, RUL-library_confirmed_before_lock, DEF-filesystem_requirements, RUL-filesystem_trial_leaves_nothing
+:uses: DEF-merge, DEF-library, DEF-filesystem_requirements, RUL-filesystem_trial_leaves_nothing
 
 Merge's plan, dry run and execution SHALL try on the library's filesystem what {need}`DEF-filesystem_requirements`
-requires of a library's — once the library's mark has confirmed it, and before its lock is taken — leaving nothing of
-the files they try it with ({need}`RUL-filesystem_trial_leaves_nothing`).
+requires of a library's, leaving nothing of the files they try it with ({need}`RUL-filesystem_trial_leaves_nothing`).
+:::
+
+:::{rul} The library is tried between its mark and its lock
+:id: RUL-library_tried_before_lock
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+:refines: RUL-library_requirements_tried
+:uses: DEF-merge, DEF-library, RUL-library_confirmed_before_lock
+
+Merge SHALL try the library's filesystem only once the library's mark has confirmed it, and before it takes the
+library's lock.
 :::
 
 :::{rul} A library's filesystem lacking one stops merge
@@ -431,13 +443,45 @@ read — nor for a run interrupted, leaving the summary an earlier run wrote as 
 Merge SHALL never overwrite an execution's summary: written again, the earlier one is first set aside, recoverably.
 :::
 
-:::{rul} Merge tells how its run ended
+:::{rul} Merge tells what it placed
 :id: RUL-merge_run_reported
 :status: ruled
 :criticality: low
 :verify: required
-:uses: DEF-merge, DEF-library, DEF-managed_folders, DEF-sealed_workspace
+:uses: DEF-merge, DEF-library
 
-At the end of an execution merge SHALL report what it placed in the library, what was already there, each photo left in
-photos by destination with why, and whether the workspace is now sealed.
+At the end of an execution merge SHALL report what it placed in the library.
+:::
+
+:::{rul} Merge tells what was already in the library
+:id: RUL-merge_reports_already_present
+:status: ruled
+:criticality: low
+:verify: required
+:refines: RUL-merge_run_reported
+:uses: DEF-merge, DEF-library
+
+At the end of an execution merge SHALL report what was already in the library.
+:::
+
+:::{rul} Merge tells each photo it left, with why
+:id: RUL-merge_reports_left_with_why
+:status: ruled
+:criticality: low
+:verify: required
+:refines: RUL-merge_run_reported
+:uses: DEF-merge, DEF-managed_folders
+
+At the end of an execution merge SHALL report each photo left in photos by destination, with why.
+:::
+
+:::{rul} Merge tells whether the workspace is sealed
+:id: RUL-merge_reports_sealed
+:status: ruled
+:criticality: low
+:verify: required
+:refines: RUL-merge_run_reported
+:uses: DEF-merge, DEF-sealed_workspace
+
+At the end of an execution merge SHALL report whether the workspace is now sealed.
 :::

@@ -238,7 +238,8 @@ def test_the_summary_says_where_each_photo_landed_or_why_it_did_not(tmp_path):
     assert "could not be fingerprinted" in d["blocked_reason"]
 
 
-@pytest.mark.spec("RUL-merge_run_reported", test="TST-merge_execute-the_run_reports_what_it_placed_and_what_stayed")
+@pytest.mark.spec("RUL-merge_run_reported", "RUL-merge_reports_already_present", "RUL-merge_reports_left_with_why",
+                  "RUL-merge_reports_sealed", test="TST-merge_execute-the_run_reports_what_it_placed_and_what_stayed")
 def test_the_run_reports_what_it_placed_and_what_stayed(tmp_path, capsys):
     """A partial run tells what it placed, what was already there, and each photo that stayed with its
     reason, and that nothing is sealed; the run that finishes tells that the workspace is sealed."""
@@ -1425,6 +1426,33 @@ def test_sealed_workspace_rerun_hardstops(tmp_path):
     before = open(os.path.join(str(lib), "Trip", "a.jpg"), "rb").read()
     assert merge._run_locked_workflow("execute", str(ws)) == 2          # sealed -> preflight blocker
     assert open(os.path.join(str(lib), "Trip", "a.jpg"), "rb").read() == before   # untouched
+
+
+@pytest.mark.spec("RUL-sealed_records_readable", "BLD-seal_marker",
+                  test="TST-merge_execute-a_sealed_workspaces_records_stay_readable")
+def test_a_sealed_workspaces_records_stay_readable(tmp_path):
+    """Sealing leaves the workspace's records in place, as they were written: every record the package lists is still
+    on disk and reads, the package itself opens, and a run refused on the seal leaves them all as they were."""
+    import tarfile
+    ws, lib = _ws(tmp_path, [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"}])
+    assert merge._run_locked_workflow("plan", str(ws)) == 0
+    assert merge._run_locked_workflow("execute", str(ws)) == 0
+    assert utils.is_sealed(str(ws))
+    ctl = ws / ".photos-ingest"
+
+    def records():
+        return {p.name: p.read_bytes() for p in ctl.iterdir() if p.is_file() and p.name != "photos-00-workspace.lock"}
+    before = records()
+    manifest = json.loads((ctl / "photos-35-archive-manifest.json").read_text())
+    for name in manifest["contents"]:
+        assert name in before, name                                       # every record of the package still there
+        if name.endswith(".json"):
+            json.loads(before[name])                                      # and reads
+    assert json.loads(before["photos-31-merge-summary.json"])["status"] == "success"
+    with tarfile.open(ctl / "photos-35-archive.tar.gz") as tar:
+        assert ".photos-ingest/photos-31-merge-summary.json" in tar.getnames()
+    assert merge._run_locked_workflow("plan", str(ws)) == 2              # refused on the seal...
+    assert records() == before                                            # ...its records left as they were
 
 
 @pytest.mark.spec("RUL-merge_is_terminal", "RUL-library_takes_many_workspaces", test="TST-merge_execute-library_takes_a_second_workspace_after_the_first_is_sealed")

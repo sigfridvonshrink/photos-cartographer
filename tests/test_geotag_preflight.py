@@ -89,7 +89,8 @@ def test_sealed_blocks_and_warns_on_dump(tmp_path):
     assert any("new dump" in w.lower() for w in warnings), warnings
 
 
-@pytest.mark.spec("RUL-top_level_only_managed", test="TST-geotag_preflight-loose_root_file_blocks")
+@pytest.mark.spec("RUL-top_level_only_managed", "RUL-misplaced_entry_blocks",
+                  test="TST-geotag_preflight-loose_root_file_blocks")
 def test_loose_root_file_blocks(tmp_path):
     ws = _ws(tmp_path)
     (ws / "stray.txt").write_text("loose")
@@ -116,7 +117,8 @@ def test_root_hidden_file_allowed(tmp_path):
     assert not any("Misplaced entry" in b for b in blockers), blockers
 
 
-@pytest.mark.spec("RUL-top_level_only_managed", test="TST-geotag_preflight-every_misplaced_root_entry_named")
+@pytest.mark.spec("RUL-top_level_only_managed", "RUL-misplaced_entry_blocks",
+                  test="TST-geotag_preflight-every_misplaced_root_entry_named")
 def test_every_misplaced_root_entry_named(tmp_path):
     """Any other top-level entry blocks, whatever its kind — a named pipe too — and the block names
     every one, not only the first."""

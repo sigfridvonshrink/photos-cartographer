@@ -448,7 +448,7 @@ plan` does with `--download-zone-table`, lists `photos-02-zone-table.json` as wr
 :::{bld} The answer to the table of countries written by hand
 :id: BLD-zone_table_answered_by_hand
 :status: ruled
-:realises: RUL-zone_table_answered_by_hand
+:realises: RUL-zone_table_answered_by_hand, RUL-zone_table_hand_permission_at_next_plan
 :uses: BLD-zone_table_question
 
 `settle_zone_table` SHALL take a `photos-02-zone-table.json` holding `"download": "accepted"` with neither `copy` nor
@@ -1124,7 +1124,7 @@ with no acceptance, then run `prep plan`, `prep execute` and `geotag plan` again
 :::{bld} A write's leftover cleared only by the journal
 :id: BLD-own_leftover_cleared
 :status: ruled
-:realises: RUL-geotag_clears_own_leftover, RUL-other_write_leftover_holds_photo, RUL-write_leftover_stops_geotag_plan
+:realises: RUL-geotag_clears_own_leftover, RUL-other_write_leftover_holds_photo, RUL-other_write_leftover_named, RUL-write_leftover_stops_geotag_plan
 
 `geotag execute` SHALL note a photo's metadata write operations `begun` in the plan's journal, and persist it under
 the lock the confirmations are written under, before it writes that photo's tags; it removes a `<file>_exiftool_tmp`

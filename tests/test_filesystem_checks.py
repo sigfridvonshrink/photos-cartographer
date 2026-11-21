@@ -260,6 +260,24 @@ def test_merge_stops_on_a_library_that_cannot_refuse_a_move(tmp_path, monkeypatc
         assert open(merge.merge_plan_path(str(ws))).read() == plan_before
 
 
+@pytest.mark.spec("RUL-library_tried_before_lock", "BLD-library_trial",
+                  test="TST-filesystem_checks-library_tried_after_its_mark_and_before_its_lock")
+def test_the_library_is_tried_after_its_mark_and_before_its_lock(tmp_path, monkeypatch):
+    """The library's filesystem is tried only once its mark has confirmed it — a library without its mark is never
+    tried — and the trial comes before the library's lock is taken."""
+    ws, lib = _merge_ws(tmp_path, [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"}])
+    order = []
+    real_trial, real_acquire = merge.library_filesystem_error, utils.LibraryLock.acquire
+    monkeypatch.setattr(merge, "library_filesystem_error", lambda root: order.append("trial") or real_trial(root))
+    monkeypatch.setattr(utils.LibraryLock, "acquire", lambda self: order.append("lock") or real_acquire(self))
+    assert merge._run_locked_workflow("plan", str(ws)) == 0
+    assert order == ["trial", "lock"]
+    order.clear()
+    os.remove(os.path.join(str(lib), ".photos-library"))             # the mark gone: the library unconfirmed
+    assert merge._run_locked_workflow("plan", str(ws)) == 2
+    assert order == []
+
+
 @pytest.mark.spec("RUL-library_network_allowed", test="TST-filesystem_checks-library_on_a_network_filesystem")
 def test_a_library_on_a_network_filesystem_is_merged_into(tmp_path, monkeypatch):
     ws, lib = _merge_ws(tmp_path, [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"}])

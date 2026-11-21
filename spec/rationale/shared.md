@@ -1488,7 +1488,7 @@ this one.
 :status: ruled
 :forced: yes
 :follows_from: RAT-workspace_not_recycled, RAT-non_destructive_core
-:justifies: RUL-sealed_refuses, RUL-sealed_new_dump_warned, RUL-editor_refuses_sealed, RUL-sealed_no_library_recorded
+:justifies: RUL-sealed_refuses, RUL-sealed_records_readable, RUL-sealed_new_dump_warned, RUL-editor_refuses_sealed, RUL-sealed_no_library_recorded
 
 A second batch processed in a merged workspace would interleave with the first's database, logs and package, and its
 record would no longer describe one dump. So nothing that could change it runs; the records stay readable; and a dump
@@ -1928,7 +1928,7 @@ before the lock is taken, it is never mistaken for a run in progress.
 :status: ruled
 :forced: no
 :follows_from: RAT-one_filesystem_specific_part, RAT-safe_at_each_change
-:justifies: RUL-filesystem_requirements_tried, RUL-filesystem_lacking_stops, RUL-filesystem_lacking_named, RUL-filesystem_trial_leaves_nothing, RUL-library_requirements_tried, RUL-library_lacking_stops, RUL-library_lacking_named
+:justifies: RUL-filesystem_requirements_tried, RUL-filesystem_lacking_stops, RUL-filesystem_lacking_named, RUL-filesystem_trial_leaves_nothing, RUL-library_requirements_tried, RUL-library_tried_before_lock, RUL-library_lacking_stops, RUL-library_lacking_named
 
 A filesystem without one of what every change rests on — a FAT or exFAT card, some network shares — fails at the run's
 first lock or move, with that call's error and no word of why: a lock it cannot take reads as a run in progress, a move

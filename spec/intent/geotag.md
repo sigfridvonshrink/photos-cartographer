@@ -598,7 +598,19 @@ as one given to prep is.
 :uses: DEF-control_records
 
 The question whether to download the table of countries SHALL be answerable by hand, in the record that keeps its
-answer — a permission written there downloading the table at prep's next plan.
+answer.
+:::
+
+:::{rul} A permission written by hand downloads the table at prep's next plan
+:id: RUL-zone_table_hand_permission_at_next_plan
+:status: ruled
+:criticality: med
+:verify: required
+:refines: RUL-zone_table_answered_by_hand
+:uses: DEF-control_records, DEF-prep
+
+A permission to download the table of countries written by hand into the record that keeps its answer SHALL download
+the table at prep's next plan.
 :::
 
 :::{rul} An unreadable record of the answer stops the run
@@ -3025,7 +3037,18 @@ again, and only where its own journal of the execution shows its write to that p
 :refines: RUL-geotag_clears_own_leftover
 
 Geotag's execution SHALL NOT write a photo beside which lies a temporary file of an interrupted metadata write that it
-may not remove ({need}`RUL-geotag_clears_own_leftover`): the photo fails, the file named and left where it is.
+may not remove ({need}`RUL-geotag_clears_own_leftover`): the photo fails, the file left where it is.
+:::
+
+:::{rul} A leftover holding its photo back is named
+:id: RUL-other_write_leftover_named
+:status: ruled
+:criticality: high
+:verify: required
+:refines: RUL-other_write_leftover_holds_photo
+:uses: DEF-geotag
+
+A temporary file that holds a photo back from geotag's execution SHALL be named to the user.
 :::
 
 :::{rul} A write's leftover stops geotag's plan

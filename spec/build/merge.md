@@ -75,7 +75,7 @@ hidden file or folder there, each named.
 :::{bld} The library's filesystem, tried before its lock
 :id: BLD-library_trial
 :status: ruled
-:realises: RUL-library_requirements_tried, RUL-library_lacking_stops, RUL-library_lacking_named, RUL-library_network_allowed
+:realises: RUL-library_requirements_tried, RUL-library_tried_before_lock, RUL-library_lacking_stops, RUL-library_lacking_named, RUL-library_network_allowed
 :uses: BLD-filesystem_trial
 
 Merge's plan, dry run and execute SHALL, after the preflight and the workspace's check and before `LibraryLock`, call
@@ -237,7 +237,7 @@ before the summary is built.
 :::{bld} What merge's execute tells at its end
 :id: BLD-merge_run_told
 :status: ruled
-:realises: RUL-merge_run_reported
+:realises: RUL-merge_run_reported, RUL-merge_reports_already_present, RUL-merge_reports_left_with_why, RUL-merge_reports_sealed
 :uses: BLD-merge_records
 
 Merge's `do_execute` SHALL print, once its photos are run, the run's totals (`summary.totals`) — placed new, already

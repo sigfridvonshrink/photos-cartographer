@@ -332,7 +332,7 @@ does.
 :status: ruled
 :forced: no
 :follows_from: RAT-zone_table_where_host_lacks, RAT-every_question_answerable
-:justifies: RUL-zone_table_answered_in_editor, RUL-zone_table_answered_by_hand
+:justifies: RUL-zone_table_answered_in_editor, RUL-zone_table_answered_by_hand, RUL-zone_table_hand_permission_at_next_plan
 
 The question of the table of countries is prep's, asked at a terminal when the workspace is made; a workspace made
 with no one at the terminal leaves it open, and the user who opens the editor to answer geotag's questions would
