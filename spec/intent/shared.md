@@ -3451,6 +3451,40 @@ and no character a filename may not hold.
 The filename format SHALL hold no field that reads a time differently with a timezone than without one.
 :::
 
+:::{rul} The filename format varies with the time
+:id: RUL-filename_format_varies_with_time
+:status: ruled
+:criticality: med
+:verify: required
+:uses: RUL-one_filename_format
+:refines: RUL-checked_filename_format
+
+The filename format SHALL make another name for another time.
+:::
+
+:::{rul} The filename format ends in nothing shaped like a suffix
+:id: RUL-filename_format_not_suffix_shaped
+:status: ruled
+:criticality: med
+:anti: yes
+:verify: required
+:uses: RUL-one_filename_format, RUL-suffix_no_clobber
+:refines: RUL-checked_filename_format
+
+The filename format SHALL NOT make a name that ends as a differentiating suffix does.
+:::
+
+:::{rul} The development subfolders' names are checked
+:id: RUL-checked_development_subfolder_names
+:status: ruled
+:criticality: med
+:verify: required
+:uses: DEF-development
+:refines: INV-authored_values_checked
+
+The names of the development subfolders SHALL be a list that is not empty, each one part of a path.
+:::
+
 :::{rul} A number is of the right kind and in range
 :id: RUL-checked_numbers
 :status: ruled
@@ -3640,7 +3674,21 @@ leaves the state before it or the state after, never part of either.
 :excepts: RUL-failed_operation_clean
 
 Where a move cannot be one operation, an interruption, or a failure partway, SHALL leave the file whole under its old
-name, its new name or both — never under neither, never part of one.
+name, its new name or both — never under neither, never part of one — a rename of case alone
+({need}`RUL-case_rename_rests_under_own_name`) aside.
+:::
+
+:::{rul} A rename of case alone may rest under a name of the tool's own
+:id: RUL-case_rename_rests_under_own_name
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+:refines: RUL-operations_atomic
+:excepts: RUL-split_move_never_lost, RUL-failed_operation_clean
+
+A rename that changes only the case of a name, interrupted or failing partway, SHALL leave the file whole under its old
+name, its new name or a temporary name of the tool's own — never under none of them, never part of one.
 :::
 
 :::{rul} A file rewritten in place is the old one or the new one
@@ -3708,8 +3756,8 @@ A temporary copy SHALL bear a name of its own, which no photo bears.
 :verify: required
 
 An operation that cannot complete SHALL leave its file as it was before it — a move that cannot be one operation
-({need}`RUL-split_move_never_lost`) and a move whose recording fails ({need}`RUL-move_stands_when_recording_fails`)
-aside.
+({need}`RUL-split_move_never_lost`), a rename of case alone ({need}`RUL-case_rename_rests_under_own_name`) and a move
+whose recording fails ({need}`RUL-move_stands_when_recording_fails`) aside.
 :::
 
 :::{rul} A move whose recording fails stands
@@ -3780,8 +3828,9 @@ first run — the configuration it seeds; a prep execution that geotag's plan ru
 :upholds: INV-every_change_from_the_record
 
 Execution SHALL carry out only the operations its plan records, re-deriving no decision — clearing the temporary
-copies a crash left ({need}`RUL-crash_temps_cleared`), and taking as already in the library a photo whose place is found
-holding it ({need}`RUL-collision_same_content`), aside.
+copies a crash left ({need}`RUL-crash_temps_cleared`), clearing the leftover of its own interrupted write
+({need}`RUL-geotag_clears_own_leftover`), and taking as already in the library a photo whose place is found holding it
+({need}`RUL-collision_same_content`), aside.
 :::
 
 :::{rul} The job count changes nothing an execution does

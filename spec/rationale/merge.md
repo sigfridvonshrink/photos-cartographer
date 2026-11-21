@@ -193,6 +193,20 @@ empty is written over by the run's first confirmation, and what it held is gone.
 repair or restore, and has lost nothing.
 :::
 
+:::{rat} A photo the user moved into this library is in it
+:id: RAT-moved_into_this_library
+:status: ruled
+:forced: no
+:follows_from: RAT-merged_means_in_this_library, RAT-library_is_evidence_of_move
+:justifies: RUL-earlier_place_moved_to_this_library
+
+A photo left in a library the setting has since been pointed away from blocks, and there are two ways on: point the
+setting back, or move the photo to its place in the library now named. The second is the user's own move of a photo
+merge had placed and checked. Found there, the photo itself, it is in the library the seal will name — which is all
+that counting it merged ever meant — and a plan that still blocked it would leave moving it back as the only way to
+finish.
+:::
+
 :::{rat} Another library's photos are not in this one
 :id: RAT-merged_means_in_this_library
 :status: ruled

@@ -2142,6 +2142,7 @@ def test_a_photo_placed_in_a_library_since_pointed_away_from_blocks(tmp_path):
 
 @pytest.mark.parametrize("way_out", ["library_pointed_back", "photo_moved_by_hand"])
 @pytest.mark.spec("RUL-earlier_place_in_this_library", "RUL-replan_carries_placed",
+                  "RUL-earlier_place_moved_to_this_library",
                   test="TST-merge_execute-either_way_out_of_a_library_pointed_away_from_finishes_the_merge")
 def test_either_way_out_of_a_library_pointed_away_from_finishes_the_merge(tmp_path, way_out):
     """Either way out the block names lets the merge finish: point library_root back at the library holding the

@@ -2349,7 +2349,7 @@ user withdraws it.
 :uses: DEF-tracks
 
 A photo whose own position its camera's agreed clock offset contradicts, lying farther from where the tracks place it at
-its true time than the configuration lets an anchor lie from its track, SHALL be asked about by itself among the GPS
+its true time than the configuration lets an own position lie from them, SHALL be asked about by itself among the GPS
 decisions, proposing that place.
 :::
 
@@ -2991,7 +2991,7 @@ back into photos by date, then running prep and planning geotag again.
 :criticality: high
 :anti: yes
 :verify: required
-:excepts: RUL-write_leftovers_by_dest_warned
+:excepts: RUL-write_leftovers_by_dest_warned, RUL-execution_only_the_plan
 :uses: DEF-geotag
 
 Geotag SHALL remove the temporary file an interrupted metadata write left beside a photo only to write that photo

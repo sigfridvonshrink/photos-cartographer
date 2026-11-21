@@ -244,7 +244,7 @@ two. `CAMERA_GROUP_KEY_VERSION` is a code constant, never a configuration field.
 :::{bld} What validating the configuration checks
 :id: BLD-config_values_checked
 :status: ruled
-:realises: RUL-config_validated_before_use, RUL-checked_paths, RUL-checked_snapshot_names, RUL-checked_filename_format, RUL-checked_numbers, RUL-checked_extension_lists, RUL-checked_folder_names, RUL-checked_fixed_set, RUL-drift_window_positive, RUL-checked_timezones
+:realises: RUL-config_validated_before_use, RUL-checked_paths, RUL-checked_snapshot_names, RUL-checked_filename_format, RUL-checked_numbers, RUL-checked_extension_lists, RUL-checked_folder_names, RUL-checked_fixed_set, RUL-drift_window_positive, RUL-checked_timezones, RUL-filename_format_varies_with_time, RUL-filename_format_not_suffix_shaped, RUL-checked_development_subfolder_names
 
 Validating the configuration (`validate_config`) SHALL check that a path is not blank and holds no NUL; that the ZFS
 snapshot prefix is a syntactically valid snapshot component; that `filename_timestamp_format` is a format that yields a

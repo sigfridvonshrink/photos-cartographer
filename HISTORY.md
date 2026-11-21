@@ -40,6 +40,14 @@ leaves aside, and the rule that states the exception links it with `excepts`.
   an execution had begun under is executed again under its id, the earlier journal set aside as it already was for a
   plan executed twice. The second change of behaviour.
 
+The same reading found the build stating things the intent did not. No build item now declares an exception to an
+intent rule: a rename of case alone, resting between its two moves under a name of the tool's own, and geotag's
+clearing of its own interrupted write, are exceptions the intent states. A photo the user moved to its place in the
+library now named is carried forward — the owner: *"add intent rule"* — where before only the build said so. The
+distance at which an own position counts as contradicted is the configuration's own, not the anchor's; and three checks
+of the configuration have rules: a filename format that varies with the time, one that ends in nothing shaped like a
+suffix, and the development subfolders' names.
+
 ## 2026-11-17 — a leaner corpus measured, and dropped (BACKLOG 57)
 
 The corpus is about three quarters the size of the code by words, and the owner asked whether that was overdoing it.

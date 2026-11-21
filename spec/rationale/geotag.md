@@ -1139,7 +1139,8 @@ camera's offset, one whose own position agrees with none of them most likely car
 photo's: GPS jitter, a fix from minutes before, a position another program wrote. Accepting the agreed offset corrects
 its time and would leave the wrong place in it, and the user could only read the pattern and mend it elsewhere. The
 tracks say where the user was at the photo's corrected time; where that lies farther from the photo's own position than
-an anchor may, the two are set side by side, the track's proposed. The photo's own stays unless the user takes
+the configuration allows — a distance of its own, not the one an anchor is matched within — the two are set side by
+side, the track's proposed. The photo's own stays unless the user takes
 another: it is still a measurement, and only the user can tell a stale fix from a detour the track missed — so nothing
 waits on it, and nothing replaces it but their answer. With no track at that time there is nothing to propose; the
 photo keeps its own, and the record says it was doubted. A position replaced is a position lost from the photo, so

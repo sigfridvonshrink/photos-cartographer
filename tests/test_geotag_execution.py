@@ -962,6 +962,7 @@ def test_rename_target_occupied_at_execute_blocks(tmp_path, monkeypatch):
 
 
 @pytest.mark.spec("RUL-geotag_extension_lowercase", "BLD-case_rename_via", "RUL-target_free_at_execute",
+                  "RUL-case_rename_rests_under_own_name",
                   test="TST-geotag_execution-a_change_of_case_alone_goes_by_a_temporary_name")
 def test_a_change_of_case_alone_goes_by_a_temporary_name(tmp_path, monkeypatch):
     """`X.JPG` to `X.jpg`: on a filesystem that ignores case the new name is the photo's own, which a no-clobber move

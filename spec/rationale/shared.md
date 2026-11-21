@@ -1561,7 +1561,7 @@ both checks are needed, every time.
 :status: ruled
 :forced: yes
 :follows_from: RAT-plain_json_record, RAT-why_did_this_change
-:justifies: INV-authored_values_checked, RUL-checked_paths, RUL-checked_timezones, RUL-checked_positions_and_times, RUL-checked_filename_format, RUL-checked_numbers, RUL-checked_shapes, RUL-date_fallback_checked, RUL-invalid_value_stops, RUL-invalid_value_located, RUL-invalid_value_never_repaired, RUL-unknown_decision_field_refused
+:justifies: INV-authored_values_checked, RUL-checked_paths, RUL-checked_timezones, RUL-checked_positions_and_times, RUL-checked_filename_format, RUL-checked_numbers, RUL-checked_shapes, RUL-date_fallback_checked, RUL-invalid_value_stops, RUL-invalid_value_located, RUL-invalid_value_never_repaired, RUL-unknown_decision_field_refused, RUL-checked_development_subfolder_names
 
 The user writes the configuration and the decisions by hand, so the tool cannot assume they are well formed. A
 mistyped timezone or an unsafe path, reported early as a specific problem in a named place, is fixed at its source;
@@ -1668,6 +1668,19 @@ which no plan, however careful, can stand in for.
 That nothing is overwritten, and that an interrupted run is finished by running it again, hold only if each change is
 safe when it happens. A half-done move, a half-written file, or a failure recorded as done would break both where no
 plan can see it.
+:::
+
+:::{rat} A name differing only in case cannot be taken in one checked step
+:id: RAT-case_rename_by_a_third_name
+:status: ruled
+:forced: yes
+:follows_from: RAT-safe_at_each_change
+:justifies: RUL-case_rename_rests_under_own_name
+
+On a filesystem that ignores case, a file's name in another case is its own name: a move to it that refuses a taken
+name is refused, and one that does not refuse cannot be told from an overwrite. The only way that keeps the check
+that every name is free is to go by a third name, in two checked moves. Between the two the file is under that third
+name — whole, and under a name only the tool gives, so the next run knows it for a rename half made and finishes it.
 :::
 
 :::{rat} A move is not undone to tidy a failure

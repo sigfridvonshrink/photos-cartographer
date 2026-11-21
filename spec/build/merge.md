@@ -136,7 +136,7 @@ its own name where geotag renamed nothing; the entries sorted by their path in t
 :::{bld} A fresh plan carries forward from the earlier plans
 :id: BLD-merge_carry_forward
 :status: ruled
-:realises: RUL-replan_carries_placed, RUL-earlier_place_in_this_library, RUL-merge_unreadable_record_stops, RUL-replan_blocks_unaccounted, RUL-replan_block_names_why
+:realises: RUL-replan_carries_placed, RUL-earlier_place_in_this_library, RUL-merge_unreadable_record_stops, RUL-replan_blocks_unaccounted, RUL-replan_block_names_why, RUL-earlier_place_moved_to_this_library
 
 Merge's `build_merge_plan` SHALL give a finalized photo no longer under `6-photos-by-dest` the record of the latest
 plan — `photos-30-merge-plan.json`, then its `-NNN` backups newest first, by the number of the suffix — holding a record for its content fingerprint

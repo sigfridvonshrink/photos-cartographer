@@ -257,7 +257,7 @@ rests on their sharing a dump folder), and the set-aside copy is never used.
 :::{bld} A filed file's extension is lowercased in two renames
 :id: BLD-two_step_case_rename
 :status: ruled
-:realises: RUL-media_extension_lowercase
+:realises: RUL-media_extension_lowercase, RUL-case_rename_rests_under_own_name
 
 A filed media file's extension SHALL be lowercased by two no-clobber renames in its folder, through a temporary name
 free on disk and in the plan; an inbox file's, in the move that files it.

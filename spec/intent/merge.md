@@ -310,6 +310,18 @@ placed there, whatever image engine version now takes the fingerprints.
 Merge SHALL count a photo an earlier plan placed as merged only while it lies inside the library now configured.
 :::
 
+:::{rul} A photo moved to its place in this library is carried
+:id: RUL-earlier_place_moved_to_this_library
+:status: ruled
+:criticality: med
+:verify: required
+:refines: RUL-replan_carries_placed
+:uses: DEF-merge, DEF-library
+
+A fresh plan SHALL carry forward a finalized photo an earlier plan placed in another library where the library now
+configured holds it at the same place within it.
+:::
+
 :::{rul} A photo a fresh plan cannot carry blocks
 :id: RUL-replan_blocks_unaccounted
 :status: ruled

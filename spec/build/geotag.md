@@ -909,8 +909,7 @@ it, case folded.
 :::{bld} A change of case alone goes by a temporary name
 :id: BLD-case_rename_via
 :status: ruled
-:realises: RUL-geotag_extension_lowercase, RUL-suffix_no_clobber, RUL-target_free_at_execute
-:excepts: RUL-split_move_never_lost, RUL-failed_operation_clean
+:realises: RUL-geotag_extension_lowercase, RUL-suffix_no_clobber, RUL-target_free_at_execute, RUL-case_rename_rests_under_own_name
 
 A rename `plan_renames` plans whose new name differs from the current one only in case SHALL carry `via`: a
 temporary name — the new name's stem with `.carto-case` before its extension, suffixed by `allocate_suffix` — free
@@ -1101,7 +1100,6 @@ with no acceptance, then run `prep plan`, `prep execute` and `geotag plan` again
 :id: BLD-own_leftover_cleared
 :status: ruled
 :realises: RUL-geotag_clears_own_leftover, RUL-other_write_leftover_holds_photo, RUL-write_leftover_stops_geotag_plan
-:excepts: RUL-execution_only_the_plan
 
 `geotag execute` SHALL note a photo's metadata write operations `begun` in the plan's journal, and persist it under
 the lock the confirmations are written under, before it writes that photo's tags; it removes a `<file>_exiftool_tmp`

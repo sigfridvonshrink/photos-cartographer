@@ -69,6 +69,7 @@ def _pol(**overrides):
     (_pol(device_groups={"phone": ["Pixel"]}), "device_groups.phone is not a device class"),  # misspelt class
 ])
 @pytest.mark.spec("RUL-config_validated_before_use", "BLD-gpx_root_checked", "RUL-checked_filename_format",
+                  "RUL-filename_format_varies_with_time",
                   "RUL-checked_shapes", "RUL-checked_numbers", "RUL-checked_paths", "RUL-checked_fixed_set",
                   test="TST-config_validation-validate_config_rejects")
 def test_validate_config_rejects(cfg, needle):
@@ -116,6 +117,8 @@ def test_distribution_subfolders_default_valid():
     utils.validate_config(_cfg(destination_distribution_subfolders=["jpg", "tif", "webp"]))
 
 
+@pytest.mark.spec("RUL-checked_development_subfolder_names", "BLD-config_values_checked",
+                  test="TST-config_validation-distribution_subfolders_rejects_bad")
 @pytest.mark.parametrize("bad, needle", [
     ("jpg", "non-empty list"),
     ([], "non-empty list"),
@@ -191,6 +194,7 @@ def test_a_media_extension_holding_a_dot_is_refused():
 
 
 @pytest.mark.spec("RUL-merge_suffix_above_highest", "RUL-filename_format_configured", "BLD-config_values_checked",
+                  "RUL-filename_format_not_suffix_shaped",
                   test="TST-config_validation-a_format_ending_like_a_suffix_is_refused")
 def test_a_format_ending_like_a_suffix_is_refused():
     """A filename format whose names end in `-` and three or more digits — how a differentiating suffix looks — is
