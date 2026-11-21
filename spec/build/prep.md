@@ -522,7 +522,7 @@ missing-GPS and `GPSProcessingMethod` counts, cache freshness, and the duplicate
 :realises: RUL-plan_carried_out_by_its_code, RUL-new_file_restales_plan
 
 `photos-10-prep-plan.json` SHALL record its id, its schema version, its command, the configuration's hash, the
-fingerprint of the code that made it ({need}`BLD-code_fingerprint`), its operations in order, its blockers and warnings,
+hash of the code that made it ({need}`BLD-code_fingerprint`), its operations in order, its blockers and warnings,
 the size and modification time of each file it leaves as it is, its metadata dependencies, every path its scan found,
 and a summary.
 :::
@@ -623,7 +623,7 @@ rather than read it as empty; with no such file, the earlier log is empty.
 :realises: RUL-prep_log_derived, RUL-prep_log_records_set_aside, RUL-log_follows_retaken_fingerprint, RUL-partial_history_shown, RUL-retaken_fingerprint_step_logged
 
 Prep's execute SHALL build `photos-15-prep-log.json` from the plan's moves and renames replayed per file, the
-quarantine evidence and the final database rows, merged onto the prior log by fingerprint: an entry whose old value is
+quarantine manifests and the final database rows, merged onto the prior log by fingerprint: an entry whose old value is
 nowhere in the workspace and whose `prep_path` holds a file of a new value that this run's plan gives no step moves to
 it with a `fingerprint_retaken` step, the same file unchanged ({need}`BLD-retake_same_file`); an entry whose file is elsewhere with no step of this run gains a `user` step `moved_to_by_dest` — `moved_to_by_date` where the file is not in photos by destination; and a file in
 a prep-organized folder with no recorded history gets an entry marked `partial`, with a warning.
@@ -646,7 +646,7 @@ one's.
 :realises: RUL-gone_photo_entry_carried
 
 An entry of the prior `photos-15-prep-log.json` whose fingerprint no database row holds, which this run's plan gives no
-step and no quarantine record, and which no `fingerprint_retaken` claims ({need}`BLD-prep_log_build`), SHALL be written
+step and no entry of a quarantine manifest, and which no `fingerprint_retaken` claims ({need}`BLD-prep_log_build`), SHALL be written
 into the new log unchanged, `prep_path` included.
 :::
 

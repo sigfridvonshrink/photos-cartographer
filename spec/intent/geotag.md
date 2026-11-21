@@ -748,7 +748,7 @@ accepted by that confirmation ({need}`RUL-timezone_offset_asked_once`).
 :uses: DEF-geotag, DEF-decision
 
 A clock offset derived from the destination's timezone, or from the offset the camera's photos record, SHALL be asked
-about once: at the check against the tracks where tracks lie by its photos, and by acceptance where none do.
+about once: at the drift check where tracks lie by its photos, and by acceptance where none do.
 :::
 
 :::{rul} An acceptance holds for the proposal it accepted
@@ -2030,7 +2030,7 @@ are read.
 :uses: RUL-timezone_offset_asked_once
 
 A phone's photos recording no offset that neither its tagged photos nor its own GPS settle SHALL be asked about once,
-as a camera's guessed offset is: at the check against the tracks where tracks lie by them, by acceptance where none do.
+as a camera's guessed offset is: at the drift check where tracks lie by them, by acceptance where none do.
 :::
 
 :::{rul} A phone kept as it records itself
@@ -2188,7 +2188,7 @@ confirmed that offset against the tracks.
 :refines: RUL-unanchored_offset_confirmed
 :uses: DEF-tracks
 
-A check against the tracks left untouched SHALL never count as a confirmation.
+A drift check left untouched SHALL never count as a confirmation.
 :::
 
 :::{rul} A confirmation holds for the offset it confirmed
@@ -2399,6 +2399,15 @@ A photo whose position is latitude 0 and longitude 0 SHALL count, wherever geota
 having none.
 :::
 
+:::{def} A folder fallback
+:id: DEF-folder_fallback
+:status: ruled
+:uses: DEF-destination
+
+A **folder fallback** is a position the user gives a destination, for the photos there that hold none of their own and
+that the tracks do not place.
+:::
+
 :::{rul} A photo is placed by the most specific source it has
 :id: RUL-placement_order
 :status: ruled
@@ -2406,7 +2415,7 @@ having none.
 :verify: required
 
 A photo with no position of its own SHALL be placed by the first that applies: a position the user set for it, the
-tracks at its resolved time, its destination's folder fallback.
+tracks at its true time, its destination's folder fallback.
 :::
 
 :::{rul} A photo nothing places waits for the user

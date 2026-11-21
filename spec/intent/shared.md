@@ -94,6 +94,16 @@ A file's **media class** — image, raw, video, or `other` — is the one the co
 A **blocker** is a reason a plan cannot be carried out as it stands, reported with it.
 :::
 
+:::{def} A blocked photo
+:id: DEF-blocked_photo
+:status: ruled
+:uses: DEF-blocker, DEF-merge, DEF-library
+
+A **blocked photo** is one merge's plan leaves where it is, with the reason, because its place in the library cannot be
+settled. It is reported as a blocker; unlike one that stops a command before a plan is made, it holds back that photo
+alone, the plan carried out for the rest.
+:::
+
 :::{def} The managed folders
 :id: DEF-managed_folders
 :status: ruled
@@ -1262,6 +1272,15 @@ A file's recorded time SHALL be read from the first of its `DateTimeOriginal`, `
 holds a valid time; a field present but holding none is passed over.
 :::
 
+:::{def} A true time
+:id: DEF-true_time
+:status: ruled
+:uses: DEF-recorded_time, DEF-geotag
+
+A photo's **true time** is the instant it was made, as UTC — what geotag resolves its recorded time to, and names and
+places the photo by.
+:::
+
 :::{def} A timestamp name
 :id: DEF-timestamp_name
 :status: ruled
@@ -1554,7 +1573,7 @@ as a file of no media class is handled.
 :uses: DEF-tracks, DEF-dependency_cascade
 
 Geotag SHALL record, as a dependency of every record it derives with the tracks — the time decisions, the drift
-validation, the GPS decisions and the executable plan — a digest of the tracks at the times its decisions reach, so that
+check, the GPS decisions and the executable plan — a digest of the tracks at the times its decisions reach, so that
 a change to the tracks there makes those records stale.
 :::
 
@@ -1641,14 +1660,14 @@ A dependency that is missing, or cannot be checked, SHALL count as changed.
 A media file's fingerprint SHALL stay the same when the pipeline rewrites its metadata or its position, or renames it.
 :::
 
-:::{rul} Another image decoder is a reason to check a fingerprint
+:::{rul} Another image engine is a reason to check a fingerprint
 :id: RUL-engine_change_is_checked
 :status: ruled
 :criticality: high
 :verify: required
 :uses: DEF-fingerprint
 
-A photo's fingerprint taken under another version of the image decoder SHALL be taken again before a phase relies on it.
+A photo's fingerprint taken under another version of the image engine SHALL be taken again before a phase relies on it.
 :::
 
 :::{rul} A photo's fingerprint covers every frame
@@ -1687,7 +1706,7 @@ Geotag and merge SHALL NOT proceed on a handoff whose fingerprints were taken by
 :verify: required
 :uses: DEF-fingerprint, RUL-engine_change_is_checked
 
-A fingerprint taken again under another version of the image decoder whose value is new SHALL be read as the same photo's —
+A fingerprint taken again under another version of the image engine whose value is new SHALL be read as the same photo's —
 never, for a changed version alone, as a different photo's.
 :::
 
@@ -3184,7 +3203,7 @@ package. Merge's plan and journal, from which an interrupted merge resumes, are 
 :::
 
 :::{rul} Merge remakes the package as part of its run
-:id: RUL-merge_reseals
+:id: RUL-merge_repackages
 :status: ruled
 :criticality: med
 :verify: required
@@ -3195,12 +3214,12 @@ part of the same run and with no command of its own.
 :::
 
 :::{rul} Remaking the package re-derives nothing
-:id: RUL-reseal_rederives_nothing
+:id: RUL-repackage_rederives_nothing
 :status: ruled
 :criticality: med
 :anti: yes
 :verify: required
-:refines: RUL-merge_reseals
+:refines: RUL-merge_repackages
 
 Merge SHALL remake the package from the records as they stand, re-deriving nothing of an earlier phase.
 :::
@@ -3856,13 +3875,13 @@ Each phase SHALL carry out or summarise a saved plan only with the code that mad
 made by other code or recording none.
 :::
 
-:::{rul} Every change is journaled
+:::{rul} Every change is journalled
 :id: RUL-every_change_journaled
 :status: ruled
 :criticality: med
 :verify: required
 
-Every change an execution makes to a media file SHALL be recorded in that run's journal.
+Every change an execution makes to a media file SHALL be recorded in the journal of the plan it carries out.
 :::
 
 
@@ -4334,7 +4353,7 @@ The decision editor SHALL NOT save while a record it answers into is not the one
 :uses: DEF-decision
 
 The decision editor SHALL write the records a save changes one after another, each whole: the time decisions, the
-drift validation, the GPS decisions — each standing on the ones before it — then the execution's summary and the
+drift check, the GPS decisions — each standing on the ones before it — then the execution's summary and the
 configuration, which stand on none of them, and then the answer about the table of countries, which stands on none;
 so that a save cut short leaves only a leading part of it written.
 :::

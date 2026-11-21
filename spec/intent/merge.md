@@ -134,7 +134,7 @@ Merge SHALL NOT proceed while photos by destination holds a hidden file or folde
 :::
 
 :::{rul} Merge stops without its image engine
-:id: RUL-imagemagick_absent_stops_merge
+:id: RUL-image_engine_absent_stops_merge
 :status: ruled
 :criticality: high
 :anti: yes

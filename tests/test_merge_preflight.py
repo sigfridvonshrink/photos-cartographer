@@ -167,7 +167,7 @@ def test_clean_workspace_passes(tmp_path):
 
 @pytest.mark.parametrize("command", ["plan", "dry-run", "execute"])
 @pytest.mark.parametrize("present", [(), ("identify",), ("magick",)])
-@pytest.mark.spec("RUL-imagemagick_absent_stops_merge", "BLD-merge_preflight",
+@pytest.mark.spec("RUL-image_engine_absent_stops_merge", "BLD-merge_preflight",
                   test="TST-merge_preflight-imagemagick_absent_stops_merge")
 def test_imagemagick_absent_stops_merge(tmp_path, monkeypatch, capsys, command, present):
     """With neither `magick` nor the older `identify` on the PATH, merge's plan, dry run and execute stop (exit 2) as

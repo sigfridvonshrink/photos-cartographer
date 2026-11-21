@@ -102,7 +102,7 @@ A stray is a file cartographer does not understand — a document, a thumbnail a
 video, a file of a format the lists do not name. Recorded beside the media,
 it would make cartographer answer for what it cannot reason about; parked whole, it waits for the user to keep or clear
 it, and clearing it is a change the user accepts once, by its code. Moving it is a change like any other, planned and
-journaled, so the plan names it, where it was and where it goes, and that plan is kept with the workspace's records; it
+journalled, so the plan names it, where it was and where it goes, and that plan is kept with the workspace's records; it
 is named nowhere it would be taken for a photo.
 :::
 
@@ -672,7 +672,7 @@ leave it truncated — the evidence lost at the one moment it is needed, and the
 :justifies: RUL-emptied_folders_removed, RUL-folder_removed_only_as_planned
 
 Moving files out leaves their folders empty, and the inbox must end empty for the next dump; a day emptied by the sort
-should not linger. Removing a folder is a change to the workspace like any other, so it is planned and journaled; and
+should not linger. Removing a folder is a change to the workspace like any other, so it is planned and journalled; and
 only an empty one goes, so nothing a folder holds — even what arrived unplanned — is ever lost with it.
 :::
 
@@ -710,7 +710,7 @@ run sets it aside again under a new record — the old one at worst a record of 
 :follows_from: RAT-reason_first, RAT-no_automatic_deletion
 :justifies: RUL-unreadable_manifest_kept
 
-A quarantine record found unreadable may still be read by hand, so it is set aside, kept, and a new one begun. Where
+A quarantine manifest found unreadable may still be read by hand, so it is set aside, kept, and a new one begun. Where
 it cannot even be set aside, a new one written in its place would be the end of it: the files already quarantined
 would lie there with nothing saying why. Stopping keeps the record and the file not yet moved; the user mends the
 folder, and the next run quarantines it again.

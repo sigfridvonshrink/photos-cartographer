@@ -933,7 +933,7 @@ Prep SHALL record why it quarantines a file — its path and its reason, and for
 shared fingerprint — before it moves the file into the quarantine.
 :::
 
-:::{rul} An unreadable quarantine record is never written over
+:::{rul} An unreadable quarantine manifest is never written over
 :id: RUL-unreadable_manifest_kept
 :status: ruled
 :criticality: high
@@ -941,7 +941,7 @@ shared fingerprint — before it moves the file into the quarantine.
 :verify: required
 :refines: RUL-evidence_before_quarantine
 
-Prep SHALL stop rather than write over a quarantine record it cannot read and cannot set aside, the file it was to
+Prep SHALL stop rather than write over a quarantine manifest it cannot read and cannot set aside, the file it was to
 quarantine left where it was.
 :::
 
@@ -1031,14 +1031,14 @@ A file the user moves from the quarantine back into the inbox SHALL, once its le
 quarantine is accepted ({need}`RUL-stop_gives_acceptance_code`), be handled as a new file of the dump.
 :::
 
-:::{rul} A restored file's quarantine record is left as it is
+:::{rul} A restored file's quarantine manifest is left as it is
 :id: RUL-restored_file_record_kept
 :status: ruled
 :criticality: med
 :verify: required
 :refines: RUL-restored_file_is_new
 
-The earlier quarantine record of a file the user moves back into the inbox SHALL be left as it is.
+The earlier quarantine manifest of a file the user moves back into the inbox SHALL be left as it is.
 :::
 
 :::{rul} The quarantine's size is reported
@@ -1124,7 +1124,7 @@ fingerprint the handoff records.
 :criticality: med
 :verify: required
 
-Prep's log SHALL be made from prep's plans, journals, quarantine evidence and database alone, holding nothing they do
+Prep's log SHALL be made from prep's plans, journals, quarantine manifests and database alone, holding nothing they do
 not.
 :::
 

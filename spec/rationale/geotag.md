@@ -387,7 +387,7 @@ a trip with none of its own would be far from all of them too.
 :justifies: RUL-timezone_offset_asked_once
 
 A timezone's offset, like the one a camera's photos record, is a guess that needs the user's word before it is written. Where tracks lie by the photos the
-user gives that word at the check against the tracks, looking at where the offset puts a photo; asking them to accept
+user gives that word at the drift check, looking at where the offset puts a photo; asking them to accept
 the same number first, in another file and another run, adds a question and no safety — the check is the stronger
 act and names the offset itself. Where no track covers the photos there is no check, and acceptance is the word.
 :::

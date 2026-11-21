@@ -51,7 +51,7 @@ the log copied forward, are left keyed by the old value, and none is rewritten.
 :::{bld} Merge's preflight
 :id: BLD-merge_preflight
 :status: ruled
-:realises: RUL-merge_rechecks_gates, RUL-merge_blocked_changes_nothing, RUL-merge_takes_finalized_current, RUL-merge_refuses_changed_since_finalize, RUL-unfingerprinted_photo_stops_merge, RUL-hidden_among_photos_stops_merge, RUL-imagemagick_absent_stops_merge, RUL-merge_refuses_unplaced, RUL-merge_gates_leave_out_residue, RUL-fingerprint_method_is_the_builds
+:realises: RUL-merge_rechecks_gates, RUL-merge_blocked_changes_nothing, RUL-merge_takes_finalized_current, RUL-merge_refuses_changed_since_finalize, RUL-unfingerprinted_photo_stops_merge, RUL-hidden_among_photos_stops_merge, RUL-image_engine_absent_stops_merge, RUL-merge_refuses_unplaced, RUL-merge_gates_leave_out_residue, RUL-fingerprint_method_is_the_builds
 
 Merge's `preflight` SHALL run, under the workspace lock and before the library's, stopping at the first that fails: the
 seal; the initialization mark; a link at the top level; the configuration, read and checked; a missing managed folder; a

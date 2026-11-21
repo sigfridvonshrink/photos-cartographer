@@ -357,7 +357,7 @@ class MergeWorkflow:
         # ---- Gathered preconditions (report every problem at once) ----------
         # ImageMagick, `magick` or the older `identify`: merge settles every taken place, and confirms every
         # photo a run already moved, by a fingerprint it takes. Without it nothing can be settled — every
-        # collision would block and no moved photo be confirmed — so it stops merge (RUL-imagemagick_absent_stops_merge).
+        # collision would block and no moved photo be confirmed — so it stops merge (RUL-image_engine_absent_stops_merge).
         from .photos_utils import missing_tools
         if missing_tools(["magick"]) and missing_tools(["identify"]):
             blockers.append("ImageMagick is not installed (neither `magick` nor `identify` is on PATH): merge "

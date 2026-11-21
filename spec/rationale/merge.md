@@ -75,7 +75,7 @@ merges that ran.
 :status: ruled
 :forced: yes
 :follows_from: RAT-decoded_pixel_identity, RAT-library_is_evidence_of_move
-:justifies: RUL-imagemagick_absent_stops_merge
+:justifies: RUL-image_engine_absent_stops_merge
 
 A place merge finds taken is settled by fingerprinting the file there, and a photo gone from the workspace counts as
 merged only once its place is fingerprinted again. Without ImageMagick no fingerprint can be taken: every collision

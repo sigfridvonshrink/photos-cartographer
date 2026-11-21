@@ -48,6 +48,14 @@ distance at which an own position counts as contradicted is the configuration's 
 of the configuration have rules: a filename format that varies with the time, one that ends in nothing shaped like a
 suffix, and the development subfolders' names.
 
+One word now means one thing. Remaking the package at merge is *repackaging*; *seal* is left to the mark merge
+writes. *Hash* is a digest of exact bytes and *fingerprint* a media file's identity, in prose as in the definitions —
+the fields named `*_fingerprint` that hold a hash keep their names. photos-22 is the *drift check*; the decoder is the
+*image engine*; a quarantine's evidence file is its *manifest*; a phase's copy of the database is its *image*, and the
+database a record, not a cache. A *true time*, a *folder fallback* and a *blocked photo* — one photo merge's plan holds
+back while it places the rest, against a blocker that stops a command — are defined. Three rules and a rationale took
+the new words into their ids.
+
 ## 2026-11-17 — a leaner corpus measured, and dropped (BACKLOG 57)
 
 The corpus is about three quarters the size of the code by words, and the owner asked whether that was overdoing it.

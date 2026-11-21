@@ -328,7 +328,7 @@ the photo and video bands — are pipeline logic, so the user sets the names and
 :follows_from: RAT-one_source_per_fact, RAT-grouping_computed_once
 :justifies: RUL-camera_classes_not_derivation
 
-The version of the camera-group derivation takes part in the dependency fingerprints, so a change to the derivation is
+The version of the camera-group derivation takes part in the dependencies, so a change to the derivation is
 detectable; it versions the code that computes the key, so only the code can set it.
 :::
 
@@ -1048,8 +1048,7 @@ present one rather than trusting finalize was last, so a half-geotagged set cann
 :follows_from: RAT-consolidated_log, RAT-record_outlives_workspace
 :justifies: RUL-merge_is_terminal, RUL-library_takes_many_workspaces
 
-Even with photos by destination empty, a merged workspace keeps its database, ledgers, caches, snapshots and sealed
-record. Starting afresh keeps each workspace's record about one batch.
+Even with photos by destination empty, a merged workspace keeps its database, its images of it, its journals and its package. Starting afresh keeps each workspace's record about one batch.
 :::
 
 :::{rat} Corrections would invalidate development
@@ -1445,11 +1444,11 @@ still needs attention.
 :::
 
 :::{rat} Merge is the end, so the package is remade at once
-:id: RAT-reseal_automatic
+:id: RAT-repackage_automatic
 :status: ruled
 :forced: no
 :follows_from: RAT-package_answers_later, RAT-finalize_apart
-:justifies: RUL-merge_reseals, RUL-reseal_rederives_nothing
+:justifies: RUL-merge_repackages, RUL-repackage_rederives_nothing
 
 Merge adds to the record finalize packaged, so the existing package no longer describes the whole journey. Since merge
 is the workspace's last act, remaking the package once at its end is what the user always wants.
@@ -1983,7 +1982,7 @@ in between two saves of the first, so it is kept until the editor itself is stop
 :justifies: RUL-save_writes_in_order
 
 A save of several records is several writes, and a power cut or a killed editor can fall between two of them. The
-drift validation is proposed from the times the time decisions settle, and the GPS decisions from both; written in
+drift check is proposed from the times the time decisions settle, and the GPS decisions from both; written in
 that order, a save cut short leaves the earlier records with their new answers and the later ones as they were — no
 answer stands on an earlier one left unsaved, and saving again finishes the rest. The summary's acceptances and a
 camera group's class stand on none of the three, and come after them.

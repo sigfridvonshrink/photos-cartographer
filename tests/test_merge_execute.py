@@ -1109,7 +1109,7 @@ def _ctl(ws, name):
     return os.path.join(str(ws), ".photos-ingest", name)
 
 
-@pytest.mark.spec("BLD-merge_success_sequence", "RUL-merge_records_landing", "RUL-merge_reseals", "RUL-seal_on_success_only", test="TST-merge_execute-full_success_writes_terminal_artifacts_and_seals")
+@pytest.mark.spec("BLD-merge_success_sequence", "RUL-merge_records_landing", "RUL-merge_repackages", "RUL-seal_on_success_only", test="TST-merge_execute-full_success_writes_terminal_artifacts_and_seals")
 def test_full_success_writes_terminal_artifacts_and_seals(tmp_path):
     ws, lib = _ws(tmp_path, [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"}])
     assert merge._run_locked_workflow("plan", str(ws)) == 0

@@ -1348,7 +1348,7 @@ def max_suffix(root: str, names) -> int:
             hi = max(hi, int(m.group(1)))
     return hi
 
-# Library-merge archival re-seal (RUL-merge_reseals). On a successful
+# Library-merge archival re-seal (RUL-merge_repackages). On a successful
 # merge, the package gains merge's own artifacts; merge re-bundles by recomputing every present
 # artifact's SHA-256 into its OWN photos-35-archive-manifest.json, which supersedes geotag's
 # photos-26 manifest (parallel to the photos-15→25→35 log chain). It reads each artifact and never
