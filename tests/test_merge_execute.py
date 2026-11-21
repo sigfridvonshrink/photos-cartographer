@@ -254,7 +254,7 @@ def test_the_run_reports_what_it_placed_and_what_stayed(tmp_path, capsys):
     text = out.out + out.err
     assert "1 placed" in text and "1 already-present" in text and "1 blocked" in text
     assert "c.jpg" in text and "could not be fingerprinted" in text and "left in by-dest" in text
-    assert "sealed the workspace" not in text
+    assert "sealed the workspace" not in text and "The workspace is NOT sealed" in text     # said, not left unsaid
     with open(os.path.join(str(lib), "Trip", "c.jpg"), "wb") as f:
         f.write(_fp_bytes("OLD"))
     assert merge._run_locked_workflow("plan", str(ws)) == 0

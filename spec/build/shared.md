@@ -560,9 +560,9 @@ is named in its blocker, and an empty inbox passes.
 
 `missing_managed_folders` SHALL name each managed folder whose name at the workspace root holds no directory
 (`os.path.isdir`), whatever a directory there holds — so an empty folder put back restores it, a link there being
-blocked as a link ({need}`BLD-shape_guards_by_phase`) —; and the blocker of prep's shape check (`_shape_blockers`) and
-plan, of geotag's preflight and of merge's preflight names the folders it returns and tells the user to restore them
-before running again.
+blocked as a link ({need}`BLD-shape_guards_by_phase`) —; and each block of one — prep's shape check (`_shape_blockers`), its plan and its execute's check again before the first
+operation (`validate_plan_preflight`), geotag's preflight, merge's preflight and `init-library`'s (`_shape_refusal`) —
+names the folders it returns and tells the user to restore them before running again.
 :::
 
 :::{bld} A link stops a phase before its records
@@ -572,9 +572,11 @@ before running again.
 
 A link SHALL stop every geotag command, merge's `plan`, `dry-run` and `execute`, and `init-library` (`_shape_refusal`)
 before they write any decision record, plan or summary, exit 2; and prep's commands, one at the top level before the
-scan (`_shape_blockers`) and one deeper as a blocker of the plan, which `prep plan` saves and ends with exit status 2
-and which dry-run and execute refuse before any change ({need}`BLD-blocked_plan_refused`), so no journal, log, handoff
-or database image follows it.
+scan (`_shape_blockers`) and one its walk meets deeper once the scan is done: `prep plan` names each
+(a blocker beginning `LINK_BLOCKER`), saves no plan — the saved one left as it was, none set aside — writes neither
+the plan memo ({need}`BLD-plan_memo`) nor the zone table's answer ({need}`BLD-zone_table_question`), and ends with exit
+status 2; a link come since a plan was saved stops dry-run and execute before any change, the plan refused as stale
+({need}`BLD-handoff_after_link_free_scan`).
 :::
 
 ## Camera groups, derived once

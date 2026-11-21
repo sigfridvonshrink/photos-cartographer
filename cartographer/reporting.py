@@ -91,16 +91,17 @@ def finished_line(label: str, duration: Optional[float], status: str = "ok") -> 
     return f"Finished {label} in {(duration or 0.0):.2f}s"
 
 
-def report_lines(r: dict, plan_summary: Optional[dict] = None) -> List[str]:
+def report_lines(r: dict, plan_summary: Optional[dict] = None, planned: bool = False) -> List[str]:
     """The prep run report (RUL-prep_run_summarised) as labelled lines: one rendering, printed by the terminal sink and
-    logged by the web sink, so the console shows the summary the terminal prints."""
+    logged by the web sink, so the console shows the summary the terminal prints. `planned` gives the report of a plan
+    not yet executed: the same lines without those that tell what an execution applied and wrote."""
     pc = (plan_summary or {}).get("performance_and_cache", {}) or {}
     qf = r.get("quarantine_footprint", {}) or {}
     _qr = r.get("quarantined_by_reason") or {}
-    return [
+    lines = [
         "",
-        "=== Prep run summary ===",
-        f"  Media operations planned/executed : {r.get('media_operations', 0)}  "
+        "=== Prep plan summary ===" if planned else "=== Prep run summary ===",
+        f"  Media operations {'planned         ' if planned else 'planned/executed'} : {r.get('media_operations', 0)}  "
         f"(cache ops: {r.get('cache_operations', 0)})",
         f"  No-op / already-correct           : {r.get('no_op_already_correct', 0)}",
         f"  Recognized moves (carried forward): {r.get('recognized_moves', 0)}",
@@ -130,6 +131,10 @@ def report_lines(r: dict, plan_summary: Optional[dict] = None) -> List[str]:
         f"(never auto-deleted)",
         "========================",
     ]
+    if planned:      # what only an execution applies and writes
+        lines = [l for l in lines if not l.startswith(("  Cache effects applied", "  Dependency validation",
+                                                         "  End-of-prep audit record"))]
+    return lines
 
 
 @dataclass

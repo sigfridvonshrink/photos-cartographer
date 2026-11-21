@@ -1606,7 +1606,8 @@ class MergeWorkflow:
             for b in result.get("blocked", []):
                 if b.get("blocker"):
                     reporter.error(f"  Blocker: {b['blocker']}")
-            reporter.log("Blocked files were left in by-dest; resolve them and re-run `execute`.")
+            reporter.log("Blocked files were left in by-dest; resolve them and re-run `execute`. "
+                         "The workspace is NOT sealed.")
             emit_next_step(reporter, "resolve the blocked file(s) above, then re-run `merge execute`.")
             return 3
         mapped = (result.get("finalized") or {}).get("mapped")
@@ -1891,8 +1892,10 @@ def _shape_refusal(ws, reporter):
              + [f"missing managed folder: {f}" for f in missing_managed_folders(ws)]
              + [f"misplaced entry at the workspace root: {f}" for f in misplaced_top_level_entries(ws)])
     if wrong:
+        remedy = (" Restore the missing folder(s) — an empty folder of that name will do — and run again."
+                  if missing_managed_folders(ws) else "")
         reporter.error("Workspace is non-conforming — " + "; ".join(wrong) + ". Nothing was blessed or written; "
-                       "put the workspace right first.")
+                       "put the workspace right first." + remedy)
     return bool(wrong)
 
 

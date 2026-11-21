@@ -69,6 +69,13 @@ by its rules.
 Three checks hold what was put right, each failing the build: an exception stated by anything but a rule; a rule no
 build item realises; a retired word, from a list kept beside the corpus.
 
+Writing the build items showed four rules the code met only in part, and the owner ruled each for the rule:
+`prep plan` prints its summary — *"print at plan"* — where it had only saved it; a merge that does not end whole says
+the workspace is not sealed — *"print it"*; every stop on a missing managed folder tells the user to restore it,
+prep execute's and `init-library`'s now too — *"add it"*; and a link below the top level stops `prep plan` before
+anything is saved — *"stop before saving"* — no plan, no memo, no zone-table answer, where a blocked plan had been
+written.
+
 ## 2026-11-17 — a leaner corpus measured, and dropped (BACKLOG 57)
 
 The corpus is about three quarters the size of the code by words, and the owner asked whether that was overdoing it.

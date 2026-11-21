@@ -166,7 +166,7 @@ def test_a_culled_photo_passes_and_is_named_in_the_log(tmp_path, monkeypatch):
     assert sorted(c["path"] for c in named) == gone and {c["kind"] for c in named} == {"deleted"}
     assert all(c["content_fingerprint"].startswith("sig-") for c in named)
     rc, said, _ = _prep(monkeypatch, ws, "plan")
-    assert rc == 0 and "deleted" not in said, said
+    assert rc == 0 and not any(g in said for g in gone), said      # told once, not again
 
 
 @pytest.mark.parametrize("folder, kind", [

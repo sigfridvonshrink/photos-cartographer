@@ -238,8 +238,8 @@ Merge's `do_execute` SHALL print, once its photos are run, the run's totals (`su
 present, renamed for the library, blocked, and removed from `6-photos-by-dest` — and that it wrote
 `photos-31-merge-summary.json`, which holds each photo's outcome ({need}`BLD-merge_records`); then, on `success`, that it
 wrote the merge log and database image, repackaged and sealed the workspace, ending 0; otherwise each blocked
-photo's `blocker`, naming its path and why, and that the blocked photos were left in photos by destination for another
-execute, ending 3 with no seal written.
+photo's `blocker`, naming its path and why, that the blocked photos were left in photos by destination for another
+execute, and that the workspace is not sealed, ending 3 with no seal written.
 :::
 
 :::{bld} A photo held back holds back itself alone

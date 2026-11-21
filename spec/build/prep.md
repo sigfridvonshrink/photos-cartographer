@@ -296,9 +296,9 @@ SHALL be a line of text naming what blocks: the workspace path of each file or f
 :status: ruled
 :realises: RUL-handoff_built_without_links
 
-Prep SHALL stop on a link at the top level before it scans (`_shape_blockers`) and record each one its walk meets
-deeper — in every folder it walks, `6-photos-by-dest` among them (`_scan_inventory`, `_flag_dir_symlinks`) — as a
-blocker of its plan, which execute refuses before any change ({need}`BLD-blocked_plan_refused`); and its execute walks
+Prep SHALL stop on a link at the top level before it scans (`_shape_blockers`) and on each one its walk meets
+deeper — in every folder it walks, `6-photos-by-dest` among them (`_scan_inventory`, `_flag_dir_symlinks`) — saving no
+plan ({need}`BLD-link_blocks_before_records`); and its execute walks
 the workspace again before its first operation (`_rescan_inventory`), refusing the plan as stale on a link found there;
 so `photos-11-handoff.json` is written only by an execute that found no link, the earlier one left as it was.
 :::
@@ -569,7 +569,8 @@ plan reads, the database is then as the earlier run left it.
 :realises: RUL-plan_memo_kept, RUL-database_over_memo, RUL-memo_entry_same_tests, RUL-memo_never_changes_plan, RUL-memo_tracks_workspace
 
 The plan memo SHALL be the SQLite file `photos-00-plan-memo.db` in `.photos-ingest/`, one row per path with its size,
-`mtime_ns` and the file's row as read, replaced whole by each plan with its media files holding both a fingerprint and a
+`mtime_ns` and the file's row as read, replaced whole by each plan — but one a link stops
+({need}`BLD-link_blocks_before_records`) — with its media files holding both a fingerprint and a
 metadata record; read, its entries lie under the database's rows and pass the same reuse tests, and failing to open,
 read or write it warns and goes on.
 :::
@@ -935,11 +936,12 @@ of the unexpected ones, and the fingerprints reused from the plan memo.
 :status: ruled
 :realises: RUL-prep_run_summarised
 
-`_build_run_report` SHALL record, as `summary.report` of `photos-10-prep-plan.json`, the plan's media operations
+`_build_run_report` SHALL make, as `summary.report` of `photos-10-prep-plan.json`, and `prep plan` print through
+`report_lines`, the plan's media operations
 (`mkdir`, moves, renames, quarantine moves) apart from its database operations, the files already in place
 (`no_op_already_correct`), the recognized moves, the files of `6-photos-by-dest` read
 (`by_dest_files_scanned_read_only`), the duplicates whose kept copy is in `6-photos-by-dest` apart from the others, the
 quarantine moves by kind, the metadata reused, extracted, carried forward and failed, and the blockers and warnings; and
-prep's execute, at its end, prints it through `report_lines` with the database effects applied and whether it wrote
-the handoff, `photos-15-prep-log.json` and the database image (`performance_and_cache`).
+prep's execute, at its end, prints it again with the database effects applied and whether it wrote the handoff,
+`photos-15-prep-log.json` and the database image (`performance_and_cache`), lines the plan's printing leaves out.
 :::
