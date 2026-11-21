@@ -1334,7 +1334,7 @@ the photo no longer has.
 
 The workspace is transient; the package is what remains of it beside the library. It must answer later what the
 workspace could: under which settings, by which decisions, from which plans each photo was changed, and what each phase
-saw. Anything left out — a journal, a snapshot — is a question no one can answer once the workspace is gone.
+saw. Anything left out — a journal, a database image — is a question no one can answer once the workspace is gone.
 :::
 
 :::{rat} The package can be checked without the tool
@@ -1920,7 +1920,7 @@ place made for one ingest — so a local one costs nothing, and the question is 
 filesystem. The kinds known to be local are listed, not the network ones: a kind the list does not know is refused,
 so no new network filesystem slips through, and a local one left off costs a refusal that names it. No setting turns
 the check off: it would be the one switch that rests the safety of the originals on a filesystem's goodwill. Asked
-before anything else, the lock included, it is never mistaken for a run in progress.
+before the lock is taken, it is never mistaken for a run in progress.
 :::
 
 :::{rat} A missing requirement is named before it fails a change

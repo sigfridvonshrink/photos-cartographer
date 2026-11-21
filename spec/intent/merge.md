@@ -10,7 +10,6 @@ to — most of merge's rules are there, in its section on the library and the se
 :id: RUL-merge_rechecks_under_new_engine
 :status: ruled
 :criticality: high
-:anti: yes
 :verify: required
 :refines: RUL-engine_change_is_checked
 :uses: DEF-fingerprint, DEF-library
@@ -72,14 +71,14 @@ destination, unmerged.
 Merge SHALL proceed only while the workspace, checked again at merge's own start, satisfies geotag's gates.
 :::
 
-:::{rul} Merge takes no photo without a position
+:::{rul} A photo without a position stops merge
 :id: RUL-merge_refuses_unplaced
 :status: ruled
 :criticality: high
 :anti: yes
 :verify: required
-:refines: RUL-merge_rechecks_gates
-:uses: DEF-merge, RUL-finalize_refuses_unplaced
+:refines: RUL-finalize_refuses_unplaced
+:uses: DEF-merge
 
 Merge SHALL refuse while a photo in photos by destination holds no position, checked again at merge's own start as
 finalize checks it.
@@ -119,7 +118,7 @@ the record of a stop for want of a required snapshot or of room in the library
 :verify: required
 :uses: DEF-fingerprint, DEF-managed_folders
 
-Merge SHALL NOT plan or execute while a photo in photos by destination has no fingerprint.
+Merge SHALL NOT plan, dry-run or execute while a photo in photos by destination has no fingerprint.
 :::
 
 :::{rul} A hidden entry among the photos stops merge
@@ -130,7 +129,7 @@ Merge SHALL NOT plan or execute while a photo in photos by destination has no fi
 :verify: required
 :uses: DEF-managed_folders
 
-Merge SHALL NOT proceed while photos by destination holds a hidden file or folder.
+Merge SHALL NOT plan, dry-run or execute while photos by destination holds a hidden file or folder.
 :::
 
 :::{rul} Merge stops without its image engine
@@ -149,14 +148,12 @@ Merge SHALL NOT plan, dry-run or execute while the image engine, by which it fin
 :id: RUL-library_requirements_tried
 :status: ruled
 :criticality: high
-:anti: yes
 :verify: required
-:refines: RUL-filesystem_agnostic
-:uses: DEF-merge, DEF-library, RUL-library_confirmed_before_lock, DEF-filesystem_requirements
+:uses: DEF-merge, DEF-library, RUL-library_confirmed_before_lock, DEF-filesystem_requirements, RUL-filesystem_trial_leaves_nothing
 
-Merge's plan, dry run and execution SHALL try on the library's filesystem its lock, the move that fails where its
-target exists, and syncing a file and a folder — once the library's mark has confirmed it, and before its lock is
-taken.
+Merge's plan, dry run and execution SHALL try on the library's filesystem what {need}`DEF-filesystem_requirements`
+requires of a library's — once the library's mark has confirmed it, and before its lock is taken — leaving nothing of
+the files they try it with ({need}`RUL-filesystem_trial_leaves_nothing`).
 :::
 
 :::{rul} A library's filesystem lacking one stops merge
@@ -192,15 +189,15 @@ Merge SHALL NOT refuse a library for the kind of filesystem it lies on, a networ
 filesystem does what merge needs of it.
 :::
 
-:::{rul} A library on another filesystem is checked for room before anything moves
+:::{rul} The library's room on another filesystem is checked before anything moves
 :id: RUL-library_space_checked
 :status: ruled
 :criticality: med
 :verify: required
 :uses: DEF-merge, DEF-library
 
-Where the library lies on another filesystem than the workspace, merge's execution SHALL compare, before its first
-move, the library's free space with the total size of the photos it is about to move into it.
+Merge's execution SHALL compare, before its first move, the free space of each filesystem other than the workspace's
+that it is about to move photos onto — the library's, or one within it — with the room those photos ask.
 :::
 
 :::{rul} The room asked of a library holds a margin
@@ -210,8 +207,8 @@ move, the library's free space with the total size of the photos it is about to 
 :verify: required
 :refines: RUL-library_space_checked
 
-The room merge asks of a library on another filesystem SHALL be the photos' total size and a margin on top of it, a
-share of that size the configuration sets.
+The room merge asks of a filesystem of the library other than the workspace's SHALL be the total size of the photos
+it is about to move onto it and a margin on top of it, a share of that size the configuration sets.
 :::
 
 :::{rul} A library short of room stops the execution
@@ -222,8 +219,8 @@ share of that size the configuration sets.
 :verify: required
 :refines: RUL-library_space_checked
 
-An execution that finds the library's free space short of the photos it is about to move SHALL stop with nothing
-moved.
+An execution that finds the free space of a filesystem of the library short of the room it asks of it SHALL stop with
+nothing moved.
 :::
 
 :::{rul} The stop names the room needed and the room free
@@ -241,6 +238,7 @@ The report of a library short of room SHALL name the space the photos need and t
 :status: ruled
 :criticality: low
 :verify: required
+:refines: RUL-library_space_checked
 
 Merge's plan SHALL warn of a library its execution would find short of room, the plan written all the same.
 :::
@@ -277,7 +275,6 @@ Merge SHALL allow a fresh plan at any time on a workspace not sealed, whatever a
 :id: RUL-replan_carries_placed
 :status: ruled
 :criticality: high
-:anti: yes
 :verify: required
 :refines: RUL-merge_resumable
 :uses: DEF-merge, DEF-library, DEF-fingerprint, DEF-managed_folders
@@ -334,7 +331,7 @@ configured holds it at the same place within it.
 A finalized photo no longer in photos by destination that a fresh plan cannot carry forward SHALL block.
 :::
 
-:::{rul} The blocker for a photo not carried names why
+:::{rul} A photo blocked for not being carried is reported with why
 :id: RUL-replan_block_names_why
 :status: ruled
 :criticality: high
@@ -342,10 +339,10 @@ A finalized photo no longer in photos by destination that a fresh plan cannot ca
 :refines: RUL-replan_blocks_unaccounted
 :uses: DEF-merge, DEF-library, DEF-fingerprint, DEF-managed_folders
 
-The blocker for a photo a fresh plan cannot carry forward SHALL name why.
+The report of a photo blocked because a fresh plan cannot carry it forward SHALL name why it could not be carried.
 :::
 
-:::{rul} A resumed merge checks the library, not the journal
+:::{rul} A resumed execution checks the library, not the journal
 :id: RUL-resume_rechecks_library
 :status: ruled
 :criticality: high
@@ -354,31 +351,34 @@ The blocker for a photo a fresh plan cannot carry forward SHALL name why.
 :refines: RUL-merge_resumable
 :uses: DEF-merge, DEF-library, DEF-fingerprint
 
-A photo gone from photos by destination SHALL count as merged only while its library place, checked again, holds
-it — whatever the journal or the plan says.
+Merge's execution SHALL count a photo of its plan gone from photos by destination as merged only while its library
+place, checked again, holds it — whatever the journal or the plan says.
 :::
 
-:::{rul} A photo gone from both places blocks
+:::{rul} A photo gone from both places blocks at execution
 :id: RUL-resume_blocks_missing
 :status: ruled
 :criticality: high
+:anti: yes
 :verify: required
 :refines: RUL-resume_rechecks_library
 :uses: DEF-merge, DEF-library, DEF-fingerprint
 
-A photo gone from photos by destination whose library place does not hold it SHALL block.
+At merge's execution, a photo of its plan gone from photos by destination whose library place does not hold it SHALL
+block.
 :::
 
-:::{rul} A run with a photo gone from both places is never whole
+:::{rul} An execution with a photo gone from both places is never whole
 :id: RUL-resume_block_makes_partial
 :status: ruled
 :criticality: high
+:anti: yes
 :verify: required
 :refines: RUL-resume_blocks_missing
 :uses: DEF-merge, DEF-library, DEF-fingerprint
 
-A run in which a photo gone from photos by destination blocks SHALL NOT end whole: it ends partial, or failed where
-every photo was blocked.
+An execution in which a photo gone from photos by destination blocks SHALL NOT end whole: it ends partial, or failed
+where every photo was blocked.
 :::
 
 :::{rul} A record of merge's own that cannot be read stops it
@@ -400,7 +400,6 @@ taking it for an empty one.
 :status: ruled
 :criticality: med
 :verify: required
-:refines: RUL-merge_records_landing
 :uses: DEF-merge
 
 Merge SHALL record whether its execution succeeded whole, in part or not at all, or stopped before its first move for
@@ -411,13 +410,14 @@ want of a required snapshot or of room in the library.
 :id: RUL-merge_summary_only_for_execution
 :status: ruled
 :criticality: low
+:anti: yes
 :verify: required
 :refines: RUL-merge_outcome_recorded
 :uses: DEF-merge
 
-Merge SHALL write no summary for a run stopped by anything but the want of a required snapshot or of room in the library
-— a stale plan, a plan or journal it cannot read, or any other refusal of its preflight — nor for a run interrupted,
-leaving the summary an earlier run wrote as it was.
+Merge SHALL write no summary for a run stopped before its execution began by anything but the want of a required
+snapshot or of room in the library — a precondition, a plan no longer current, or a plan or journal of its own it cannot
+read — nor for a run interrupted, leaving the summary an earlier run wrote as it was.
 :::
 
 :::{rul} Merge keeps each execution's summary

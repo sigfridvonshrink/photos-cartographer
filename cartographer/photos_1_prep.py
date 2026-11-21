@@ -3825,17 +3825,9 @@ def _run_locked(args, workspace_root, reporter):
                 reporter.log(f"    - {w}", stream="stdout")
             if len(plan.warnings) > 20:
                 reporter.log(f"    … and {len(plan.warnings) - 20} more", stream="stdout")
-        if plan.blockers:
-            reporter.log(f"  BLOCKERS: {len(plan.blockers)} — execute will refuse:", stream="stdout")
-            for b in plan.blockers[:20]:
-                reporter.log(f"    - {b}", stream="stdout")
-            if len(plan.blockers) > 20:
-                reporter.log(f"    … and {len(plan.blockers) - 20} more", stream="stdout")
+        # A plan holding a blocker never reaches here: the preflight above refuses it, naming each.
         reporter.log(f"  Full plan: {pp}", stream="stdout")
-        if plan.blockers:
-            emit_next_step(reporter, "fix the blocker(s) shown above, then re-run `prep plan`.")
-        else:
-            emit_next_step(reporter, "`prep execute` to apply the plan.")
+        emit_next_step(reporter, "`prep execute` to apply the plan.")
 
     elif args.command == "execute":
         from .photos_utils import prep_plan_path, PREP_PLAN_ARTIFACT

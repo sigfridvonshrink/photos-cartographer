@@ -339,8 +339,8 @@ with no one at the terminal leaves it open, and the user who opens the editor to
 otherwise have to leave it to answer this one. The owner ruled *"the user should be able to answer all questions in
 the editor"* — this one too, though prep asks it. Given there, it is the same answer: recorded as prep records it, a
 permission downloading the table then, on the user's word. And as every answer is a field of a record the user may
-write by hand, so is this one: written into the record that keeps it, a refusal stands as given, and a permission is
-acted on by prep's next plan — the one run that downloads.
+write by hand, so is this one: written into the record that keeps it, a refusal stands as given, and a permission —
+given to no run, as the editor's and prep's are — is acted on by prep's next plan, the run that reads the record.
 :::
 
 :::{rat} A camera that records its offset says which zone its clock was on
@@ -561,14 +561,15 @@ why the photos it should have placed were not.
 :status: ruled
 :forced: yes
 :follows_from: FCT-partial_track_coverage, CHC-photos_matter
-:justifies: RUL-tracks_never_joined, RUL-disagreeing_tracks_place_nothing
+:justifies: RUL-tracks_never_joined, RUL-disagreeing_tracks_place_nothing, RUL-tracks_never_joined_to_anchor
 
 Each track is one device's record, and the tracks folder — or one file of it — may hold several for the same hours: a
 phone and a logger in the same pocket, or a companion who spent the afternoon elsewhere. Read as one line through all
 the points in time order, two devices five kilometres apart become a zigzag between them, and a photo is placed at
-whichever was logged a second nearer — or halfway. Kept apart, two tracks that agree are one party and either serves;
-two of one rank that do not are a question only the user can answer, by filing their own track higher or taking out the
-one that is not theirs.
+whichever was logged a second nearer — or halfway. An anchor read the other way round is as false: a photo's own
+position found on the line between two devices' points fixes its clock by a place and a time neither device was at. Kept
+apart, two tracks that agree are one party and either serves; two of one rank that do not are a question only the user
+can answer, by filing their own track higher or taking out the one that is not theirs.
 :::
 
 :::{rat} The better device is believed first
@@ -933,14 +934,14 @@ devices that holds back a guess far from all of them.
 :status: ruled
 :forced: yes
 :follows_from: RAT-day_offset_is_the_cameras, RAT-decision_withdrawable
-:justifies: RUL-kept_offset_rests_on_its_tracks, RUL-kept_offset_rests_on_its_fixes
+:justifies: RUL-kept_offset_rests_on_its_tracks, RUL-kept_offset_rests_on_its_fixes, RUL-kept_offset_yields_to_new_photo
 
 The offset is kept because it was read from the camera's own GPS — against the tracks, or from the times its fixes
 recorded — and the photos that gave it can no longer give it again. But the user takes a track out of the folder for one
 reason — it was someone else's — and an offset read against it goes with it; a photo whose fix gave it, taken out of the
 workspace, takes its reading with it; and a photo arriving later with its own position is new evidence about the same
-clock. Kept past either, the offset would be the one decision in the record nobody could withdraw and nothing still
-supported.
+clock, which may say another offset, or leave the day's evidence no longer settling one. Kept past any of the three,
+the offset would be the one decision in the record nobody could withdraw and nothing still supported.
 :::
 
 

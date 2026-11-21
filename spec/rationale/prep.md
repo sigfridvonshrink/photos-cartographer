@@ -194,8 +194,8 @@ in the plan.
 
 A file outside the inbox was filed by an earlier run or moved there by the user. Moving it again on a later run would
 undo either for nothing and churn the names the user and later phases know it by. Only these move it: a copy of it found
-to be better filed, its own recorded time no longer matching its day or gone, a time given at last to one set apart
-for having none, and its RAW culled when it is the JPEG set aside beside it.
+to be better filed, a dated file lying outside its own day's folder or whose time is gone, a time given at last to one
+set apart for having none, and its RAW culled when it is the JPEG set aside beside it.
 :::
 
 :::{rat} A day of photos is one folder
@@ -206,8 +206,10 @@ for having none, and its RAW culled when it is the JPEG set aside beside it.
 :justifies: RUL-by_date_in_day_folder
 
 The user sorts photos by date into destinations, and a day is the unit they think in: a day's folder holds what was
-shot that day and nothing else. A file's day comes from its recorded time, so a file whose time changed — corrected by
-the user — belongs to another day, and one whose time is gone belongs to no day at all.
+shot that day and nothing else. A file's day comes from its recorded time, so a file moved by hand out of its day's
+folder is put back in it, and one whose time is gone belongs to no day at all. A file whose time the user corrected no
+longer carries its time as its name, and stops prep as misnamed ({need}`RUL-misnamed_file_stops_prep`) until the user
+names it so; named, it goes to its new day.
 :::
 
 :::{rat} Photos wait by date for the user's sort
@@ -226,10 +228,10 @@ one day sit together, ready to be moved as a block. The timestamp name keeps tha
 :status: ruled
 :forced: yes
 :follows_from: RAT-day_folder, RAT-prep_has_no_evidence
-:justifies: RUL-untimed_to_missing_metadata
+:justifies: RUL-untimed_to_missing_metadata, RUL-by_date_untimed_to_missing_metadata
 
-Prep cannot invent a time, and a file with none has no day to be filed under: it waits apart, flat, until the user
-gives it one. Its untimed name keeps the name it came with, the user's only way to tell which file it was.
+Prep cannot invent a time, and a file with none — one that came so, or one of photos by date whose time is gone — has
+no day to be filed under: it waits apart, flat, until the user gives it one. Its untimed name keeps the name it came with, the user's only way to tell which file it was.
 :::
 
 :::{rat} A stray is the user's, untouched
@@ -349,8 +351,8 @@ same on every run.
 :follows_from: RAT-idempotent_reruns
 :justifies: RUL-database_matches_files
 
-The next run reuses the database's fingerprints and metadata for every file whose path, size and time are unchanged
-and whose fingerprint was taken the way this build takes it. A row
+The next run reuses the database's fingerprints and metadata for every file whose path, size and time are unchanged,
+whose fingerprint was taken the way this build takes it and whose metadata was read the way it is read now. A row
 left stale or pointing at a file that is gone would be reused for what it no longer describes; refreshing and pruning at
 each execution keeps reuse safe.
 :::
@@ -508,7 +510,9 @@ broken, prep plans the same.
 A fingerprint that could not be taken tells nothing of what the file holds: two failures are not two copies, and a
 failure is no copy of anything. Outside photos by destination, every file's place depends on knowing whether it is a
 copy, so prep stops and names it rather than file it blind. A file in photos by destination is the user's, never set
-aside; its failure decides nothing there.
+aside; its failure decides nothing there, and prep hands it on. Geotag, which follows each photo by its fingerprint,
+stops on it instead ({need}`RUL-unfingerprinted_photo_stops_geotag`), and prep takes it again at every run until one
+is taken.
 :::
 
 :::{rat} A failure may be the machine's
@@ -773,8 +777,9 @@ later one never writes over an earlier's.
 :follows_from: RAT-recoverable_core
 :justifies: RUL-prune_age_at_least_one_day
 
-Pruning is the only place cartographer deletes for good. An age of zero or less selects every run's quarantine, which is
-what `--all` exists to say out loud. An age is counted in whole days, so one under a day is zero.
+Pruning is the only place cartographer deletes for good. An age of zero or less would select every run's quarantine; the
+prune asks for that by a choice of its own, said out loud, never slipped in as an age. An age is counted in whole days,
+so one under a day is zero.
 :::
 
 
@@ -810,11 +815,13 @@ left out on purpose.
 :status: ruled
 :forced: yes
 :follows_from: RAT-idempotent_reruns, RAT-handoff_by_content
-:justifies: RUL-handoff_deterministic
+:justifies: RUL-handoff_deterministic, RUL-handoff_read_back
 
 Geotag's work depends on the handoff and is made stale when it changes. A run that changed nothing must therefore leave
 its content as it was; the run's own identity and diagnostics, which differ every time, are kept apart, so that only a
-real change — a file filed, sorted or changed — restales geotag.
+real change — a file filed, sorted or changed — restales geotag. Geotag checks the handoff by that content's
+fingerprint, so a handoff that, read back, gave another would never pass: prep reads what it wrote, and fails its own
+run rather than hand such a one on.
 :::
 
 :::{rat} The log adds no authority
@@ -824,8 +831,8 @@ real change — a file filed, sorted or changed — restales geotag.
 :follows_from: RAT-consolidated_log, RAT-one_source_per_fact
 :justifies: RUL-prep_log_derived, RUL-prep_log_records_set_aside
 
-The log is for reading, not deciding: it gathers what prep's own records already say into one account per photo. Made
-from them alone, it can be checked against them and never contradicts them; and a set-aside copy appears beside the
+The log is for reading, not deciding: it gathers what prep's own records already say, and the changes by hand its
+checks found, into one account per photo. Made from them alone, it can be checked against them and never contradicts them; and a set-aside copy appears beside the
 photo it copies, so the account of that photo is whole.
 :::
 

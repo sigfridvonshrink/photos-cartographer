@@ -76,6 +76,16 @@ prep execute's and `init-library`'s now too — *"add it"*; and a link below the
 anything is saved — *"stop before saving"* — no plan, no memo, no zone-table answer, where a blocked plan had been
 written.
 
+The review's smaller findings were then worked through, a reader to each document set changing only its own files.
+Links were made to bear their relation: a rule that upholds an invariant says `upholds`, one that states an exception
+says `excepts` and is named by the rule it excepts, a `refines` that narrowed nothing was repointed or dropped where
+another reason reached the rule. Enumerations stated twice were made one from the code — prep's stage order, a plan's
+contents, the exit statuses, merge's plan fields — and the handoff's file record got a build item of its own. The
+order every command checks in is said once: the filesystem, the lock, the seal, one filesystem, the shape, the
+workspace. `anti`, the mark of a rule that forbids, was set on every rule that does and taken off those that only
+oblige. The check for retired words reads a paragraph at a time, a phrase broken across two lines being still the
+phrase. Prep's dry run lost a listing of blockers that no plan could reach.
+
 ## 2026-11-17 — a leaner corpus measured, and dropped (BACKLOG 57)
 
 The corpus is about three quarters the size of the code by words, and the owner asked whether that was overdoing it.

@@ -42,7 +42,7 @@ and when a later plan carries it forward and its place holds other bytes than th
 
 A whole merge SHALL write `photos-35-fingerprint-map.json` — `artifact_type` `fingerprint_map`, its `artifact_name`,
 `schema_version` 1, and under `photos`, keyed by its new value, each photo merged with an `engine_mapping`: that
-mapping's `was` and `now`, its by-dest path as `from` and its `library_path` — empty where none was; geotag's records,
+mapping's `was` and `now`, its by-dest path as `from` and its `library_path`; geotag's records,
 the log copied forward, are left keyed by the old value, and none is rewritten.
 :::
 
@@ -53,24 +53,23 @@ the log copied forward, are left keyed by the old value, and none is rewritten.
 :status: ruled
 :realises: RUL-merge_rechecks_gates, RUL-merge_blocked_changes_nothing, RUL-merge_takes_finalized_current, RUL-merge_refuses_changed_since_finalize, RUL-unfingerprinted_photo_stops_merge, RUL-hidden_among_photos_stops_merge, RUL-image_engine_absent_stops_merge, RUL-merge_refuses_unplaced, RUL-merge_gates_leave_out_residue, RUL-fingerprint_method_is_the_builds
 
-Merge's `preflight` SHALL run, under the workspace lock and before the library's, stopping at the first that fails: the
-seal; the initialization mark; a link at the top level; the configuration, read and checked; a missing managed folder; a
-misplaced top-level entry; a link in photos by destination; the library's place and mark; the handoff, read as a JSON
-object; its filename format. It then gathers
-the rest and reports them together: ImageMagick on the `PATH`, as `magick` or `identify`; the inbox empty;
-`photos-24-executable-plan.json` present with `photos-25-execution-summary.json` at `success`, it and the archive
-manifest of `photos-24`'s `plan_id`; the handoff's content
-fingerprint the one `photos-26-finalized-media.json` holds ({need}`BLD-finalized_media`) — not the one `photos-24`
-pinned, which a prep run between execute and finalize leaves behind; prep's log as the handoff vouches for it ({need}`BLD-prep_log_checked`);
-`photos-26-complete-log.json` and the archive manifest present, the complete log carrying prep's; photos by date holding
-no photo; photos by destination holding only `image` and `raw` files and no development subfolder; every photo
-there one of the finalized set — the handoff's photos by destination joined by fingerprint to `photos-24`'s renames,
-each under its final name; and each photo of that set still there with the size and modification time
-`photos-26-finalized-media.json` recorded, and holding a position ({need}`BLD-no_photo_unplaced`). Any blocker ends the
-run with exit status 2 before the library lock, the plan or the summary. It stops, too, on a handoff whose fingerprints
-are not of this build's method (`depends_on.cache.fingerprint_algorithm_version`, {need}`BLD-fingerprint_method`), on a
-photo in `6-photos-by-dest` whose handoff record holds no fingerprint and on any hidden file or folder there, each
-named.
+Merge's `plan`, `dry-run` and `execute` each SHALL run `preflight`, under the workspace lock and before the library's,
+stopping at the first that fails: the seal; the initialization mark; a link at the top level; the configuration, read
+and checked; a missing managed folder; a misplaced top-level entry; a link in photos by destination; the library's place
+and mark; the handoff, read as a JSON object; its filename format. It then gathers the rest and reports them together:
+ImageMagick on the `PATH`, as `magick` or `identify`; the inbox empty; `photos-24-executable-plan.json` present with
+`photos-25-execution-summary.json` at `success`, it and the archive manifest of `photos-24`'s `plan_id`; the handoff's
+content fingerprint the one `photos-26-finalized-media.json` holds ({need}`BLD-finalized_media`) — not the one
+`photos-24` pinned, which a prep run between execute and finalize leaves behind; prep's log as the handoff vouches for
+it ({need}`BLD-prep_log_checked`); `photos-26-complete-log.json` and the archive manifest present, the complete log
+carrying prep's; photos by date holding no photo; photos by destination holding only `image` and `raw` files and no
+development subfolder; every photo there one of the finalized set — the handoff's photos by destination joined by
+fingerprint to `photos-24`'s renames, each under its final name; and each photo of that set still there with the size
+and modification time `photos-26-finalized-media.json` recorded, and holding a position ({need}`BLD-no_photo_unplaced`).
+Any blocker ends the run with exit status 2 before the library lock, the plan or the summary. It stops, too, on a
+handoff whose fingerprints are not of this build's method (`depends_on.cache.fingerprint_algorithm_version`,
+{need}`BLD-fingerprint_method`), on a photo in `6-photos-by-dest` whose handoff record holds no fingerprint and on any
+hidden file or folder there, each named.
 :::
 
 :::{bld} The library's filesystem, tried before its lock
@@ -137,6 +136,7 @@ its own name where geotag renamed nothing; the entries sorted by their path in t
 :id: BLD-merge_carry_forward
 :status: ruled
 :realises: RUL-replan_carries_placed, RUL-earlier_place_in_this_library, RUL-merge_unreadable_record_stops, RUL-replan_blocks_unaccounted, RUL-replan_block_names_why, RUL-earlier_place_moved_to_this_library
+:uses: BLD-placed_bytes_journalled, BLD-merge_record_shape
 
 Merge's `build_merge_plan` SHALL give a finalized photo no longer under `6-photos-by-dest` the record of the latest
 plan — `photos-30-merge-plan.json`, then its `-NNN` backups newest first, by the number of the suffix — holding a record for its content fingerprint
@@ -163,7 +163,7 @@ Merge's plan SHALL be made whatever an earlier execute ended with: no step of it
 :id: BLD-placed_bytes_journalled
 :status: ruled
 :realises: RUL-placed_bytes_confirm_place, RUL-replan_carries_placed, RUL-resume_rechecks_library
-:uses: BLD-merge_journal_resume, BLD-merge_carry_forward
+:uses: BLD-merge_journal_resume, BLD-changed_fingerprint_mapped
 
 Merge's execute SHALL record in the journal, under `placed_sha256` keyed by the photo's path in the workspace, the
 SHA-256 of the library file of each photo it confirms, where that file can be read; a later plan carrying a photo forward gives its record, as
@@ -202,14 +202,20 @@ is not an object.
 :id: BLD-merge_plan
 :status: ruled
 :realises: RUL-execution_only_the_plan, RUL-plan_carried_out_by_its_code
-:uses: BLD-merge_target
+:uses: BLD-merge_target, BLD-one_library_file_compared, BLD-changed_fingerprint_mapped, BLD-merge_carry_forward, BLD-placed_bytes_journalled
 
-`photos-30-merge-plan.json` SHALL hold the plan id, schema version and `library_root`; per destination, each photo's
-record — its path in the workspace, content fingerprint, library target and disposition (`placed_new`,
-`renamed_incoming` with its new name, `already_present`, or `blocked` with why), and as preconditions its fingerprint
-and its size and modification time as they stand at planning; the blockers and the totals; and `depends_on`: the
-SHA-256 of `photos-24` and `photos-25`, the handoff's content fingerprint, the configuration's SHA-256, the code
-fingerprint, the ImageMagick version, and the fingerprints of the folder names and media extensions.
+`photos-30-merge-plan.json` SHALL hold its `artifact_type` `merge_plan` and `artifact_name`, the plan id, schema version
+and `library_root`; per destination, each photo's record — its path in the workspace (`by_dest_source`),
+`content_fingerprint`, `library_target`, `resolved_name`, `renamed_for_library` and disposition (`placed_new`;
+`renamed_incoming` with its new name, `renamed_from` and the `library_collision` it was renamed around;
+`already_present` with `library_match` `bytes`; or `blocked` with its `blocked_reason`, and `library_match` `pixels` and
+`same_picture` where the library holds its picture in other bytes, {need}`BLD-one_library_file_compared`), its
+`engine_mapping` where its fingerprint was mapped ({need}`BLD-changed_fingerprint_mapped`), and, for a photo still in
+`6-photos-by-dest`, as `preconditions` its fingerprint and its size and modification time as they stand at planning — a
+photo carried forward holding instead the earlier plan's record with `carried_from_plan` and its `placed_sha256` where
+one is known ({need}`BLD-merge_carry_forward`, {need}`BLD-placed_bytes_journalled`); the `blockers` and the `totals`;
+and `depends_on`: the SHA-256 of `photos-24` and `photos-25`, the handoff's content fingerprint, the configuration's
+SHA-256, the code fingerprint, the ImageMagick version, and the fingerprints of the folder names and media extensions.
 :::
 
 :::{bld} Merge's execute, in order

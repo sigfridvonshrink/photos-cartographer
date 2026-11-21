@@ -14,9 +14,10 @@ items it `justifies`. Where the two differ, the intent wins and this is stale.
 
 Merge compares prep's fingerprint of a photo with one it takes now of the library file in its way. Taken by two
 versions of ImageMagick, two fingerprints of the same pixels may differ: the photo would be called new and placed again,
-renamed, beside itself — a duplicate in the library, which merge must never make. Taken again under the version now in
-use, prep's fingerprint is confirmed and the comparison holds. A photo whose fingerprint did change is compared by its
-new value, which is the one the library's files are fingerprinted under ({need}`RAT-changed_fingerprint_mapped`).
+renamed, beside itself — a duplicate in the library, the very thing comparing by content is there to prevent. Taken
+again under the version now in use, prep's fingerprint is confirmed and the comparison holds. A photo whose fingerprint
+did change is compared by its new value, which is the one the library's files are fingerprinted under
+({need}`RAT-changed_fingerprint_mapped`).
 :::
 
 :::{rat} The archive outlives any one ImageMagick
@@ -78,8 +79,9 @@ merges that ran.
 :justifies: RUL-image_engine_absent_stops_merge
 
 A place merge finds taken is settled by fingerprinting the file there, and a photo gone from the workspace counts as
-merged only once its place is read again — fingerprinted, where the journal kept no digest of the bytes placed. Without ImageMagick no fingerprint can be taken: every collision
-would block, no photo already moved could be confirmed, and a merge left half done could not be finished. Run so, it
+merged only once its place is read again — by the digest of the bytes merge placed there, else by its fingerprint.
+Without ImageMagick no fingerprint can be taken: every collision would block, a photo already moved whose place no
+digest vouches for could not be confirmed, and a merge left half done might never be finished. Run so, it
 would turn a merge that could be whole into a partial one; stopped, it changes nothing until the tool is back.
 :::
 
@@ -143,8 +145,8 @@ every run, which is what lets an interrupted merge find its own work.
 :follows_from: RAT-recoverable_core, RAT-idempotent_reruns
 :justifies: RUL-merge_replan_any_time
 
-A partial merge leaves the cause of its blockers for the user to fix — a library file that could not be read, a photo
-changed — and some fixes change what the plan must say. Until the seal, nothing merge has done is final, and its
+A partial merge leaves the cause of each blocked photo for the user to fix — a library file that could not be read, a
+photo changed — and some fixes change what the plan must say. Until the seal, nothing merge has done is final, and its
 records describe what happened rather than gate what may happen next; refusing to re-plan would leave the user with a
 plan that can no longer finish and no way to make one that can.
 :::
@@ -160,8 +162,8 @@ The journal is written after a move, so a crash or a Ctrl-C can leave a photo in
 the library is the user's, so a photo a journal entry vouches for may since have been moved or replaced there. Either
 way the journal and the library disagree, and only the library says where the photo is. Trusting the journal would
 block forever a photo safely placed, or seal a workspace whose merge log names a library file that no longer holds the
-photo — a record the user would rely on to find it. Reading the place again settles it — by the digest of the bytes merge placed
-there, where the journal kept one, else by its fingerprint — and costs a read only on a resume.
+photo — a record the user would rely on to find it. Reading the place again settles it — by the digest of the bytes
+merge placed there, where merge recorded one, else by its fingerprint — and costs a read only on a resume.
 :::
 
 :::{rat} A placed file is known by its bytes, which no ImageMagick reads differently

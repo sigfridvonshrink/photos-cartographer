@@ -296,13 +296,18 @@ def _no_retired_terms(app, env):
         if os.sep + GENERATED + os.sep in src:
             continue
         rel = os.path.relpath(src, app.srcdir)
-        for number, line in enumerate(open(src, encoding="utf-8"), 1):
-            if line.startswith(":"):
+        # A paragraph at a time, its lines joined: a phrase broken across two lines is still the phrase.
+        number, start, paragraph = 0, 0, []
+        for number, line in enumerate(list(open(src, encoding="utf-8")) + ["\n"], 1):
+            if line.strip() and not line.startswith(":"):
+                start = start or number
+                paragraph.append(line.strip())
                 continue
-            prose = re.sub(r"`[^`]*`", "", line)
+            prose = re.sub(r"`[^`]*`", "", " ".join(paragraph))
             for old, new in terms:
-                if re.search(r"(?<![\w-])" + re.escape(old) + r"(?![\w-])", prose, re.I):
-                    LOG.warning(f"{rel}:{number}: \"{old}\" is retired: say \"{new}\"", type="corpus", subtype="terms")
+                if paragraph and re.search(r"(?<![\w-])" + re.escape(old) + r"(?![\w-])", prose, re.I):
+                    LOG.warning(f"{rel}:{start}: \"{old}\" is retired: say \"{new}\"", type="corpus", subtype="terms")
+            start, paragraph = 0, []
 
 
 def setup(app):
