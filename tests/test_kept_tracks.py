@@ -327,7 +327,7 @@ def test_execute_leaves_the_catalogue_as_it_was(tracks, tmp_path):
     assert checked.read == 1 and _rows(record, "SELECT * FROM gpx_track_files ORDER BY track_id") == before
 
 
-@pytest.mark.spec("RUL-sealing_needs_no_tracks", "BLD-track_window", test="TST-kept_tracks-the_kept_points_are_read_without_the_tracks")
+@pytest.mark.spec("RUL-finalize_needs_no_tracks", "BLD-track_window", test="TST-kept_tracks-the_kept_points_are_read_without_the_tracks")
 def test_the_kept_points_are_read_without_the_tracks(tracks, tmp_path):
     """The points the record keeps give the same index, fingerprint and all, with the tracks folder gone."""
     record = tmp_path / "record.db"

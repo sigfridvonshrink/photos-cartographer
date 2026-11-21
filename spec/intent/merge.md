@@ -280,6 +280,16 @@ Merge's plan SHALL warn of a library its execution would find short of room, the
 Merge SHALL NOT plan, dry-run or execute while prep's log is not the one the handoff vouches for.
 :::
 
+:::{rul} Merge needs no tracks folder
+:id: RUL-merge_needs_no_tracks
+:status: ruled
+:criticality: med
+:verify: required
+:uses: DEF-merge, DEF-tracks
+
+Merge SHALL proceed without the tracks folder, on the track points the workspace keeps.
+:::
+
 ## Destination-to-library mapping
 
 :::{rul} The library mirrors the destination tree

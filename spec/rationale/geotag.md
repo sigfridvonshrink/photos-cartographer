@@ -43,7 +43,7 @@ before, so that the date can be asked there, in the editor or by hand, like any 
 :status: ruled
 :forced: no
 :follows_from: RAT-folder_gps_fallback, RAT-untimed_set_apart, RAT-no_phase_invents_time
-:justifies: RUL-date_fallback_from_nearest, RUL-date_fallback_times_untimed, RUL-date_fallback_fills_to_a_day, RUL-date_fallback_time_written, RUL-date_fallback_names_in_scanner_order, RUL-date_fallback_applies_itself
+:justifies: RUL-date_fallback_from_nearest, RUL-date_fallback_times_untimed, RUL-date_fallback_fills_to_a_day, RUL-date_fallback_time_written, RUL-date_fallback_names_in_name_order, RUL-date_fallback_applies_itself
 
 A scanned print records no time: the scanner's clock says when it was scanned, if anything, never when it was taken.
 What does say it is the folder the user sorts it into — "1985", "Christmas 1985" — better than any one photo can. The
@@ -496,7 +496,7 @@ one with no evidence is only offered ({need}`RAT-neighbour_day_offered`).
 :status: ruled
 :forced: no
 :follows_from: RAT-clock_is_the_cameras_for_the_day, RAT-assumptions_need_acceptance, RAT-drift_invisible
-:justifies: RUL-neighbour_day_offset_proposed, RUL-neighbour_day_offset_needs_acceptance, RUL-neighbour_day_offset_drift_checked, RUL-neighbour_day_no_gap_bound, RUL-neighbour_day_keeps_its_cell
+:justifies: RUL-neighbour_day_offset_proposed, RUL-neighbour_day_offset_needs_acceptance, RUL-neighbour_day_offset_asked_once, RUL-neighbour_day_no_gap_bound, RUL-neighbour_day_keeps_its_cell
 
 A day is a camera's day by its own clock, so a camera left on home time abroad, or a night shoot, has its midnight in
 the middle of an outing: the outing becomes two days, and the half with no anchor asks for its offset and then for a
@@ -626,7 +626,7 @@ there, and is not followed; its tracks, unread, are named as unread rather than 
 :status: ruled
 :forced: no
 :follows_from: RAT-database_is_record, CHC-photos_matter
-:justifies: RUL-track_points_kept, RUL-withdrawn_track_points_kept, RUL-sealing_needs_no_tracks, RUL-merge_needs_no_tracks
+:justifies: RUL-track_points_kept, RUL-withdrawn_track_points_kept, RUL-finalize_needs_no_tracks, RUL-merge_needs_no_tracks
 
 A placement or a clock offset rests on track points, and the tracks folder is the user's, outside the workspace: it is
 reorganised, pruned, moved to another disk. A sealed workspace that recorded only a track's fingerprint and name could no

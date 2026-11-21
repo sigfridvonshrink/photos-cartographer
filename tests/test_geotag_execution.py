@@ -708,7 +708,7 @@ def test_own_leftover_cleared_where_the_journal_shows_the_write_begun(tmp_path, 
     assert photo.read_bytes() == b"rewritten" and os.listdir(tmp_path) == ["x.jpg"]
 
 
-@pytest.mark.spec("RUL-other_write_leftover_holds_photo", "RUL-write_leftovers_by_dest_warned", "BLD-own_leftover_cleared",
+@pytest.mark.spec("RUL-other_write_leftover_holds_photo", "RUL-write_leftover_in_by_dest_left", "BLD-own_leftover_cleared",
                   "RUL-geotag_clears_own_leftover", "RUL-other_write_leftover_named",
                   test="TST-geotag_execution-another_leftover_holds_its_photo_back")
 def test_another_leftover_holds_its_photo_back(tmp_path, monkeypatch):

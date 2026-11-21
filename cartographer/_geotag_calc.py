@@ -474,7 +474,7 @@ class GPXIndex:
     def build(self, coordinator=None, window=None, keep=True, read=True):
         """Index the points in `window` (a list of (start, end) whole seconds; None: every point). `keep` False
         leaves the record as it was: execute checks the tracks, planning keeps them. `read` False reads nothing
-        under gpx_root — the points are those the record keeps (finalize, RUL-sealing_needs_no_tracks)."""
+        under gpx_root — the points are those the record keeps (finalize, RUL-finalize_needs_no_tracks)."""
         self.window = window_union(window) if window is not None else list(ALL_TIME)
         self.points, self.warnings, self.file_sha, self.unreadable, self.unlisted = [], [], {}, [], []
         self.told = []
@@ -1902,7 +1902,7 @@ def place_gps(target_utc, gpx, cfg, why=None):
 
 
 def _valid_coord(lat, lon):
-    """True iff (lat, lon) is a numeric coordinate in range (RUL-checked_positions_and_times)."""
+    """True iff (lat, lon) is a numeric coordinate in range (RUL-checked_positions)."""
     return (isinstance(lat, (int, float)) and not isinstance(lat, bool) and -90 <= lat <= 90
             and isinstance(lon, (int, float)) and not isinstance(lon, bool) and -180 <= lon <= 180)
 
@@ -1919,7 +1919,7 @@ def classify_gps(file, resolved_utc, gpx, cfg, effective_fallback, file_decision
     the user (RUL-unplaced_photo_waits), never left without a position. A photo's own
     position gives way only to a position the user set for it, where `replace_own` says its review item is of an own
     position its clock offset contradicts (RUL-own_position_replaced_on_answer).
-    Authored coordinates are assumed already range-validated by the caller (RUL-checked_positions_and_times)."""
+    Authored coordinates are assumed already range-validated by the caller (RUL-checked_positions)."""
     fd = file_decision or {}
     mlat, mlon = fd.get("manual_lat", ""), fd.get("manual_lon", "")
     manual = mlat not in (None, "") and mlon not in (None, "")

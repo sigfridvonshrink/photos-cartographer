@@ -191,7 +191,7 @@ def test_a_photo_with_no_time_reads_no_clock_and_is_in_no_cameras_offset(tmp_pat
     assert d["camera_group_time_decisions"] == {} and "unidentified_files" not in d
 
 
-@pytest.mark.spec("RUL-date_fallback_names_in_scanner_order", "BLD-rename_planning",
+@pytest.mark.spec("RUL-date_fallback_names_in_name_order", "BLD-rename_planning",
                   test="TST-geotag_date_fallback-suffixed_in_the_order_of_their_names")
 def test_photos_sharing_the_filled_date_are_suffixed_in_the_order_of_their_names():
     """Three scans of one date take its name and suffixes in the order of the names they hold — compared as text, so
@@ -300,7 +300,7 @@ def _edit(path, fn):
 @pytest.mark.spec("RUL-time_before_gps", "RUL-untimed_photo_stops_geotag", "RUL-untimed_photo_named",
                   "RUL-every_question_answerable_by_hand",
                   "RUL-date_fallback_time_written", "RUL-date_fallback_recorded", "RUL-date_fallback_only_untimed",
-                  "RUL-date_fallback_names_in_scanner_order", "RUL-date_fallback_never_placed_by_tracks",
+                  "RUL-date_fallback_names_in_name_order", "RUL-date_fallback_never_placed_by_tracks",
                   "BLD-geotag_untimed_gate", "BLD-date_fallback_cell", "BLD-editor_answers_every_question",
                   test="TST-geotag_date_fallback-geotag_plan_asks_then_writes_the_date")
 def test_geotag_plan_stops_on_a_photo_with_no_time_then_writes_the_date_given_its_folder(tmp_path, monkeypatch, capsys):

@@ -795,7 +795,7 @@ be moved to the recoverable quarantine — never taken for media, never put amon
 :::
 
 :::{rul} Such a leftover in photos by destination is left where it is
-:id: RUL-write_leftovers_by_dest_warned
+:id: RUL-write_leftover_in_by_dest_left
 :status: ruled
 :criticality: low
 :anti: yes
@@ -811,7 +811,7 @@ SHALL be left where it is.
 :status: ruled
 :criticality: low
 :verify: required
-:refines: RUL-write_leftovers_by_dest_warned
+:refines: RUL-write_leftover_in_by_dest_left
 
 The user SHALL be warned of each leftover of an interrupted metadata write left in photos by destination.
 :::
@@ -2783,7 +2783,7 @@ The workspace database SHALL be archived in the package.
 Each phase SHALL write only its own part of the workspace database, no two phases writing the same rows — but the record
 of the state the last execution left the workspace's files in, which every execution rewrites whole
 ({need}`RUL-execution_records_state`) and a prune trims of what it removes
-({need}`RUL-quarantine_changed_only_by_prune`).
+({need}`RUL-prune_removals_no_difference`).
 :::
 
 :::{rul} Finalize only reads the database
@@ -3518,7 +3518,7 @@ A timezone the user writes SHALL be a real zone that resolves, never an arbitrar
 :::
 
 :::{rul} A position is well formed
-:id: RUL-checked_positions_and_times
+:id: RUL-checked_positions
 :status: ruled
 :criticality: high
 :verify: required
@@ -4100,7 +4100,7 @@ metadata, anything in the strays or the quarantine changed, a file moved where n
 :::
 
 :::{rul} A prune's removals are no change to the comparison
-:id: RUL-quarantine_changed_only_by_prune
+:id: RUL-prune_removals_no_difference
 :status: ruled
 :criticality: med
 :verify: required

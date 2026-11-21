@@ -1837,7 +1837,7 @@ def recognise_interrupted_work(ws: str, record_id, record: dict, current: dict):
 def forget_in_workspace_record(ws: str, prefixes) -> None:
     """Take out of the record every file under each folder in `prefixes` (workspace-relative) that is no longer on disk
     — what a quarantine prune removed, all of the folder or, cut short, part of it — so the next check does not take it
-    for a change (RUL-quarantine_changed_only_by_prune). No record, no-op."""
+    for a change (RUL-prune_removals_no_difference). No record, no-op."""
     if read_workspace_record(ws)[0] is None:
         return
     conn = sqlite3.connect(db_path(ws))

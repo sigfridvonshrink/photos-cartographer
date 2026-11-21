@@ -107,7 +107,7 @@ def test_the_tracks_come_before_the_folder_fallback():
 
 @pytest.mark.parametrize("lat, lon, ok", [(50, 4, True), (-90, 180, True), (91, 0, False),
                                           (0, 181, False), ("x", 0, False), (0, True, False)])
-@pytest.mark.spec("RUL-checked_positions_and_times", test="TST-geotag_gps_decisions-valid_coord")
+@pytest.mark.spec("RUL-checked_positions", test="TST-geotag_gps_decisions-valid_coord")
 def test_valid_coord(lat, lon, ok):
     assert cal._valid_coord(lat, lon) is ok
 

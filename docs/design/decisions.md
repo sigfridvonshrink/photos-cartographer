@@ -254,7 +254,7 @@ what matters. Such choices are build choices and should be ruled under a separat
   only that merge looks for an incoming photo at its own place, never de-duplicating the library as a whole
   (`RUL-library_not_scanned`).
 - **`init-library` may look for the guard before it takes the lock**, to know whether it is run in a workspace at all.
-  The phases take the lock first and look for the guard under it (`BLD-lock_after_guard`).
+  The phases take the lock first and look for the guard under it (`BLD-lock_before_guard_read`).
 - **Prep finds a link below the top level by the walk that would cross it**, after the workspace check. The spec keeps
   only that what the top level shows is checked right after the lock and the seal (`RUL-shape_checked_first`).
 - **An empty hidden folder in the dump is removed, not moved to the quarantine**: it holds nothing to keep. The spec
@@ -273,7 +273,7 @@ what matters. Such choices are build choices and should be ruled under a separat
 - **A plan, a dry run or finalize names, file by file, the changes accepted since the last execution**, though no record
   of theirs holds them. The spec keeps that the record an execution writes names them (`RUL-accepted_changes_logged`).
 - **A prune forgives the files of its folders already gone** from the quarantine. The spec keeps that only a prune
-  changes the quarantine (`RUL-quarantine_changed_only_by_prune`).
+  changes the quarantine (`RUL-prune_removals_no_difference`).
 - **An acceptance code certifies the list printed, not the bytes behind it**: a file changed again in the same way is
   the same line of the list. The spec keeps that a code accepts only its list (`RUL-code_accepts_only_its_list`).
 - **The editor refuses a save when any record it loaded has changed since, and an edit that carries no answer.** The

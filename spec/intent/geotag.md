@@ -165,7 +165,7 @@ A photo a date fallback times SHALL take no part in finding any camera's clock o
 :::
 
 :::{rul} Photos of one date fallback are suffixed in the order of their names
-:id: RUL-date_fallback_names_in_scanner_order
+:id: RUL-date_fallback_names_in_name_order
 :status: ruled
 :criticality: low
 :verify: required
@@ -944,7 +944,7 @@ against the tracks counting as its acceptance.
 :::
 
 :::{rul} A neighbouring day's offset is asked about once, at the drift check where it can be
-:id: RUL-neighbour_day_offset_drift_checked
+:id: RUL-neighbour_day_offset_asked_once
 :status: ruled
 :criticality: high
 :verify: required
@@ -1467,7 +1467,7 @@ Geotag SHALL NOT plan or execute while its tracks folder, or a folder within it,
 :::
 
 :::{rul} Finalize needs no tracks folder
-:id: RUL-sealing_needs_no_tracks
+:id: RUL-finalize_needs_no_tracks
 :status: ruled
 :criticality: med
 :verify: required
@@ -1475,17 +1475,6 @@ Geotag SHALL NOT plan or execute while its tracks folder, or a folder within it,
 
 Finalize SHALL proceed without the tracks folder, on the track points the workspace keeps.
 :::
-
-:::{rul} Merge needs no tracks folder
-:id: RUL-merge_needs_no_tracks
-:status: ruled
-:criticality: med
-:verify: required
-:uses: DEF-merge, DEF-tracks
-
-Merge SHALL proceed without the tracks folder, on the track points the workspace keeps.
-:::
-
 
 ## Camera groups
 
@@ -3034,7 +3023,7 @@ back into photos by date, then running prep and planning geotag again.
 :criticality: high
 :anti: yes
 :verify: required
-:excepts: RUL-write_leftovers_by_dest_warned, RUL-execution_only_the_plan
+:excepts: RUL-write_leftover_in_by_dest_left, RUL-execution_only_the_plan
 :uses: DEF-geotag
 
 Geotag SHALL remove the temporary file an interrupted metadata write left beside a photo only to write that photo
@@ -3070,7 +3059,7 @@ A temporary file that holds a photo back from geotag's execution SHALL be named 
 :criticality: med
 :anti: yes
 :verify: required
-:refines: RUL-write_leftovers_by_dest_warned
+:refines: RUL-write_leftover_in_by_dest_left
 :uses: DEF-geotag
 
 Geotag's plan SHALL stop, naming it, on a temporary file an interrupted metadata write left in photos by destination.

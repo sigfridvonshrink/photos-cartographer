@@ -1146,7 +1146,7 @@ def test_execute_marks_the_tracks_it_times_photos_by(tmp_path, monkeypatch):
                             "USING (track_id) GROUP BY f.track_id") == [(1, 2)]
 
 
-@pytest.mark.spec("RUL-gone_track_not_used", "RUL-sealing_needs_no_tracks", "BLD-withdrawn_track_points",
+@pytest.mark.spec("RUL-gone_track_not_used", "RUL-finalize_needs_no_tracks", "BLD-withdrawn_track_points",
                   test="TST-geotag_finalize-a_used_track_changed_seals_on_its_current_points")
 def test_a_used_track_changed_since_execute_seals_on_its_current_points(tmp_path, monkeypatch):
     """The track the executed plan rests on is changed — a point of another year added — and catalogued again as a plan
@@ -1168,7 +1168,7 @@ def test_a_used_track_changed_since_execute_seals_on_its_current_points(tmp_path
     assert (ctl / "photos-26-archive.tar.gz").exists()
 
 
-@pytest.mark.spec("RUL-sealing_needs_no_tracks", "RUL-finalize_requires_plan_still_holds", "BLD-track_window",
+@pytest.mark.spec("RUL-finalize_needs_no_tracks", "RUL-finalize_requires_plan_still_holds", "BLD-track_window",
                   test="TST-geotag_finalize-finalize_seals_without_the_tracks_folder")
 def test_finalize_seals_without_the_tracks_folder(tmp_path, monkeypatch):
     """Finalize seals what the workspace keeps: with the tracks folder gone after execute it packages all the same,

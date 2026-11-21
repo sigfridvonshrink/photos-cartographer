@@ -131,7 +131,8 @@ An offset cell's `user_decision` SHALL hold `accept_proposal`, `accepted_offset_
 :::{bld} Geotag's destinations
 :id: BLD-geotag_destinations
 :status: ruled
-:realises: DEF-destination, DEF-container_destination, RUL-container_never_waits, RUL-moved_photo_decided_anew
+:realises: RUL-container_never_waits, RUL-moved_photo_decided_anew
+:uses: DEF-destination, DEF-container_destination
 
 A photo's destination SHALL be the `dirname` of its path; the container destinations are every ancestor of a
 destination within `6-photos-by-dest` that is not one, `6-photos-by-dest` included, each marked `file_less: true` in the
@@ -285,7 +286,7 @@ parse yields bumps `GPX_PARSE_VERSION`, so a track file catalogued under the old
 :::{bld} The window of the tracks
 :id: BLD-track_window
 :status: ruled
-:realises: RUL-tracks_elsewhere_restale_nothing, RUL-track_points_kept, RUL-sealing_needs_no_tracks, RUL-merge_needs_no_tracks, RUL-track_window_reaches_every_reader
+:realises: RUL-tracks_elsewhere_restale_nothing, RUL-track_points_kept, RUL-finalize_needs_no_tracks, RUL-merge_needs_no_tracks, RUL-track_window_reaches_every_reader
 :uses: BLD-anchor_matching, BLD-offset_far_from_evidence, BLD-drift_validation, BLD-track_placement
 
 The tracks' window SHALL be the union of what each reader of the tracks reaches, from the reader's own settings, never a setting of its own: each photo's camera time, read as UTC, give or take `gpx_anchor_max_clock_error_seconds` and the larger of `gpx_direct_match_max_seconds` and `gpx_interpolation_max_gap_seconds` — offset inference, and a higher-ranked track covering an anchor candidate's time; each offset cell's photos whose proposal is `recorded_offset`, `timezone_naive`, `gps_time` or `neighbour_day`, at the times it corrects them to, from the first to the last, give or take the larger of `gpx_anchor_max_clock_error_seconds` and the drift check's reach — the far-from-evidence check, and whether the guess goes to the drift check; each camera's photos of one day in one destination, from the first camera time to the last, give or take the drift check's reach ({need}`BLD-drift_validation`) — the drift check falling back on the camera's clock; once photos-21 is complete, each drift bucket's photos at their corrected times, from the first to the last, give or take the drift check's reach; and once photos-22 is complete, each photo placement places, and each whose own position its offset contradicts
@@ -519,7 +520,7 @@ After the offsets shared within a day, `build_time_decisions` SHALL withdraw the
 :::{bld} The offset of the day next to it
 :id: BLD-neighbour_day_proposal
 :status: ruled
-:realises: RUL-neighbour_day_offset_proposed, RUL-neighbour_day_offset_needs_acceptance, RUL-neighbour_day_offset_drift_checked, RUL-neighbour_day_no_gap_bound, RUL-neighbour_day_keeps_its_cell, RUL-offset_from_own_evidence, RUL-track_confirmation_is_acceptance
+:realises: RUL-neighbour_day_offset_proposed, RUL-neighbour_day_offset_needs_acceptance, RUL-neighbour_day_offset_asked_once, RUL-neighbour_day_no_gap_bound, RUL-neighbour_day_keeps_its_cell, RUL-offset_from_own_evidence, RUL-track_confirmation_is_acceptance
 :uses: BLD-offset_buckets, BLD-offset_shared_within_day, BLD-drift_validation
 
 After the offsets shared within a day, and after the offsets the photos' fixes gave are judged far from evidence or not
@@ -861,7 +862,7 @@ A position write of photos-24 whose placement has `lower_tracks` SHALL carry the
 :::{bld} How renames are planned
 :id: BLD-rename_planning
 :status: ruled
-:realises: RUL-suffix_no_clobber, RUL-uncorrected_keeps_its_name, RUL-geotag_name_final, RUL-geotag_extension_lowercase, RUL-suffix_in_capture_order, RUL-pair_named_as_one, RUL-date_fallback_names_in_scanner_order
+:realises: RUL-suffix_no_clobber, RUL-uncorrected_keeps_its_name, RUL-geotag_name_final, RUL-geotag_extension_lowercase, RUL-suffix_in_capture_order, RUL-pair_named_as_one, RUL-date_fallback_names_in_name_order
 
 For each destination, `plan_renames` SHALL count every current name of its photos as taken, case folded, and never
 freed by a rename it plans — two photos that would trade names both take a suffix — then leave a photo whose name

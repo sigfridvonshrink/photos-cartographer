@@ -3364,7 +3364,7 @@ def prune_quarantine(workspace_root, plan_ids=None, older_than_days=None, do_del
             try:
                 shutil.rmtree(safe)
             finally:
-                # What prune removes is no change to the next check (RUL-quarantine_changed_only_by_prune): out of the
+                # What prune removes is no change to the next check (RUL-prune_removals_no_difference): out of the
                 # record too, each file gone, a removal cut short midway too. A sealed workspace is checked no more,
                 # and its database is left as merge sealed it.
                 from .photos_utils import QUARANTINE_DIR, is_sealed

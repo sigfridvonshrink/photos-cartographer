@@ -95,7 +95,7 @@ def test_a_day_with_no_anchor_is_proposed_the_day_before(tmp_path):
     assert after["day"] == "2024-07-04" and "user_decision" in after and after is not before
 
 
-@pytest.mark.spec("RUL-neighbour_day_offset_needs_acceptance", "RUL-neighbour_day_offset_drift_checked",
+@pytest.mark.spec("RUL-neighbour_day_offset_needs_acceptance", "RUL-neighbour_day_offset_asked_once",
                   "BLD-neighbour_day_proposal", "BLD-drift_validation",
                   test="TST-geotag_neighbour_day-with_tracks_it_is_asked_only_at_the_drift_check")
 def test_with_tracks_it_is_asked_only_at_the_drift_check(tmp_path):
@@ -127,7 +127,7 @@ def test_with_tracks_it_is_asked_only_at_the_drift_check(tmp_path):
     assert rows[f"{DEST}/c.arw"]["resolved_utc"] == "2024-07-03T23:30:00Z"
 
 
-@pytest.mark.spec("RUL-neighbour_day_offset_needs_acceptance", "RUL-neighbour_day_offset_drift_checked",
+@pytest.mark.spec("RUL-neighbour_day_offset_needs_acceptance", "RUL-neighbour_day_offset_asked_once",
                   "BLD-neighbour_day_proposal",
                   test="TST-geotag_neighbour_day-without_tracks_it_is_accepted_in_the_time_decisions")
 def test_without_tracks_it_is_accepted_in_the_time_decisions(tmp_path):

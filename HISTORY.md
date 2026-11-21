@@ -86,6 +86,40 @@ workspace. `anti`, the mark of a rule that forbids, was set on every rule that d
 oblige. The check for retired words reads a paragraph at a time, a phrase broken across two lines being still the
 phrase. Prep's dry run lost a listing of blockers that no plan could reach.
 
+What the readers could not settle was put to the owner in one list, each with a side suggested, and ruled *"All as
+suggested"*.
+
+- **Photos sharing a fingerprint are each merged on their own.** The same picture sorted into two destinations stays
+  twice in photos by destination — prep's duplicates stop at its door — and merge knew a photo by its fingerprint
+  alone: one copy took the other's final name, one was carried forward on the other's record, and a copy deleted from
+  the library by hand still counted as merged, the workspace sealing over a photo in neither place. Merge now joins a
+  photo to its rename by its path, by fingerprint only where it is the one photo of that value, and carries a photo
+  forward only on a record of its own path and fingerprint; the log names each copy's place.
+- **Held as one value, moved together to one value, they merge** under a changed image engine, where each had been
+  blocked for a reason that was false. A value that splits in two blocks, which it had not.
+- **A merge begun is a state.** From the first photo moved until the seal, prep and geotag stay allowed — a blocked
+  photo may need them — and a fresh merge plan carries every photo an earlier plan placed, whether or not the
+  finalized set still lists it. Before, prep and geotag run again left those photos out of the next plan, and the
+  workspace sealed with no word of where they had gone. Such a photo is only ever checked in the library: nothing at
+  its old path in the workspace is its.
+- **A failed read of a folder's metadata does not block a file whose record is still valid.**
+- **A track point's time is read whatever its precision, on every Python**: the tool reads the form itself, a
+  fraction of any length cut to microseconds. A time not in that form is passed over, as one unreadable was.
+- **An offset is shared, or taken from what the photos record, where the camera's own GPS gives none** — positions on
+  no track measure nothing of the clock.
+- **The package leaves out an earlier package; a library file under the photo's name in another case, holding it, is
+  the photo already there; finalize and merge stop on a prep log the handoff does not vouch for** — each already so,
+  now a rule's.
+- **Twelve rules were split out** of nine that carried more than one obligation, **seven ids renamed** to what their
+  items now say, and a merge rule moved from geotag's intent to merge's. A definition carries no obligation, so no
+  build item `realises` one: each that did now `uses` it.
+
+Two things the building left open. A photo placed by a merge that crashed before journalling it, where prep and
+geotag are then run before any new merge plan, is in the library but out of the sealed record: only a placing the
+journal confirms, or a later plan carried, counts as placed outside the finalized set. And where finalize, run again,
+drops the geotag steps of a photo no longer there, merge takes them from the complete log finalize set aside — the
+better place to keep them is finalize itself.
+
 ## 2026-11-17 — a leaner corpus measured, and dropped (BACKLOG 57)
 
 The corpus is about three quarters the size of the code by words, and the owner asked whether that was overdoing it.

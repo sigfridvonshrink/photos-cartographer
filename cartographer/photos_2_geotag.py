@@ -1857,7 +1857,7 @@ class GeotagWorkflow:
         the camera's own GPS (BLD-neighbour_day_proposal): on its tracks, or by its fixes' times; of a day split at a
         change of the clock, the part next to it. However far apart in time; asked about once, as a timezone's guess
         is — with tracks by the day's photos at the drift check, else by acceptance here
-        (RUL-neighbour_day_offset_drift_checked). The day keeps its own cell."""
+        (RUL-neighbour_day_offset_asked_once). The day keeps its own cell."""
         for (dest, bucket), (group, g, prior_cell, anchor_frames, rep_naive, date, day, sel, tz) in sorted(recall.items()):
             cells = destinations[dest]["camera_group_time_decisions"]
             cell = cells.get(bucket) or {}
@@ -3760,7 +3760,7 @@ class GeotagWorkflow:
         # prep run after execute records geotag's own writes and renames in it, and that is the loop, not a
         # change of decision.
         # The tracks are those the record keeps: finalize seals what is kept and never reads gpx_root
-        # (RUL-sealing_needs_no_tracks).
+        # (RUL-finalize_needs_no_tracks).
         gpx = self.plan_tracks(plan, read=False)
         stale = self.revalidate_plan(plan, gpx, with_handoff=False)
         if stale:

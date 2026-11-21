@@ -511,7 +511,7 @@ operator's task.
 :status: ruled
 :forced: no
 :follows_from: RAT-recoverable_core
-:justifies: RUL-write_leftovers_quarantined, RUL-write_leftovers_by_dest_warned
+:justifies: RUL-write_leftovers_quarantined, RUL-write_leftover_in_by_dest_left
 
 A metadata write that was killed leaves a partial copy or a backup beside the photo, named after it. Taken for media
 it would be fingerprinted, filed and perhaps kept over the photo it shadows; sent to the strays it would sit among
@@ -1570,7 +1570,7 @@ both checks are needed, every time.
 :status: ruled
 :forced: yes
 :follows_from: RAT-plain_json_record, RAT-why_did_this_change
-:justifies: INV-authored_values_checked, RUL-checked_paths, RUL-checked_timezones, RUL-checked_positions_and_times, RUL-checked_filename_format, RUL-checked_numbers, RUL-checked_shapes, RUL-date_fallback_checked, RUL-invalid_value_stops, RUL-invalid_value_located, RUL-invalid_value_never_repaired, RUL-unknown_decision_field_refused, RUL-checked_development_subfolder_names
+:justifies: INV-authored_values_checked, RUL-checked_paths, RUL-checked_timezones, RUL-checked_positions, RUL-checked_filename_format, RUL-checked_numbers, RUL-checked_shapes, RUL-date_fallback_checked, RUL-invalid_value_stops, RUL-invalid_value_located, RUL-invalid_value_never_repaired, RUL-unknown_decision_field_refused, RUL-checked_development_subfolder_names
 
 The user writes the configuration and the decisions by hand, so the tool cannot assume they are well formed. A
 mistyped timezone or an unsafe path, reported early as a specific problem in a named place, is fixed at its source;
@@ -1867,7 +1867,7 @@ it, so the account of the workspace stays whole.
 :status: ruled
 :forced: yes
 :follows_from: RAT-workspace_as_last_left, RAT-idempotent_reruns
-:justifies: RUL-execution_records_state, RUL-planning_leaves_record, RUL-record_needed, RUL-first_prep_compares_nothing, RUL-quarantine_changed_only_by_prune
+:justifies: RUL-execution_records_state, RUL-planning_leaves_record, RUL-record_needed, RUL-first_prep_compares_nothing, RUL-prune_removals_no_difference
 
 The tool's own work changes the entries too: prep moves and renames, geotag writes an original through a file renamed
 over it — a new inode, size and time, its fingerprint the same — and renames it, merge moves photos out. Unless each

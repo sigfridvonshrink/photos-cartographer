@@ -8,7 +8,7 @@ the intent it implements. *Why* a choice was made is in [the rationale](../ratio
 :::{bld} The phases are three commands
 :id: BLD-phase_commands
 :status: ruled
-:realises: DEF-prep, DEF-geotag, DEF-merge
+:uses: DEF-prep, DEF-geotag, DEF-merge
 
 The phases SHALL be the commands `photos-cartographer prep`, `geotag` and `merge` — named in the specs, and in their
 records, `photos-1-prep`, `photos-2-geotag` and `photos-3-merge`.
@@ -48,7 +48,7 @@ progress.
 :::
 
 :::{bld} The lock is taken after the filesystem checks, before the guard is read
-:id: BLD-lock_after_guard
+:id: BLD-lock_before_guard_read
 :status: ruled
 :realises: RUL-lock_before_reading
 
@@ -151,7 +151,8 @@ filesystem — `flock`, `os.replace`, `fsync`, and `renameat2` with `RENAME_NORE
 :::{bld} The configuration is `photos-00-config.json`, in the control directory
 :id: BLD-config_file
 :status: ruled
-:realises: DEF-configuration, RUL-one_configuration, RUL-config_never_media
+:realises: RUL-one_configuration, RUL-config_never_media
+:uses: DEF-configuration
 
 The configuration SHALL be the JSON file `photos-00-config.json` in the workspace's control directory, `.photos-ingest/`,
 which prep skips wholesale ({need}`BLD-prep_skip_set`) — its values never taken from the in-code template once the file exists.
@@ -241,7 +242,8 @@ it.
 :::{bld} The configuration's keys
 :id: BLD-config_keys
 :status: ruled
-:realises: DEF-config_areas, RUL-folder_names_not_roles, RUL-camera_classes_not_derivation, RUL-extension_one_class, RUL-folder_found_by_role, RUL-config_lists_extensions, RUL-unlisted_extension_other, RUL-setting_bounds_one_thing
+:realises: RUL-folder_names_not_roles, RUL-camera_classes_not_derivation, RUL-extension_one_class, RUL-folder_found_by_role, RUL-config_lists_extensions, RUL-unlisted_extension_other, RUL-setting_bounds_one_thing
+:uses: DEF-config_areas
 
 The areas SHALL be, at least: the `zfs` block and `snapshots_required` ({need}`BLD-snapshot_is_zfs`);
 `camera_time_and_timezone_policy.device_groups`, with `phones` and `fixed_clock_cameras` ({need}`DEF-camera_group`), and
@@ -299,7 +301,8 @@ geotag from one with a zone; every phase reads the configuration through it befo
 :::{bld} The control directory's contents
 :id: BLD-control_directory_contents
 :status: ruled
-:realises: DEF-control_records, RUL-control_records_together
+:realises: RUL-control_records_together
+:uses: DEF-control_records
 
 The control records SHALL be these files in `.photos-ingest/` ({need}`DEF-archival_package` and {need}`DEF-workspace_database` for the archival and database ones):
 
@@ -348,7 +351,7 @@ The ids in it name the items that govern each entry.
 :::{bld} An artifact's first digit names the phase that made it
 :id: BLD-artifact_numbering
 :status: ruled
-:realises: DEF-control_records
+:uses: DEF-control_records
 
 The numbered artifacts SHALL follow this scheme:
 
@@ -381,7 +384,8 @@ atomic rename (`write_json_artifact`, `write_versioned_json`).
 :::{bld} What prep skips
 :id: BLD-prep_skip_set
 :status: ruled
-:realises: RUL-not_inventoried, RUL-control_records_never_media, RUL-config_never_media, DEF-strays_folder, RUL-strays_never_processed
+:realises: RUL-not_inventoried, RUL-control_records_never_media, RUL-config_never_media, RUL-strays_never_processed
+:uses: DEF-strays_folder
 
 Prep SHALL skip `.photos-ingest/`, `.photos-ingest-quarantine/` and `.git` at the workspace's top level as whole
 subtrees, every dot-prefixed file,
@@ -402,7 +406,7 @@ counted — is a blocker naming it.
 :::{bld} A write's leftover is quarantined, or warned of in photos by destination
 :id: BLD-write_leftover_quarantined
 :status: ruled
-:realises: RUL-write_leftovers_quarantined, RUL-write_leftovers_by_dest_warned, RUL-write_leftover_in_by_dest_warned, RUL-user_backup_is_a_stray
+:realises: RUL-write_leftovers_quarantined, RUL-write_leftover_in_by_dest_left, RUL-write_leftover_in_by_dest_warned, RUL-user_backup_is_a_stray
 
 Prep SHALL recognise a file named `<media name>_exiftool_tmp` as the one leftover of a write, take one outside photos
 by destination out of the inventory and move it to the quarantine (`exiftool_leftover`), and leave one inside photos by
@@ -593,7 +597,8 @@ status 2; a link come since a plan was saved stops dry-run and execute before an
 :::{bld} `camera_group_key` and its version
 :id: BLD-camera_group_key
 :status: ruled
-:realises: DEF-camera_group, RUL-prep_derives_camera_group, RUL-geotag_reuses_camera_group, RUL-camera_group_in_handoff, RUL-camera_group_in_prep_records
+:realises: RUL-prep_derives_camera_group, RUL-geotag_reuses_camera_group, RUL-camera_group_in_handoff, RUL-camera_group_in_prep_records
+:uses: DEF-camera_group
 
 The key SHALL be `camera_group_key`, computed by prep from the serial, make, model and owner fields and emitted in both
 the handoff manifest and SQLite ({need}`BLD-metadata_extraction`); geotag consumes and classifies it
@@ -638,7 +643,8 @@ A group SHALL be known when its key is listed under `camera_time_and_timezone_po
 :::{bld} `filename_timestamp_format`
 :id: BLD-filename_timestamp_format
 :status: ruled
-:realises: RUL-one_filename_format, DEF-timestamp_name, RUL-filename_format_configured
+:realises: RUL-one_filename_format, RUL-filename_format_configured
+:uses: DEF-timestamp_name
 
 The format SHALL be the configuration key `filename_timestamp_format`, a `strftime` format giving a timestamp such as
 `YYYY-MM-DD--HH-MM-SS`. Prep, geotag and merge read it; geotag's plans also depend on it through the filename-format
@@ -678,7 +684,8 @@ format. Two instants of the hour a zone repeats give one local time, and the nam
 :::{bld} The `UNKN_` mark
 :id: BLD-untimed_mark
 :status: ruled
-:realises: DEF-untimed_name, RUL-untimed_mark_once
+:realises: RUL-untimed_mark_once
+:uses: DEF-untimed_name
 
 The untimed name SHALL be `UNKN_<name it came with>`, with the `-NNN` suffix when that is taken; a file whose name
 already starts `UNKN_` keeps it, never marked twice.
@@ -732,7 +739,8 @@ configured format at plan once a file outside the inbox carries a timestamp name
 :::{bld} `gpx_root`
 :id: BLD-gpx_root
 :status: ruled
-:realises: DEF-tracks, RUL-tracks_outside_managed_folders, RUL-tracks_geotag_only
+:realises: RUL-tracks_outside_managed_folders, RUL-tracks_geotag_only
+:uses: DEF-tracks
 
 The tracks' location SHALL be the configuration key `gpx_root`: a path, absolute or relative to the workspace, resolved
 through links before use; empty means no tracks. It MAY be anywhere outside `0-sources` … `6-photos-by-dest` — on any
@@ -754,7 +762,7 @@ any other entry of the workspace's top level that is not hidden ({need}`RUL-top_
 :::{bld} A track file
 :id: BLD-track_file
 :status: ruled
-:realises: DEF-tracks
+:uses: DEF-tracks
 
 A track file SHALL be a file named `*.gpx`, `*.kml`, `*.kmz`, `*.fit`, `*.tcx`, `*.nmea` or `*.igc`, in any case. Of
 these geotag reads only the `*.gpx` files beneath `gpx_root`.
@@ -801,7 +809,8 @@ made them.
 :::{bld} How a fingerprint is computed
 :id: BLD-fingerprint
 :status: ruled
-:realises: DEF-fingerprint, RUL-fingerprint_survives_mutation, RUL-fingerprint_covers_every_frame, RUL-fingerprint_covers_every_stream
+:realises: RUL-fingerprint_survives_mutation, RUL-fingerprint_covers_every_frame, RUL-fingerprint_covers_every_stream
+:uses: DEF-fingerprint
 
 A photo's fingerprint SHALL be ImageMagick's signature — a SHA-256 of the normalized pixel stream — of its one frame, or, of a file of several frames, the SHA-256 of every frame's signature, one to a line, in order, the same whichever of the two ways of running ImageMagick took it; a video's, the `ffmpeg` MD5 of all its streams as stored, copied out without decoding (`-map 0 -c copy -copy_unknown`).
 :::
@@ -809,7 +818,8 @@ A photo's fingerprint SHALL be ImageMagick's signature — a SHA-256 of the norm
 :::{bld} How a hash is computed
 :id: BLD-hash
 :status: ruled
-:realises: DEF-hash, RUL-hash_detects_any_change, RUL-hash_is_the_dependency_check
+:realises: RUL-hash_detects_any_change, RUL-hash_is_the_dependency_check
+:uses: DEF-hash
 
 A hash SHALL be a SHA-256 over the exact bytes of a numbered JSON record or the configuration.
 :::
@@ -819,7 +829,8 @@ A hash SHALL be a SHA-256 over the exact bytes of a numbered JSON record or the 
 :::{bld} The loop's commands
 :id: BLD-loop_commands
 :status: ruled
-:realises: DEF-operator_loop, DEF-finalize, RUL-finalize_explicit, RUL-more_dumps_until_merge
+:realises: RUL-finalize_explicit, RUL-more_dumps_until_merge
+:uses: DEF-operator_loop, DEF-finalize
 
 The loop SHALL run as: `prep plan`, `dry-run`, `execute`; the sort, by hand; the prep commands again; `geotag plan`, the
 decision editor (`edit`) for what it asks, and `geotag plan` again until `photos-24-executable-plan.json` is ready;
@@ -1627,7 +1638,7 @@ existing folder neither inside the workspace nor holding it.
 :::{bld} Where geotag checks the decisions
 :id: BLD-geotag_checks_decisions
 :status: ruled
-:realises: RUL-checked_shapes, RUL-checked_positions_and_times, RUL-checked_timezones, RUL-invalid_value_stops, RUL-invalid_value_located, RUL-invalid_decision_kept, RUL-invalid_value_never_repaired, RUL-checked_every_run, RUL-unknown_decision_field_refused, RUL-checked_decision_structure, RUL-checked_clock_offsets, RUL-invalid_decision_reported
+:realises: RUL-checked_shapes, RUL-checked_positions, RUL-checked_timezones, RUL-invalid_value_stops, RUL-invalid_value_located, RUL-invalid_decision_kept, RUL-invalid_value_never_repaired, RUL-checked_every_run, RUL-unknown_decision_field_refused, RUL-checked_decision_structure, RUL-checked_clock_offsets, RUL-invalid_decision_reported
 
 Geotag SHALL check the decisions in `photos-21`, `photos-22` and `photos-23`, and the content acceptances of
 `photos-25` (`fingerprint_mismatches[*].user_decision`), as it reads them — those of `photos-22` and `photos-23` that a
@@ -1753,7 +1764,7 @@ Merge SHALL record a placement that raised as blocked, its photo left in photos 
 :::{bld} The record of the workspace's state
 :id: BLD-workspace_record
 :status: ruled
-:realises: RUL-execution_records_state, RUL-planning_leaves_record, RUL-check_covers_media_folders, RUL-quarantine_changed_only_by_prune
+:realises: RUL-execution_records_state, RUL-planning_leaves_record, RUL-check_covers_media_folders, RUL-prune_removals_no_difference
 
 The record SHALL be the table `workspace_record` of `photos-00-ingest.db` — each file's `relative_path`, `size`,
 `mtime_ns`, `inode` and `fingerprint` (prep's `file_cache.content_hash` where that row still has the file's size and
