@@ -1,9 +1,9 @@
 # Merge — why
 
 **Not normative.** Each item here is the reasoning behind the [intent](../intent/merge.md) or [build](../build/merge.md)
-items it `justifies`, under the same section numbers. Where the two differ, the intent wins and this is stale.
+items it `justifies`. Where the two differ, the intent wins and this is stale.
 
-## 1. Scope and boundary
+## Scope and boundary
 
 :::{rat} One version on both sides of a comparison
 :id: RAT-one_version_per_comparison
@@ -41,7 +41,7 @@ mapping can settle which photo a value names, and those photos wait in photos by
 cannot prove.
 :::
 
-## 2. Preconditions
+## Preconditions
 
 :::{rat} The workspace may have been touched since geotag
 :id: RAT-touched_since_geotag
@@ -78,7 +78,7 @@ merges that ran.
 :justifies: RUL-image_engine_absent_stops_merge
 
 A place merge finds taken is settled by fingerprinting the file there, and a photo gone from the workspace counts as
-merged only once its place is fingerprinted again. Without ImageMagick no fingerprint can be taken: every collision
+merged only once its place is read again — fingerprinted, where the journal kept no digest of the bytes placed. Without ImageMagick no fingerprint can be taken: every collision
 would block, no photo already moved could be confirmed, and a merge left half done could not be finished. Run so, it
 would turn a merge that could be whole into a partial one; stopped, it changes nothing until the tool is back.
 :::
@@ -118,7 +118,7 @@ the library is not merge's alone — digiKam writes its thumbnails and sidecars 
 (2026-11-16): *"I think a safety margin is needed. Configurable, too, default say 5% on top of by-dest size?"*
 :::
 
-## 4. Destination-to-library mapping
+## Destination-to-library mapping
 
 :::{rat} The destination tree is the library's organisation
 :id: RAT-destination_tree_is_the_library
@@ -134,7 +134,7 @@ make differently. Kept the same, a photo's place in the library is the place the
 every run, which is what lets an interrupted merge find its own work.
 :::
 
-## 5. Idempotency, resume, and non-destructiveness
+## Idempotency, resume, and non-destructiveness
 
 :::{rat} A partial merge is never a dead end
 :id: RAT-partial_merge_no_dead_end
@@ -160,8 +160,8 @@ The journal is written after a move, so a crash or a Ctrl-C can leave a photo in
 the library is the user's, so a photo a journal entry vouches for may since have been moved or replaced there. Either
 way the journal and the library disagree, and only the library says where the photo is. Trusting the journal would
 block forever a photo safely placed, or seal a workspace whose merge log names a library file that no longer holds the
-photo — a record the user would rely on to find it. Fingerprinting the place again settles it, and costs a read only on
-a resume.
+photo — a record the user would rely on to find it. Reading the place again settles it — by the digest of the bytes merge placed
+there, where the journal kept one, else by its fingerprint — and costs a read only on a resume.
 :::
 
 :::{rat} A placed file is known by its bytes, which no ImageMagick reads differently
@@ -218,7 +218,7 @@ The seal says the workspace's photos are in the library it names. A photo placed
 :::
 
 
-## 6. User-visible outputs and the merge summary
+## User-visible outputs and the merge summary
 
 :::{rat} The run's end decides what to do next
 :id: RAT-merge_outcome_decides_next

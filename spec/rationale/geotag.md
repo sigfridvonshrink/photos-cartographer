@@ -1,9 +1,9 @@
 # Geotag — why
 
 **Not normative.** Each item here is the reasoning behind the [intent](../intent/geotag.md) or [build](../build/geotag.md)
-items it `justifies`, under the same section numbers. Where the two differ, the intent wins and this is stale.
+items it `justifies`. Where the two differ, the intent wins and this is stale.
 
-## 1. Core workflow rule
+## Core workflow rule
 
 :::{rat} A position is looked up by time
 :id: RAT-position_follows_time
@@ -76,7 +76,7 @@ reading is never traded for a filing. Since the written time looks like any othe
 the date fallback, and the date as given, so a "1985-01-01" can be told from a photo taken that night.
 :::
 
-## 3. Linear dependency inclusion
+## Linear dependency inclusion
 
 :::{rat} A chain is only as fresh as its weakest link
 :id: RAT-no_chain_of_vouching
@@ -91,7 +91,7 @@ later one was written — would pass unseen whenever the later record happened n
 itself, every input is checked against what it is now, at the one moment that matters: just before anything changes.
 :::
 
-## 4. Geotag scope
+## Geotag scope
 
 :::{rat} Only what the user sorted is ready
 :id: RAT-only_sorted_is_ready
@@ -173,7 +173,7 @@ make, the corrections would rest on values neither version would now take for th
 first, and the plan then rests on one reading throughout.
 :::
 
-## 5. JSON artifact rule
+## JSON artifact rule
 
 :::{rat} A missing record should mean one thing
 :id: RAT-record_means_stage_reached
@@ -189,7 +189,7 @@ only mean the stage was not reached. Were an all-automatic stage to write nothin
 to act on when there was none. With no record written, the run's output is the one place left to say what stopped it.
 :::
 
-## 6. Human decision field rule
+## Human decision field rule
 
 :::{rat} The camera's own GPS is evidence; the user decides how much
 :id: RAT-anchor_evidence_trusted_as_configured
@@ -403,7 +403,7 @@ A user accepts a proposal by looking at it: this offset, for this camera, on thi
 :::
 
 
-## 7. Per-destination structure
+## Per-destination structure
 
 :::{rat} A clock changed during the day shows only on the GPS
 :id: RAT-clock_change_seen_by_gps
@@ -430,7 +430,7 @@ says which part took it, and no one camera time divides such photos from each ot
 overlap — so each is asked its part, of the user, who knows when the clock was set.
 :::
 
-:::{rat} One place's clock evidence says nothing of another's
+:::{rat} A clock's error does not follow the folders
 :id: RAT-no_borrowed_offsets
 :status: ruled
 :forced: yes
@@ -439,9 +439,11 @@ overlap — so each is asked its part, of the user, who knows when the clock was
 
 Folders nest by geography, which is why a timezone or a fallback position can pass down them; a clock's error does not
 follow geography. A museum visited inside a city trip may be another day, the camera reset in between; a parent
-folder's offset averaged from its children would be right for none of them. An offset borrowed would look measured
-while it is not — so each is proposed from the camera's own positions that day, or from the timezone, and labelled as
-such.
+folder's offset averaged from its children would be right for none of them. An offset borrowed down the folders would look
+measured while it is not — so none comes down them or is averaged across them: each is proposed from what the camera's
+own photos show — its positions that day, there or in another destination
+({need}`RAT-clock_is_the_cameras_for_the_day`), the times its fixes and its photos record — or from the timezone, and
+labelled as what it is.
 :::
 
 :::{rat} A container is a place to put defaults
@@ -538,7 +540,7 @@ ruling: *"proposal counts as automatic today - keep it automatic"*.
 :::
 
 
-## 8. Reading the tracks
+## Reading the tracks
 
 :::{rat} A track is evidence only where it can be read
 :id: RAT-track_points_read_exactly
@@ -704,7 +706,7 @@ drawn across it is invented.
 :::
 
 
-## 9. Camera groups
+## Camera groups
 
 :::{rat} The class decides how a photo's time is found
 :id: RAT-class_decides_time_model
@@ -770,7 +772,7 @@ change.
 :::
 
 
-## 10. Destination civil timezone
+## Destination civil timezone
 
 :::{rat} The nearest place says the most
 :id: RAT-nearest_timezone
@@ -843,7 +845,7 @@ its time and its name, now hidden under the right folder.
 :::
 
 
-## 11. Clock offsets from the camera's own GPS
+## Clock offsets from the camera's own GPS
 
 :::{rat} The same place on another trip is not evidence
 :id: RAT-clock_error_window
@@ -942,7 +944,7 @@ supported.
 :::
 
 
-## 13. Resolved UTC
+## Resolved UTC
 
 :::{rat} A phone says its own offset
 :id: RAT-phone_records_its_offset
@@ -1048,7 +1050,7 @@ A local time that happened twice, or never, has two readings an hour apart, and 
 :::
 
 
-## 14. The GPS-drift check
+## The GPS-drift check
 
 :::{rat} A wrong offset moves a whole day along the track
 :id: RAT-drift_invisible
@@ -1093,7 +1095,7 @@ of what they saw, for them to replace.
 :::
 
 
-## 15. Every photo's own values
+## Every photo's own values
 
 :::{rat} A new decoder does not make a new photo
 :id: RAT-same_photo_new_fingerprint
@@ -1113,7 +1115,7 @@ log may have changed since the plan was made, so execution asks the same of it, 
 :::
 
 
-## 16. Placing each photo
+## Placing each photo
 
 :::{rat} The camera measured where it was
 :id: RAT-own_position_best
@@ -1313,7 +1315,7 @@ where the folder says it was not. Asked again, it costs one answer.
 :::
 
 
-## 17. The corrected time
+## The corrected time
 
 :::{rat} Only a time geotag wrote is marked as corrected
 :id: RAT-only_corrected_time_marked
@@ -1354,7 +1356,7 @@ beside a time stay as they are: a clock offset is a whole number of seconds, so 
 :::
 
 
-## 18. Renames
+## Renames
 
 :::{rat} Geotag finishes the spelling prep could not
 :id: RAT-geotag_finishes_extension_spelling
@@ -1398,7 +1400,7 @@ The true order is kept where it can be read: in the metadata, each time with its
 :::
 
 
-## 19. The executable plan
+## The executable plan
 
 :::{rat} Half a position is a wrong one
 :id: RAT-position_whole
@@ -1426,7 +1428,7 @@ question already settled, or leave the later photos an offset nobody checked.
 :::
 
 
-## 20. Execution
+## Execution
 
 :::{rat} A crash leaves work, not damage
 :id: RAT-execution_resumable
@@ -1564,7 +1566,7 @@ finalize and the next run read. An interrupted run reached no end to record: its
 finishes it writes the summary.
 :::
 
-## 21. Finalize
+## Finalize
 
 :::{rat} The package records what was done
 :id: RAT-package_records_what_was_done

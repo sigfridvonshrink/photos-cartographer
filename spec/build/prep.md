@@ -3,7 +3,7 @@
 How this build meets [prep's intent](../intent/prep.md): the files, names, tools and steps. Each item `realises` the
 intent it implements. *Why* a choice was made is in [the rationale](../rationale/prep.md).
 
-## 1. What prep does, and what it leaves alone
+## What prep does, and what it leaves alone
 
 :::{bld} Prep's operations hold no metadata write
 :id: BLD-prep_operation_kinds
@@ -26,7 +26,7 @@ reads the files there for their fingerprint and metadata only ({need}`RUL-move_r
 {need}`RUL-copy_kept_by_folder`).
 :::
 
-## 2. The workspace's first run, and the strays
+## The workspace's first run, and the strays
 
 :::{bld} The mark is `photos-00-workspace-guard`, written last
 :id: BLD-workspace_guard
@@ -117,7 +117,7 @@ Prep SHALL seed the configuration at the start of its run, before any fingerprin
 fingerprint, the handoff's recorded hash among them, is of the file as it stands in the workspace.
 :::
 
-## 3. The plan, validated, then carried out
+## The plan, validated, then carried out
 
 :::{bld} Prep's execute replays the saved plan
 :id: BLD-prep_execute_replays
@@ -137,7 +137,7 @@ Prep's execute SHALL append each operation's outcome to `journal-<plan-id>.json`
 journal after each by replacing it whole — written to a temporary file in its folder, then renamed over it.
 :::
 
-## 4. What each of prep's records depends on
+## What each of prep's records depends on
 
 :::{bld} Prep's dependencies, in full
 :id: BLD-prep_dependencies
@@ -190,7 +190,7 @@ Prep's stop on an already-prepped workspace SHALL not apply while the log's hash
 so that prep's next execute rewrites both.
 :::
 
-## 5. What prep refuses to work on
+## What prep refuses to work on
 
 :::{bld} The sidecars prep refuses
 :id: BLD-sidecar_extensions
@@ -220,7 +220,7 @@ blocker it finds, the plan still saved — is not empty.
 :::
 
 
-## 6. The prep pipeline
+## The prep pipeline
 
 :::{bld} The stages run in a fixed order
 :id: BLD-prep_stage_order
@@ -250,8 +250,8 @@ Prep's organization stage SHALL take each file in `2-missing-metadata` whose met
 inbox's files to be filed — one `move_no_clobber` of reason `Chronological Organization` into its day folder of
 `5-photos-by-date` or `4-videos-by-date`, its name allocated against the names already planned — after the duplicates
 stage has set aside any copy of it, and leave one with no recorded time where and as it lies. A JPEG set aside beside
-its RAW in `3-redundant-jpgs` keeps its name when the RAW is so filed: the two cannot be paired there (the pairing
-rests on their sharing a dump folder), and the set-aside copy is never used.
+its RAW in `3-redundant-jpgs` keeps its name when the RAW is so filed: prep renames no set-aside JPEG, which geotag names with its RAW, found by the
+fingerprint prep's log records for the pair ({need}`BLD-set_aside_pair_recorded`).
 :::
 
 :::{bld} A filed file's extension is lowercased in two renames
@@ -322,7 +322,7 @@ that no move explains and whose path no planned move fills again — that row is
 :::
 
 
-## 7. Naming conventions
+## Naming conventions
 
 :::{bld} A day's folder is named `YYYY-MM-DD`
 :id: BLD-day_folder_name
@@ -333,7 +333,7 @@ A day's folder SHALL be named `YYYY-MM-DD` from its recorded time's date, whatev
 :::
 
 
-## 8. Content fingerprinting and cache reuse
+## Content fingerprinting and cache reuse
 
 :::{bld} The database's version row
 :id: BLD-cache_versions
@@ -356,7 +356,7 @@ when its strategy does. The handoff carries the method's version (`depends_on.ca
 :::
 
 
-## 9. Files the user moves, and the plan memo
+## Files the user moves, and the plan memo
 
 :::{bld} The move is matched on size, time and name
 :id: BLD-move_match
@@ -430,7 +430,7 @@ read or write it warns and goes on.
 :::
 
 
-## 10. Duplicates and failures beside photos by destination
+## Duplicates and failures beside photos by destination
 
 :::{bld} A failed fingerprint is recorded as failed
 :id: BLD-failed_fingerprint
@@ -465,7 +465,7 @@ and each destination folder's duplicates hold the duplicates alone, the others l
 :::
 
 
-## 11. The metadata prep keeps for geotag
+## The metadata prep keeps for geotag
 
 :::{bld} Metadata is read by exiftool, by group
 :id: BLD-metadata_extraction
@@ -514,7 +514,7 @@ missing-GPS and `GPSProcessingMethod` counts, cache freshness, and the duplicate
 :::
 
 
-## 12. Plan, dry run, execution
+## Plan, dry run, execution
 
 :::{bld} What prep's plan records
 :id: BLD-prep_plan_contents
@@ -539,7 +539,7 @@ empty, journals a folder found not empty or not removable as skipped, and warns 
 :::
 
 
-## 13. The quarantine
+## The quarantine
 
 :::{bld} The quarantine's layout and manifest
 :id: BLD-quarantine_layout
@@ -576,7 +576,7 @@ plan's summary carries the quarantine's footprint. An age below one day is refus
 :::
 
 
-## 14. The handoff and prep's log
+## The handoff and prep's log
 
 :::{bld} What the handoff holds
 :id: BLD-handoff_content
@@ -651,7 +651,7 @@ into the new log unchanged, `prep_path` included.
 :::
 
 
-## 15. Concurrency, determinism, and what a run shows
+## Concurrency, determinism, and what a run shows
 
 :::{bld} The tools' workers
 :id: BLD-tool_workers

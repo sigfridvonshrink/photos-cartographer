@@ -4,7 +4,7 @@ How this build meets [merge's intent](../intent/merge.md) and the shared contrac
 tools and steps. Each item `realises` the intent it implements. *Why* a choice was made is in
 [the rationale](../rationale/merge.md).
 
-## 1. Scope and boundary
+## Scope and boundary
 
 :::{bld} Merge checks prep's fingerprints against the handoff's ImageMagick
 :id: BLD-merge_engine_recheck
@@ -46,7 +46,7 @@ mapping's `was` and `now`, its by-dest path as `from` and its `library_path` —
 the log copied forward, are left keyed by the old value, and none is rewritten.
 :::
 
-## 2. Preconditions
+## Preconditions
 
 :::{bld} Merge's preflight
 :id: BLD-merge_preflight
@@ -98,7 +98,7 @@ with exit status 2, the summary written `rejected` with each shortfall among its
 the plan calls it once written, warning of each.
 :::
 
-## 3. Configuration and validation
+## Configuration and validation
 
 :::{bld} `init-library`'s four cases
 :id: BLD-init_library_cases
@@ -118,7 +118,7 @@ with exit status 2. A configuration that cannot be read or fails its checks, or 
 a file, stops it with exit status 2, nothing marked and nothing written.
 :::
 
-## 4. Destination-to-library mapping
+## Destination-to-library mapping
 
 :::{bld} A photo's target in the library
 :id: BLD-merge_target
@@ -131,7 +131,7 @@ final name: the target of `photos-24`'s `rename_no_clobber` whose `content_finge
 its own name where geotag renamed nothing; the entries sorted by their path in the workspace.
 :::
 
-## 5. Idempotency, resume, and non-destructiveness
+## Idempotency, resume, and non-destructiveness
 
 :::{bld} A fresh plan carries forward from the earlier plans
 :id: BLD-merge_carry_forward
@@ -173,7 +173,7 @@ present, is not an object or `blockers` not a list; and a journal whose `operati
 is not an object.
 :::
 
-## 7. Plan / dry-run / execute lifecycle
+## Plan / dry-run / execute lifecycle
 
 :::{bld} Merge's plan
 :id: BLD-merge_plan

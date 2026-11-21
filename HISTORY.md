@@ -56,6 +56,11 @@ database a record, not a cache. A *true time*, a *folder fallback* and a *blocke
 back while it places the rest, against a blocker that stops a command — are defined. Three rules and a rationale took
 the new words into their ids.
 
+Reasons that had fallen behind their rules were brought up to them: why no offset comes down the folders, now that a
+camera's day is shared across destinations; when a file comes in already carrying the untimed mark; that merge does
+remove one copy unasked, the workspace's, of a photo the library holds; that a library place is confirmed by the
+bytes merge placed. The headings lost their numbers, which the three levels had never shared.
+
 ## 2026-11-17 — a leaner corpus measured, and dropped (BACKLOG 57)
 
 The corpus is about three quarters the size of the code by words, and the owner asked whether that was overdoing it.

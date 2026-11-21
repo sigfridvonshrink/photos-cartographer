@@ -1,9 +1,9 @@
 # Prep — why
 
 **Not normative.** Each item here is the reasoning behind the [intent](../intent/prep.md) or [build](../build/prep.md)
-items it `justifies`, under the same section numbers. Where the two differ, the intent wins and this is stale.
+items it `justifies`. Where the two differ, the intent wins and this is stale.
 
-## 1. What prep does, and what it leaves alone
+## What prep does, and what it leaves alone
 
 :::{rat} Prep has no evidence for a time or a place
 :id: RAT-prep_has_no_evidence
@@ -41,7 +41,7 @@ so they are neither lost nor scattered, not because the pipeline means to correc
 own, out of the sort.
 :::
 
-## 2. The workspace's first run, and the strays
+## The workspace's first run, and the strays
 
 :::{rat} The first gesture bootstraps the workspace
 :id: RAT-bootstrap_once
@@ -106,7 +106,7 @@ journalled, so the plan names it, where it was and where it goes, and that plan 
 is named nowhere it would be taken for a photo.
 :::
 
-## 5. What prep refuses to work on
+## What prep refuses to work on
 
 :::{rat} Photos and videos go separate ways
 :id: RAT-bands_never_mix
@@ -170,7 +170,7 @@ choice — to list the extension and plan again — with the user; the warning b
 :::
 
 
-## 6. The prep pipeline
+## The prep pipeline
 
 :::{rat} A dump's folders say where it came from
 :id: RAT-dump_folders_kept
@@ -356,7 +356,7 @@ each execution keeps reuse safe.
 :::
 
 
-## 8. Content fingerprinting and cache reuse
+## Content fingerprinting and cache reuse
 
 :::{rat} Size and time are the cheap sign of change
 :id: RAT-size_time_sign_change
@@ -409,7 +409,7 @@ workspace is the remedy.
 :::
 
 
-## 9. Files the user moves, and the plan memo
+## Files the user moves, and the plan memo
 
 :::{rat} Sorting costs no reading
 :id: RAT-sort_costs_no_reading
@@ -496,7 +496,7 @@ broken, prep plans the same.
 :::
 
 
-## 10. Duplicates and failures beside photos by destination
+## Duplicates and failures beside photos by destination
 
 :::{rat} A failure says nothing of the content
 :id: RAT-failure_says_nothing
@@ -562,7 +562,7 @@ dedup against what they dumped would find it wrong. Counted apart by why each we
 :::
 
 
-## 11. The metadata prep keeps for geotag
+## The metadata prep keeps for geotag
 
 :::{rat} One read serves both phases
 :id: RAT-one_read_serves_both
@@ -615,7 +615,7 @@ and infers nothing: inference is geotag's, made with evidence prep lacks.
 :::
 
 
-## 12. Plan, dry run, execution
+## Plan, dry run, execution
 
 :::{rat} The plan is of the workspace it saw
 :id: RAT-plan_saw_the_workspace
@@ -689,7 +689,7 @@ plan made for a workspace that no longer stands. The journal records what happen
 :::
 
 
-## 13. The quarantine
+## The quarantine
 
 :::{rat} The reason is written down first
 :id: RAT-reason_first
@@ -778,7 +778,7 @@ what `--all` exists to say out loud. An age is counted in whole days, so one und
 :::
 
 
-## 14. The handoff and prep's log
+## The handoff and prep's log
 
 :::{rat} A record speaks for a finished run
 :id: RAT-record_of_a_finished_run
@@ -883,7 +883,7 @@ retaken; a different file at the path is a new photo, and the removed one's entr
 :::
 
 
-## 15. Concurrency, determinism, and what a run shows
+## Concurrency, determinism, and what a run shows
 
 :::{rat} Speed is the machine's, the plan is the workspace's
 :id: RAT-speed_is_the_machines
@@ -922,7 +922,7 @@ not match, a file touched — are invisible until counted. Counting them by reas
 and that an unexpected cause is one.
 :::
 
-## 16. What prep reports
+## What prep reports
 
 :::{rat} The reviewer sees what was touched
 :id: RAT-reviewer_sees_what_was_touched

@@ -4,7 +4,7 @@ How this build meets [geotag's intent](../intent/geotag.md) and the shared contr
 tools and steps. Each item `realises` the intent it implements. *Why* a choice was made is in
 [the rationale](../rationale/geotag.md).
 
-## 1. Core workflow rule
+## Core workflow rule
 
 :::{bld} Geotag's planning stages, in order
 :id: BLD-geotag_stage_order
@@ -55,7 +55,7 @@ never given one. The values pinned at a photo's first write hold no time where i
 it untimed again ({need}`BLD-decided_from_own_values`).
 :::
 
-## 2. Artifact dependencies
+## Artifact dependencies
 
 :::{bld} Geotag's dependencies, recorded and checked
 :id: BLD-geotag_dependencies
@@ -84,7 +84,7 @@ version's — naming how many records and one of them, with prep's plan and exec
 execute compares the plan's `metadata_field_set_version` likewise ({need}`BLD-geotag_dependencies`).
 :::
 
-## 4. Geotag scope
+## Geotag scope
 
 :::{bld} Geotag's file model
 :id: BLD-geotag_file_model
@@ -97,7 +97,7 @@ the renames of the JPEGs set aside beside them ({need}`BLD-set_aside_renamed_wit
 {need}`BLD-set_aside_jpeg_catches_up`).
 :::
 
-## 6. Human decision field rule
+## Human decision field rule
 
 :::{bld} The auto-apply settings
 :id: BLD-auto_apply_settings
@@ -122,7 +122,7 @@ An offset cell's `user_decision` SHALL hold `accept_proposal`, `accepted_offset_
 :::
 
 
-## 7. Per-destination structure
+## Per-destination structure
 
 :::{bld} Geotag's destinations
 :id: BLD-geotag_destinations
@@ -225,7 +225,7 @@ destination's path under `6-photos-by-dest`, every decision of a destination ins
 :::
 
 
-## 8. Reading the tracks
+## Reading the tracks
 
 :::{bld} How track points are read
 :id: BLD-track_points
@@ -298,7 +298,7 @@ The tracks' window SHALL be the union of what each reader of the tracks reaches,
 :::
 
 
-## 9. Camera groups
+## Camera groups
 
 :::{bld} The classification snippet
 :id: BLD-unknown_group_snippet
@@ -355,7 +355,7 @@ its GPS — its own, the same day's elsewhere, or the day next to it's — holds
 :::
 
 
-## 10. Destination civil timezone
+## Destination civil timezone
 
 :::{bld} The timezone cell
 :id: BLD-timezone_cell
@@ -453,7 +453,7 @@ a refusal, kept as given.
 :::
 
 
-## 11. Clock offsets from the camera's own GPS
+## Clock offsets from the camera's own GPS
 
 :::{bld} How anchors are matched and agreed
 :id: BLD-anchor_matching
@@ -542,7 +542,7 @@ cell keeps its own key and decision.
 Over the cells of one camera group naming the same `day` in different destinations, `build_time_decisions` SHALL take as donors those whose effective source is `gpx_anchor_auto`, `gpx_anchor_accepted` or `gpx_anchor_chosen` — the last an offset the user wrote that a group of the camera's own GPS anchors supports; a `gpx_anchor_accepted` donor, its proposal accepted as it stood, is not written by hand, and is held as a `gpx_anchor_auto` one is. Donors not written by hand whose offsets differ by more than `clock_offset_same_day_max_difference_seconds`, or of which one differs by more than it from a `gpx_anchor_chosen` donor, are in conflict: those, with each `gpx_anchor_chosen` donor that differs by more than it from one of them, list the others in `conflicts_with` (`destination`, `bucket`, `offset_seconds`, and `chosen`: whether that one is `gpx_anchor_chosen`); each not written by hand loses its effective offset and asks, each `gpx_anchor_chosen` one keeps its own and does not ask; and nothing is shared. Two `gpx_anchor_chosen` donors are not held against each other. Otherwise a cell whose own proposal would be `recorded_offset`, `timezone_naive` or `manual_required` is proposed the donor's offset — a `gpx_anchor_auto` donor first, then by path — as `proposal_source: "same_day_elsewhere"` with `shared_from` (`destination`, `bucket`): taking effect as `same_day_auto` where the donor's source is `gpx_anchor_auto`, else once accepted, naming the offset, as `same_day_accepted`. An offset the cell keeps from its own earlier GPS comes first. Neither source is followed by a drift check.
 :::
 
-## 12. The decision records
+## The decision records
 
 :::{bld} What every decision record carries
 :id: BLD-decision_record_envelope
@@ -562,7 +562,7 @@ and `handoff`, the handoff's content fingerprint ({need}`BLD-handoff_content_fin
 :::
 
 
-## 13. Resolved UTC
+## Resolved UTC
 
 :::{bld} How each photo's true time is resolved
 :id: BLD-resolved_utc
@@ -635,7 +635,7 @@ track decided anything.
 :::
 
 
-## 14. The GPS-drift check
+## The GPS-drift check
 
 :::{bld} The drift check
 :id: BLD-drift_validation
@@ -654,7 +654,7 @@ A drift cell's `proposal` SHALL hold `tracks`, each track file its `track_segmen
 :::
 
 
-## 15. Every photo's own values
+## Every photo's own values
 
 :::{bld} The pinned values follow a retaken fingerprint
 :id: BLD-original_values_follow_fingerprint
@@ -672,7 +672,7 @@ status 2.
 :::
 
 
-## 16. Placing each photo
+## Placing each photo
 
 :::{bld} The placement order
 :id: BLD-placement_order
@@ -842,7 +842,7 @@ A position write of photos-24 whose placement has `lower_tracks` SHALL carry the
 :::
 
 
-## 18. Renames
+## Renames
 
 :::{bld} How renames are planned
 :id: BLD-rename_planning
@@ -922,7 +922,7 @@ its new one — for the next run to complete.
 :::
 
 
-## 19. The executable plan
+## The executable plan
 
 :::{bld} The executable plan
 :id: BLD-executable_plan
@@ -976,7 +976,7 @@ decision and its drift confirmation, the effective values derived again each run
 :::
 
 
-## 20. Execution
+## Execution
 
 :::{bld} How execution applies the plan
 :id: BLD-geotag_execution
@@ -1111,7 +1111,7 @@ photo the plan writes, which is left to the writer ({need}`BLD-loop_gates`).
 :::
 
 
-## 21. Finalize
+## Finalize
 
 :::{bld} Summaries and packages set aside under `-NNN`
 :id: BLD-geotag_records_versioned

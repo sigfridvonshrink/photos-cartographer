@@ -4,7 +4,7 @@ What the last phase, {need}`DEF-merge`, guarantees, beyond what [the shared cont
 to — most of merge's rules are there, in its section on the library and the seal. *Why* each holds is in
 [the rationale](../rationale/merge.md); *how this build meets it*, in [the build](../build/merge.md).
 
-## 1. Scope and boundary
+## Scope and boundary
 
 :::{rul} Merge checks prep's fingerprints under another image engine
 :id: RUL-merge_rechecks_under_new_engine
@@ -58,7 +58,7 @@ does not merge — and a photo whose unchanged value such a photo's new value eq
 destination, unmerged.
 :::
 
-## 2. Preconditions
+## Preconditions
 
 :::{rul} Merge checks geotag's gates again
 :id: RUL-merge_rechecks_gates
@@ -245,7 +245,7 @@ The report of a library short of room SHALL name the space the photos need and t
 Merge's plan SHALL warn of a library its execution would find short of room, the plan written all the same.
 :::
 
-## 4. Destination-to-library mapping
+## Destination-to-library mapping
 
 :::{rul} The library mirrors the destination tree
 :id: RUL-library_mirrors_destinations
@@ -260,7 +260,7 @@ as the user built them, its name the one geotag gave it — the name an incoming
 change.
 :::
 
-## 5. Idempotency, resume, and non-destructiveness
+## Idempotency, resume, and non-destructiveness
 
 :::{rul} A fresh plan is allowed at any time before the seal
 :id: RUL-merge_replan_any_time
@@ -393,7 +393,7 @@ Merge SHALL stop, naming the file and changing nothing, on a plan or journal of 
 taking it for an empty one.
 :::
 
-## 6. User-visible outputs and the merge summary
+## User-visible outputs and the merge summary
 
 :::{rul} Merge records how its run ended
 :id: RUL-merge_outcome_recorded

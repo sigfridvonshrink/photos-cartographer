@@ -143,7 +143,9 @@ No-clobber **re-verified atomically at the moment of each write**, not just at p
 :forced: yes
 :follows_from: RAT-non_destructive_core
 
-Duplicates are **quarantined**, never removed; pruning is an explicit, separate act.
+Duplicates are **quarantined**, never removed; pruning is an explicit, separate act. The one copy the tool removes
+unasked is the workspace's own, once merge finds the library already holding the photo itself, byte for byte: nothing
+goes with it.
 :::
 
 :::{rat} A decision must be withdrawable

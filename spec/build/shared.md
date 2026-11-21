@@ -3,7 +3,7 @@
 How this build meets [the shared intent](../intent/shared.md): the files, names, tools and steps. Each item `realises`
 the intent it implements. *Why* a choice was made is in [the rationale](../rationale/shared.md).
 
-## 0. The pipeline
+## The pipeline
 
 :::{bld} The phases are three commands
 :id: BLD-phase_commands
@@ -32,7 +32,7 @@ nothing to do ends 0. `merge init-library` ends 0 when it blesses or finds a lib
 and 2 when it refuses, and a phase named with no command prints what it does and ends 0.
 :::
 
-## 1. One run at a time
+## One run at a time
 
 :::{bld} The workspace lock
 :id: BLD-workspace_lock
@@ -90,7 +90,7 @@ Each phase's `plan`, `dry-run` and `execute` SHALL run with the lock taken at st
 or scoping it on its own ({need}`RUL-lock_through_the_run`).
 :::
 
-## 2. A snapshot before changing, optionally
+## A snapshot before changing, optionally
 
 :::{bld} The snapshot is a ZFS snapshot, configured by the `zfs` block
 :id: BLD-snapshot_is_zfs
@@ -131,7 +131,7 @@ The three phases SHALL take their snapshots through one mechanism — prep's exe
 taking it under the workspace lock, after revalidating its plan and before its first operation.
 :::
 
-## 3. One configuration, kept in the workspace
+## One configuration, kept in the workspace
 
 :::{bld} The configuration is `photos-00-config.json`, in the control directory
 :id: BLD-config_file
@@ -269,7 +269,7 @@ through the host's, saying that prep names files from a time without a zone and
 geotag from one with a zone; every phase reads the configuration through it before anything else.
 :::
 
-## 4. The control records, apart from the media
+## The control records, apart from the media
 
 :::{bld} The control directory's contents
 :id: BLD-control_directory_contents
@@ -483,7 +483,7 @@ again before its first operation, so a folder lost since the plan is not made ag
 is named in its blocker, and an empty inbox passes.
 :::
 
-## 5. Camera groups, derived once
+## Camera groups, derived once
 
 :::{bld} `camera_group_key` and its version
 :id: BLD-camera_group_key
@@ -528,7 +528,7 @@ A group SHALL be known when its key is listed under `camera_time_and_timezone_po
 ({need}`BLD-group_in_both_lists`).
 :::
 
-## 6. One filename format
+## One filename format
 
 :::{bld} `filename_timestamp_format`
 :id: BLD-filename_timestamp_format
@@ -589,7 +589,7 @@ The handoff SHALL record the format prep named the files in as `filename_timesta
 configured format at plan once a file outside the inbox carries a timestamp name, and geotag and merge at their start.
 :::
 
-## 7. The tracks, kept outside the managed folders
+## The tracks, kept outside the managed folders
 
 :::{bld} `gpx_root`
 :id: BLD-gpx_root
@@ -646,7 +646,7 @@ of their own, the last two with a warning. It is recorded as `gpx_fingerprint` i
 and `photos-24-executable-plan.json`, and checked before each is used.
 :::
 
-## 8. Nothing used once what it came from has changed
+## Nothing used once what it came from has changed
 
 :::{bld} Each phase's dependencies, in full
 :id: BLD-phase_dependencies
@@ -676,7 +676,7 @@ A photo's fingerprint SHALL be ImageMagick's signature — a SHA-256 of the norm
 A hash SHALL be a SHA-256 over the exact bytes of a numbered JSON record or the configuration.
 :::
 
-## 9. One loop across the phases
+## One loop across the phases
 
 :::{bld} The loop's commands
 :id: BLD-loop_commands
@@ -897,7 +897,7 @@ final path, its size and modification time, and as `handoff_content_fingerprint`
 differs from it, when the handoff's content fingerprint is no longer the one it holds, or when the record is missing.
 :::
 
-## 10. Change only what needs changing
+## Change only what needs changing
 
 :::{bld} What each phase reuses
 :id: BLD-idempotency
@@ -938,7 +938,7 @@ file already in place, geotag plans no write a file already holds and recomputes
 library as already present ({need}`RUL-collision_same_content`).
 :::
 
-## 11. Nothing changes that the user did not write down
+## Nothing changes that the user did not write down
 
 :::{bld} Where the decisions live
 :id: BLD-decision_records
@@ -975,7 +975,7 @@ again, its own pinned position written back where it has one (a `metadata_gps_wr
 geotag's position cleared; an automatic position is recomputed, never rolled back.
 :::
 
-## 12. The record of what was done, kept beyond the workspace
+## The record of what was done, kept beyond the workspace
 
 :::{bld} The per-phase logs
 :id: BLD-phase_logs
@@ -1194,7 +1194,7 @@ for the image ({need}`RUL-image_untouched_by_failed_run`), once the image is cap
 package fails after it leaves the new image in place, for the next success to capture again.
 :::
 
-## 13. Merge: the library kept, the workspace sealed
+## Merge: the library kept, the workspace sealed
 
 :::{bld} Where merge looks in the library
 :id: BLD-merge_collision
@@ -1410,7 +1410,7 @@ from outside any workspace, it writes nothing in the workspace and does not chec
 `prune-quarantine` SHALL not be refused by the seal.
 :::
 
-## 14. Every value the user writes is checked
+## Every value the user writes is checked
 
 :::{bld} Where the configuration is checked
 :id: BLD-authored_checks_by_phase
@@ -1441,7 +1441,7 @@ for its block or cell, a review item's `manual_lat` and `manual_lon` among them 
 blocker per field, naming it.
 :::
 
-## 15. Nothing overwritten, nothing left half-done
+## Nothing overwritten, nothing left half-done
 
 :::{bld} One rename that refuses a taken name
 :id: BLD-no_clobber_rename
@@ -1547,7 +1547,7 @@ Merge SHALL record a placement that raised as blocked, its photo left in photos 
 :::
 
 
-## 17. The workspace as the last execution left it
+## The workspace as the last execution left it
 
 :::{bld} The record of the workspace's state
 :id: BLD-workspace_record
@@ -1650,7 +1650,7 @@ to `workspace_changes` of its plan's journal in the same step that records the s
 journal carrying them over. A plan, a dry run and finalize print them.
 :::
 
-## 18. The workspace's filesystem
+## The workspace's filesystem
 
 :::{bld} Each run checks the workspace's devices
 :id: BLD-workspace_one_filesystem
@@ -1693,7 +1693,7 @@ the workspace itself on a first prep run, before the control directory is made; 
 folder in is reported as lacking the making of a file.
 :::
 
-## 19. The decision editor
+## The decision editor
 
 :::{bld} The editor's own lock, held for its session
 :id: BLD-editor_session_lock

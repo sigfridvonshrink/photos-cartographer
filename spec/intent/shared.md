@@ -4,7 +4,7 @@ The facts all three phases — prep, geotag and merge — must agree on. Each it
 that names none binds them all. *Why* each holds is in [the rationale](../rationale/shared.md); *how this build meets
 it*, in [the build](../build/shared.md).
 
-## 0. The pipeline
+## The pipeline
 
 :::{def} The workspace
 :id: DEF-workspace
@@ -139,7 +139,7 @@ A phase's plan that reports a blocker, and a phase's dry run of a plan holding o
 a refusal, never with that of a run that did what it was asked.
 :::
 
-## 1. One run at a time
+## One run at a time
 
 :::{inv} One run at a time
 :id: INV-one_run_at_a_time
@@ -256,7 +256,7 @@ the lock's record says of its owner.
 Merge also takes a lock on the library it writes into, so that two merges into one library — even from two workspaces
 — never overlap; that lock is held besides the workspace's, not instead of it. Its items are with merge's.
 
-## 2. A snapshot before changing, optionally
+## A snapshot before changing, optionally
 
 :::{rul} A snapshot is optional, and nothing rests on it
 :id: RUL-snapshot_optional
@@ -360,7 +360,7 @@ Merge's snapshot SHALL cover the workspace, and the library too where the librar
 Merge SHALL take no snapshot of the library alone.
 :::
 
-## 3. One configuration, kept in the workspace
+## One configuration, kept in the workspace
 
 :::{def} The configuration
 :id: DEF-configuration
@@ -679,7 +679,7 @@ configuration — never as a separate, optional pass.
 No setting of the configuration SHALL be read for more than one purpose.
 :::
 
-## 4. The control records, apart from the media
+## The control records, apart from the media
 
 :::{def} The control records
 :id: DEF-control_records
@@ -1175,7 +1175,7 @@ Each phase SHALL check the workspace's shape at its start — right after the lo
 workspace check ({need}`RUL-workspace_checked_first`), scanning, planning or changing anything.
 :::
 
-## 5. Camera groups, derived once
+## Camera groups, derived once
 
 :::{def} A camera group
 :id: DEF-camera_group
@@ -1251,7 +1251,7 @@ A camera group SHALL be known when the configuration classes it as exactly one o
 clock, and unknown otherwise.
 :::
 
-## 6. One filename format
+## One filename format
 
 :::{def} A recorded time
 :id: DEF-recorded_time
@@ -1501,7 +1501,7 @@ A JPEG set aside beside its RAW that carries that RAW's name, extension aside, S
 Once prep has named a workspace's files in a format, a change to the format SHALL stop every phase.
 :::
 
-## 7. The tracks, kept outside the managed folders
+## The tracks, kept outside the managed folders
 
 :::{def} The tracks
 :id: DEF-tracks
@@ -1577,7 +1577,7 @@ check, the GPS decisions and the executable plan — a digest of the tracks at t
 a change to the tracks there makes those records stale.
 :::
 
-## 8. Nothing used once what it came from has changed
+## Nothing used once what it came from has changed
 
 :::{def} A fingerprint
 :id: DEF-fingerprint
@@ -1740,7 +1740,7 @@ A record that another record or a later run depends on SHALL be written as the s
 same, so that its hash changes only when what it says does.
 :::
 
-## 9. One loop across the phases
+## One loop across the phases
 
 :::{def} The operator loop
 :id: DEF-operator_loop
@@ -2110,7 +2110,7 @@ execution and finalize, and merge.
 A folder SHALL count as a development subfolder whatever the case of its name.
 :::
 
-## 10. Change only what needs changing
+## Change only what needs changing
 
 :::{inv} A run changes only what its inputs require
 :id: INV-change_only_what_needs
@@ -2201,7 +2201,7 @@ fingerprints and names.
 A run over unchanged inputs SHALL never treat earlier work as an error.
 :::
 
-## 11. Nothing changes that the user did not write down
+## Nothing changes that the user did not write down
 
 :::{def} A decision
 :id: DEF-decision
@@ -2340,7 +2340,7 @@ After a decision is withdrawn, a time and a name SHALL be recomputed where the f
 Withdrawing a decision SHALL never move a file out of its destination.
 :::
 
-## 12. The record of what was done, kept beyond the workspace
+## The record of what was done, kept beyond the workspace
 
 :::{def} The transformation log
 :id: DEF-transformation_log
@@ -2811,7 +2811,7 @@ A database image SHALL be a consistent state of the database, never a copy torn 
 An interrupted capture of a database image SHALL leave the earlier image or the new one, whole.
 :::
 
-## 13. Merge: the library kept, the workspace sealed
+## Merge: the library kept, the workspace sealed
 
 :::{def} A sealed workspace
 :id: DEF-sealed_workspace
@@ -3342,7 +3342,7 @@ there and must go to a fresh workspace.
 A command refusing a sealed workspace SHALL leave a new dump it finds there exactly where it is.
 :::
 
-## 14. Every value the user writes is checked
+## Every value the user writes is checked
 
 :::{def} An authored value
 :id: DEF-authored_value
@@ -3645,7 +3645,7 @@ A decision found invalid SHALL be kept exactly as the user wrote it — never er
 A decision found invalid SHALL be reported as needing correction.
 :::
 
-## 15. Nothing overwritten, nothing left half-done
+## Nothing overwritten, nothing left half-done
 
 :::{rul} Every name is checked free as it is written
 :id: RUL-target_free_at_execute
@@ -3812,7 +3812,7 @@ The failure of an operation that cannot complete SHALL be recorded.
 An operation that cannot complete SHALL never be recorded as done, so that a re-run does it again.
 :::
 
-## 16. Nothing changed outside a validated plan
+## Nothing changed outside a validated plan
 
 :::{rul} Planning changes no media
 :id: RUL-planning_changes_no_media
@@ -3885,7 +3885,7 @@ Every change an execution makes to a media file SHALL be recorded in the journal
 :::
 
 
-## 17. The workspace as the last execution left it
+## The workspace as the last execution left it
 
 :::{rul} Every run first checks the workspace is as the last execution left it
 :id: RUL-workspace_checked_first
@@ -4140,7 +4140,7 @@ the record an execution writes, or what a plan, a dry run or a finalize prints.
 Pruning the quarantine, setting up the library and editing the decisions SHALL run without the comparison.
 :::
 
-## 18. The workspace's filesystem
+## The workspace's filesystem
 
 :::{def} What cartographer requires of a filesystem
 :id: DEF-filesystem_requirements
@@ -4311,7 +4311,7 @@ The report of a workspace spanning filesystems SHALL name a folder in it that li
 A move by prep or geotag that would cross filesystems SHALL fail, never be made a copy.
 :::
 
-## 19. The decision editor
+## The decision editor
 
 :::{rul} One decision editor at a time
 :id: RUL-one_editor_at_a_time

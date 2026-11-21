@@ -1,9 +1,9 @@
 # Shared — why
 
 **Not normative.** Each item here is the reasoning behind the [intent](../intent/shared.md) or [build](../build/shared.md)
-items it `justifies`, under the same section numbers. Where the two differ, the intent wins and this is stale.
+items it `justifies`. Where the two differ, the intent wins and this is stale.
 
-## 0. The pipeline
+## The pipeline
 
 :::{rat} How a run ended is what runs it next
 :id: RAT-exit_status_decides_next
@@ -18,7 +18,7 @@ summary for what was left; the command again to finish. A plan that reports a bl
 it stands, and ended as a success it would let a script go on as if it could.
 :::
 
-## 1. One run at a time
+## One run at a time
 
 :::{rat} A plan made beside another run cannot be trusted
 :id: RAT-planning_inside_lock
@@ -80,7 +80,7 @@ owner counts as alive — and the lock's record of its owner, which a crash can 
 decides it: only the system's own account of who holds the lock is.
 :::
 
-## 2. A snapshot before changing, optionally
+## A snapshot before changing, optionally
 
 :::{rat} A snapshot is an extra layer, not the safety model
 :id: RAT-snapshot_is_extra
@@ -154,7 +154,7 @@ alone, a snapshot of the library takes the merged photos out of the library whil
 the rollback loses them, a rollback point that destroys what it should protect. A snapshot of the workspace alone is
 safe: rolled back, it gives the photos back to the workspace while the library keeps them, a duplicate the next merge
 finds already present. So merge snapshots the workspace always, the library beside it where it can, and never the
-library alone; with no snapshot of the workspace it takes none at all, and says this merge has no rollback point.
+library alone; with no snapshot of the workspace it takes none at all.
 :::
 
 :::{rat} One mechanism, so the phases cannot diverge
@@ -167,7 +167,7 @@ library alone; with no snapshot of the workspace it takes none at all, and says 
 Each phase that mutates uses the same mechanism so the phases behave identically and cannot diverge.
 :::
 
-## 3. One configuration, kept in the workspace
+## One configuration, kept in the workspace
 
 :::{rat} One place for every setting
 :id: RAT-one_place_for_settings
@@ -332,7 +332,7 @@ The version of the camera-group derivation takes part in the dependencies, so a 
 detectable; it versions the code that computes the key, so only the code can set it.
 :::
 
-## 4. The control records, apart from the media
+## The control records, apart from the media
 
 :::{rat} One skipped place instead of a list of names
 :id: RAT-one_skipped_place
@@ -516,7 +516,8 @@ operator's task.
 A metadata write that was killed leaves a partial copy or a backup beside the photo, named after it. Taken for media
 it would be fingerprinted, filed and perhaps kept over the photo it shadows; sent to the strays it would sit among
 the user's own files as if they had put it there. It is debris of the pipeline's own making, and may still be the
-only whole copy of something, so it goes where nothing is lost and nothing is mistaken: the quarantine.
+only whole copy of something, so it goes where nothing is lost and nothing is mistaken: the quarantine. In photos by destination, where prep
+moves nothing, it is left where it lies and the user told of it.
 :::
 
 :::{rat} The user's backup is the user's
@@ -526,7 +527,7 @@ only whole copy of something, so it goes where nothing is lost and nothing is mi
 :follows_from: RAT-recoverable_core
 :justifies: RUL-user_backup_is_a_stray
 
-A file named for a photo with `_original` after it is what the user's own tool left when they edited that photo: the photo as the camera made it. No write of cartographer's leaves one. Taken for debris it would go to the quarantine, which is the one place files are ever deleted from.
+A file named for a photo with `_original` after it is what the user's own tool left when they edited that photo: the photo as the camera made it. No write of cartographer's leaves one. Taken for debris it would go to the quarantine, which is the one place files are ever pruned from.
 :::
 
 :::{rat} What is not read is left behind
@@ -536,11 +537,11 @@ A file named for a photo with `_original` after it is what the user's own tool l
 :follows_from: RAT-recoverable_core
 :justifies: RUL-hidden_folder_among_photos_blocks, RUL-hidden_among_photos_stops_merge
 
-Prep reads no hidden folder, so photos in one are never fingerprinted, never handed on, never merged — and the workspace is sealed around them as if it were empty. A hidden entry among the photos is something outside cartographer put there; saying so costs the user a moment, silence can cost the photos. Merge is where it is caught: merge seals the workspace around what it leaves, and up to then removing it costs nothing.
+Prep reads no hidden folder, so photos in one are never fingerprinted, never handed on, never merged — and the workspace is sealed around them as if it were empty. A hidden entry among the photos is something outside cartographer put there; saying so costs the user a moment, silence can cost the photos. Prep stops on it, where it would otherwise plan around photos it never read; merge stops on it again, before it seals the workspace around what it leaves. Up to then removing it costs nothing.
 :::
 
 
-## 5. Camera groups, derived once
+## Camera groups, derived once
 
 :::{rat} Grouping computed once is never reinvented
 :id: RAT-grouping_computed_once
@@ -567,7 +568,7 @@ some devices, and wrong without anyone noticing. Only the user knows, so a group
 unknown and geotag asks.
 :::
 
-## 6. One filename format
+## One filename format
 
 :::{rat} The shutter's time first
 :id: RAT-shutter_time_first
@@ -602,7 +603,8 @@ guaranteed to share the same textual shape and can never drift apart; there is n
 :justifies: RUL-prep_name_provisional, RUL-geotag_name_final, RUL-uncorrected_keeps_its_name
 
 Both phases use the same format, but the **value** differs by phase and that difference is intentional. Because the
-shape is identical, a file's name changes between phases only when its timestamp is genuinely corrected; an uncorrected
+shape is identical, a file's name changes between phases only when its timestamp is genuinely corrected — or its extension is not in
+lowercase, or it is a set-aside JPEG taking its RAW's name; an uncorrected
 file's provisional and final names coincide, so geotag plans no needless rename for it.
 :::
 
@@ -683,9 +685,11 @@ file is.
 :follows_from: RAT-idempotent_reruns, RAT-untimed_set_apart
 :justifies: RUL-untimed_mark_once
 
-A file comes in already marked when the user sends it back from missing metadata: they gave it a time, or meant to. If
-it still has none it returns to missing metadata, and the name it had there is the one the user knows it by; marking it
-again would grow its name on every round and say nothing new.
+A file comes in already marked when it has lain in missing metadata before — in this workspace, taken out by hand and
+the change accepted, or in another. If it still has no time it goes to missing metadata again, and the name it had
+there is the one the user knows it by; marking it again would grow its name on every round and say nothing new. A file
+given a time where it lies does not come round at all: prep files it on from there
+({need}`RUL-time_given_filed_on`).
 :::
 
 :::{rat} One format for a workspace's life
@@ -714,7 +718,7 @@ run from claiming the same name, and comparing without case keeps them apart on 
 Allocated deterministically, a re-run gives each file the name it gave before.
 :::
 
-## 7. The tracks, kept outside the managed folders
+## The tracks, kept outside the managed folders
 
 :::{rat} Where the tracks live is what keeps them geotag's
 :id: RAT-tracks_kept_outside
@@ -763,7 +767,7 @@ change them. A decision made against the old tracks, or a plan built from them, 
 settled; the tracks' hash in each record turns the change into staleness instead of letting it pass unseen.
 :::
 
-## 8. Nothing used once what it came from has changed
+## Nothing used once what it came from has changed
 
 :::{rat} One source for each shared fact
 :id: RAT-one_source_per_fact
@@ -881,7 +885,7 @@ Two files with one fingerprint are one photo to everything that follows: one is 
 :::
 
 
-## 9. One loop across the phases
+## One loop across the phases
 
 :::{rat} A steady state to return to
 :id: RAT-loop_is_steady_state
@@ -1075,7 +1079,7 @@ The breakout folders are named by people and by the tools they export with, and 
 would let development begun under another one pass unseen, the very case the gate exists to stop.
 :::
 
-## 10. Change only what needs changing
+## Change only what needs changing
 
 :::{rat} Redoing settled work buys no safety
 :id: RAT-no_redo_to_be_safe
@@ -1088,7 +1092,7 @@ Settled work done again "to be safe" makes nothing safer: a file written with wh
 risks a failed write, and reading a library's content again can cost hours.
 :::
 
-## 11. Nothing changes that the user did not write down
+## Nothing changes that the user did not write down
 
 :::{rat} A user who distrusts opaque mutation can always ask why
 :id: RAT-why_did_this_change
@@ -1151,7 +1155,7 @@ to download the table of countries a host lacks, is about the host, not the phot
 :::
 
 
-## 12. The record of what was done, kept beyond the workspace
+## The record of what was done, kept beyond the workspace
 
 :::{rat} The workspace is transient; the record must not be
 :id: RAT-record_outlives_workspace
@@ -1357,7 +1361,7 @@ journal in the archival package; one that does not says what happened and not wh
 :::
 
 
-## 13. Merge: the library kept, the workspace sealed
+## Merge: the library kept, the workspace sealed
 
 :::{rat} The library is the user's, and already in order
 :id: RAT-library_is_ground_truth
@@ -1541,7 +1545,7 @@ A workspace's folders are scanned, moved from and sealed by the phases that run 
 :::
 
 
-## 14. Every value the user writes is checked
+## Every value the user writes is checked
 
 :::{rat} A current value can still be wrong
 :id: RAT-valid_is_not_unchanged
@@ -1643,7 +1647,7 @@ Erasing an invalid decision would take away the very thing the user must see to 
 what was written and what is wrong with it.
 :::
 
-## 15. Nothing overwritten, nothing left half-done
+## Nothing overwritten, nothing left half-done
 
 :::{rat} A plan describes the workspace as it was
 :id: RAT-plan_can_be_overtaken
@@ -1719,7 +1723,7 @@ merge, never one being written now. It bears no photo's name, so it does no harm
 library free of litter — hygiene, not safety.
 :::
 
-## 16. Nothing changed outside a validated plan
+## Nothing changed outside a validated plan
 
 :::{rat} A plan is read before anything moves
 :id: RAT-plan_read_before_anything_moves
@@ -1790,7 +1794,7 @@ record exists to prevent.
 :::
 
 
-## 17. The workspace as the last execution left it
+## The workspace as the last execution left it
 
 :::{rat} The only hand changes are the expected ones
 :id: RAT-workspace_as_last_left
@@ -1900,7 +1904,7 @@ accepted change is part of the state from then on, so it stops nothing again.
 :::
 
 
-## 18. The workspace's filesystem
+## The workspace's filesystem
 
 :::{rat} A workspace is local, by a list of the kinds known to be
 :id: RAT-workspace_is_local
@@ -1948,7 +1952,7 @@ crosses into it. Checking every run, not once, catches a volume mounted into the
 :::
 
 
-## 19. The decision editor
+## The decision editor
 
 :::{rat} A save answers what the user saw
 :id: RAT-save_what_was_seen
