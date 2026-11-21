@@ -54,7 +54,21 @@ the image engine version that took it.
 
 A photo whose fingerprint, taken again by merge, has changed, and which {need}`RUL-merge_merges_changed_fingerprint`
 does not merge — and a photo whose unchanged value such a photo's new value equals — SHALL be left in photos by
-destination, unmerged.
+destination, unmerged — photos that moved together from one value to one ({need}`RUL-shared_value_moved_together_merged`)
+aside.
+:::
+
+:::{rul} Photos held as one value that move together to one are merged
+:id: RUL-shared_value_moved_together_merged
+:status: ruled
+:criticality: high
+:verify: required
+:excepts: RUL-merge_changed_fingerprint_unmerged
+:uses: DEF-fingerprint, DEF-finalize, DEF-managed_folders
+
+Photos in photos by destination that prep held under one fingerprint, each the very file finalize recorded, whose
+fingerprints taken again by merge are all one new value that no other photo holds now or held under prep's version,
+SHALL each be merged under that new value.
 :::
 
 ## Preconditions
@@ -258,6 +272,16 @@ as the user built them, its name the one geotag gave it — the name an incoming
 change.
 :::
 
+:::{rul} Photos sharing a fingerprint are each merged on their own
+:id: RUL-shared_fingerprint_each_merged
+:status: ruled
+:criticality: high
+:verify: required
+:uses: DEF-merge, DEF-fingerprint, DEF-managed_folders, DEF-library
+
+Photos in photos by destination that share a fingerprint SHALL each be merged and accounted for as a photo of its own.
+:::
+
 ## Idempotency, resume, and non-destructiveness
 
 :::{rul} A fresh plan is allowed at any time before the seal
@@ -282,6 +306,18 @@ Merge SHALL allow a fresh plan at any time on a workspace not sealed, whatever a
 A fresh plan SHALL carry forward every finalized photo no longer in photos by destination with the library place the
 latest earlier plan of the workspace gave it whose place, checked again, holds it — whether or not the journal
 recorded the move.
+:::
+
+:::{rul} A fresh plan carries every photo an earlier plan placed
+:id: RUL-replan_carries_every_placed
+:status: ruled
+:criticality: high
+:verify: required
+:refines: RUL-replan_carries_placed
+:uses: DEF-merge, DEF-merge_begun, DEF-library, DEF-finalize
+
+A fresh plan SHALL carry forward every photo an earlier merge plan of the workspace placed in the library, whether or
+not the workspace's latest finalize recorded it.
 :::
 
 :::{rul} An earlier place is confirmed by the bytes placed there

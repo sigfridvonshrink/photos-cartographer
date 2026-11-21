@@ -1297,14 +1297,15 @@ ran, oldest first, matched by fingerprint — before the current plan's, from th
 :::{bld} Merge's step in the log
 :id: BLD-merge_log_steps
 :status: ruled
-:realises: RUL-log_entry_grows, RUL-log_step_names_run, RUL-merge_records_landing
+:realises: RUL-log_entry_grows, RUL-log_step_names_run, RUL-merge_records_landing, RUL-shared_fingerprint_each_merged
 :uses: BLD-log_format, BLD-phase_logs
 
 Merge SHALL append to the `journey` of each photo it placed or found already in the library one step: `phase`
 `merge`; its `run`, the merge plan that placed it — the earlier one for a photo a re-plan carried forward
 ({need}`BLD-merge_carry_forward`); `action` `placed`, or `already_present`; `from`, its path in photos by destination;
 `library_path`, its place in the library; and `renamed_for_library`, whether it took a name of its own there — setting
-the entry's `library_path` to the same place.
+the entry's `library_path` to the same place, or, where photos sharing the entry's fingerprint were each merged, to the
+list of their places, sorted, each step naming its own.
 :::
 
 :::{bld} The journals and the decisions each execution used are kept

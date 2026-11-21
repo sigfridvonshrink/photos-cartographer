@@ -42,6 +42,21 @@ mapping can settle which photo a value names, and those photos wait in photos by
 cannot prove.
 :::
 
+:::{rat} One value moved whole to one value is still one to one
+:id: RAT-shared_value_moved_whole
+:status: ruled
+:forced: no
+:follows_from: RAT-changed_fingerprint_mapped, RAT-shared_fingerprint_two_photos
+:justifies: RUL-shared_value_moved_together_merged
+
+Photos prep held under one value are, to prep and to every record keyed by that value, one picture — the same picture
+the user sorted into more than one destination. Where every one of them reads as one new value under the new version,
+and no other photo holds it, the mapping between values is still one to one: the old value to the new, and back. What
+the one-to-one test guards against is two pictures prep told apart collapsing into one value, or one value splitting in
+two, so that a record keyed by a value would come to name another picture; neither happens here. Held back, each such
+photo would wait in photos by destination for a reason no record shows, as long as that version is in use.
+:::
+
 ## Preconditions
 
 :::{rat} The workspace may have been touched since geotag
@@ -136,6 +151,21 @@ make differently. Kept the same, a photo's place in the library is the place the
 every run, which is what lets an interrupted merge find its own work.
 :::
 
+:::{rat} The same picture in two destinations is two photos
+:id: RAT-shared_fingerprint_two_photos
+:status: ruled
+:forced: yes
+:follows_from: RAT-destination_tree_is_the_library, RAT-library_is_evidence_of_move
+:justifies: RUL-shared_fingerprint_each_merged
+
+The user may sort one picture into two destinations on purpose — a view of the Louvre belongs under Paris and under the
+Louvre — and prep, which leaves photos by destination as the user sorted it, keeps both. They share a fingerprint, but
+each has its own place in the workspace, its own name from geotag and its own place in the library. A record of one
+says nothing of where the other is: taken one for the other, a copy would be given the other's name, a copy deleted
+from the library would be carried on the record of the one still there, and the workspace would seal with that photo
+in neither place, its merge log naming one copy twice and the other never.
+:::
+
 ## Idempotency, resume, and non-destructiveness
 
 :::{rat} A partial merge is never a dead end
@@ -149,6 +179,34 @@ A partial merge leaves the cause of each blocked photo for the user to fix — a
 photo changed — and some fixes change what the plan must say. Until the seal, nothing merge has done is final, and its
 records describe what happened rather than gate what may happen next; refusing to re-plan would leave the user with a
 plan that can no longer finish and no way to make one that can.
+:::
+
+:::{rat} Prep and geotag stay open in a merge begun
+:id: RAT-merge_begun_stays_open
+:status: ruled
+:forced: yes
+:follows_from: RAT-partial_merge_no_dead_end, RAT-loop_is_steady_state
+:justifies: RUL-geotag_rerunnable, RUL-more_dumps_until_merge
+
+Some fixes for a photo a partial merge blocked are prep's or geotag's: a photo changed since finalize, a position to
+give, a photo to rename and record again. Refusing prep and geotag once merge had moved a photo would strand every
+such photo in photos by destination, with nothing the user could do but start over; only the seal, after which the
+workspace holds nothing more to merge, closes the loop.
+:::
+
+:::{rat} A photo merge placed stays the workspace's
+:id: RAT-placed_photo_stays_the_workspaces
+:status: ruled
+:forced: yes
+:follows_from: RAT-merge_begun_stays_open, RAT-library_is_evidence_of_move
+:justifies: RUL-replan_carries_every_placed
+
+Prep and geotag, run again in a merge begun, see only what is still in photos by destination; finalize then records
+only those, and a photo merge already placed would drop out of the plan that seals — neither carried nor blocked —
+leaving the sealed record with no place for a photo the workspace put in the library. The sealed record must say where
+every photo of the workspace went, and a photo merge placed is the workspace's whatever geotag was run on afterwards:
+so a fresh plan takes it from the earlier plan that placed it, its place checked again like that of any photo carried
+forward.
 :::
 
 :::{rat} The library is the evidence of a move
