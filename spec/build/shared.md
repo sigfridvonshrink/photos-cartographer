@@ -409,8 +409,8 @@ The plan and decision artifacts SHALL be prep's `photos-10-prep-plan.json`, geot
 
 A differing re-plan SHALL first copy the existing artifact to the shared incremental `-NNN` suffix ({need}`BLD-name_suffix`) —
 `photos-10-prep-plan-001.json`, say, the copy landing under that name only whole — then replace the artifact atomically,
-and announce where. Prep's plan carries a fresh plan id each run, so
-re-planning it always sets the prior one aside; geotag's and merge's plan ids derive from their content. The journals keep their `journal-<plan id>.json` naming; this
+and announce where. Prep's plan carries an id of the run that made it ({need}`BLD-prep_replan_unchanged`); geotag's and merge's plan ids
+derive from their content. The journals keep their `journal-<plan id>.json` naming; this
 convention governs the plan and decision artifacts.
 :::
 
@@ -419,7 +419,24 @@ convention governs the plan and decision artifacts.
 :status: ruled
 :realises: RUL-unchanged_replan_writes_nothing
 
-A re-plan whose content is byte-identical to the saved artifact SHALL write nothing and back up nothing.
+A re-plan whose content is byte-identical to the saved artifact SHALL write nothing and back up nothing — prep's plan,
+which names its run, compared as {need}`BLD-prep_replan_unchanged` gives.
+:::
+
+:::{bld} A prep plan saying the same is kept
+:id: BLD-prep_replan_unchanged
+:status: ruled
+:realises: RUL-unchanged_replan_writes_nothing
+:uses: BLD-history_kept
+
+`prep plan` SHALL keep `photos-10-prep-plan.json` as it is, writing and backing up nothing, where the plan it has made
+says what the saved one says; otherwise it writes its plan, the saved one set aside ({need}`BLD-plan_backups`). Two
+plans say the same where they are equal once each is taken without its `plan_id`, wherever it appears — the quarantine
+and strays paths carry it — its `created_at`, its `summary`, each operation's `operation_id`, and all of each database
+effect but its action and its path: what is left is the operations, their sources, destinations, reasons,
+preconditions and evidence, the blockers and warnings, the inventory, the file preconditions and the dependencies. A
+kept plan an execution already began under is executed again under its id, its earlier journal set aside
+({need}`BLD-history_kept`).
 :::
 
 :::{bld} The handoff's two hashes

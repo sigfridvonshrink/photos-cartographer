@@ -412,7 +412,10 @@ enough because the whole plan is on disk to read.
 :justifies: RUL-replanning_keeps_the_prior, RUL-unchanged_replan_writes_nothing
 
 Setting the prior artifact aside keeps a superseded plan and any authored decisions recoverable; writing nothing on an
-unchanged re-run means the iterative decision-editing loop does not accumulate redundant backups.
+unchanged re-run means the iterative decision-editing loop does not accumulate redundant backups. Prep's plan names
+the run that made it, and two runs that would do the same to the same files have made the same plan: it is what a
+plan says that is compared, not the name and the hour of its making, or planning twice before executing would set a
+copy aside each time for nothing.
 :::
 
 :::{rat} What a run reported stays on the record

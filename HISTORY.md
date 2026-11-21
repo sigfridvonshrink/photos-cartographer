@@ -2,11 +2,10 @@
 
 *What was decided and why, newest first. A record: never corrected forward. Per-commit detail is `git log`.*
 
-## 2026-11-21 — the corpus read against itself: sixteen contradictions ruled
+## 2026-11-21 — the corpus read against itself: seventeen contradictions ruled
 
 The corpus was read without the code, a reader to each phase and one to the shared contract, for rules that cannot
-both hold. Seventeen pairs were put to the owner with a side suggested for each, and ruled as suggested; sixteen are
-written in, the seventeenth (an unchanged re-plan of prep) waiting on its cost. Nearly all were one shape: a rule
+both hold. Seventeen pairs were put to the owner with a side suggested for each, and ruled as suggested. Nearly all were one shape: a rule
 stated without exception, and its exception stated elsewhere and never linked. Each general rule now names what it
 leaves aside, and the rule that states the exception links it with `excepts`.
 
@@ -35,6 +34,11 @@ leaves aside, and the rule that states the exception links it with `excepts`.
 - **The control records' place, the quarantine and a top-level version-control directory are not quarantined** as
   hidden entries of a first dump.
 - **Prep's own dry-run rule is gone**: it said less than the shared one it refined.
+- **An unchanged re-plan of prep writes nothing.** The rule said so of every phase; prep's plan named its run, so no
+  two were ever the same and every re-plan set a copy aside. Prep now compares what the plan says — its operations,
+  blockers, preconditions, inventory and dependencies — and keeps the saved plan where that is the same. A kept plan
+  an execution had begun under is executed again under its id, the earlier journal set aside as it already was for a
+  plan executed twice. The second change of behaviour.
 
 ## 2026-11-17 — a leaner corpus measured, and dropped (BACKLOG 57)
 

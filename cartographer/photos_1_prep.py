@@ -3182,6 +3182,43 @@ def _removable_folder(rel, ws):
     return os.path.isdir(p) and not os.path.islink(p)
 
 
+def _plan_substance(plan: dict):
+    """What a prep plan would do and what it rests on, without what names or describes the run that made it
+    (BLD-prep_replan_unchanged): its plan id is taken out wherever it appears (the quarantine and strays paths carry
+    it), with its creation time, its operations' ids and its summary — the counts of what the run read and reused.
+    Of each database effect only the action and the path are kept: the row a run would write says when and how that
+    run read the file, which a run reading it from the memo says otherwise of the same file."""
+    plan_id = plan.get("plan_id")
+    if not isinstance(plan_id, str) or not plan_id:
+        return None
+    plan = json.loads(json.dumps(plan, sort_keys=True).replace(plan_id, "<plan>"))
+    plan.pop("created_at", None)
+    plan.pop("summary", None)
+    for op in plan.get("operations") or []:
+        if not isinstance(op, dict):
+            continue
+        op.pop("operation_id", None)
+        op["database_effects_after_verification"] = [
+            {"action": fx.get("action"), "relative_path": fx.get("relative_path") or (fx.get("data") or {}).get("relative_path")}
+            for fx in op.get("database_effects_after_verification") or [] if isinstance(fx, dict)]
+    return plan
+
+
+def _replan_unchanged(plan_file, plan: dict) -> bool:
+    """True iff the plan saved at `plan_file` says what `plan` says (RUL-unchanged_replan_writes_nothing,
+    BLD-prep_replan_unchanged). An unreadable saved plan is not the same. A kept plan an execution began under is
+    executed again under its id, its earlier journal set aside first (BLD-history_kept)."""
+    try:
+        with open(plan_file) as f:
+            saved = json.load(f)
+    except (OSError, ValueError):
+        return False
+    if not isinstance(saved, dict):
+        return False
+    was = _plan_substance(saved)
+    return was is not None and was == _plan_substance(plan)
+
+
 def _parse_plan_id_time(plan_id: str):
     """The quarantine <plan_id> dir name starts with the run's UTC timestamp."""
     ts = plan_id.split('-', 1)[0]
@@ -3692,10 +3729,15 @@ def _run_locked(args, workspace_root, reporter):
         # the plan can be reviewed without hunting for it.
         from .photos_utils import prep_plan_path, write_versioned_json
         pp = prep_plan_path(workspace_root)
-        _sha, _bak = write_versioned_json(pp, asdict(plan))
-        reporter.log(f"Plan saved to {pp}", stream="stdout")
-        if _bak:
-            reporter.log(f"  Previous plan backed up to {_bak}", stream="stdout")
+        if _replan_unchanged(pp, asdict(plan)):
+            # The saved plan says the same: kept, nothing written or set aside (RUL-unchanged_replan_writes_nothing).
+            # Its id stays the plan's, for its journal and its quarantine.
+            reporter.log(f"Plan unchanged — the saved plan is kept at {pp}", stream="stdout")
+        else:
+            _sha, _bak = write_versioned_json(pp, asdict(plan))
+            reporter.log(f"Plan saved to {pp}", stream="stdout")
+            if _bak:
+                reporter.log(f"  Previous plan backed up to {_bak}", stream="stdout")
         from .photos_utils import settle_zone_table
         settle_zone_table(workspace_root, _zone_answer, reporter)
 

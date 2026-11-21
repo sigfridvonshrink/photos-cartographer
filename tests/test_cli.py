@@ -240,6 +240,7 @@ def test_replan_backs_up_previous_plan(tmp_path, monkeypatch, capsys):
     ws = _ws(tmp_path)
     assert _main(monkeypatch, ws, "plan") == 0
     capsys.readouterr()
+    (ws / "0-sources" / "note.txt").write_text("stray")       # so the re-plan says something else
     assert _main(monkeypatch, ws, "plan") == 0                # re-plan
     assert "Previous plan backed up to" in capsys.readouterr().out
     cd = ws / ".photos-ingest"

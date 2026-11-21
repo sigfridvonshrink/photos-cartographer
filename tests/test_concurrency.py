@@ -315,8 +315,10 @@ def test_cli_jobs_argparse(workspace):
     with open(canonical, "r") as f:
         plan_data_2 = json.load(f)
     assert "jobs_requested" not in json.dumps(plan_data_2)
-    # the re-plan backed the first plan up rather than clobbering it
-    assert os.path.exists(os.path.join(workspace, ".photos-ingest", "photos-10-prep-plan-001.json"))
+    # the re-plan, saying the same with other jobs, kept the saved plan and set nothing aside
+    # (RUL-unchanged_replan_writes_nothing): the number of jobs is nothing a plan says
+    assert plan_data_2 == plan_data_1
+    assert not os.path.exists(os.path.join(workspace, ".photos-ingest", "photos-10-prep-plan-001.json"))
 
     res = subprocess.run([*mod, "--jobs", "2", "plan"], cwd=workspace, capture_output=True, text=True, env=env)
     assert "jobs must be a positive integer" not in res.stderr

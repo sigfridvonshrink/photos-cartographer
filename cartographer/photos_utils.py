@@ -1186,8 +1186,9 @@ def write_versioned_json(path: str, obj: dict):
 
     A no-op guard: if the existing file is already byte-identical to what we'd write, nothing is backed
     up or rewritten (sha, None) — so an unchanged re-run (e.g. geotag regenerating identical
-    decisions) never accumulates redundant backups. A plan with a fresh plan_id differs every run, so
-    re-planning still always preserves the prior plan."""
+    decisions) never accumulates redundant backups. Prep's plan, which names the run that made it,
+    is never byte-identical to an earlier one: prep compares what the plan says before calling this
+    (BLD-prep_replan_unchanged)."""
     new_text = json.dumps(obj, indent=2, sort_keys=True)
     if os.path.exists(path):
         try:
