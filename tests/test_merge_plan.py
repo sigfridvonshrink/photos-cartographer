@@ -302,6 +302,7 @@ def test_plan_two_incoming_case_variants_resolve_at_plan_time(tmp_path, monkeypa
 
 @pytest.mark.parametrize("variant_fp, disposition", [("X", "renamed_incoming"), ("A", "already_present")])
 @pytest.mark.spec("RUL-collision_by_content", "BLD-library_file_fingerprinted", "BLD-names_case_folded",
+                  "RUL-collision_same_content", "RUL-library_mirrors_destinations", "BLD-one_library_file_compared",
                   test="TST-merge_plan-a_case_variant_in_the_library_is_settled_by_content")
 def test_a_case_variant_in_the_library_is_settled_by_content(tmp_path, monkeypatch, variant_fp, disposition):
     """A library file whose name differs from the target's only in case takes the place on a case-insensitive

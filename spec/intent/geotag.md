@@ -870,11 +870,13 @@ the user wrote apart from what the camera's positions support, or accepted on a 
 :criticality: high
 :verify: required
 :refines: RUL-offset_per_camera_destination_day
+:uses: DEF-anchor
 
-A camera's photos of a day in a destination where none has its own position SHALL be proposed the offset the camera's
-own positions gave that day in another destination, in place of the one their times record and the timezone's — a day
-split at a change of its clock ({need}`RUL-split_day_passes_no_offset`) and a camera group the configuration names
-several bodies ({need}`RUL-several_bodies_days_apart`) aside.
+A camera's photos of a day in a destination where the camera's own GPS gives no offset — no anchor, nor the times its
+fixes recorded — SHALL be proposed the offset the camera's own positions gave that day in another destination, in place
+of the one their times record and the timezone's — a day split at a change of its clock
+({need}`RUL-split_day_passes_no_offset`) and a camera group the configuration names several bodies
+({need}`RUL-several_bodies_days_apart`) aside.
 :::
 
 :::{rul} A camera's offset is proposed from the offset its photos record
@@ -883,11 +885,11 @@ several bodies ({need}`RUL-several_bodies_days_apart`) aside.
 :criticality: high
 :verify: required
 :refines: RUL-offset_per_camera_destination_day
-:uses: DEF-clock_offset, DEF-recorded_offset
+:uses: DEF-clock_offset, DEF-recorded_offset, DEF-anchor
 
-A camera's photos of a day in a destination where none has its own position, and where every one of them recording an
-offset with its time records the same one, SHALL be proposed the clock offset of a clock set to that offset, in place
-of the timezone's.
+A camera's photos of a day in a destination where the camera's own GPS gives no offset — no anchor, nor the times its
+fixes recorded — and where every one of them recording an offset with its time records the same one, SHALL be proposed
+the clock offset of a clock set to that offset, in place of the timezone's.
 :::
 
 :::{rul} Photos recording different offsets propose none
@@ -2315,6 +2317,17 @@ Geotag SHALL NOT plan while prep's log is not the one the handoff vouches for.
 
 Geotag SHALL NOT execute a plan, nor change anything toward it, while prep's log is not the one the handoff vouches
 for.
+:::
+
+:::{rul} Geotag finalizes only on the prep log the handoff vouches for
+:id: RUL-finalize_on_vouched_log
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+:refines: RUL-geotag_plans_on_vouched_log
+
+Geotag SHALL NOT finalize while prep's log is not the one the handoff vouches for.
 :::
 
 

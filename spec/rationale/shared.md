@@ -1334,7 +1334,9 @@ the photo no longer has.
 
 The workspace is transient; the package is what remains of it beside the library. It must answer later what the
 workspace could: under which settings, by which decisions, from which plans each photo was changed, and what each phase
-saw. Anything left out — a journal, a database image — is a question no one can answer once the workspace is gone.
+saw. Anything left out — a journal, a database image — is a question no one can answer once the workspace is gone. An
+earlier package is the one exception: every record it holds is still in the control directory, and so in the later
+package itself; holding it too would only nest the earlier package inside the later and repeat its records.
 :::
 
 :::{rat} The package can be checked without the tool
@@ -1373,7 +1375,11 @@ journal in the archival package; one that does not says what happened and not wh
 The library is the user's curated collection: its organisation and names are the ground truth, and other tools and
 people rely on them. So merge adds to it and changes nothing in it. Where a name is taken, only the content tells a
 copy already present from a different photo sharing a name — and where the content cannot be read, nothing does: a
-guess either way is a duplicate placed or a photo lost from the workspace, so the photo waits.
+guess either way is a duplicate placed or a photo lost from the workspace, so the photo waits. A name differing from
+the photo's only in case takes its place too, whatever the filesystem: on one that ignores case the two names are one
+file, and on one that does not, two files differing only in case would collide the day the library moves to one that
+does. So a file under such a name holding the photo byte for byte is the photo, already in the library under the name
+it was given there.
 :::
 
 :::{rat} A library file costs a full read

@@ -355,7 +355,8 @@ clock's own error; the destination's zone is only an assumption that the camera 
 home time in Japan records +01:00 and is eight hours from the zone's guess, offered as the answer to accept. So the
 recorded offset is proposed before the zone. It states a setting, not a measurement — a clock set to the wrong hour
 in its right zone records the zone and is still wrong — so it is a proposal like the zone's, accepted or checked
-against the tracks the same way, and the camera's own positions, which measure the clock, come before it. Photos of
+against the tracks the same way, and the camera's own GPS, where it measures the clock — by an anchor, or by the times
+its fixes recorded — comes before it; positions that lie on no track and record no usable time measure nothing. Photos of
 one day recording two offsets say the setting was changed that day, or that the tag is not to be trusted; which is the
 day's is a guess, so neither is proposed, and the offsets are shown for the user to answer.
 :::
@@ -481,7 +482,8 @@ either part is that part's clock, and stands.
 
 A camera has one clock. Sorting a day's photos into a museum and a castle does not give it two: what its own positions
 show of its clock in the morning is the best evidence there is for the afternoon, far better than assuming it kept the
-local hour. So a destination with no position of its own that day is offered the offset found elsewhere that day —
+local hour. So a destination where the camera's own GPS gives no offset that day — no anchor, nor the times its fixes
+recorded; positions that lie on no track measure nothing of the clock — is offered the offset found elsewhere that day —
 applied by itself only where it was sure enough to apply itself there. And where the camera's positions give two
 offsets for one day that cannot both be right, one of them rests on a wrong match; neither is written until the user
 says which. An offset the user wrote apart from what the camera's positions support, or accepted on a guess, is not passed
@@ -1103,7 +1105,7 @@ of what they saw, for them to replace.
 :status: ruled
 :forced: yes
 :follows_from: RAT-decision_withdrawable, RAT-decoded_pixel_identity, RAT-new_fingerprint_same_photo
-:justifies: RUL-own_values_follow_new_fingerprint, RUL-geotag_plans_on_vouched_log, RUL-geotag_executes_on_vouched_log, RUL-fingerprint_mapping_one_to_one
+:justifies: RUL-own_values_follow_new_fingerprint, RUL-geotag_plans_on_vouched_log, RUL-geotag_executes_on_vouched_log, RUL-fingerprint_mapping_one_to_one, RUL-finalize_on_vouched_log, RUL-merge_on_vouched_log
 
 A new ImageMagick may decode a photo to a new fingerprint; the photo is the same, and so are its own time and
 position. Lost with the old value, they would leave geotag taking the photo's corrected time for its own: a changed
@@ -1112,7 +1114,9 @@ it does not say so one for one, no photo's values can be told apart, and geotag 
 handoff does not vouch for says nothing that can be trusted of which became which: planned past it, as though no
 fingerprint had changed, a photo would lose its pinned values without a word — so geotag stops on it as well, as
 finalize and merge do. Execution builds the same model again from the log and moves each pin to its new value; the
-log may have changed since the plan was made, so execution asks the same of it, before it changes anything.
+log may have changed since the plan was made, so execution asks the same of it, before it changes anything. Finalize
+copies the log into the package, and merge takes that package as the workspace's record: a log no longer the one the
+handoff vouches for, archived or carried on, would stand in the record for prep's work when it is not.
 :::
 
 

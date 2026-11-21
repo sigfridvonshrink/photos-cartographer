@@ -2027,6 +2027,11 @@ class WorkspacePrepWorkflow:
             # applicable, never a blocker (RUL-inbox_non_media_never_blocks).
             meta = {"extraction_status": "not_applicable"}
             result["metadata_plan_status"] = "not_applicable"
+        elif parent_folder in failed_metadata_folders and md_fresh:
+            # Its folder's read failed, but prep keeps a record of its metadata still valid: that record is reused,
+            # as for a file missing from its batch's result, and it blocks nothing (RUL-metadata_failure_blocks).
+            meta = None
+            result["metadata_plan_status"] = "reused_from_cache"
         elif parent_folder in failed_metadata_folders:
             meta = {}
             meta["extraction_status"] = "extraction_failed"

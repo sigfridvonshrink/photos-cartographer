@@ -398,28 +398,62 @@ def _trk(*segments):
     return "<trk>" + "".join("<trkseg>" + "".join(pt(*p) for p in seg) + "</trkseg>" for seg in segments) + "</trk>"
 
 
-@pytest.mark.spec("BLD-track_time_parser", "RUL-track_time_never_guessed",
-                  test="TST-geotag_gps_placement-track_times_are_read_as_the_host_python_reads_them")
-def test_track_times_are_read_as_the_host_python_reads_them(tmp_path):
-    """A track point's time is what the host Python's `datetime.fromisoformat` reads, a final `Z` taken as
-    `+00:00`: the xsd:dateTime forms on every Python, the other ISO 8601 forms where this one takes them, and a
-    time with no offset never — its point skipped, never read as some zone's."""
-    def host_reads(t):
-        try:
-            return datetime.fromisoformat(t[:-1] + "+00:00" if t[-1:] in "Zz" else t).tzinfo is not None
-        except ValueError:
-            return False
-    times = ["2024-07-03T12:00:00Z", "2024-07-03T14:00:01+02:00", "2024-07-03T12:00:02.000Z",   # xsd:dateTime
-             "2024-07-03T12:00:03.5Z", "2024-07-03 12:00:04+00:00", "20240703T120005Z",       # host-dependent
-             "2024-07-03T12:00:06"]                                                            # no offset
+def _track_times(tmp_path, times):
+    """{index in `times`: the UTC instant geotag read} for a track of one point at each of `times`, and its
+    warnings."""
     body = "<trk><trkseg>" + "".join(f'<trkpt lat="50.0" lon="{4 + i / 1000}"><time>{t}</time></trkpt>'
                                      for i, t in enumerate(times)) + "</trkseg></trk>"
     g = _gpx_file(tmp_path, "t.gpx", body)
-    read = {round((p.lon - 4) * 1000) for p in g.points}
-    assert read == {i for i, t in enumerate(times) if host_reads(t)}
-    assert {0, 1, 2} <= read and 6 not in read
-    assert sorted(p.time_utc for p in g.points if round((p.lon - 4) * 1000) < 3) == \
-        [_utc(12, 0, 0), _utc(12, 0, 1), _utc(12, 0, 2)]
+    return {round((p.lon - 4) * 1000): p.time_utc for p in g.points}, g.warnings
+
+
+@pytest.mark.spec("BLD-track_time_parser", "RUL-track_time_never_guessed",
+                  test="TST-geotag_gps_placement-a_fraction_of_any_length_is_cut_to_microseconds")
+def test_a_fraction_of_any_length_is_cut_to_microseconds(tmp_path):
+    """A fraction of a second of 1, 2, 3, 4, 6, 7 or 9 digits is read on every Python, cut to microseconds and never
+    rounded: a time never moves forward."""
+    fracs = ["9", "99", "999", "9999", "999999", "9999999", "999999999"]
+    read, warnings = _track_times(tmp_path, [f"2024-07-03T12:00:00.{f}Z" for f in fracs])
+    assert warnings == []
+    assert [read[i] for i in range(len(fracs))] == [
+        _utc(12, 0, 0).replace(microsecond=int(f[:6].ljust(6, "0"))) for f in fracs]
+    assert read[6] == read[5] == read[4] == _utc(12, 0, 0).replace(microsecond=999999)
+
+
+@pytest.mark.spec("BLD-track_time_parser", "RUL-track_time_never_guessed",
+                  test="TST-geotag_gps_placement-track_times_are_read_with_the_zone_they_state")
+def test_track_times_are_read_with_the_zone_they_state(tmp_path):
+    """Each zone form xsd:dateTime has — `Z`, a positive and a negative offset, `-00:00` — is the instant it states;
+    `24:00:00` is the next day's midnight."""
+    times = ["2024-07-03T12:00:00Z", "2024-07-03T12:00:00z", "2024-07-03T14:00:00+02:00",
+             "2024-07-03T06:30:00-05:30", "2024-07-03T12:00:00-00:00", "2024-07-02T24:00:00+12:00"]
+    read, warnings = _track_times(tmp_path, times)
+    assert warnings == []
+    assert [read[i] for i in range(5)] == [_utc(12, 0, 0)] * 5
+    assert read[5] == _utc(0, 0, 0) - timedelta(hours=12)
+
+
+@pytest.mark.spec("BLD-track_time_parser", "RUL-track_time_never_guessed", "RUL-unreadable_point_skipped",
+                  test="TST-geotag_gps_placement-a_time_not_xsd_datetime_or_with_no_zone_is_skipped")
+def test_a_time_not_xsd_datetime_or_with_no_zone_is_skipped(tmp_path):
+    """A time with no zone is never read as some zone's, and a form that is not xsd:dateTime — though another
+    ISO 8601 reader takes it — is unparseable, on every Python: each point is skipped with a warning."""
+    times = ["2024-07-03T12:00:00",            # no zone
+             "2024-07-03T12:00:00.5",          # no zone, a fraction
+             "2024-07-03 12:00:00+00:00",      # a space for the T
+             "20240703T120000Z",               # the basic format
+             "2024-W27-3T12:00:00Z",           # a week date
+             "2024-07-03T12:00Z",              # no seconds
+             "2024-07-03T12:00:00+0200",       # an offset with no colon
+             "2024-07-03T12:00:00+02:99",      # minutes of the offset out of range
+             "2024-07-03T12:00:00.Z",          # a point with no fraction
+             "2024-07-03T24:00:01Z",           # past the end of the day
+             "2024-07-03T12:00:00Z"]           # the one readable
+    read, warnings = _track_times(tmp_path, times)
+    assert set(read) == {len(times) - 1}
+    assert len(warnings) == len(times) - 1
+    assert all("t.gpx" in w and "trkpt" in w for w in warnings)
+    assert sum("without timezone" in w for w in warnings) == 2
 
 
 @pytest.mark.spec("RUL-track_is_one_trk", "RUL-tracks_never_joined", "BLD-track_placement",

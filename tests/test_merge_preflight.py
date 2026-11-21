@@ -480,7 +480,7 @@ def test_a_refresh_describing_only_a_prep_run_does_not_block_merge(tmp_path):
 
 
 @pytest.mark.parametrize("touch", ["edited", "removed", "unvouched"])
-@pytest.mark.spec("BLD-prep_log_checked", "RUL-merge_takes_finalized_current", "RUL-unchecked_counts_as_changed",
+@pytest.mark.spec("BLD-prep_log_checked", "RUL-merge_takes_finalized_current", "RUL-unchecked_counts_as_changed", "RUL-merge_on_vouched_log",
                   test="TST-merge_preflight-a_prep_log_the_handoff_does_not_vouch_for_blocks")
 def test_a_prep_log_the_handoff_does_not_vouch_for_blocks(tmp_path, touch):
     """Prep's log touched after finalize — edited, removed, or a handoff recording no hash of it — stops merge,

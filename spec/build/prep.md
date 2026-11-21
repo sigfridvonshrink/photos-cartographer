@@ -662,11 +662,11 @@ and geotag's file model read.
 :status: ruled
 :realises: RUL-metadata_failure_blocks
 
-A media file whose folder exiftool's batch failed on SHALL have its metadata recorded `extraction_failed` and a
-blocker naming it in prep's plan, `6-photos-by-dest` included, whatever record of its metadata the database or the plan
-memo holds — a fresh one kept as its record (`_process_file`); one missing from its batch's result is so recorded and
-blocks only where neither holds a record `is_metadata_cache_fresh` accepts ({need}`BLD-metadata_extraction`), the fresh
-record being reused otherwise.
+A media file of which neither the database nor the plan memo holds a record `is_metadata_cache_fresh` accepts, and
+whose folder exiftool's batch failed on or whose batch's result leaves it out, SHALL have its metadata recorded
+`extraction_failed` and a blocker naming it in prep's plan, `6-photos-by-dest` included (`_process_file`,
+{need}`BLD-metadata_extraction`); one of which either holds such a record has that record reused, `reused_from_cache`,
+and blocks nothing, whichever way its read failed.
 :::
 
 :::{bld} The other time fields are kept by their group

@@ -1155,11 +1155,12 @@ Each copy SHALL carry the earlier log unchanged — every entry, every field and
 :::{bld} Prep's log is checked against the handoff
 :id: BLD-prep_log_checked
 :status: ruled
-:realises: INV-no_stale_use, RUL-unchecked_counts_as_changed
+:realises: INV-no_stale_use, RUL-unchecked_counts_as_changed, RUL-finalize_on_vouched_log, RUL-merge_on_vouched_log
 
-Finalize and merge SHALL stop while `photos-15-prep-log.json` is not the log the handoff vouches for
-({need}`BLD-prep_log_vouched`) — missing, unreadable, its SHA-256 other than `depends_on.prep_log`'s, or the handoff
-recording none — through the shared `prep_log_blocker`, merge among its gathered preconditions.
+`geotag finalize` and merge's `plan`, `dry-run` and `execute` SHALL stop while `photos-15-prep-log.json` is not the
+log the handoff vouches for ({need}`BLD-prep_log_vouched`) — missing, unreadable, its SHA-256 other than
+`depends_on.prep_log`'s, or the handoff recording none — through the shared `prep_log_blocker`: finalize, exit 2, before
+it writes any record of the package, merge among its gathered preconditions.
 :::
 
 :::{bld} Each phase's records stay on disk
@@ -1404,7 +1405,7 @@ folder, passing over one taken there without regard to case; the library's own n
 :::{bld} Every library file at a photo's place is compared
 :id: BLD-one_library_file_compared
 :status: ruled
-:realises: RUL-collision_by_content, RUL-collision_same_content, RUL-same_pixels_other_file_blocks, RUL-unsettled_collision_blocks
+:realises: RUL-collision_by_content, RUL-collision_same_content, RUL-same_pixels_other_file_blocks, RUL-unsettled_collision_blocks, RUL-library_mirrors_destinations
 
 Merge SHALL compare with each photo every library file at its place — the one under the photo's own name, then,
 in sorted order, those whose names differ from it only in case (`_at_place`): the photo is already in the library
