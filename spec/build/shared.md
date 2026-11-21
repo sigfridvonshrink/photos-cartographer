@@ -28,7 +28,7 @@ journal of merge's own it cannot read, a workspace database of another schema, a
 prune's selection refused, and a plan, or a dry run, that reports a blocker; 3 for an execution that ended partial or failed — an operation failed, or
 prep's log or handoff not written after its operations; 4 for an error the build did not foresee, which each phase's
 `run` and `cli.main` catch (`ends_unforeseen_error_apart`); and 130 for an interrupt. Prep's execute or dry run with
-nothing to do ends 0. `merge init-library` ends 0 when it blesses or finds a library, 1 when the workspace is locked
+nothing to do ends 0. `merge init-library` ends 0 when it marks or finds a library, 1 when the workspace is locked
 and 2 when it refuses, and a phase named with no command prints what it does and ends 0.
 :::
 
@@ -37,7 +37,7 @@ and 2 when it refuses, and a phase named with no command prints what it does and
 :::{bld} The workspace lock
 :id: BLD-workspace_lock
 :status: ruled
-:realises: RUL-one_workspace_lock, RUL-lock_fail_fast, RUL-lock_refusal_says_locked, RUL-lock_released_on_any_end, RUL-lock_through_the_run, RUL-stale_lock_recovered, RUL-stale_takeover_conservative
+:realises: RUL-one_workspace_lock, RUL-lock_fail_fast, RUL-lock_refusal_says_locked, RUL-lock_released_on_any_end, RUL-lock_through_the_run, RUL-stale_lock_recovered, RUL-stale_takeover_conservative, INV-one_run_at_a_time
 
 `WorkspaceLock` SHALL be an exclusive non-blocking `flock` on `.photos-ingest/photos-00-workspace.lock`, one per
 workspace for every command, taken without waiting, released by the kernel however its holder ends, the file never
@@ -129,6 +129,18 @@ only after the workspace's has succeeded, and recording both in `photos-31-merge
 The three phases SHALL take their snapshots through one mechanism — prep's execute, geotag's
 ({need}`BLD-geotag_execution`) and merge's ({need}`BLD-merge_execute`) invoke it, and none redefines it —, each execute
 taking it under the workspace lock, after revalidating its plan and before its first operation.
+:::
+
+:::{bld} Only the snapshot runs `zfs`
+:id: BLD-zfs_only_in_snapshot
+:status: ruled
+:realises: RUL-filesystem_agnostic
+
+The `zfs` command SHALL be run only by the snapshot's helpers — `take_zfs_snapshot`, `zfs_dataset` with
+`detect_zfs_dataset`, and `_zfs_snapshot_exists` — called by prep's, geotag's and merge's executes (merge's through
+`_take_snapshots`) and running nothing where `zfs.enabled` is not true; every other file operation uses calls of no one
+filesystem — `flock`, `os.replace`, `fsync`, and `renameat2` with `RENAME_NOREPLACE`, falling back to `os.link` then
+`os.unlink` where the filesystem refuses it ({need}`BLD-no_clobber_rename`).
 :::
 
 ## One configuration, kept in the workspace
@@ -239,6 +251,16 @@ flags, such as `single_anchor_auto_apply` and `multi_anchor_auto_apply` (geotag)
 ({need}`DEF-development`); and `media_extensions`, mapping `image`, `raw` and `video` to lists of canonical extensions —
 lowercase, no leading dot ({need}`RUL-checked_extension_lists`) —, an extension in no list being `other`, and none in
 two. `CAMERA_GROUP_KEY_VERSION` is a code constant, never a configuration field.
+:::
+
+:::{bld} An extension is looked up lowercased
+:id: BLD-extension_case_folded
+:status: ruled
+:realises: RUL-extension_matched_ignoring_case
+
+`media_class_for_ext` SHALL classify a file by its extension lowercased and stripped of its leading dot, looked up in
+the map `_build_media_class_map` builds from `media_extensions`, each listed extension lowercased the same way, one
+found in no list being `other`; every phase classifies a file through it.
 :::
 
 :::{bld} What validating the configuration checks
@@ -402,6 +424,41 @@ The plan and decision artifacts SHALL be prep's `photos-10-prep-plan.json`, geot
 `dry-run` and `execute` read it there, and no command takes a path flag for it.
 :::
 
+:::{bld} A dry run checks the saved plan as execute would, and summarises it
+:id: BLD-dry_run_reads_saved_plan
+:status: ruled
+:realises: RUL-dry_run_summarises_the_real_plan, RUL-dry_run_validates_saved_plan
+
+Prep's and merge's `dry-run` SHALL read the plan at its fixed path ({need}`BLD-canonical_plan_paths`), none there
+stopping it with exit status 2, check it with the check their execute makes before its first change — prep's
+`PlanValidator.validate_plan_preflight`, merge's `revalidate_plan_deps` —, one failing stopping it with exit status 2,
+and report a summary of that plan, never each operation: its `plan_id`, its operations counted by type (prep) or its
+moves and `totals` by disposition (merge), its warnings and blockers, and the plan's path; prep's dry run that finds
+nothing to do (`_prep_nothing_to_do`) ends 0 before it reads the plan.
+:::
+
+:::{bld} A dry run writes nothing but its locks' owners and an acceptance
+:id: BLD-dry_run_writes_nothing
+:status: ruled
+:realises: RUL-dry_run_changes_nothing
+
+Prep's and merge's `dry-run` SHALL write nothing but the owner records of `WorkspaceLock` and, for merge, `LibraryLock`,
+and the acceptance `check_workspace` adds to `photos-01-accepted-changes.json` when given its code
+({need}`BLD-accept_changes`) — the filesystem trials' scratch folders removed again ({need}`BLD-filesystem_trial`,
+{need}`BLD-library_trial`): no plan, journal, summary, snapshot or move, prep's opening no `WorkspaceCache` and merge's
+writing no `library_fingerprint_cache` row ({need}`BLD-library_file_fingerprinted`).
+:::
+
+:::{bld} No plan: the command names `plan`
+:id: BLD-no_plan_stops
+:status: ruled
+:realises: RUL-no_plan_says_plan_first
+
+`prep dry-run`, `prep execute`, `geotag execute`, `merge dry-run` and `merge execute` SHALL, finding no plan at its
+fixed path ({need}`BLD-canonical_plan_paths`), stop with exit status 2 before any change, naming the missing artifact
+and the phase's `plan` as the command to run first.
+:::
+
 :::{bld} A superseded plan goes aside under `-NNN`
 :id: BLD-plan_backups
 :status: ruled
@@ -437,6 +494,19 @@ effect but its action and its path: what is left is the operations, their source
 preconditions and evidence, the blockers and warnings, the inventory, the file preconditions and the dependencies. A
 kept plan an execution already began under is executed again under its id, its earlier journal set aside
 ({need}`BLD-history_kept`).
+:::
+
+:::{bld} A plan of the same state is the same plan
+:id: BLD-plan_deterministic
+:status: ruled
+:realises: RUL-no_op_run_same_result
+
+Each phase's planning SHALL make the same plan of the same workspace state: prep walks it sorted and gathers its
+workers' results by path, two of its plans differing only where {need}`BLD-planning_order` says; geotag's records carry
+no time of their making and `photos-24` takes its `plan_id` from the SHA-256 of its `depends_on`; merge sorts each
+destination's records by `by_dest_source`, records no time of its making and takes its `plan_id` from the SHA-256 of its
+`depends_on`, `destinations` and `library_root`; and every record is written with sorted keys
+({need}`BLD-json_written_alike`).
 :::
 
 :::{bld} The handoff's two hashes
@@ -481,6 +551,30 @@ throughout `6-photos-by-dest` at startup, by a walk that follows nothing and rea
 again before its first operation, so a folder lost since the plan is not made again by a move into it
 ({need}`RUL-missing_folder_never_recreated`). A link or a missing folder
 is named in its blocker, and an empty inbox passes.
+:::
+
+:::{bld} A managed folder is there while a folder holds its name
+:id: BLD-missing_folder_check
+:status: ruled
+:realises: RUL-empty_folder_restores, RUL-missing_folder_remedy_told
+
+`missing_managed_folders` SHALL name each managed folder whose name at the workspace root holds no directory
+(`os.path.isdir`), whatever a directory there holds — so an empty folder put back restores it, a link there being
+blocked as a link ({need}`BLD-shape_guards_by_phase`) —; and the blocker of prep's shape check (`_shape_blockers`) and
+plan, of geotag's preflight and of merge's preflight names the folders it returns and tells the user to restore them
+before running again.
+:::
+
+:::{bld} A link stops a phase before its records
+:id: BLD-link_blocks_before_records
+:status: ruled
+:realises: RUL-link_block_produces_nothing
+
+A link SHALL stop every geotag command, merge's `plan`, `dry-run` and `execute`, and `init-library` (`_shape_refusal`)
+before they write any decision record, plan or summary, exit 2; and prep's commands, one at the top level before the
+scan (`_shape_blockers`) and one deeper as a blocker of the plan, which `prep plan` saves and ends with exit status 2
+and which dry-run and execute refuse before any change ({need}`BLD-blocked_plan_refused`), so no journal, log, handoff
+or database image follows it.
 :::
 
 ## Camera groups, derived once
@@ -549,6 +643,18 @@ The names SHALL be `<timestamp>.ext`, else `<timestamp>-NNN.ext` with NNN three 
 geotag take the lowest free, merge the one above the highest ({need}`BLD-collision_suffix`).
 :::
 
+:::{bld} The order a suffix is allocated in
+:id: BLD-suffix_order
+:status: ruled
+:realises: RUL-suffix_deterministic
+
+Each phase SHALL allocate the `-NNN` suffix in an order fixed by the files themselves, never by the order they are met
+in, each name given added to the names taken (`allocate_suffix`, `allocate_stem`): prep over its scan sorted by path
+({need}`BLD-planning_order`); geotag in the order {need}`BLD-rename_planning` gives, its last key the path; merge over
+`enumerate_finalized`'s entries sorted by their path in the workspace ({need}`BLD-merge_target`), from one above the
+highest suffix among the folder's names and the batch's ({need}`BLD-collision_suffix`).
+:::
+
 :::{bld} Geotag's final name, step by step
 :id: BLD-geotag_final_name
 :status: ruled
@@ -578,6 +684,27 @@ formatted by `filename_timestamp_format`, or starts with `UNKN_` for a file with
 the missing-metadata folder. A dated file with no recorded time is moved to the missing-metadata folder instead, and the
 strays folder is not checked. A JPEG in the redundant-JPG folder whose name without its extension is that of the raw
 file its prep log names ({need}`BLD-set_aside_pair_recorded`), found by its fingerprint, is rightly named.
+:::
+
+:::{bld} A file's time is read from its metadata alone
+:id: BLD-time_from_metadata
+:status: ruled
+:realises: RUL-no_meaning_from_names
+
+A file's time SHALL be taken by `recorded_time` from the fields exiftool reads (`RECORDED_TIME_TAGS`:
+`DateTimeOriginal`, `CreateDate`, `ModifyDate`) and kept as `selected_source_naive_timestamp` with its tag; no phase
+parses a time from a file's name — prep's name check formats the recorded time and compares the name with it
+({need}`BLD-name_check`), and geotag takes each photo's time from its handoff record.
+:::
+
+:::{bld} A misnamed file's blocker gives the name it should carry
+:id: BLD-misnamed_expected_name
+:status: ruled
+:realises: RUL-misnamed_file_expected_name
+
+Prep's blocker for a misnamed file (`_misnamed_blocker`) SHALL carry the name `_expected_name` gives it: its recorded
+time formatted by `filename_timestamp_format` with the file's own extension, or, with no recorded time or in the
+missing-metadata folder, its name behind `UNKN_` ({need}`BLD-untimed_mark`).
 :::
 
 :::{bld} The format recorded in the handoff
@@ -723,6 +850,20 @@ it, prep's other checks of its record ({need}`BLD-reprep_pending`) being the pla
 merge's preflight checks the inbox, the
 development gate, that photos by date holds no photo, and that photos by destination holds only photos ({need}`BLD-merge_preflight`). A development subfolder
 is one named in `destination_distribution_subfolders`. Geotag's preflight stops as well on a photo in `6-photos-by-dest` whose handoff record holds no fingerprint, named.
+:::
+
+:::{bld} Geotag's gates read the workspace as it stands
+:id: BLD-geotag_gates_present_state
+:status: ruled
+:realises: RUL-geotag_gates_ignore_history, RUL-geotag_rerunnable
+
+Geotag's `preflight` SHALL decide its gates from the workspace as it stands alone — the inbox, photos by date and
+photos by destination as listed now, the current `photos-11-handoff.json` and prep's log, and, at `execute` and
+`finalize`, the renames of the plan they carry out — reading no earlier plan, journal,
+`photos-25-execution-summary.json` or `photos-26-*` record and counting no earlier run; so a workspace geotag has
+planned, executed and finalized before is refused for it by none of geotag's commands, the seal aside
+({need}`BLD-phases_check_seal`), each re-run setting aside the records it replaces ({need}`BLD-plan_backups`,
+{need}`BLD-geotag_records_versioned`).
 :::
 
 :::{bld} A development subfolder's name, case folded
@@ -879,7 +1020,7 @@ placed nowhere has geotag's position and marker cleared and carries the suffix a
 :::{bld} A re-run plans only the writes and renames that differ
 :id: BLD-rerun_writes_only_differences
 :status: ruled
-:realises: RUL-geotag_rerun_keeps_settled
+:realises: RUL-geotag_rerun_keeps_settled, RUL-withdrawal_recomputes_time_and_name
 
 A write SHALL be planned only where the file does not already hold its value, names being recomputed from the
 destination's local time, a file already so named getting no rename ({need}`BLD-rename_planning`,
@@ -902,7 +1043,7 @@ differs from it, when the handoff's content fingerprint is no longer the one it 
 :::{bld} What each phase reuses
 :id: BLD-idempotency
 :status: ruled
-:realises: RUL-reuse_valid_work
+:realises: RUL-reuse_valid_work, RUL-decision_kept, RUL-rerun_asks_only_affected, RUL-rerun_does_what_changed
 
 Each phase SHALL reuse what is still valid: prep, the cached fingerprint and metadata of a file whose size and
 modification time are unchanged, carrying a moved file's identity forward without reading it ({need}`RUL-moved_file_carried`), a plan never executed leaving its fingerprints and metadata for the next plan to reuse
@@ -967,7 +1108,7 @@ same way ({need}`BLD-merge_journal_resume`, {need}`BLD-merge_records`).
 :::{bld} Every plan decides from a photo's own values
 :id: BLD-decided_from_own_values
 :status: ruled
-:realises: RUL-withdrawal_undoes, RUL-decision_revisable
+:realises: RUL-withdrawal_undoes, RUL-decision_revisable, RUL-wrong_choice_needs_no_hand_repair
 
 Every plan SHALL decide about a photo from its own values, pinned before geotag first wrote to it
 ({need}`BLD-original_values_pinned`), so a withdrawn manual position is undone like any decision: the photo is placed
@@ -1034,7 +1175,7 @@ another value or none stale at dry run and execute alike.
 :::{bld} Which phase writes which record
 :id: BLD-record_ownership
 :status: ruled
-:realises: RUL-phase_writes_own_records
+:realises: RUL-phase_writes_own_records, RUL-config_writers
 :uses: BLD-artifact_numbering, BLD-init_library_writes_library_root
 
 A phase SHALL write only records in its own number band of the numbering scheme: prep `photos-1X`, geotag `photos-2X`,
@@ -1052,6 +1193,22 @@ record of the state it leaves and a prune that deletes that record's rows of wha
 the decision editor, which records the same answer ({need}`BLD-editor_answers_zone_table`); and the editor writes, of geotag's records, the user's answers
 alone. Bundling copies of every phase's records into
 the archival package reads them, and is no write.
+:::
+
+:::{bld} What a plan writes
+:id: BLD-planning_writes
+:status: ruled
+:realises: RUL-planning_changes_no_media, RUL-planning_writes_only_its_records
+
+A phase's `plan` SHALL carry out none of its operations, writing — beside its locks, the control directory its lock
+makes on a first run ({need}`BLD-control_dir_by_prep_only`), and `photos-01-accepted-changes.json` where it is given an
+accepting code ({need}`BLD-accept_changes`) — only: prep, `photos-10-prep-plan.json`, the plan memo
+({need}`BLD-plan_memo`), `photos-02-zone-table.json` ({need}`BLD-zone_table_question`) and, on the first run, the seeded
+`photos-00-config.json` ({need}`BLD-seed_before_fingerprints`), opening `photos-00-ingest.db` read-only
+(`WorkspaceCache(read_only=True)`); geotag, `photos-21` to `photos-24` and, in `photos-00-ingest.db`,
+`resolved_utc_cache` and the track catalogue ({need}`BLD-track_catalogue`); merge, `photos-30-merge-plan.json` and the
+rows of `library_fingerprint_cache` ({need}`BLD-library_file_fingerprinted`); each record it replaces set aside under
+`-NNN` ({need}`BLD-plan_backups`). The prep execution geotag's plan may run is prep's ({need}`BLD-geotag_auto_reprep`).
 :::
 
 :::{bld} The package: the control directory, archived with its manifest
@@ -1233,7 +1390,7 @@ folder, passing over one taken there without regard to case; the library's own n
 :::{bld} Every library file at a photo's place is compared
 :id: BLD-one_library_file_compared
 :status: ruled
-:realises: RUL-collision_by_content, RUL-collision_same_content, RUL-same_pixels_other_file_blocks
+:realises: RUL-collision_by_content, RUL-collision_same_content, RUL-same_pixels_other_file_blocks, RUL-unsettled_collision_blocks
 
 Merge SHALL compare with each photo every library file at its place — the one under the photo's own name, then,
 in sorted order, those whose names differ from it only in case (`_at_place`): the photo is already in the library
@@ -1250,6 +1407,18 @@ A library SHALL be marked by an empty `.photos-library` file in `library_root`, 
 `os.path.isfile` and `merge init-library` alone creates, with `O_CREAT|O_EXCL`, leaving one already there as it is.
 :::
 
+:::{bld} A library is bound to no workspace
+:id: BLD-library_bound_to_no_workspace
+:status: ruled
+:realises: RUL-library_takes_many_workspaces
+
+A library SHALL name no workspace: its mark `.photos-library` is empty and tested alone by `is_library`,
+`merge init-library` leaves a mark already there as it is, and the seal a merge writes is the workspace's own
+`photos-00-sealed.json` ({need}`BLD-seal_marker`); so a merge from any workspace whose `merge.library_root` names a
+marked library proceeds there, one at a time under `LibraryLock` ({need}`BLD-library_lock`), each photo set against the
+files already at its place ({need}`BLD-one_library_file_compared`).
+:::
+
 :::{bld} `validate_merge_config` checks the library's place
 :id: BLD-library_root_validated
 :status: ruled
@@ -1264,6 +1433,19 @@ A library SHALL be marked by an empty `.photos-library` file in `library_root`, 
 :realises: RUL-library_creates_only_placements
 
 Merge SHALL create a missing destination directory under `library_root` with `os.makedirs` as it places a photo there.
+:::
+
+:::{bld} The library holds no record of merge's
+:id: BLD-library_holds_no_record
+:status: ruled
+:realises: RUL-library_no_database
+
+Merge SHALL keep what it records of the library in the workspace — the library files' fingerprints in
+`library_fingerprint_cache` of `photos-00-ingest.db` ({need}`BLD-workspace_database`), its plan, journal and summary in
+`.photos-ingest/` — and write into `library_root` only the photos it places and the folders it makes for them
+({need}`BLD-library_folders_made`), its `.tmp-xdev-*.part` copies ({need}`BLD-cross_fs_temp`), the lock file
+`.photos-merge.lock` ({need}`BLD-library_lock`) and the trial's scratch folder, removed again
+({need}`BLD-library_trial`); `init-library` alone adds the empty mark `.photos-library` ({need}`BLD-library_marker`).
 :::
 
 :::{bld} The library lock
@@ -1356,7 +1538,7 @@ differs first copied whole to the next free `-NNN`.
 :::{bld} What a whole merge writes, and the seal last
 :id: BLD-merge_success_sequence
 :status: ruled
-:realises: RUL-merge_repackages, RUL-seal_on_success_only, RUL-repackage_rederives_nothing, RUL-empty_merge_seals
+:realises: RUL-merge_repackages, RUL-seal_on_success_only, RUL-repackage_rederives_nothing, RUL-empty_merge_seals, RUL-unplaced_photo_run_partial
 
 Only on success — every photo placed or already present, none left, a plan of no photo among them — SHALL merge then,
 in order, write `photos-35-merge-log.json`, `photos-35-fingerprint-map.json`, `photos-35-merge-ingest.db`, the package's
@@ -1375,7 +1557,7 @@ prep writes — recording `sealed`, the merge run id (`merged_run_id`) and `libr
 :::{bld} The phases check the seal first
 :id: BLD-phases_check_seal
 :status: ruled
-:realises: RUL-sealed_refuses, RUL-sealed_new_dump_warned, RUL-sealed_new_dump_left
+:realises: RUL-sealed_refuses, RUL-sealed_new_dump_warned, RUL-sealed_new_dump_left, RUL-merge_is_terminal, RUL-merged_batch_no_op
 
 Prep's `plan`, `dry-run` and `execute`, every geotag command, and merge's `plan`, `dry-run` and `execute` SHALL check
 the seal under the workspace lock before reading anything else but the filesystem checks
@@ -1398,7 +1580,7 @@ folders and hidden entries, or anything in the inbox.
 :realises: RUL-sealed_no_library_recorded
 
 `merge init-library` given a path from inside a workspace, which would record it as `library_root` in the configuration,
-SHALL check the seal under the lock the same way, and stop with exit status 2 having blessed nothing; without a path, or
+SHALL check the seal under the lock the same way, and stop with exit status 2 having marked nothing; without a path, or
 from outside any workspace, it writes nothing in the workspace and does not check.
 :::
 

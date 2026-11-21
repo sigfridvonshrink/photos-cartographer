@@ -39,6 +39,17 @@ holds `initialized`, `tool` and `initialized_by_run`, the initializing plan's id
 records as the workspace's identity ({need}`BLD-archive_manifest`).
 :::
 
+:::{bld} The managed folders are planned on the first run alone
+:id: BLD-structure_at_init
+:status: ruled
+:realises: RUL-structure_built_once
+
+Prep's plan SHALL hold a `mkdir` of each managed folder, in the order of `FOLDER_ROLES`, on the initializing run alone —
+`photos-00-workspace-guard` absent ({need}`BLD-workspace_guard`); on every later run it plans none, a managed folder
+missing being a blocker (`missing_managed_folders`, {need}`BLD-shape_guards_by_phase`), and no folder removal names a
+managed folder (`_removable_folder`, {need}`BLD-folder_removals`).
+:::
+
 :::{bld} The question of the table of countries, asked by `prep plan`
 :id: BLD-zone_table_question
 :status: ruled
@@ -58,6 +69,18 @@ answer is not asked again; an answer given on a later `prep plan` is acted on as
 `copy` that `check_zone_table_text` does not find well formed (`zone_table_record_error`), `prep plan` stops with status
 2 before its question and scan, and each geotag command after its workspace check, naming the file; the console's state
 then asks nothing.
+:::
+
+:::{bld} Prep asks one question, and only at a terminal
+:id: BLD-prep_asks_nothing
+:status: ruled
+:realises: RUL-prep_takes_no_decision
+
+Prep SHALL read none of geotag's decision records and write no `user_decision` field, its plan made from its scan, the
+workspace database, the records of earlier runs and `photos-00-config.json`, no command option bearing on it
+({need}`BLD-prep_dependencies`); its one question, `_zone_table_answer`'s y/N, is put only where standard input is a
+terminal and the reporter renders to one (`TtySink`), and an answer not given, an end of input among them, leaves the
+plan as it is ({need}`BLD-zone_table_question`).
 :::
 
 :::{bld} The download of the table of countries
@@ -86,6 +109,19 @@ first `NNN` from `001` so free among the folder's names on disk and planned, ign
 file from.
 :::
 
+:::{bld} The initializing run takes the managed folders as it finds them
+:id: BLD-init_takes_folders_as_found
+:status: ruled
+:realises: RUL-dump_folder_named_as_managed, RUL-init_taken_up_again
+
+Where `photos-00-workspace-guard` is absent, prep's plan SHALL plan an initializing run whatever an earlier one did: an
+`mkdir` of each managed folder, which execute makes with `os.makedirs(…, exist_ok=True)`, a folder already there kept
+with what it holds; a top-level folder named as a managed folder (`managed_folder_names`) walked as that folder, and
+one named `1-strays` skipped as the strays ({need}`BLD-prep_skip_set`), neither inventoried as dump; and
+`_plan_init_moves` moving into `0-sources` only the files whose path's first component is no managed folder's name,
+so a file already in the inbox is filed from there as the inbox's.
+:::
+
 :::{bld} A run's strays go to `1-strays/<plan-id>/`
 :id: BLD-strays_per_run
 :status: ruled
@@ -93,6 +129,18 @@ file from.
 
 Prep SHALL move a run's strays into `1-strays/<plan-id>/`, each at its path under `0-sources/`, so that no two runs
 share a folder there.
+:::
+
+:::{bld} A file of no media class is never read for prep's checks
+:id: BLD-non_media_never_read
+:status: ruled
+:realises: RUL-inbox_non_media_never_blocks
+
+A file of no media class SHALL take no fingerprint, no place in the duplicate groups (`_plan_content_groups`) and the
+metadata status `not_applicable` whether or not exiftool's batch for its folder failed or left it out (`_process_file`),
+so that in the inbox it is only moved to the strays ({need}`BLD-strays_per_run`) and no blocker names it there — the
+sidecars ({need}`BLD-sidecar_extensions`) and track files ({need}`BLD-track_file_blocker`), which prep stops on wherever
+they lie, apart.
 :::
 
 :::{bld} Where a stray is named
@@ -126,6 +174,20 @@ fingerprint, the handoff's recorded hash among them, is of the file as it stands
 
 Prep's execute SHALL apply the operations of `photos-10-prep-plan.json` in their recorded order, to the destinations
 recorded there, running no step of planning.
+:::
+
+:::{bld} Prep's execute carries out only a plan the workspace still matches
+:id: BLD-prep_execute_rechecks
+:status: ruled
+:realises: RUL-prep_replans
+
+Prep's execute SHALL take nothing from the journal of an earlier execution — `start_journal` sets an existing
+`journal-<plan-id>.json` aside under `-NNN` and begins the plan's journal afresh — and carry out the saved plan only once
+`validate_plan_preflight` finds, before any change, each operation's source at the size and `mtime_ns` it records, each
+destination free among the files on disk and the plan's earlier destinations, ignoring case, each file of
+`workspace_file_preconditions` and each `db_upsert` target as recorded, each ghost prune's path still gone, and no
+inventoried file the plan's `inventory` lacks; any other finding refuses the plan, exit 2, for a new `prep plan` to
+replace it.
 :::
 
 :::{bld} Prep journals each operation as it ends
@@ -219,6 +281,28 @@ Prep's dry-run and execute SHALL refuse, before any change, a plan whose `blocke
 blocker it finds, the plan still saved — is not empty.
 :::
 
+:::{bld} A blocker is a line naming what blocks
+:id: BLD-blocker_names_path
+:status: ruled
+:realises: RUL-blocker_names_what_blocks
+
+Each blocker prep's plan records in `blockers`, and each its shape check stops on before planning (`_shape_blockers`),
+SHALL be a line of text naming what blocks: the workspace path of each file or folder it concerns, or, for a changed
+`filename_timestamp_format`, the setting with the format recorded and the one now configured (`filename_format_changed`).
+:::
+
+:::{bld} No handoff is built while a link is there
+:id: BLD-handoff_after_link_free_scan
+:status: ruled
+:realises: RUL-handoff_built_without_links
+
+Prep SHALL stop on a link at the top level before it scans (`_shape_blockers`) and record each one its walk meets
+deeper — in every folder it walks, `6-photos-by-dest` among them (`_scan_inventory`, `_flag_dir_symlinks`) — as a
+blocker of its plan, which execute refuses before any change ({need}`BLD-blocked_plan_refused`); and its execute walks
+the workspace again before its first operation (`_rescan_inventory`), refusing the plan as stale on a link found there;
+so `photos-11-handoff.json` is written only by an execute that found no link, the earlier one left as it was.
+:::
+
 
 ## The prep pipeline
 
@@ -231,6 +315,19 @@ Prep's planning SHALL run its stages in this order: initialization and inventory
 dump is moved; duplicates; extension case; redundant JPEGs; organization by class and time; database reconciliation.
 :::
 
+:::{bld} The duplicate groups, and the copy kept
+:id: BLD-duplicate_kept_copy
+:status: ruled
+:realises: RUL-duplicates_quarantined, RUL-copy_kept_first_by_path, RUL-copy_kept_by_folder
+
+Prep's duplicates stage SHALL group the media files it inventories, `6-photos-by-dest`'s among them, by their fingerprint
+record (`content_hash`) and media class, a file with no valid fingerprint left out (`_plan_content_groups`); and in each
+group of more than one keep the file first by `dedup_priority` of the path it lies at when planned — the order of
+`FOLDER_DEDUP_PRIORITY`: `6-photos-by-dest`, `5-photos-by-date`, `4-videos-by-date`, `3-redundant-jpgs`,
+`2-missing-metadata`, `0-sources`, a dump file at the top level ranked at its inbox place — then by that path compared
+as text, planning a `quarantine_move` of kind `duplicate` for every other copy not in `6-photos-by-dest` (`_plan_dedup`).
+:::
+
 :::{bld} Each stage works from the paths the stages before it planned
 :id: BLD-planned_paths_tracked
 :status: ruled
@@ -239,6 +336,19 @@ dump is moved; duplicates; extension case; redundant JPEGs; organization by clas
 Each stage of prep's planning SHALL work from the path the stages before it gave each file, allocating every name
 against the names on disk and those already planned; a file in the inbox keeps its path there until the stage that
 files it moves it out.
+:::
+
+:::{bld} An inbox file is filed by its recorded time
+:id: BLD-inbox_filed_by_time
+:status: ruled
+:realises: RUL-photos_by_date, RUL-videos_by_date, RUL-untimed_to_missing_metadata
+
+Prep's organization stage (`_plan_organize`) SHALL file each media file of the inbox not set aside with one
+`move_no_clobber` of reason `Chronological Organization`: one with a recorded time (`_file_datetime`) into
+`4-videos-by-date/<YYYY-MM-DD>/` for a video and `5-photos-by-date/<YYYY-MM-DD>/` for a photo or raw file
+({need}`BLD-day_folder_name`), under its time formatted by `filename_timestamp_format`; one with none directly into
+`2-missing-metadata/`, under its untimed name (`untimed_stem`, {need}`BLD-untimed_mark`); each name taking the `-NNN`
+suffix only on a clash ({need}`BLD-name_suffix`) and its extension lowercased.
 :::
 
 :::{bld} A timed file in missing metadata is organized with the inbox's
@@ -293,6 +403,17 @@ each prep execution writes the latest one of each JPEG into its record of the ha
 a JPEG names neither.
 :::
 
+:::{bld} A redundant JPEG's name
+:id: BLD-redundant_jpeg_named
+:status: ruled
+:realises: RUL-redundant_jpg_timestamp_named
+
+`_plan_redundant_jpgs` SHALL move a JPEG set aside beside its RAW to `3-redundant-jpgs` under its recorded time
+formatted by `filename_timestamp_format`, or with none its untimed name (`untimed_stem`, {need}`BLD-untimed_mark`), its
+extension lowercased, the bare name first and else the lowest free `-NNN` against every name already outside the inbox
+and those it has given, case folded ({need}`BLD-name_suffix`).
+:::
+
 :::{bld} A culled RAW, found by its fingerprint
 :id: BLD-culled_raw_found
 :status: ruled
@@ -332,6 +453,17 @@ that no move explains and whose path no planned move fills again — that row is
 A day's folder SHALL be named `YYYY-MM-DD` from its recorded time's date, whatever `filename_timestamp_format` is.
 :::
 
+:::{bld} Prep names by the time as recorded
+:id: BLD-prep_name_from_recorded_time
+:status: ruled
+:realises: RUL-prep_name_provisional
+
+Prep SHALL name a file it files by its recorded time as `_file_datetime` reads it — `parse_naive_time` of the value
+`recorded_time` selects, a naive datetime with no zone, offset or correction applied — formatted by
+`filename_timestamp_format` (`_plan_organize`, `_plan_redundant_jpgs`); geotag names a photo anew from its resolved UTC
+({need}`BLD-geotag_final_name`), and renames no video ({need}`BLD-geotag_file_model`).
+:::
+
 
 ## Content fingerprinting and cache reuse
 
@@ -355,13 +487,26 @@ photo's the ImageMagick version that took it; a cached photo fingerprint is reus
 when its strategy does. The handoff carries the method's version (`depends_on.cache.fingerprint_algorithm_version`); geotag's and merge's preflight stop on one that is not the build's.
 :::
 
+:::{bld} The freshness gate
+:id: BLD-freshness_gate
+:status: ruled
+:realises: RUL-fingerprint_taken_afresh, RUL-reread_whole
+
+Prep's plan SHALL reuse a media file's row (`_process_file`) only where the workspace database, the plan memo laid under
+it ({need}`BLD-plan_memo`), holds one at its path with the file's size and `mtime_ns`, a metadata record
+`is_metadata_cache_fresh` accepts and a fingerprint `fingerprint_reusable` accepts ({need}`BLD-fingerprint_method`); any
+other media file it fingerprints afresh, its folder read by exiftool again where its metadata record is not fresh — but
+for a file a recognized move carries ({need}`BLD-carried_row`), whose row is taken without reading it, and one geotag's
+journal carries ({need}`BLD-geotag_journal_carried`), whose fingerprint is reused and its metadata alone read.
+:::
+
 
 ## Files the user moves, and the plan memo
 
 :::{bld} The move is matched on size, time and name
 :id: BLD-move_match
 :status: ruled
-:realises: RUL-move_recognized, RUL-memo_proves_no_move
+:realises: RUL-move_recognized, RUL-memo_proves_no_move, RUL-sort_recorded_by_stat
 
 Prep's plan SHALL match, before laying the plan memo under the database, the rows of the workspace database whose path
 is not in the inventory against the inventoried files under `6-photos-by-dest` that have no row, by size, `mtime_ns`
@@ -371,7 +516,7 @@ and exact basename; a triple held by more than one row or more than one file mat
 :::{bld} A recognized move is a database write
 :id: BLD-carried_row
 :status: ruled
-:realises: RUL-moved_file_carried, RUL-log_follows_retaken_fingerprint, RUL-moved_file_stale_read_again
+:realises: RUL-moved_file_carried, RUL-log_follows_retaken_fingerprint, RUL-moved_file_stale_read_again, RUL-sort_recorded_by_stat
 
 Prep's plan SHALL carry a matched row whose fingerprint passes {need}`BLD-fingerprint_method` and whose metadata is
 fresh as a `db_upsert` of it at the new path with the file's size, `mtime_ns` and inode; a matched stale row moves to
@@ -429,6 +574,15 @@ metadata record; read, its entries lie under the database's rows and pass the sa
 read or write it warns and goes on.
 :::
 
+:::{bld} The plan memo is written outside the plan
+:id: BLD-plan_memo_not_journalled
+:status: ruled
+:realises: RUL-scratch_database_not_journalled
+
+`prep plan` SHALL write the plan memo itself, by `PlanFingerprintMemo.replace_all` in `_save_plan_memo`, outside its
+plan: no operation of the plan names the memo, and no journal records it.
+:::
+
 
 ## Duplicates and failures beside photos by destination
 
@@ -479,6 +633,18 @@ and a time field from the first group holding a
 valid time in it; it keeps the fields in `metadata_cache.parsed_json` with the recorded time's field and group, stamped
 with `exiftool`, its version, the field-set version, the SHA-256 of the options, the metadata-schema version and the
 camera-group-key version.
+:::
+
+:::{bld} The recorded time's field
+:id: BLD-recorded_time_field
+:status: ruled
+:realises: RUL-recorded_time_order
+
+`recorded_time` SHALL take a file's recorded time from the first of `RECORDED_TIME_TAGS` — `DateTimeOriginal`,
+`CreateDate`, `ModifyDate` — whose value `parse_naive_time` reads as a time, passing over one absent, not text or no
+time, a placeholder such as `0000:00:00 00:00:00` among them; `_parse_exiftool_item` records the value as
+`selected_source_naive_timestamp` and its field, with its group, as `selected_source_timestamp_tag`, which prep's naming
+and geotag's file model read.
 :::
 
 :::{bld} A metadata read that failed is a blocker
@@ -538,6 +704,31 @@ its moves over the files on disk, hidden ones included, deepest folder first; ex
 empty, journals a folder found not empty or not removable as skipped, and warns of it.
 :::
 
+:::{bld} A managed folder is no folder prep may remove
+:id: BLD-managed_folder_not_removable
+:status: ruled
+:realises: RUL-managed_folder_never_removed
+:refines: BLD-folder_removals
+
+`_removable_folder` SHALL admit for an `rmdir` only a folder below `0-sources`, `4-videos-by-date` or
+`5-photos-by-date`, or a folder at the top level that is no managed folder, control directory, quarantine or `.git` —
+never a managed folder itself, nor anything in `1-strays` or `6-photos-by-dest`; planning plans an `rmdir` only of a
+folder it admits, and `validate_plan_preflight` refuses a plan holding one of any other.
+:::
+
+:::{bld} Every inbox file is moved out
+:id: BLD-inbox_emptied
+:status: ruled
+:realises: RUL-prep_empties_inbox
+
+Prep's plan SHALL move every file under `0-sources/` out of it — a duplicate (`_plan_dedup`) and a hidden file
+(`_collect_dump_dotfiles`, {need}`BLD-dump_dotfiles_quarantined`) to the quarantine, a JPEG beside its RAW to
+`3-redundant-jpgs` (`_plan_redundant_jpgs`), a stray to `1-strays/<plan-id>/` ({need}`BLD-strays_per_run`) and every
+other media file to its day folder or `2-missing-metadata` (`_plan_organize`) — and remove each folder under it so
+emptied ({need}`BLD-folder_removals`); a file it cannot move — a link, a sidecar, a track file — is a blocker, and a plan
+holding one is refused ({need}`BLD-blocked_plan_refused`).
+:::
+
 
 ## The quarantine
 
@@ -551,6 +742,31 @@ quarantine path, the copy kept, the fingerprint and the plan id — appended to 
 move; the manifest is replaced whole at each append, and one found unreadable is set aside as
 `manifest.json.corrupt-<time>-<random>` and a new one begun — or, where it cannot be set aside, the quarantine move
 fails before the file is moved, the manifest left as it was.
+:::
+
+:::{bld} Prep's runs leave the quarantine as they find it
+:id: BLD-quarantine_untouched_by_prep
+:status: ruled
+:realises: RUL-quarantine_never_auto_deleted
+
+Prep's plan SHALL plan no operation whose source lies in `.photos-ingest-quarantine/` — its scan skips that folder whole
+({need}`BLD-prep_skip_set`), and `_removable_folder` refuses it an `rmdir`, at plan and in `validate_plan_preflight` —
+its execute writing there only the files its quarantine moves take in and its own plan's `manifest.json`
+(`_append_quarantine_manifest`, an unreadable one set aside by rename, {need}`BLD-quarantine_layout`); only
+`prep prune-quarantine` ({need}`BLD-prune_command`) removes anything there.
+:::
+
+:::{bld} A file back from the quarantine has no record but its manifest
+:id: BLD-restored_file_unrecorded
+:status: ruled
+:realises: RUL-restored_file_is_new, RUL-restored_file_record_kept
+
+A quarantine move SHALL remove the file's row and write none at its destination ({need}`BLD-move_row_effects`), so a
+file the user moves from `.photos-ingest-quarantine/` back into `0-sources` — its leaving the quarantine found `removed`
+by the workspace check and passed only once accepted by its code ({need}`BLD-workspace_check`,
+{need}`BLD-accept_changes`) — has no row at its path and is planned as any new file of the inbox; and each execute
+writes only to the manifest of its own plan id, `.photos-ingest-quarantine/<plan-id>/manifest.json`
+({need}`BLD-quarantine_layout`), so the manifest that recorded the file's quarantine is left as it is.
 :::
 
 :::{bld} The prune's record is `photos-16-prune-record.json`
@@ -594,16 +810,36 @@ status, folder and metadata),
 final inventory, metadata extractor, plan and database versions, image engine) and `content_fingerprint`.
 :::
 
+:::{bld} The handoff's files are the database's rows
+:id: BLD-handoff_files_from_rows
+:status: ruled
+:realises: RUL-quarantined_leaves_handoff
+
+The handoff's `files` SHALL be every row of `file_cache` as prep's execute leaves it (`cache.get_all_files()`), so a
+file a quarantine move took — whose row the move removes and writes nowhere ({need}`BLD-move_row_effects`) — is not
+among them, named in the handoff only as evidence ({need}`BLD-duplicate_evidence`, {need}`BLD-quarantine_reasons`).
+:::
+
 :::{bld} The handoff's content fingerprint
 :id: BLD-handoff_content_fingerprint
 :status: ruled
-:realises: RUL-handoff_deterministic
+:realises: RUL-handoff_deterministic, RUL-prep_refresh_not_a_change
 
 `content_fingerprint` SHALL be the SHA-256 of the handoff serialized with sorted keys, without the keys `run_metadata`,
 `diagnostics`, `execution_journal`, `prep_log`, `content_fingerprint`, `cache_freshness` and `conflicts_or_duplicates`
 wherever they appear — the last two being each camera group's and destination folder's run-scoped counts and
 duplicates. Each file's `inode` is in what it covers, as it is in `cache_fingerprint`: a file whose row is written again
 at another inode changes both, though its size, time and fingerprint do not.
+:::
+
+:::{bld} The handoff is read back once written
+:id: BLD-handoff_read_back
+:status: ruled
+:realises: RUL-handoff_read_back
+
+Prep's execute SHALL, once `write_json_artifact` has written `photos-11-handoff.json`, read it back and recompute
+`handoff_content_fingerprint` over what it reads, failing the run (`ExecuteFailed`, exit 3) where that differs from the
+`content_fingerprint` it wrote.
 :::
 
 :::{bld} An unreadable `photos-15-prep-log.json` is a blocker
@@ -692,4 +928,18 @@ two plans of one workspace differ only in `plan_id`, `created_at`, the operation
 The plan's `performance_and_cache.rehash_summary` SHALL count the media files fingerprinted this run by reason — `new`,
 `moved-unmatched`, `size-changed`, `mtime-changed`, `metadata-stale`, `failed-before`, `engine-changed` — with a sample
 of the unexpected ones, and the fingerprints reused from the plan memo.
+:::
+
+:::{bld} Prep's run report
+:id: BLD-prep_run_report
+:status: ruled
+:realises: RUL-prep_run_summarised
+
+`_build_run_report` SHALL record, as `summary.report` of `photos-10-prep-plan.json`, the plan's media operations
+(`mkdir`, moves, renames, quarantine moves) apart from its database operations, the files already in place
+(`no_op_already_correct`), the recognized moves, the files of `6-photos-by-dest` read
+(`by_dest_files_scanned_read_only`), the duplicates whose kept copy is in `6-photos-by-dest` apart from the others, the
+quarantine moves by kind, the metadata reused, extracted, carried forward and failed, and the blockers and warnings; and
+prep's execute, at its end, prints it through `report_lines` with the database effects applied and whether it wrote
+the handoff, `photos-15-prep-log.json` and the database image (`performance_and_cache`).
 :::

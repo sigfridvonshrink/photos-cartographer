@@ -1380,8 +1380,8 @@ def test_a_re_plan_block_says_why_in_the_plan_and_on_screen(tmp_path, capsys, ca
 @pytest.mark.spec("RUL-merge_replan_any_time", test="TST-merge_execute-re_plan_after_failed_is_allowed")
 def test_re_plan_after_failed_is_allowed(tmp_path):
     # An all-blocked run is `failed` — nothing was placed, every source is still in by-dest. Like a
-    # `rejected` run, it moved nothing, so re-planning is allowed (no moved file to drop from the log);
-    # the re-plan refusal applies only to runs that actually moved files (partial/success).
+    # `rejected` run, it moved nothing. Merge plans again whatever an earlier run ended with
+    # (RUL-merge_replan_any_time): no state of an earlier run refuses a plan, the seal aside.
     ws, lib = _ws(tmp_path, [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"}],
                   library_files=[{"fp": "FAIL", "dest": "Trip", "name": "a.jpg"}])
     assert merge._run_locked_workflow("plan", str(ws)) == 2   # a blocker: ends as a refusal (RUL-blocked_plan_ends_refused)

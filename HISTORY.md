@@ -61,6 +61,14 @@ camera's day is shared across destinations; when a file comes in already carryin
 remove one copy unasked, the workspace's, of a photo the library holds; that a library place is confirmed by the
 bytes merge placed. The headings lost their numbers, which the three levels had never shared.
 
+Every rule now has a build item, as the owner ruled when the leaner corpus was weighed. Sixty-three rules had none:
+twelve were realised by an item that did not name them, and fifty-one took forty new items, each written from the code
+by a reader that changed nothing, and stating only what it found there. Three invariants keep none — each is carried
+by its rules.
+
+Three checks hold what was put right, each failing the build: an exception stated by anything but a rule; a rule no
+build item realises; a retired word, from a list kept beside the corpus.
+
 ## 2026-11-17 — a leaner corpus measured, and dropped (BACKLOG 57)
 
 The corpus is about three quarters the size of the code by words, and the owner asked whether that was overdoing it.

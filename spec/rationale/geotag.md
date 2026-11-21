@@ -1059,7 +1059,7 @@ A local time that happened twice, or never, has two readings an hour apart, and 
 :follows_from: RAT-position_follows_time, CHC-photos_matter
 :justifies: RUL-unanchored_offset_confirmed
 
-A photo with no position of its own is placed where the track was at its resolved time. With an offset the camera's
+A photo with no position of its own is placed where the track was at its true time. With an offset the camera's
 GPS measured, that time is evidence; with one assumed from the timezone or written by hand, nothing has checked it.
 Wrong by an hour, it slides the whole day's photos an hour along the track — each to a real place on the route, so
 none looks wrong — and writes those places into the originals. Seeing a photo against the track at its time is the

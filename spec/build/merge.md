@@ -147,6 +147,18 @@ One of those plans or their journals that cannot be read, does not parse as a JS
 or `operations` (a journal), or is not in the shape of {need}`BLD-merge_record_shape` stops the plan with exit status 2, naming it, no plan written.
 :::
 
+:::{bld} Merge's plan reads no earlier run as a gate
+:id: BLD-merge_replan_ungated
+:status: ruled
+:realises: RUL-merge_replan_any_time
+
+Merge's plan SHALL be made whatever an earlier execute ended with: no step of its preflight reads
+`photos-31-merge-summary.json`, a journal or an earlier `photos-30-merge-plan.json`, and a finalized photo gone from
+`6-photos-by-dest` is passed over there (`_check_unchanged_since_finalize`) and carried forward or blocked by the plan
+({need}`BLD-merge_carry_forward`), the earlier plan set aside ({need}`BLD-plan_backups`); only the seal
+({need}`BLD-phases_check_seal`) refuses it.
+:::
+
 :::{bld} The bytes of each placed file are journalled, and confirm its place
 :id: BLD-placed_bytes_journalled
 :status: ruled
@@ -160,6 +172,17 @@ whose file has the record's `placed_sha256` holds the photo, no fingerprint take
 differ, holding it only where it fingerprints, through `_fingerprint_library_file`, to the value the photo was placed
 under ({need}`BLD-changed_fingerprint_mapped`). Both the plan carrying it forward and the execute finding the photo's
 workspace copy gone check the place so.
+:::
+
+:::{bld} How a merge execute's status is settled
+:id: BLD-merge_execution_status
+:status: ruled
+:realises: RUL-resume_block_makes_partial
+:uses: BLD-merge_journal_resume
+
+`merge_execution_status` SHALL end an execute `success` only where no photo's result is `blocked`, `failed` where every
+one is, and `partial` otherwise; a photo whose copy is gone from `6-photos-by-dest` and whose library place `_holds` does
+not find holding it is `blocked` (`_place_file`), so a run with one never ends whole.
 :::
 
 :::{bld} The shape of merge's plan and journal
@@ -203,4 +226,29 @@ stops the dry run — then check the library's room ({need}`BLD-library_space`);
 temporaries a crash left; then move the photos on a pool of `jobs` workers, each touching only its own photo and
 returning a result; the main thread alone writing the journal, as each result arrives, and sorting the results by path
 before the summary is built.
+:::
+
+:::{bld} What merge's execute tells at its end
+:id: BLD-merge_run_told
+:status: ruled
+:realises: RUL-merge_run_reported
+:uses: BLD-merge_records
+
+Merge's `do_execute` SHALL print, once its photos are run, the run's totals (`summary.totals`) — placed new, already
+present, renamed for the library, blocked, and removed from `6-photos-by-dest` — and that it wrote
+`photos-31-merge-summary.json`, which holds each photo's outcome ({need}`BLD-merge_records`); then, on `success`, that it
+wrote the merge log and database image, repackaged and sealed the workspace, ending 0; otherwise each blocked
+photo's `blocker`, naming its path and why, and that the blocked photos were left in photos by destination for another
+execute, ending 3 with no seal written.
+:::
+
+:::{bld} A photo held back holds back itself alone
+:id: BLD-blocked_photo_alone
+:status: ruled
+:realises: RUL-unsettled_collision_rest_proceeds
+
+A photo merge's plan records as `blocked` SHALL hold back that photo alone: the plan's other records keep their
+dispositions, the plan is saved though `merge plan` ends 2 ({need}`BLD-exit_statuses`), and execute, moving each record
+on its own (`_move_file`), returns a `blocked` record's photo unmoved (`_place_file`) and places the rest, the run then
+ending `partial` or `failed` ({need}`BLD-merge_records`).
 :::
