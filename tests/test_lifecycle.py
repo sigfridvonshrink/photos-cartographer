@@ -676,13 +676,16 @@ def test_a_folder_lost_between_plan_and_execute_is_not_recreated(tmp_path, monke
 
 @pytest.mark.spec("RUL-more_dumps_until_merge", test="TST-lifecycle-new_dump_after_successful_geotag_is_organized")
 def test_new_dump_after_successful_geotag_is_organized(tmp_path, monkeypatch):
-    """A dump arriving after geotag executed and finalized is prep's again: the loop resumes from prep."""
+    """A dump arriving after geotag executed and finalized, and a merge begun — one execution of it ended partial — is
+    prep's again: the loop resumes from prep."""
     _install(monkeypatch)
     ws = _initialized(tmp_path)
     ctl = ws / ".photos-ingest"
     (ctl / "photos-25-execution-summary.json").write_text('{"status": "success"}')
     (ctl / "photos-26-complete-log.json").write_text('{"photos": {}}')
     (ctl / "photos-26-archive-manifest.json").write_text('{"artifact_name": "m"}')
+    (ctl / "photos-30-merge-plan.json").write_text('{"plan_id": "m1", "destinations": {}}')
+    (ctl / "photos-31-merge-summary.json").write_text('{"merge_plan_id": "m1", "status": "partial"}')
     (ws / "6-photos-by-dest" / "Trip").mkdir()
     (ws / "6-photos-by-dest" / "Trip" / "2023-01-02--03-04-05.jpg").write_bytes(b"geotagged")
     (ws / "0-sources" / "b.jpg").write_bytes(b"later")

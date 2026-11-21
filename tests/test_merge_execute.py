@@ -86,13 +86,14 @@ def _ws(tmp_path, photos, library_files=(), name="ws", folders=None):
         ddir.mkdir(parents=True, exist_ok=True)
         (ddir / final).write_bytes(_fp_bytes(p["fp"]))
         rel_pre = os.path.join(bd, dest, pre) if dest else os.path.join(bd, pre)
+        content_hash = p.get("content_hash", json.dumps({"status": "valid", "value": p["fp"]}))
         ho_files.append({"relative_path": rel_pre, "folder_class": bd,
                          "media_class": "image",
-                         "content_hash": p.get("content_hash", json.dumps({"status": "valid", "value": p["fp"]})),
+                         "content_hash": content_hash,
                          "metadata_status": PLACED})
-        if pre != final:
-            ops.append({"type": "rename_no_clobber", "to": final,
-                        "preconditions": {"content_fingerprint": p["fp"]}})
+        if pre != final:                   # planned on the handoff's path and fingerprint, as geotag's are
+            ops.append({"type": "rename_no_clobber", "relative_path": rel_pre, "to": final,
+                        "preconditions": {"content_fingerprint": merge._record_fingerprint({"content_hash": content_hash})}})
     for lf in library_files:
         dest = lf.get("dest", "")
         ldir = (lib / dest) if dest else lib
@@ -2439,3 +2440,224 @@ def test_each_end_of_a_merge_has_its_own_exit_status(tmp_path, monkeypatch, end,
     finally:
         if held:
             held.release()
+
+
+# --- photos sharing a fingerprint, each merged on its own -------------------
+
+def _records(ws):
+    """[record] of the saved merge plan, every destination's."""
+    return [f for d in json.load(open(merge.merge_plan_path(str(ws))))["destinations"].values() for f in d["files"]]
+
+
+_COPIES = [{"fp": "F", "dest": "Paris", "pre_name": "IMG_1.jpg", "final_name": "x.jpg"},
+           {"fp": "F", "dest": "Louvre", "pre_name": "IMG_1.jpg", "final_name": "y.jpg"}]
+_X, _Y = "6-photos-by-dest/Paris/x.jpg", "6-photos-by-dest/Louvre/y.jpg"
+
+
+@pytest.mark.spec("RUL-shared_fingerprint_each_merged", "BLD-merge_target", "BLD-merge_preflight",
+                  test="TST-merge_execute-two_photos_sharing_a_fingerprint_each_merge_to_their_own_place")
+def test_two_photos_sharing_a_fingerprint_each_merge_to_their_own_place(tmp_path):
+    """The same picture sorted into two destinations — one fingerprint, two names geotag gave — passes the preflight,
+    and each copy is planned and merged to its own place in the library, never the other's name."""
+    ws, lib = _ws(tmp_path, _COPIES)
+    assert merge._run_locked_workflow("plan", str(ws)) == 0
+    assert {r["by_dest_source"]: r["library_target"] for r in _records(ws)} == {
+        _X: os.path.join(str(lib), "Paris", "x.jpg"), _Y: os.path.join(str(lib), "Louvre", "y.jpg")}
+    assert merge._run_locked_workflow("execute", str(ws)) == 0
+    assert open(os.path.join(str(lib), "Paris", "x.jpg"), "rb").read() == _fp_bytes("F")
+    assert open(os.path.join(str(lib), "Louvre", "y.jpg"), "rb").read() == _fp_bytes("F")
+    assert utils.is_sealed(str(ws))
+
+
+def _copies_partly_merged(tmp_path):
+    """Both copies of F placed by a merge left partial by c.jpg, blocked on a library file that cannot be read; the
+    blocker then cleared, c.jpg to be renamed around the library's file."""
+    ws, lib = _ws(tmp_path, _COPIES + [{"fp": "C", "dest": "Trip", "final_name": "c.jpg"}],
+                  library_files=[{"fp": "FAIL", "dest": "Trip", "name": "c.jpg"}])
+    assert merge._run_locked_workflow("plan", str(ws)) == 2
+    first = json.load(open(merge.merge_plan_path(str(ws))))["plan_id"]
+    assert merge._run_locked_workflow("execute", str(ws)) == 3
+    assert not os.path.exists(os.path.join(str(ws), _X)) and not os.path.exists(os.path.join(str(ws), _Y))
+    with open(os.path.join(str(lib), "Trip", "c.jpg"), "wb") as f:
+        f.write(_fp_bytes("OTHER"))
+    return ws, lib, first
+
+
+@pytest.mark.spec("RUL-shared_fingerprint_each_merged", "RUL-replan_blocks_unaccounted", "BLD-merge_carry_forward",
+                  test="TST-merge_execute-a_copy_gone_from_the_library_is_not_carried_on_the_other_copys_record")
+def test_a_copy_gone_from_the_library_is_not_carried_on_the_other_copys_record(tmp_path):
+    """Of two photos sharing a fingerprint, both placed by a partial merge, one is deleted from the library by hand:
+    the fresh plan blocks it — the other copy's record, whose place still holds the picture, never vouches for it —
+    carries the other once, and the run that follows is not whole and seals nothing."""
+    ws, lib, first = _copies_partly_merged(tmp_path)
+    os.remove(os.path.join(str(lib), "Paris", "x.jpg"))
+    assert merge._run_locked_workflow("plan", str(ws)) == 2
+    recs = _records(ws)
+    assert sorted(r["by_dest_source"] for r in recs) == sorted([_X, _Y, "6-photos-by-dest/Trip/c.jpg"])
+    x = next(r for r in recs if r["by_dest_source"] == _X)
+    y = next(r for r in recs if r["by_dest_source"] == _Y)
+    assert x["disposition"] == "blocked" and "no longer holds it" in x["blocked_reason"]
+    assert y["carried_from_plan"] == first and y["library_target"] == os.path.join(str(lib), "Louvre", "y.jpg")
+    assert merge._run_locked_workflow("execute", str(ws)) == 3
+    assert _summary(ws)["status"] == "partial"
+    assert not utils.is_sealed(str(ws)) and not os.path.exists(_ctl(ws, "photos-35-merge-log.json"))
+
+
+@pytest.mark.spec("RUL-shared_fingerprint_each_merged", "BLD-merge_log_steps", "BLD-merge_carry_forward",
+                  test="TST-merge_execute-two_copies_carried_forward_are_each_named_with_their_own_place")
+def test_two_copies_carried_forward_are_each_named_with_their_own_place(tmp_path):
+    """Both copies of one fingerprint in the library after a partial merge: the fresh plan, the summary and the merge
+    log name each copy once, each with its own library place — the log's one entry for the fingerprint holding a
+    merge step for each, and every place."""
+    ws, lib, first = _copies_partly_merged(tmp_path)
+    x_lib, y_lib = os.path.join(str(lib), "Paris", "x.jpg"), os.path.join(str(lib), "Louvre", "y.jpg")
+    assert merge._run_locked_workflow("plan", str(ws)) == 0
+    recs = {r["by_dest_source"]: r for r in _records(ws)}
+    assert (recs[_X]["library_target"], recs[_Y]["library_target"]) == (x_lib, y_lib)
+    assert recs[_X]["carried_from_plan"] == recs[_Y]["carried_from_plan"] == first
+    assert merge._run_locked_workflow("execute", str(ws)) == 0 and utils.is_sealed(str(ws))
+    files = {f["by_dest_path"]: f for d in _summary(ws)["destinations"].values() for f in d["files"]}
+    assert (files[_X]["library_path"], files[_Y]["library_path"]) == (x_lib, y_lib)
+    entry = json.load(open(_ctl(ws, "photos-35-merge-log.json")))["photos"]["F"]
+    steps = [(s["from"], s["library_path"], s["run"]) for s in entry["journey"] if s["phase"] == "merge"]
+    assert steps == [(_Y, y_lib, first), (_X, x_lib, first)]
+    assert entry["library_path"] == sorted([x_lib, y_lib])
+
+
+@pytest.mark.spec("RUL-shared_value_moved_together_merged", "RUL-changed_fingerprint_mapping_recorded",
+                  "BLD-fingerprint_map",
+                  test="TST-merge_execute-photos_held_as_one_value_moved_together_are_merged_and_mapped_once")
+def test_photos_held_as_one_value_moved_together_are_merged_and_mapped_once(tmp_path, monkeypatch):
+    """Two copies prep held under one fingerprint F both read as F2 under another ImageMagick: both merge, and merge's
+    fingerprint map holds the one mapping F to F2, with each copy's path in the workspace and place in the library."""
+    ws, lib = _ws(tmp_path, [_changed_under_new_engine(p, "F2") for p in _COPIES])
+    monkeypatch.setattr(merge, "get_imagemagick_version", lambda: "newer")
+    assert merge._run_locked_workflow("plan", str(ws)) == 0
+    assert merge._run_locked_workflow("execute", str(ws)) == 0 and utils.is_sealed(str(ws))
+    fmap = json.load(open(_ctl(ws, "photos-35-fingerprint-map.json")))
+    assert fmap["photos"] == {"F2": {"was": {"content_fingerprint": "F", "image_engine_version": None},
+                                     "now": {"content_fingerprint": "F2", "image_engine_version": "newer"},
+                                     "from": [_Y, _X],
+                                     "library_path": [os.path.join(str(lib), "Louvre", "y.jpg"),
+                                                      os.path.join(str(lib), "Paris", "x.jpg")]}}
+
+
+# --- a merge begun: prep and geotag run again, the placed photos still carried -----------------
+
+_A_STEPS = [{"phase": "prep", "action": "moved", "run": "prep-1"},
+            {"phase": "geotag", "action": "resolved_utc", "value": "2024-07-03T12:00:00Z", "run": "cal-plan-1"}]
+
+
+def _merge_begun(tmp_path):
+    """A merge begun: a.jpg placed in the library and gone from photos by destination, b.jpg blocked on a library file
+    that cannot be fingerprinted. The complete log holds each photo's journey."""
+    ws, lib = _ws(tmp_path, [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"},
+                             {"fp": "B", "dest": "Trip", "final_name": "b.jpg"}],
+                  library_files=[{"fp": "FAIL", "dest": "Trip", "name": "b.jpg"}])
+    with open(_ctl(ws, "photos-26-complete-log.json"), "w") as f:
+        json.dump({"photos": {"A": {"content_fingerprint": "A", "prep_path": "6-photos-by-dest/Trip/a.jpg",
+                                    "geotag_path": "6-photos-by-dest/Trip/a.jpg", "journey": _A_STEPS},
+                              "B": {"content_fingerprint": "B", "journey": [{"phase": "prep", "action": "moved"}]}}}, f)
+    assert merge._run_locked_workflow("plan", str(ws)) == 2
+    first = json.load(open(merge.merge_plan_path(str(ws))))["plan_id"]
+    assert merge._run_locked_workflow("execute", str(ws)) == 3
+    assert not os.path.exists(_src(ws, "Trip", "a.jpg")) and os.path.exists(_src(ws, "Trip", "b.jpg"))
+    return ws, lib, first
+
+
+def _prep_and_geotag_again(ws):
+    """The records prep, then geotag's plan, execute and finalize, run again leave: a handoff, an executed plan and a
+    finalized record of the photos still in photos by destination only; the complete log set aside, and made again
+    with prep's record of a photo no longer there — its prep steps alone."""
+    from _handoff import recorded
+    ctl = os.path.join(str(ws), ".photos-ingest")
+    ho = json.load(open(utils.handoff_path(str(ws))))
+    ho["files"] = [r for r in ho["files"] if os.path.exists(os.path.join(str(ws), r["relative_path"]))]
+    with open(utils.handoff_path(str(ws)), "w") as f:
+        json.dump(ho, f)
+    fp = utils.handoff_content_fingerprint(ho)
+    with open(merge.executable_plan_path(str(ws)), "w") as f:
+        json.dump({"status": "ready", "plan_id": "cal-plan-2", "destinations": {},
+                   "depends_on": {"handoff": {"dependency_type": "handoff_content",
+                                              "artifact_name": "photos-11-handoff.json", "content_fingerprint": fp}}}, f)
+    with open(merge.execution_summary_path(str(ws)), "w") as f:
+        json.dump({"status": "success", "plan_id": "cal-plan-2", "run_metadata": {"execution_id": "cal-exec-2"}}, f)
+    with open(merge.archive_manifest_path(str(ws)), "w") as f:
+        json.dump({"artifact_name": "m", "plan_id": "cal-plan-2"}, f)
+    shutil.copyfile(merge.complete_log_path(str(ws)), os.path.join(ctl, "photos-26-complete-log-001.json"))
+    with open(merge.complete_log_path(str(ws))) as f:
+        log = json.load(f)
+    log["photos"]["A"] = {"content_fingerprint": "A", "prep_path": "6-photos-by-dest/Trip/a.jpg",
+                          "journey": _A_STEPS[:1]}
+    with open(merge.complete_log_path(str(ws)), "w") as f:
+        json.dump(log, f)
+    by_dest = os.path.join(str(ws), "6-photos-by-dest")
+    with open(utils.finalized_media_path(str(ws)), "w") as f:
+        json.dump({"handoff_content_fingerprint": fp, "media": {
+            os.path.relpath(os.path.join(r, n), str(ws)): {"size": os.stat(os.path.join(r, n)).st_size,
+                                                          "mtime_ns": os.stat(os.path.join(r, n)).st_mtime_ns}
+            for r, _d, fs in os.walk(by_dest) for n in fs}}, f)
+    recorded(ws)
+
+
+@pytest.mark.spec("RUL-replan_carries_every_placed", "BLD-merge_placed_outside_finalized", "BLD-merge_carry_forward",
+                  "BLD-merge_log_steps", "DEF-merge_begun",
+                  test="TST-merge_execute-a_photo_placed_before_prep_and_geotag_ran_again_is_carried_into_the_seal")
+def test_a_photo_placed_before_prep_and_geotag_ran_again_is_carried_into_the_seal(tmp_path):
+    """In a merge begun, prep and geotag are run again, and the finalized set they leave lists only the photo still in
+    photos by destination. The fresh plan still carries the photo the first plan placed, from that plan; the merge
+    that finishes seals, and its plan, summary and merge log hold it with its place in the library — the log's entry
+    with the journey the complete log set aside kept of it, and a merge step naming the plan that placed it."""
+    ws, lib, first = _merge_begun(tmp_path)
+    _prep_and_geotag_again(ws)
+    with open(os.path.join(str(lib), "Trip", "b.jpg"), "wb") as f:
+        f.write(_fp_bytes("OTHER"))                                      # b.jpg's blocker cleared
+    a_src, a_lib = "6-photos-by-dest/Trip/a.jpg", os.path.join(str(lib), "Trip", "a.jpg")
+    assert merge._run_locked_workflow("plan", str(ws)) == 0
+    a = next(r for r in _records(ws) if r["by_dest_source"] == a_src)
+    assert a["carried_from_plan"] == first and a["library_target"] == a_lib and a["disposition"] == "placed_new"
+    assert json.load(open(merge.merge_plan_path(str(ws))))["totals"]["placed_new"] == 1
+    assert merge._run_locked_workflow("execute", str(ws)) == 0
+    assert utils.is_sealed(str(ws))
+    files = {f["by_dest_path"]: f for d in _summary(ws)["destinations"].values() for f in d["files"]}
+    assert files[a_src]["library_path"] == a_lib and files[a_src]["blocked_reason"] is None
+    entry = json.load(open(_ctl(ws, "photos-35-merge-log.json")))["photos"]["A"]
+    assert entry["library_path"] == a_lib and entry["geotag_path"] == a_src
+    assert entry["journey"] == _A_STEPS + [{"phase": "merge", "run": first, "action": "placed", "from": a_src,
+                                            "library_path": a_lib, "renamed_for_library": False}]
+    assert open(a_lib, "rb").read() == _fp_bytes("A")
+
+
+@pytest.mark.spec("RUL-replan_carries_every_placed", "RUL-replan_blocks_unaccounted", "BLD-merge_placed_outside_finalized",
+                  test="TST-merge_execute-a_photo_placed_before_prep_and_geotag_ran_again_and_since_deleted_blocks")
+def test_a_photo_placed_before_prep_and_geotag_ran_again_and_since_deleted_blocks(tmp_path):
+    """The same merge begun, prep and geotag run again, and the photo the first plan placed deleted from the library
+    by hand: the fresh plan blocks it, though the finalized set no longer lists it; the run is not whole and the
+    workspace is not sealed."""
+    ws, lib, first = _merge_begun(tmp_path)
+    _prep_and_geotag_again(ws)
+    with open(os.path.join(str(lib), "Trip", "b.jpg"), "wb") as f:
+        f.write(_fp_bytes("OTHER"))
+    os.remove(os.path.join(str(lib), "Trip", "a.jpg"))
+    assert merge._run_locked_workflow("plan", str(ws)) == 2
+    a = next(r for r in _records(ws) if r["by_dest_source"] == "6-photos-by-dest/Trip/a.jpg")
+    assert a["disposition"] == "blocked" and "no longer holds it" in a["blocked_reason"]
+    assert merge._run_locked_workflow("execute", str(ws)) == 3
+    assert _summary(ws)["status"] == "partial"
+    assert not utils.is_sealed(str(ws)) and not os.path.exists(_ctl(ws, "photos-35-merge-log.json"))
+
+
+@pytest.mark.spec("RUL-replan_carries_every_placed", "BLD-merge_placed_outside_finalized",
+                  test="TST-merge_execute-a_photo_an_earlier_plan_only_planned_is_not_carried")
+def test_a_photo_an_earlier_plan_only_planned_is_not_carried(tmp_path):
+    """A photo an earlier merge plan planned to place but no execute placed — taken out of photos by destination by
+    hand, prep and geotag run again — is no photo merge placed: the fresh plan neither carries nor blocks it, and the
+    merge of the rest seals."""
+    ws, lib = _ws(tmp_path, [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"},
+                             {"fp": "B", "dest": "Trip", "final_name": "b.jpg"}])
+    assert merge._run_locked_workflow("plan", str(ws)) == 0
+    os.remove(_src(ws, "Trip", "a.jpg"))
+    _prep_and_geotag_again(ws)
+    assert merge._run_locked_workflow("plan", str(ws)) == 0
+    assert [r["by_dest_source"] for r in _records(ws)] == ["6-photos-by-dest/Trip/b.jpg"]
+    assert merge._run_locked_workflow("execute", str(ws)) == 0 and utils.is_sealed(str(ws))

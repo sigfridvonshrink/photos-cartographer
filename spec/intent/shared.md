@@ -1864,15 +1864,15 @@ Geotag SHALL NOT plan while a photo prep recorded in photos by destination is go
 time from prep's record.
 :::
 
-:::{rul} Geotag may be re-run until merge
+:::{rul} Geotag may be re-run until the seal
 :id: RUL-geotag_rerunnable
 :status: ruled
 :criticality: med
 :verify: required
-:uses: DEF-geotag, DEF-merge
+:uses: DEF-geotag, DEF-merge, DEF-merge_begun, DEF-sealed_workspace
 
-Geotag SHALL be re-runnable any number of times — after a successful execution too — for as long as the workspace has
-not been merged.
+Geotag SHALL be re-runnable any number of times — after a successful execution, and in a merge begun, too — until the
+workspace is sealed.
 :::
 
 :::{rul} A re-run never corrects a time twice
@@ -2048,15 +2048,15 @@ withdrawn or altered decision, a refreshed handoff — and no more.
 A re-run SHALL ask for new decisions only for the items the change affects.
 :::
 
-:::{rul} More dumps may follow until merge
+:::{rul} More dumps may follow until the seal
 :id: RUL-more_dumps_until_merge
 :status: ruled
 :criticality: med
 :verify: required
-:uses: DEF-operator_loop, DEF-merge, DEF-dump
+:uses: DEF-operator_loop, DEF-merge, DEF-dump, DEF-merge_begun, DEF-sealed_workspace
 
-A new dump SHALL be accepted into the inbox at any point before merge, after a successful geotag too; the loop then
-resumes from prep.
+A new dump SHALL be accepted into the inbox at any point before the seal, after a successful geotag and in a merge
+begun too; the loop then resumes from prep.
 :::
 
 :::{rul} Finalize is its own command
@@ -2883,6 +2883,15 @@ An interrupted capture of a database image SHALL leave the earlier image or the 
 :uses: DEF-workspace, DEF-merge
 
 A workspace is **sealed** once it carries the mark of a finished merge, a mark only merge writes.
+:::
+
+:::{def} A merge begun
+:id: DEF-merge_begun
+:status: ruled
+:uses: DEF-workspace, DEF-merge, DEF-managed_folders, DEF-sealed_workspace
+
+A workspace is in a **merge begun** from the first merge execution that moves a photo out of photos by destination
+until it is sealed.
 :::
 
 :::{rul} Merge never alters the library
