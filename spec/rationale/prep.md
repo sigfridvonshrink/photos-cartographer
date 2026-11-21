@@ -633,7 +633,7 @@ that is already known.
 :id: RAT-dry_run_for_looking
 :status: ruled
 :forced: yes
-:justifies: RUL-prep_dry_run_changes_nothing, RUL-dry_run_changes_nothing
+:justifies: RUL-dry_run_changes_nothing
 :follows_from: RAT-no_mutation_outside_plan, RAT-dry_run_reads_the_saved_plan
 
 A dry run lets the user see what execution would do before it does it. Changing anything would make it a partial

@@ -120,7 +120,8 @@ def _ws(tmp_path, photos, library_files=(), name="ws", folders=None):
     (ctl / "photos-26-complete-log.json").write_text(json.dumps({"photos": {}}))
     (ctl / "photos-26-archive-manifest.json").write_text(json.dumps({"artifact_name": "m", "plan_id": "cal-plan-1"}))
     _bd = ws / bd                          # finalize's record of each by-dest photo as geotag left it
-    (ctl / "photos-26-finalized-media.json").write_text(json.dumps({"media": {
+    (ctl / "photos-26-finalized-media.json").write_text(json.dumps({
+        "handoff_content_fingerprint": utils.handoff_content_fingerprint(handoff), "media": {
         os.path.relpath(os.path.join(r, n), ws): {"size": os.stat(os.path.join(r, n)).st_size,
                                                   "mtime_ns": os.stat(os.path.join(r, n)).st_mtime_ns}
         for r, _d, fs in os.walk(_bd) for n in fs}}))
@@ -1993,6 +1994,9 @@ def test_a_file_without_a_fingerprint_elsewhere_does_not_stop_merge(tmp_path):
     p24 = json.loads((ctl / "photos-24-executable-plan.json").read_text())
     p24["depends_on"]["handoff"]["content_fingerprint"] = utils.handoff_content_fingerprint(ho)
     (ctl / "photos-24-executable-plan.json").write_text(json.dumps(p24))
+    finalized = json.loads((ctl / "photos-26-finalized-media.json").read_text())      # as finalize would have found it
+    finalized["handoff_content_fingerprint"] = utils.handoff_content_fingerprint(ho)
+    (ctl / "photos-26-finalized-media.json").write_text(json.dumps(finalized))
     assert merge._run_locked_workflow("plan", str(ws)) == 0
     assert merge._run_locked_workflow("execute", str(ws)) == 0
     assert os.path.exists(os.path.join(str(lib), "Trip", "a.jpg"))

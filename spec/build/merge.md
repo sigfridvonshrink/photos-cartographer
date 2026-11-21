@@ -60,7 +60,8 @@ object; its filename format. It then gathers
 the rest and reports them together: ImageMagick on the `PATH`, as `magick` or `identify`; the inbox empty;
 `photos-24-executable-plan.json` present with `photos-25-execution-summary.json` at `success`, it and the archive
 manifest of `photos-24`'s `plan_id`; the handoff's content
-fingerprint the one `photos-24` pinned; prep's log as the handoff vouches for it ({need}`BLD-prep_log_checked`);
+fingerprint the one `photos-26-finalized-media.json` holds ({need}`BLD-finalized_media`) — not the one `photos-24`
+pinned, which a prep run between execute and finalize leaves behind; prep's log as the handoff vouches for it ({need}`BLD-prep_log_checked`);
 `photos-26-complete-log.json` and the archive manifest present, the complete log carrying prep's; photos by date holding
 no photo; photos by destination holding only `image` and `raw` files and no development subfolder; every photo
 there one of the finalized set — the handoff's photos by destination joined by fingerprint to `photos-24`'s renames,

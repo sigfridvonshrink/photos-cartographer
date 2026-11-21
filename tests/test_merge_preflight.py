@@ -41,7 +41,7 @@ def _ctl(ws):
 
 
 def _make(tmp_path, *, guard=True, config=True, library_in_config=True, bless_lib=True,
-          handoff=True, handoff_current=True, cal_plan=True, cal_summary=True,
+          handoff=True, handoff_current=True, plan_pin_current=True, cal_plan=True, cal_summary=True,
           summary_status="success", prep_log=True, complete_log=True, archive_manifest=True, finalized_media=True,
           bydest=("6-photos-by-dest/Trip/a.jpg",), sources_files=(),
           fingerprint_method=utils.FINGERPRINT_ALGORITHM_VERSION, held=None):
@@ -88,7 +88,7 @@ def _make(tmp_path, *, guard=True, config=True, library_in_config=True, bless_li
         cfg["merge"]["library_root"] = str(lib) if library_in_config else ""
         (ctl / "photos-00-config.json").write_text(json.dumps(cfg))
     if cal_plan:
-        pinned = fp if handoff_current else ("stale-" + fp)
+        pinned = fp if plan_pin_current else ("earlier-" + fp)
         plan = {"status": "ready", "plan_id": "geotag-plan-1",
                 "depends_on": {"handoff": {"dependency_type": "handoff_content",
                                            "artifact_name": "photos-11-handoff.json",
@@ -102,7 +102,8 @@ def _make(tmp_path, *, guard=True, config=True, library_in_config=True, bless_li
         (ctl / "photos-26-archive-manifest.json").write_text(
             json.dumps({"artifact_name": "photos-26-archive-manifest.json", "plan_id": "geotag-plan-1"}))
     if finalized_media:
-        (ctl / "photos-26-finalized-media.json").write_text(json.dumps({"media": {
+        (ctl / "photos-26-finalized-media.json").write_text(json.dumps({
+            "handoff_content_fingerprint": fp if handoff_current else ("stale-" + fp), "media": {
             rel: {"size": os.stat(ws / rel).st_size, "mtime_ns": os.stat(ws / rel).st_mtime_ns}
             for rel in bydest}}))
     return ws, lib
@@ -405,6 +406,16 @@ def test_stale_finalized_record_blocks(tmp_path):
     blockers, _, _ = _pf(ws)
     assert any("changed since geotag was finalized" in b for b in blockers), blockers
     assert any("re-run geotag and re-finalize" in b.lower() for b in blockers), blockers
+
+
+@pytest.mark.spec("RUL-finalize_passes_prep_after_execute", "RUL-merge_refuses_changed_since_finalize",
+                  "BLD-merge_preflight", test="TST-merge_preflight-a_handoff_prep_wrote_before_finalize_passes")
+def test_a_handoff_prep_wrote_before_finalize_passes(tmp_path):
+    """Prep ran between geotag's execute and finalize: the handoff is no longer the one the plan was made from, and
+    is the one finalize recorded. Merge holds it to finalize's record, and passes."""
+    ws, _ = _make(tmp_path, plan_pin_current=False)
+    blockers, _, _ = _pf(ws)
+    assert blockers == [], blockers
 
 
 @pytest.mark.spec("RUL-dependencies_validated_before_deriving",

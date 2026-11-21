@@ -875,8 +875,9 @@ destination's local time, a file already so named getting no rename ({need}`BLD-
 :realises: RUL-merge_refuses_changed_since_finalize
 
 `geotag finalize` SHALL write `photos-26-finalized-media.json`, giving each photo in photos by destination, under its
-final path, its size and modification time; merge's preflight refuses when a photo still there differs from it, or the
-record is missing.
+final path, its size and modification time, and as `handoff_content_fingerprint` the handoff's content fingerprint
+({need}`BLD-handoff_content_fingerprint`) as finalize found it; merge's preflight refuses when a photo still there
+differs from it, when the handoff's content fingerprint is no longer the one it holds, or when the record is missing.
 :::
 
 ## 10. Change only what needs changing
@@ -1050,7 +1051,8 @@ with its SHA-256 and path in
 `photos-26-archive-manifest.json`, recording the workspace's identity — the init run id prep wrote in the guard — with
 the folder's name beside it, and the plan and execution ids, and archive those files and the manifest into
 `photos-26-archive.tar.gz` in the control directory, by a temporary name and an atomic rename — besides `photos-26-finalized-media.json` ({need}`BLD-finalized_media`) and
-the `-NNN` copies of its earlier records, writing nothing else,
+the `-NNN` copies of its earlier records, writing nothing else but what the workspace check records of an acceptance
+({need}`BLD-accept_changes`),
 and requiring a ready plan whose execution succeeded ({need}`BLD-finalize_preconditions`). Merge's re-seal does the same
 into `photos-35-archive-manifest.json` and `photos-35-archive.tar.gz` ({need}`BLD-merge_success_sequence`).
 :::
@@ -1275,7 +1277,6 @@ by destination.
 :status: ruled
 :refines: BLD-merge_move
 :realises: RUL-target_free_at_execute, RUL-collision_same_content
-:excepts: RUL-execution_only_the_plan
 
 A place found taken at execute SHALL make the photo already present where it holds the planned content, and block the
 photo where it holds other content — the plan's alternative name used only where the plan recorded one.
@@ -1504,7 +1505,7 @@ Merge's `execute` SHALL, after revalidating its plan and taking its snapshot and
 :::{bld} Prep's failed operation
 :id: BLD-failed_operation
 :status: ruled
-:realises: RUL-failed_operation_clean, RUL-failure_recorded, RUL-failure_never_done
+:realises: RUL-failed_operation_clean, RUL-failure_recorded, RUL-failure_never_done, RUL-move_stands_when_recording_fails
 
 Prep SHALL journal an operation that raised as `failed`, and stop — an operation being its move and its database
 effects after it, so that one whose effects raise is journalled `failed` with the file at its destination, for the next

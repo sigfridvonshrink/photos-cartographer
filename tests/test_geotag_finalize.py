@@ -1236,3 +1236,27 @@ def test_tracks_that_cannot_be_listed_stop_plan_and_execute(tmp_path, monkeypatc
     finally:
         os.chmod(gpx, 0o755)
     assert (ctl / "photos-24-executable-plan.json").read_bytes() == plan
+
+
+@pytest.mark.spec("RUL-finalize_passes_prep_after_execute", "RUL-merge_refuses_changed_since_finalize",
+                  "BLD-finalize_preconditions", "BLD-finalized_media",
+                  test="TST-geotag_finalize-prep_run_after_execute_does_not_stop_finalize")
+def test_prep_run_after_execute_does_not_stop_finalize(tmp_path, monkeypatch):
+    """Prep run between geotag's execute and finalize writes the handoff again under the names geotag gave: it is no
+    longer the handoff the plan was made from. Finalize passes all the same, and records the handoff as it found it —
+    the one merge holds the workspace to."""
+    ws, ctl = _ready_ws(tmp_path, monkeypatch)
+    _to_executed(monkeypatch, ws, ctl)
+    plan = json.load(open(ctl / "photos-24-executable-plan.json"))
+    pinned = plan["depends_on"]["handoff"]["content_fingerprint"]
+    renamed = {op["relative_path"]: os.path.join(os.path.dirname(op["relative_path"]), op["to"])
+               for d in plan["destinations"].values() for op in d["operations"] if op["type"] == "rename_no_clobber"}
+    assert renamed
+    handoff = json.load(open(ctl / "photos-11-handoff.json"))
+    for f in handoff["files"]:                                       # as prep records them: under geotag's names
+        f["relative_path"] = renamed.get(f["relative_path"], f["relative_path"])
+    (ctl / "photos-11-handoff.json").write_text(json.dumps(handoff))
+    now = utils.handoff_content_fingerprint(handoff)
+    assert now != pinned                                             # no longer the handoff the plan was made from
+    assert _run(monkeypatch, ws, "finalize") == 0
+    assert json.load(open(ctl / "photos-26-finalized-media.json"))["handoff_content_fingerprint"] == now

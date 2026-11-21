@@ -106,8 +106,9 @@ block merge no more than geotag.
 :verify: required
 :uses: DEF-merge, DEF-library
 
-A merge a precondition stops SHALL change nothing in the library, the workspace's photos or merge's records, but for
-the refusal it records ({need}`RUL-merge_outcome_recorded`).
+A merge a precondition stops SHALL change nothing in the library, the workspace's photos or merge's records — but for
+the record of a stop for want of a required snapshot or of room in the library
+({need}`RUL-merge_summary_only_for_execution`).
 :::
 
 :::{rul} A photo with no fingerprint stops merge

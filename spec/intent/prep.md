@@ -40,7 +40,8 @@ renaming, quarantining, deleting or writing one there.
 
 Initializing a workspace, prep SHALL move every entry at its top level that is not a managed folder, the control
 records' place or hidden ({need}`RUL-dump_hidden_files_quarantined`) — files and whole folders alike, their
-structure kept — into the inbox.
+structure kept — into the inbox, but a duplicate, which it sets aside from where it lies
+({need}`RUL-duplicate_set_aside_as_found`).
 :::
 
 :::{rul} A dump folder named as a managed folder is that folder
@@ -225,10 +226,11 @@ band; prep moves one that does not into it.
 :criticality: med
 :verify: required
 :refines: RUL-by_date_in_day_folder
-:excepts: RUL-filed_file_stays
-:uses: DEF-managed_folders, DEF-recorded_time
+:excepts: RUL-filed_file_stays, RUL-misnamed_file_stops_prep
+:uses: DEF-managed_folders, DEF-recorded_time, DEF-untimed_name
 
-Prep SHALL move a file in photos by date or videos by date that has no recorded time into missing metadata.
+Prep SHALL move a file in photos by date or videos by date that has no recorded time into missing metadata, under its
+untimed name.
 :::
 
 :::{rul} Prep puts photos by date
@@ -292,6 +294,7 @@ excepted.
 :criticality: med
 :verify: required
 :uses: DEF-managed_folders, DEF-recorded_time, DEF-timestamp_name, RUL-photos_by_date, RUL-videos_by_date
+:excepts: RUL-misnamed_file_stops_prep
 
 Prep SHALL file each media file in missing metadata that has gained a recorded time as it files one of a new dump: a
 photo into photos by date, a video into videos by date, in its day's folder under its timestamp name.
@@ -315,6 +318,7 @@ lowercase.
 :anti: yes
 :verify: required
 :uses: DEF-fingerprint
+:excepts: RUL-init_moves_dump_to_inbox
 
 Prep SHALL quarantine a duplicate from the place and under the name it had when planned, no other stage of the plan
 moving or renaming it first.
@@ -470,7 +474,9 @@ A prep execution SHALL leave in the workspace database no row for a file that is
 :uses: DEF-fingerprint, DEF-workspace_database
 
 Prep SHALL fingerprint a media file afresh when the workspace database holds no fingerprint for it at its path, or holds
-one taken when the file had another size or modification time.
+one taken when the file had another size or modification time — but one a move carried
+({need}`RUL-moved_file_carried`), geotag left ({need}`RUL-geotag_left_fingerprint_carried`) or the plan memo keeps
+({need}`RUL-database_over_memo`).
 :::
 
 :::{rul} A fingerprint is reused only from the method in use
@@ -539,6 +545,7 @@ other new file in photos by destination.
 :verify: required
 :refines: RUL-reuse_valid_work
 :uses: DEF-fingerprint, DEF-workspace_database
+:excepts: RUL-fingerprint_taken_afresh, RUL-metadata_freshness
 
 Prep SHALL carry a moved file's row to its new path, reading nothing of the file but its size and time when the row
 would have been reused at the old path.
@@ -642,6 +649,7 @@ to reuse.
 :criticality: med
 :verify: required
 :uses: DEF-plan_memo, DEF-workspace_database
+:excepts: RUL-fingerprint_taken_afresh
 
 Prep SHALL take a file's fingerprint and metadata from the plan memo only where the workspace database holds no row for
 its path.
@@ -810,7 +818,7 @@ Prep SHALL take a time field from the first of those places holding a valid time
 
 Prep SHALL reuse a file's cached metadata only while the file's path, size, modification time and fingerprint, and the
 way the metadata was read — the extractor and its version, the fields, the options and the record's form — are as they
-were when it was read.
+were when it was read — its path aside, where a move carried its record ({need}`RUL-moved_file_carried`).
 :::
 
 :::{rul} The handoff reports what the groups hold
@@ -835,17 +843,6 @@ their count, their time range, how many carry a GPS position — inferring nothi
 
 A file found, at execution, anywhere prep scans that its plan did not record SHALL make the plan stale, refused before
 any change.
-:::
-
-:::{rul} A dry run changes nothing
-:id: RUL-prep_dry_run_changes_nothing
-:status: ruled
-:criticality: med
-:anti: yes
-:verify: required
-:refines: RUL-dry_run_changes_nothing
-
-Prep's dry run SHALL change nothing in the workspace.
 :::
 
 :::{rul} A prepped workspace has nothing to do

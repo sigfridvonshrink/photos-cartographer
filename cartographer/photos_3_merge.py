@@ -435,10 +435,11 @@ class MergeWorkflow:
     def _check_geotag_finalized(self, ws, handoff, blockers):
         """Preconditions 1 and 1a. Geotag must have produced an executed plan (photos-24) with a
         successful execution summary (photos-25), and the finalized record must still be current with
-        by-dest: the CURRENT handoff's content fingerprint must equal the one photos-24 pinned as a
-        dependency. A no-op re-prep (run-metadata only) does not trip this; only a real by-dest content
-        change does — that one needs re-run geotag + re-finalize, not just re-prep (distinct from the prep-consistency
-        check, BLD-merge_preflight)."""
+        by-dest: the CURRENT handoff's content fingerprint must equal the one finalize recorded in
+        photos-26-finalized-media.json — not the one photos-24 pinned, which a prep run between execute and
+        finalize rightly leaves behind (RUL-finalize_passes_prep_after_execute). A no-op re-prep (run-metadata
+        only) does not trip this; only a real by-dest content change does — that one needs re-run geotag +
+        re-finalize, not just re-prep (distinct from the prep-consistency check, BLD-merge_preflight)."""
         plan_p = executable_plan_path(ws)
         summ_p = execution_summary_path(ws)
         plan = summ = None
@@ -495,9 +496,10 @@ class MergeWorkflow:
             blockers.append("The geotag plan records no handoff dependency — re-run geotag and "
                             "re-finalize before merging.")
             return plan
-        if handoff_content_fingerprint(handoff) != dep.get("content_fingerprint"):
+        recorded = _finalized_handoff(ws)
+        if recorded is not None and handoff_content_fingerprint(handoff) != recorded:
             blockers.append("By-dest has changed since geotag was finalized (the current handoff's "
-                            "content fingerprint no longer matches the one photos-24-executable-plan.json "
+                            f"content fingerprint no longer matches the one {FINALIZED_MEDIA_ARTIFACT} "
                             "recorded). Re-run geotag and re-finalize before merging — a present but "
                             "un-geotagged photo must not be merged.")
         return plan
@@ -1710,6 +1712,21 @@ def _finalized_media(ws):
     except (OSError, ValueError, AttributeError):
         return None
     return media if isinstance(media, dict) else None
+
+
+def _finalized_handoff(ws):
+    """The handoff's content fingerprint as finalize found it (BLD-finalized_media) — or None when the record is
+    missing or unreadable, which `_check_unchanged_since_finalize` blocks on. A record without one gives "", which
+    no handoff matches: finalize is to be run again."""
+    try:
+        with open(finalized_media_path(ws)) as f:
+            record = json.load(f)
+    except (OSError, ValueError):
+        return None
+    if not isinstance(record, dict) or not isinstance(record.get("media"), dict):
+        return None
+    value = record.get("handoff_content_fingerprint")
+    return value if isinstance(value, str) else ""
 
 
 def _as_finalized(media, rel, st):

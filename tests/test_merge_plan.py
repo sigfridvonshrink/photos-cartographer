@@ -161,7 +161,8 @@ def _build_ws(tmp_path, photos, library_files=()):
     (ctl / "photos-26-complete-log.json").write_text(json.dumps({"photos": {}}))
     (ctl / "photos-26-archive-manifest.json").write_text(json.dumps({"artifact_name": "m", "plan_id": "geotag-plan-1"}))
     _bd = ws / "6-photos-by-dest"          # finalize's record of each by-dest photo as geotag left it
-    (ctl / "photos-26-finalized-media.json").write_text(json.dumps({"media": {
+    (ctl / "photos-26-finalized-media.json").write_text(json.dumps({
+        "handoff_content_fingerprint": utils.handoff_content_fingerprint(handoff), "media": {
         os.path.relpath(os.path.join(r, n), ws): {"size": os.stat(os.path.join(r, n)).st_size,
                                                   "mtime_ns": os.stat(os.path.join(r, n)).st_mtime_ns}
         for r, _d, fs in os.walk(_bd) for n in fs}}))

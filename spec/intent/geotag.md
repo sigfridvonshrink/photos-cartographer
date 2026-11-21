@@ -446,6 +446,7 @@ inherit from above.
 :verify: required
 :refines: RUL-country_gives_its_timezone
 :uses: DEF-geotag, DEF-decision
+:excepts: RUL-timezone_from_nearest
 
 A destination the user says is in a country of several timezones SHALL be given none, it and each destination within
 answering for themselves.
@@ -1353,7 +1354,7 @@ The user SHALL be told of each folder the configuration ranks that the tracks do
 :verify: required
 :refines: RUL-tracks_in_dependencies
 
-Geotag SHALL record the ranking of the tracks with their fingerprint, so that a change to the ranking makes stale every
+Geotag SHALL record the ranking of the tracks with their digest, so that a change to the ranking makes stale every
 record a change to the tracks would.
 :::
 
@@ -1694,7 +1695,8 @@ offset as holding wrong positions.
 :refines: RUL-timezone_auto_resolves
 
 A destination's proposed timezone SHALL be the one in effect at the nearest destination it lies in that has one —
-however it was reached there.
+however it was reached there, but never one from or from above a destination the user says is in a country of several
+timezones ({need}`RUL-country_of_several_gives_none`).
 :::
 
 :::{rul} A timezone is asked at every folder above a destination waiting for one
@@ -3127,8 +3129,9 @@ cannot read, changing nothing, and send the user to plan again.
 :verify: required
 :uses: DEF-geotag
 
-Geotag SHALL write no execution summary for a run stopped before its execution began — by a precondition, a plan no
-longer current, or a record of an earlier execution it cannot read — nor for a run interrupted, leaving the summary an
+Geotag SHALL write no execution summary for a run stopped before its execution began by anything but the want of a
+required snapshot ({need}`RUL-required_snapshot_or_nothing`) — a precondition, a plan no longer current, or a record of
+an earlier execution it cannot read — nor for a run interrupted, leaving the summary an
 earlier run wrote as it was.
 :::
 
@@ -3154,7 +3157,20 @@ Finalize SHALL refuse unless geotag's current plan was executed successfully.
 :refines: RUL-finalize_requires_success
 :uses: DEF-finalize
 
-Finalize SHALL refuse unless the plan that was executed still holds.
+Finalize SHALL refuse unless the plan that was executed still holds — the handoff aside
+({need}`RUL-finalize_passes_prep_after_execute`).
+:::
+
+:::{rul} A prep run after the execution does not stop finalize
+:id: RUL-finalize_passes_prep_after_execute
+:status: ruled
+:criticality: med
+:anti: yes
+:verify: required
+:excepts: RUL-finalize_requires_plan_still_holds
+:uses: DEF-finalize, DEF-handoff
+
+Finalize SHALL NOT refuse because prep, run after the execution, has written the handoff again.
 :::
 
 :::{rul} Finalize packages the photos as execution left them
@@ -3200,8 +3216,8 @@ Finalize SHALL keep the plan's count of how every photo came by its position in 
 :refines: RUL-finalize_checks_photos
 :uses: DEF-finalize, RUL-null_island_is_no_position
 
-Finalize SHALL refuse while a photo in photos by destination holds no position — judged by what the photo holds, not
-by what the plan decided for it.
+Finalize SHALL refuse while a photo in photos by destination holds no position — judged by what is recorded of the photo, the writes
+carried out on it and what prep read of it, not by what the plan decided for it.
 :::
 
 :::{rul} Geotag's records of a run are set aside, never overwritten

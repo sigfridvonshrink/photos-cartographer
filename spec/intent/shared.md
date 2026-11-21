@@ -719,6 +719,7 @@ phase's output.
 :criticality: med
 :verify: required
 :uses: DEF-strays_folder, DEF-quarantine
+:excepts: RUL-dump_hidden_files_quarantined
 
 Prep SHALL leave out of its inventory of media, each as a whole: the control records' place, the quarantine, a
 version-control directory at the workspace's top level, and the strays folder with everything in it; and every hidden file.
@@ -755,7 +756,8 @@ workspace check compares its entries ({need}`RUL-check_covers_media_folders`), b
 :uses: DEF-quarantine, DEF-dump
 
 Hidden files and hidden folders that arrive in a dump area — the workspace's top level on the run that initializes it, or the inbox — SHALL
-be moved to the recoverable quarantine, not merely left out.
+be moved to the recoverable quarantine, not merely left out — the control records' place, the quarantine and a
+version-control directory at the top level, which prep leaves out whole ({need}`RUL-not_inventoried`), aside.
 :::
 
 :::{rul} What an interrupted metadata write left is quarantined
@@ -1412,7 +1414,8 @@ not added again.
 :uses: DEF-timestamp_name, DEF-untimed_name
 
 A media file outside the inbox whose name is neither its timestamp name nor, lacking a recorded time, its untimed name
-SHALL stop prep.
+SHALL stop prep — one the same plan files on from missing metadata ({need}`RUL-time_given_filed_on`) or moves into it
+({need}`RUL-by_date_untimed_to_missing_metadata`) aside.
 :::
 
 :::{rul} Every misnamed file is named
@@ -1550,9 +1553,9 @@ as a file of no media class is handled.
 :verify: required
 :uses: DEF-tracks, DEF-dependency_cascade
 
-Geotag SHALL record a hash of the tracks as a dependency of every record it derives with them — the time decisions,
-the drift validation, the GPS decisions and the executable plan — so that a change to the tracks makes those records
-stale.
+Geotag SHALL record, as a dependency of every record it derives with the tracks — the time decisions, the drift
+validation, the GPS decisions and the executable plan — a digest of the tracks at the times its decisions reach, so that
+a change to the tracks there makes those records stale.
 :::
 
 ## 8. Nothing used once what it came from has changed
@@ -1579,7 +1582,7 @@ means this.
 :uses: DEF-fingerprint, DEF-hash, DEF-config_areas
 
 The **dependency cascade** is how the phases keep a record from being used once what it was made from has changed: each
-record carries what it depends on — media by their fingerprints, records and the tracks by their hashes, settings by a hash
+record carries what it depends on — media by their fingerprints, records by their hashes, the tracks by a digest of what of them the record reaches, settings by a hash
 of the configuration or of the areas the record reads, and the code and tool versions that made it — and each use checks them first. Its full name, the
 *dependency-fingerprint/hash cascade*, says that it tracks both kinds of identity.
 :::
@@ -2027,8 +2030,9 @@ not.
 :verify: required
 :refines: RUL-merge_takes_finalized_current
 
-Merge SHALL refuse when photos by destination has changed since finalize, so that what reaches the library is always
-the corrected, named, fully recorded set.
+Merge SHALL refuse while photos by destination holds a photo finalize did not record, or one changed since it did, so
+that what reaches the library is always the corrected, named, fully recorded set — a photo gone from there since being
+for merge's plan to account for ({need}`RUL-replan_carries_placed`, {need}`RUL-replan_blocks_unaccounted`).
 :::
 
 :::{rul} A refresh describing only a prep run is not a change
@@ -2385,7 +2389,8 @@ the earlier one untouched, and never deriving an earlier phase's history again.
 
 Finalize SHALL change nothing in the workspace's media, its other records or the library, only reading the record that
 already stands at the end of geotag and writing from it the complete log, geotag's database image, its record of the
-photos as it found them, and the package.
+photos as it found them, and the package, and recording the acceptance of changes it is given
+({need}`RUL-acceptance_recorded`).
 :::
 
 :::{rul} What the package holds
@@ -2740,7 +2745,8 @@ A phase's database image SHALL be left untouched by every other phase.
 :refines: RUL-database_image_each_phase
 :uses: DEF-database_image
 
-A phase's database image SHALL be left untouched by a run that does not succeed.
+A phase's database image SHALL be left untouched by a run that stops before it has captured a new one whole — what
+fails after that capture leaving the new image in place.
 :::
 
 :::{rul} A database image is never read back as working data
@@ -2793,7 +2799,7 @@ An interrupted capture of a database image SHALL leave the earlier image or the 
 :status: ruled
 :uses: DEF-workspace, DEF-merge
 
-A workspace is **sealed** once merge has succeeded in it: marked as finished, by a mark only merge writes.
+A workspace is **sealed** once it carries the mark of a finished merge, a mark only merge writes.
 :::
 
 :::{rul} Merge never alters the library
@@ -2837,6 +2843,7 @@ fingerprints match, by their bytes.
 :criticality: high
 :verify: required
 :refines: RUL-collision_by_content
+:excepts: RUL-target_free_at_execute, RUL-execution_only_the_plan
 
 A taken place holding the photo itself, byte for byte, SHALL mean the photo is already in the library: nothing is written there.
 :::
@@ -3597,7 +3604,8 @@ A decision found invalid SHALL be reported as needing correction.
 
 Immediately before each change that gives a file a name — prep's moves, renames and setting duplicates aside, geotag's
 renames, merge's placing in the library — execution SHALL check that the name is free, never writing onto a taken name
-on the strength of the plan: a name found taken blocks that operation.
+on the strength of the plan: a name found taken blocks that operation — a place in the library found holding the
+photo itself ({need}`RUL-collision_same_content`) aside.
 :::
 
 :::{rul} A name is checked free ignoring case
@@ -3699,7 +3707,21 @@ A temporary copy SHALL bear a name of its own, which no photo bears.
 :anti: yes
 :verify: required
 
-An operation that cannot complete SHALL leave its file as it was before it.
+An operation that cannot complete SHALL leave its file as it was before it — a move that cannot be one operation
+({need}`RUL-split_move_never_lost`) and a move whose recording fails ({need}`RUL-move_stands_when_recording_fails`)
+aside.
+:::
+
+:::{rul} A move whose recording fails stands
+:id: RUL-move_stands_when_recording_fails
+:status: ruled
+:criticality: high
+:verify: required
+:excepts: RUL-failed_operation_clean
+:uses: DEF-workspace_database
+
+A file prep has moved SHALL stay where the move put it when the recording of that move in the workspace database then
+fails.
 :::
 
 :::{rul} A failed operation's failure is recorded
@@ -3758,7 +3780,8 @@ first run — the configuration it seeds; a prep execution that geotag's plan ru
 :upholds: INV-every_change_from_the_record
 
 Execution SHALL carry out only the operations its plan records, re-deriving no decision — clearing the temporary
-copies a crash left ({need}`RUL-crash_temps_cleared`) aside.
+copies a crash left ({need}`RUL-crash_temps_cleared`), and taking as already in the library a photo whose place is found
+holding it ({need}`RUL-collision_same_content`), aside.
 :::
 
 :::{rul} The job count changes nothing an execution does

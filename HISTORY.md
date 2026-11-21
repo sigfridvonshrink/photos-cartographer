@@ -2,6 +2,40 @@
 
 *What was decided and why, newest first. A record: never corrected forward. Per-commit detail is `git log`.*
 
+## 2026-11-21 — the corpus read against itself: sixteen contradictions ruled
+
+The corpus was read without the code, a reader to each phase and one to the shared contract, for rules that cannot
+both hold. Seventeen pairs were put to the owner with a side suggested for each, and ruled as suggested; sixteen are
+written in, the seventeenth (an unchanged re-plan of prep) waiting on its cost. Nearly all were one shape: a rule
+stated without exception, and its exception stated elsewhere and never linked. Each general rule now names what it
+leaves aside, and the rule that states the exception links it with `excepts`.
+
+- **A move whose recording fails stands.** Moving the file back would be a second change no plan records. A rule of
+  its own, with its reason, beside the rule that a failed operation leaves its file as it was.
+- **A library place found holding the photo is the photo already there**, at execute as at planning: the rule that a
+  taken name blocks, and the rule that execution re-derives nothing, both say so. The exception was declared by a
+  build item; it is now the intent's.
+- **Finalize records the acceptance it is given**, as a dry run and a plan do.
+- **The tracks are a dependency by what of them a decision reaches**, not by every byte under the root.
+- **A file prep's own plan files on, or moves to missing metadata, is not misnamed**; one moved there takes its
+  untimed name.
+- **A duplicate in the first dump is set aside from where it lies**, not moved to the inbox first.
+- **Finalize and merge judge a photo's position by the record** — the writes carried out and prep's reading — so
+  that neither needs the metadata tool.
+- **Prep run between execute and finalize no longer stops merge.** Finalize passed over the rewritten handoff and
+  merge then refused it, holding the handoff to the plan's pin. Finalize now records the handoff as it found it, in
+  `photos-26-finalized-media.json`, and merge holds the workspace to that. The one change of behaviour.
+- **No timezone passes down from or through a country of several.**
+- **A run refused for want of a required snapshot writes its summary**; geotag's rule says so as merge's did.
+- **Merge refuses a photo finalize did not record or one changed since**; a photo gone is for its plan to account for.
+- **A fingerprint a move carried, geotag left or the memo keeps is not taken afresh**, and metadata is reused across a
+  recorded move.
+- **A database image is left untouched by a run that stops before capturing a new one**; what fails after leaves the
+  new image. *Sealed* is defined by the mark, not by success.
+- **The control records' place, the quarantine and a top-level version-control directory are not quarantined** as
+  hidden entries of a first dump.
+- **Prep's own dry-run rule is gone**: it said less than the shared one it refined.
+
 ## 2026-11-17 — a leaner corpus measured, and dropped (BACKLOG 57)
 
 The corpus is about three quarters the size of the code by words, and the owner asked whether that was overdoing it.

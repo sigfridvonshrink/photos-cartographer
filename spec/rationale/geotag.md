@@ -1188,7 +1188,9 @@ geoplaced are in by-dest."* So a photo nothing places waits for that answer, and
 answer that serves a whole folder of such photos at once. Waiting is not enough on its own: what reaches the library
 is the photos as they are, and a photo can hold no position however its plan was decided — a write that never landed,
 a device's latitude 0 and longitude 0 read again. So finalize, which signs for the photos, and merge, which takes them
-into the library, look at what each photo holds, not at what was decided for it.
+into the library, look at what each photo is recorded to hold — the writes carried out on it and what prep
+read of it — not at what was decided for it; and at the record, not the photo, so that neither needs the tool that
+reads one ({need}`RAT-refusal_for_what_is_needed`).
 :::
 
 :::{rat} An answer given for one photo outranks the tracks and the fallback, and stays
@@ -1528,6 +1530,21 @@ names the plan it ran by its content and every journal belongs to a plan that ca
 before its summary can have been the torn one's — finalize passes it over, and it stays kept and archived. So a plan
 made again for one torn before it ran ends in a finalize that needs no hand on the torn copy. Where an execution may
 have run it, the torn copy is still a record finalize cannot read, and it stops.
+:::
+
+:::{rat} Prep after the execution is the loop, not a change of decision
+:id: RAT-prep_after_execute_is_the_loop
+:status: ruled
+:forced: no
+:follows_from: RAT-package_answers_later
+:justifies: RUL-finalize_passes_prep_after_execute
+
+Every other dependency of the plan is something a decision was made from: changed, the photos carry decisions that
+were never made from what now stands. The handoff is prep's account of the photos, and prep run after the execution
+writes into it what geotag itself did — the names it gave, the positions and times it wrote. That is the pipeline
+going round, and a finalize that refused on it would send the user to plan and execute again for a change the
+execution made. What must not pass unseen is a photo changed or added: finalize checks each photo against what the
+execution left, and records the handoff as it found it, for merge to hold the workspace to.
 :::
 
 :::{rat} Geotag's summary, too, records an execution

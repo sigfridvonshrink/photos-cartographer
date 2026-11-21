@@ -1667,6 +1667,19 @@ safe when it happens. A half-done move, a half-written file, or a failure record
 plan can see it.
 :::
 
+:::{rat} A move is not undone to tidy a failure
+:id: RAT-move_not_undone
+:status: ruled
+:forced: no
+:follows_from: RAT-safe_at_each_change
+:justifies: RUL-move_stands_when_recording_fails
+
+A move that succeeded has left the file whole under its new name. Where the recording that follows it fails, moving
+the file back would be a second change no plan records, and one that can fail in its turn, leaving the file where
+neither the plan nor the journal says it is. The journal already says the operation failed, and prep plans from the
+folders as they are: the next plan finds the file where it lies and records it.
+:::
+
 :::{rat} A power cut is an interruption like any other
 :id: RAT-power_loss_is_an_interruption
 :status: ruled

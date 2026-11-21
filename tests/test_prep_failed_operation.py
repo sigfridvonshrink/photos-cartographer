@@ -57,3 +57,31 @@ def test_a_raised_operation_is_journalled_failed(tmp_path, monkeypatch):
     assert (ws / failed_op["source"]).exists() and not (ws / failed_op["destination"]).exists()
     assert len(journal["operations"]) < len(plan["operations"])             # the execution stopped there
     assert journal["status"] != "success"
+
+
+@pytest.mark.spec("RUL-move_stands_when_recording_fails", "RUL-failure_recorded", "BLD-failed_operation",
+                  test="TST-prep_failed_operation-a_move_whose_recording_fails_stands")
+def test_a_move_whose_recording_fails_stands(tmp_path, monkeypatch):
+    """A photo of a new dump is moved, and the recording of that move in the database raises. The operation is
+    journalled failed and the execution stops there; the photo stays where the move put it, whole — not moved back —
+    and the next plan finds it there."""
+    ws = _fresh(monkeypatch, tmp_path)
+    (ws / "0-sources" / "d.jpg").write_bytes(b"DDDD")
+    rc, said, _ = _prep(monkeypatch, ws, "plan")
+    assert rc == 0, said
+    plan = json.load(open(utils.prep_plan_path(str(ws))))
+    moved = next(o for o in plan["operations"] if o["source"] == "0-sources/d.jpg")
+    assert moved["database_effects_after_verification"]
+
+    def recording_fails(self, data):
+        raise OSError(errno.EIO, "the recording fails")
+    monkeypatch.setattr(prep.WorkspaceCache, "upsert_file", recording_fails)
+    rc, said, _ = _prep(monkeypatch, ws, "execute")
+    assert rc == 3, said
+
+    journal = json.load(open(utils.journal_path(str(ws), plan["plan_id"])))
+    last = journal["operations"][-1]
+    assert last["operation_id"] == moved["operation_id"] and last["status"] == "failed"
+    assert "the recording fails" in last["details"]["error"]
+    assert not (ws / "0-sources" / "d.jpg").exists()
+    assert (ws / moved["destination"]).read_bytes() == b"DDDD"               # where the move put it, whole

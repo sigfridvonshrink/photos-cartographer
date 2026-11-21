@@ -3992,8 +3992,9 @@ class GeotagWorkflow:
 
     def _finalized_media(self, files, plan):
         """Each by-dest photo as geotag left it — its final path, size and modification time — for merge
-        to refuse one changed since (RUL-merge_refuses_changed_since_finalize). The final path is the plan's
-        rename target, if any."""
+        to refuse one changed since (RUL-merge_refuses_changed_since_finalize) — and the handoff's content fingerprint
+        as finalize found it, which a prep run after execute may have made another than the plan's
+        (RUL-finalize_passes_prep_after_execute). The final path is the plan's rename target, if any."""
         renamed = {op["relative_path"]: op["to"] for d in (plan.get("destinations") or {}).values()
                    for op in d.get("operations") or [] if op.get("type") == "rename_no_clobber"}
         media = {}
@@ -4006,7 +4007,9 @@ class GeotagWorkflow:
                 continue
             media[final] = {"size": st.st_size, "mtime_ns": st.st_mtime_ns}
         return {"artifact_type": "finalized_media", "artifact_name": FINALIZED_MEDIA_ARTIFACT,
-                "schema_version": 1, "plan_id": plan.get("plan_id"), "media": dict(sorted(media.items()))}
+                "schema_version": 1, "plan_id": plan.get("plan_id"),
+                "handoff_content_fingerprint": self._handoff_dependency(self.workspace_root)["content_fingerprint"],
+                "media": dict(sorted(media.items()))}
 
     def _archive_manifest(self, plan, summary, now_iso, members):
         ws = self.workspace_root

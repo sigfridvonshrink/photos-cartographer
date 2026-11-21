@@ -1142,7 +1142,7 @@ photo, to proceed without it.
 :::{bld} What finalize checks first
 :id: BLD-finalize_preconditions
 :status: ruled
-:realises: RUL-finalize_requires_success, RUL-finalize_checks_photos, RUL-finalize_reports_placement, RUL-placement_recorded_with_its_track, RUL-finalize_refuses_unplaced, RUL-finalize_requires_plan_still_holds, RUL-finalize_keeps_placement_count
+:realises: RUL-finalize_requires_success, RUL-finalize_checks_photos, RUL-finalize_reports_placement, RUL-placement_recorded_with_its_track, RUL-finalize_refuses_unplaced, RUL-finalize_requires_plan_still_holds, RUL-finalize_keeps_placement_count, RUL-finalize_passes_prep_after_execute
 
 `geotag finalize` SHALL refuse, writing nothing, unless `photos-24-executable-plan.json` is `ready`, `photos-25-execution-summary.json` is `success` for the same `plan_id`, every dependency of the plan but the handoff still holds — the handoff left out because prep, run after execute, records geotag's own writes and renames in it, and the tracks taken as the catalogue keeps them ({need}`BLD-track_window`) — and every photo under `6-photos-by-dest` is one of the plan's, at its final path, with the size and modification time the journal's `media_after` records for it, or the plan's `media_preconditions` for a photo the plan had nothing to do to — none of them holding no position ({need}`BLD-no_photo_unplaced`) — and every JPEG set aside in `3-redundant-jpgs` that the plan renames with its RAW ({need}`BLD-set_aside_renamed_with_raw`, {need}`BLD-set_aside_jpeg_catches_up`) is at its new name with the size and modification time `media_after` records for it. It prints the plan's `placement` and writes it into the archive manifest; the log gives each position from the tracks its `gpx_file` and `at_utc`.
 :::

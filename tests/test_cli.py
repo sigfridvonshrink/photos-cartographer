@@ -116,7 +116,7 @@ def test_plan_dryrun_execute_roundtrip(tmp_path, monkeypatch, capsys):
     assert _main(monkeypatch, ws, "execute") == 0             # reads it, no flag needed
 
 
-@pytest.mark.spec("RUL-prep_dry_run_changes_nothing", test="TST-cli-dry_run_summarizes_not_dumps")
+@pytest.mark.spec("RUL-dry_run_changes_nothing", test="TST-cli-dry_run_summarizes_not_dumps")
 def test_dry_run_summarizes_not_dumps(tmp_path, monkeypatch, capsys):
     ws = _ws(tmp_path)
     (ws / "0-sources" / "note.txt").write_text("stray")       # a real plan to summarize (not nothing-to-do)
@@ -442,7 +442,7 @@ def test_locked_workspace_fails_fast(tmp_path, monkeypatch, capsys):
         fcntl.flock(fd, fcntl.LOCK_UN); os.close(fd)
 
 
-@pytest.mark.spec("RUL-prep_dry_run_changes_nothing", "RUL-dry_run_changes_nothing", test="TST-cli-dry_run_mutates_nothing_on_disk")
+@pytest.mark.spec("RUL-dry_run_changes_nothing", test="TST-cli-dry_run_mutates_nothing_on_disk")
 def test_dry_run_mutates_nothing_on_disk(tmp_path, monkeypatch, capsys):
     """Dry-run is validation, not simulation, and is strictly read-only: it loads the saved plan,
     validates it against an in-memory DB, and prints a summary. Snapshot the whole control dir + a
