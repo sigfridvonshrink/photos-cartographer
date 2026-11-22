@@ -1857,7 +1857,7 @@ class GeotagWorkflow:
         the camera's own GPS (BLD-neighbour_day_proposal): on its tracks, or by its fixes' times; of a day split at a
         change of the clock, the part next to it. However far apart in time; asked about once, as a timezone's guess
         is — with tracks by the day's photos at the drift check, else by acceptance here
-        (RUL-neighbour_day_offset_drift_checked). The day keeps its own cell."""
+        (RUL-neighbour_day_offset_asked_once). The day keeps its own cell."""
         for (dest, bucket), (group, g, prior_cell, anchor_frames, rep_naive, date, day, sel, tz) in sorted(recall.items()):
             cells = destinations[dest]["camera_group_time_decisions"]
             cell = cells.get(bucket) or {}
@@ -3760,7 +3760,7 @@ class GeotagWorkflow:
         # prep run after execute records geotag's own writes and renames in it, and that is the loop, not a
         # change of decision.
         # The tracks are those the record keeps: finalize seals what is kept and never reads gpx_root
-        # (RUL-sealing_needs_no_tracks).
+        # (RUL-finalize_needs_no_tracks).
         gpx = self.plan_tracks(plan, read=False)
         stale = self.revalidate_plan(plan, gpx, with_handoff=False)
         if stale:
@@ -3791,8 +3791,16 @@ class GeotagWorkflow:
             cache.close()
         time_artifact = json.load(open(time_decisions_path(ws)))
         prep_photos = (json.load(open(prep_log_path(ws))) or {}).get("photos", {}) or {}
+        # The log this one replaces, for the steps of a photo since gone from by-dest; one that cannot be read gives
+        # none.
+        try:
+            with open(complete_log_path(ws)) as f:
+                previous = (json.load(f) or {}).get("photos")
+        except (OSError, ValueError, AttributeError):
+            previous = None
         photos = build_complete_log(prep_photos, files, rows, time_artifact, plan,
-                                    earlier_passes=self._earlier_passes(plan.get("plan_id")))
+                                    earlier_passes=self._earlier_passes(plan.get("plan_id")),
+                                    previous=previous if isinstance(previous, dict) else None)
         not_carried = entries_not_carried(prep_photos, photos)
         if not_carried:
             # a defect, not a state of the workspace: the copy would misstate prep's record (BLD-log_copy_checked)
@@ -3992,8 +4000,9 @@ class GeotagWorkflow:
 
     def _finalized_media(self, files, plan):
         """Each by-dest photo as geotag left it — its final path, size and modification time — for merge
-        to refuse one changed since (RUL-merge_refuses_changed_since_finalize). The final path is the plan's
-        rename target, if any."""
+        to refuse one changed since (RUL-merge_refuses_changed_since_finalize) — and the handoff's content fingerprint
+        as finalize found it, which a prep run after execute may have made another than the plan's
+        (RUL-finalize_passes_prep_after_execute). The final path is the plan's rename target, if any."""
         renamed = {op["relative_path"]: op["to"] for d in (plan.get("destinations") or {}).values()
                    for op in d.get("operations") or [] if op.get("type") == "rename_no_clobber"}
         media = {}
@@ -4006,7 +4015,9 @@ class GeotagWorkflow:
                 continue
             media[final] = {"size": st.st_size, "mtime_ns": st.st_mtime_ns}
         return {"artifact_type": "finalized_media", "artifact_name": FINALIZED_MEDIA_ARTIFACT,
-                "schema_version": 1, "plan_id": plan.get("plan_id"), "media": dict(sorted(media.items()))}
+                "schema_version": 1, "plan_id": plan.get("plan_id"),
+                "handoff_content_fingerprint": self._handoff_dependency(self.workspace_root)["content_fingerprint"],
+                "media": dict(sorted(media.items()))}
 
     def _archive_manifest(self, plan, summary, now_iso, members):
         ws = self.workspace_root

@@ -1,0 +1,18 @@
+# Words the corpus no longer uses, each with the one that replaced it. tools/spec-build fails on any in the prose
+# of spec/ (not in an id, nor in a name set in backticks). One to a line: <retired> -> <in its place>.
+re-seal -> repackage
+re-seals -> repackages
+re-sealed -> repackaged, remade
+reseal -> repackage
+drift validation -> drift check
+check against the tracks -> drift check
+image decoder -> image engine
+quarantine record -> quarantine manifest
+quarantine evidence -> quarantine manifest
+backup snapshot -> database image
+audit log -> prep's log
+blesses -> marks a library
+blessed -> marked
+journaled -> journalled
+resolved time -> true time
+job records -> a phase's records

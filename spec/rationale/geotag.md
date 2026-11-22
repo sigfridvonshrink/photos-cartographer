@@ -1,9 +1,9 @@
 # Geotag — why
 
 **Not normative.** Each item here is the reasoning behind the [intent](../intent/geotag.md) or [build](../build/geotag.md)
-items it `justifies`, under the same section numbers. Where the two differ, the intent wins and this is stale.
+items it `justifies`. Where the two differ, the intent wins and this is stale.
 
-## 1. Core workflow rule
+## Core workflow rule
 
 :::{rat} A position is looked up by time
 :id: RAT-position_follows_time
@@ -43,7 +43,7 @@ before, so that the date can be asked there, in the editor or by hand, like any 
 :status: ruled
 :forced: no
 :follows_from: RAT-folder_gps_fallback, RAT-untimed_set_apart, RAT-no_phase_invents_time
-:justifies: RUL-date_fallback_from_nearest, RUL-date_fallback_times_untimed, RUL-date_fallback_fills_to_a_day, RUL-date_fallback_time_written, RUL-date_fallback_names_in_scanner_order, RUL-date_fallback_applies_itself
+:justifies: RUL-date_fallback_from_nearest, RUL-date_fallback_times_untimed, RUL-date_fallback_fills_to_a_day, RUL-date_fallback_time_written, RUL-date_fallback_names_in_name_order, RUL-date_fallback_applies_itself
 
 A scanned print records no time: the scanner's clock says when it was scanned, if anything, never when it was taken.
 What does say it is the folder the user sorts it into — "1985", "Christmas 1985" — better than any one photo can. The
@@ -76,7 +76,7 @@ reading is never traded for a filing. Since the written time looks like any othe
 the date fallback, and the date as given, so a "1985-01-01" can be told from a photo taken that night.
 :::
 
-## 3. Linear dependency inclusion
+## Linear dependency inclusion
 
 :::{rat} A chain is only as fresh as its weakest link
 :id: RAT-no_chain_of_vouching
@@ -91,7 +91,7 @@ later one was written — would pass unseen whenever the later record happened n
 itself, every input is checked against what it is now, at the one moment that matters: just before anything changes.
 :::
 
-## 4. Geotag scope
+## Geotag scope
 
 :::{rat} Only what the user sorted is ready
 :id: RAT-only_sorted_is_ready
@@ -173,7 +173,7 @@ make, the corrections would rest on values neither version would now take for th
 first, and the plan then rests on one reading throughout.
 :::
 
-## 5. JSON artifact rule
+## JSON artifact rule
 
 :::{rat} A missing record should mean one thing
 :id: RAT-record_means_stage_reached
@@ -189,7 +189,7 @@ only mean the stage was not reached. Were an all-automatic stage to write nothin
 to act on when there was none. With no record written, the run's output is the one place left to say what stopped it.
 :::
 
-## 6. Human decision field rule
+## Human decision field rule
 
 :::{rat} The camera's own GPS is evidence; the user decides how much
 :id: RAT-anchor_evidence_trusted_as_configured
@@ -332,15 +332,15 @@ does.
 :status: ruled
 :forced: no
 :follows_from: RAT-zone_table_where_host_lacks, RAT-every_question_answerable
-:justifies: RUL-zone_table_answered_in_editor, RUL-zone_table_answered_by_hand
+:justifies: RUL-zone_table_answered_in_editor, RUL-zone_table_answered_by_hand, RUL-zone_table_hand_permission_at_next_plan
 
 The question of the table of countries is prep's, asked at a terminal when the workspace is made; a workspace made
 with no one at the terminal leaves it open, and the user who opens the editor to answer geotag's questions would
 otherwise have to leave it to answer this one. The owner ruled *"the user should be able to answer all questions in
 the editor"* — this one too, though prep asks it. Given there, it is the same answer: recorded as prep records it, a
 permission downloading the table then, on the user's word. And as every answer is a field of a record the user may
-write by hand, so is this one: written into the record that keeps it, a refusal stands as given, and a permission is
-acted on by prep's next plan — the one run that downloads.
+write by hand, so is this one: written into the record that keeps it, a refusal stands as given, and a permission —
+given to no run, as the editor's and prep's are — is acted on by prep's next plan, the run that reads the record.
 :::
 
 :::{rat} A camera that records its offset says which zone its clock was on
@@ -355,7 +355,8 @@ clock's own error; the destination's zone is only an assumption that the camera 
 home time in Japan records +01:00 and is eight hours from the zone's guess, offered as the answer to accept. So the
 recorded offset is proposed before the zone. It states a setting, not a measurement — a clock set to the wrong hour
 in its right zone records the zone and is still wrong — so it is a proposal like the zone's, accepted or checked
-against the tracks the same way, and the camera's own positions, which measure the clock, come before it. Photos of
+against the tracks the same way, and the camera's own GPS, where it measures the clock — by an anchor, or by the times
+its fixes recorded — comes before it; positions that lie on no track and record no usable time measure nothing. Photos of
 one day recording two offsets say the setting was changed that day, or that the tag is not to be trusted; which is the
 day's is a guess, so neither is proposed, and the offsets are shown for the user to answer.
 :::
@@ -387,7 +388,7 @@ a trip with none of its own would be far from all of them too.
 :justifies: RUL-timezone_offset_asked_once
 
 A timezone's offset, like the one a camera's photos record, is a guess that needs the user's word before it is written. Where tracks lie by the photos the
-user gives that word at the check against the tracks, looking at where the offset puts a photo; asking them to accept
+user gives that word at the drift check, looking at where the offset puts a photo; asking them to accept
 the same number first, in another file and another run, adds a question and no safety — the check is the stronger
 act and names the offset itself. Where no track covers the photos there is no check, and acceptance is the word.
 :::
@@ -403,7 +404,7 @@ A user accepts a proposal by looking at it: this offset, for this camera, on thi
 :::
 
 
-## 7. Per-destination structure
+## Per-destination structure
 
 :::{rat} A clock changed during the day shows only on the GPS
 :id: RAT-clock_change_seen_by_gps
@@ -430,7 +431,7 @@ says which part took it, and no one camera time divides such photos from each ot
 overlap — so each is asked its part, of the user, who knows when the clock was set.
 :::
 
-:::{rat} One place's clock evidence says nothing of another's
+:::{rat} A clock's error does not follow the folders
 :id: RAT-no_borrowed_offsets
 :status: ruled
 :forced: yes
@@ -439,9 +440,11 @@ overlap — so each is asked its part, of the user, who knows when the clock was
 
 Folders nest by geography, which is why a timezone or a fallback position can pass down them; a clock's error does not
 follow geography. A museum visited inside a city trip may be another day, the camera reset in between; a parent
-folder's offset averaged from its children would be right for none of them. An offset borrowed would look measured
-while it is not — so each is proposed from the camera's own positions that day, or from the timezone, and labelled as
-such.
+folder's offset averaged from its children would be right for none of them. An offset borrowed down the folders would look
+measured while it is not — so none comes down them or is averaged across them: each is proposed from what the camera's
+own photos show — its positions that day, there or in another destination
+({need}`RAT-clock_is_the_cameras_for_the_day`), the times its fixes and its photos record — or from the timezone, and
+labelled as what it is.
 :::
 
 :::{rat} A container is a place to put defaults
@@ -479,7 +482,8 @@ either part is that part's clock, and stands.
 
 A camera has one clock. Sorting a day's photos into a museum and a castle does not give it two: what its own positions
 show of its clock in the morning is the best evidence there is for the afternoon, far better than assuming it kept the
-local hour. So a destination with no position of its own that day is offered the offset found elsewhere that day —
+local hour. So a destination where the camera's own GPS gives no offset that day — no anchor, nor the times its fixes
+recorded; positions that lie on no track measure nothing of the clock — is offered the offset found elsewhere that day —
 applied by itself only where it was sure enough to apply itself there. And where the camera's positions give two
 offsets for one day that cannot both be right, one of them rests on a wrong match; neither is written until the user
 says which. An offset the user wrote apart from what the camera's positions support, or accepted on a guess, is not passed
@@ -492,7 +496,7 @@ one with no evidence is only offered ({need}`RAT-neighbour_day_offered`).
 :status: ruled
 :forced: no
 :follows_from: RAT-clock_is_the_cameras_for_the_day, RAT-assumptions_need_acceptance, RAT-drift_invisible
-:justifies: RUL-neighbour_day_offset_proposed, RUL-neighbour_day_offset_needs_acceptance, RUL-neighbour_day_offset_drift_checked, RUL-neighbour_day_no_gap_bound, RUL-neighbour_day_keeps_its_cell
+:justifies: RUL-neighbour_day_offset_proposed, RUL-neighbour_day_offset_needs_acceptance, RUL-neighbour_day_offset_asked_once, RUL-neighbour_day_no_gap_bound, RUL-neighbour_day_keeps_its_cell
 
 A day is a camera's day by its own clock, so a camera left on home time abroad, or a night shoot, has its midnight in
 the middle of an outing: the outing becomes two days, and the half with no anchor asks for its offset and then for a
@@ -538,7 +542,7 @@ ruling: *"proposal counts as automatic today - keep it automatic"*.
 :::
 
 
-## 8. Reading the tracks
+## Reading the tracks
 
 :::{rat} A track is evidence only where it can be read
 :id: RAT-track_points_read_exactly
@@ -551,7 +555,11 @@ A track's points become positions and clock offsets; a time read an hour wrong, 
 photos and correct cameras by that hour, and look like evidence. Recorders write the same instant in several valid
 forms, so each is read as the instant it is; one stating no zone could be any of them and is not used. Skipping a
 point silently would let a track whose every point was rejected pass for an empty one, and the user would never learn
-why the photos it should have placed were not.
+why the photos it should have placed were not. A form whose meaning is certain is read though the standard for a
+track's times does not strictly allow it — a lowercase `z` — and the end of a day written as `24:00:00` is the midnight
+it names; an offset no zone can have is no slip of form but a time that cannot be trusted, and its point is skipped.
+No recorder is likely to write such a point, so one found may be the sign of a deeper fault in the file: the more
+reason to tell the user of it.
 :::
 
 :::{rat} A track is where one device was
@@ -559,14 +567,15 @@ why the photos it should have placed were not.
 :status: ruled
 :forced: yes
 :follows_from: FCT-partial_track_coverage, CHC-photos_matter
-:justifies: RUL-tracks_never_joined, RUL-disagreeing_tracks_place_nothing
+:justifies: RUL-tracks_never_joined, RUL-disagreeing_tracks_place_nothing, RUL-tracks_never_joined_to_anchor
 
 Each track is one device's record, and the tracks folder — or one file of it — may hold several for the same hours: a
 phone and a logger in the same pocket, or a companion who spent the afternoon elsewhere. Read as one line through all
 the points in time order, two devices five kilometres apart become a zigzag between them, and a photo is placed at
-whichever was logged a second nearer — or halfway. Kept apart, two tracks that agree are one party and either serves;
-two of one rank that do not are a question only the user can answer, by filing their own track higher or taking out the
-one that is not theirs.
+whichever was logged a second nearer — or halfway. An anchor read the other way round is as false: a photo's own
+position found on the line between two devices' points fixes its clock by a place and a time neither device was at. Kept
+apart, two tracks that agree are one party and either serves; two of one rank that do not are a question only the user
+can answer, by filing their own track higher or taking out the one that is not theirs.
 :::
 
 :::{rat} The better device is believed first
@@ -621,7 +630,7 @@ there, and is not followed; its tracks, unread, are named as unread rather than 
 :status: ruled
 :forced: no
 :follows_from: RAT-database_is_record, CHC-photos_matter
-:justifies: RUL-track_points_kept, RUL-withdrawn_track_points_kept, RUL-sealing_needs_no_tracks, RUL-merge_needs_no_tracks
+:justifies: RUL-track_points_kept, RUL-withdrawn_track_points_kept, RUL-finalize_needs_no_tracks, RUL-merge_needs_no_tracks
 
 A placement or a clock offset rests on track points, and the tracks folder is the user's, outside the workspace: it is
 reorganised, pruned, moved to another disk. A sealed workspace that recorded only a track's fingerprint and name could no
@@ -704,7 +713,7 @@ drawn across it is invented.
 :::
 
 
-## 9. Camera groups
+## Camera groups
 
 :::{rat} The class decides how a photo's time is found
 :id: RAT-class_decides_time_model
@@ -770,7 +779,7 @@ change.
 :::
 
 
-## 10. Destination civil timezone
+## Destination civil timezone
 
 :::{rat} The nearest place says the most
 :id: RAT-nearest_timezone
@@ -843,7 +852,7 @@ its time and its name, now hidden under the right folder.
 :::
 
 
-## 11. Clock offsets from the camera's own GPS
+## Clock offsets from the camera's own GPS
 
 :::{rat} The same place on another trip is not evidence
 :id: RAT-clock_error_window
@@ -931,18 +940,18 @@ devices that holds back a guess far from all of them.
 :status: ruled
 :forced: yes
 :follows_from: RAT-day_offset_is_the_cameras, RAT-decision_withdrawable
-:justifies: RUL-kept_offset_rests_on_its_tracks, RUL-kept_offset_rests_on_its_fixes
+:justifies: RUL-kept_offset_rests_on_its_tracks, RUL-kept_offset_rests_on_its_fixes, RUL-kept_offset_yields_to_new_photo
 
 The offset is kept because it was read from the camera's own GPS — against the tracks, or from the times its fixes
 recorded — and the photos that gave it can no longer give it again. But the user takes a track out of the folder for one
 reason — it was someone else's — and an offset read against it goes with it; a photo whose fix gave it, taken out of the
 workspace, takes its reading with it; and a photo arriving later with its own position is new evidence about the same
-clock. Kept past either, the offset would be the one decision in the record nobody could withdraw and nothing still
-supported.
+clock, which may say another offset, or leave the day's evidence no longer settling one. Kept past any of the three,
+the offset would be the one decision in the record nobody could withdraw and nothing still supported.
 :::
 
 
-## 13. Resolved UTC
+## Resolved UTC
 
 :::{rat} A phone says its own offset
 :id: RAT-phone_records_its_offset
@@ -1048,7 +1057,7 @@ A local time that happened twice, or never, has two readings an hour apart, and 
 :::
 
 
-## 14. The GPS-drift check
+## The GPS-drift check
 
 :::{rat} A wrong offset moves a whole day along the track
 :id: RAT-drift_invisible
@@ -1057,7 +1066,7 @@ A local time that happened twice, or never, has two readings an hour apart, and 
 :follows_from: RAT-position_follows_time, CHC-photos_matter
 :justifies: RUL-unanchored_offset_confirmed
 
-A photo with no position of its own is placed where the track was at its resolved time. With an offset the camera's
+A photo with no position of its own is placed where the track was at its true time. With an offset the camera's
 GPS measured, that time is evidence; with one assumed from the timezone or written by hand, nothing has checked it.
 Wrong by an hour, it slides the whole day's photos an hour along the track — each to a real place on the route, so
 none looks wrong — and writes those places into the originals. Seeing a photo against the track at its time is the
@@ -1093,14 +1102,14 @@ of what they saw, for them to replace.
 :::
 
 
-## 15. Every photo's own values
+## Every photo's own values
 
 :::{rat} A new decoder does not make a new photo
 :id: RAT-same_photo_new_fingerprint
 :status: ruled
 :forced: yes
 :follows_from: RAT-decision_withdrawable, RAT-decoded_pixel_identity, RAT-new_fingerprint_same_photo
-:justifies: RUL-own_values_follow_new_fingerprint, RUL-geotag_plans_on_vouched_log, RUL-geotag_executes_on_vouched_log, RUL-fingerprint_mapping_one_to_one
+:justifies: RUL-own_values_follow_new_fingerprint, RUL-geotag_plans_on_vouched_log, RUL-geotag_executes_on_vouched_log, RUL-fingerprint_mapping_one_to_one, RUL-finalize_on_vouched_log, RUL-merge_on_vouched_log
 
 A new ImageMagick may decode a photo to a new fingerprint; the photo is the same, and so are its own time and
 position. Lost with the old value, they would leave geotag taking the photo's corrected time for its own: a changed
@@ -1109,11 +1118,13 @@ it does not say so one for one, no photo's values can be told apart, and geotag 
 handoff does not vouch for says nothing that can be trusted of which became which: planned past it, as though no
 fingerprint had changed, a photo would lose its pinned values without a word — so geotag stops on it as well, as
 finalize and merge do. Execution builds the same model again from the log and moves each pin to its new value; the
-log may have changed since the plan was made, so execution asks the same of it, before it changes anything.
+log may have changed since the plan was made, so execution asks the same of it, before it changes anything. Finalize
+copies the log into the package, and merge takes that package as the workspace's record: a log no longer the one the
+handoff vouches for, archived or carried on, would stand in the record for prep's work when it is not.
 :::
 
 
-## 16. Placing each photo
+## Placing each photo
 
 :::{rat} The camera measured where it was
 :id: RAT-own_position_best
@@ -1139,7 +1150,8 @@ camera's offset, one whose own position agrees with none of them most likely car
 photo's: GPS jitter, a fix from minutes before, a position another program wrote. Accepting the agreed offset corrects
 its time and would leave the wrong place in it, and the user could only read the pattern and mend it elsewhere. The
 tracks say where the user was at the photo's corrected time; where that lies farther from the photo's own position than
-an anchor may, the two are set side by side, the track's proposed. The photo's own stays unless the user takes
+the configuration allows — a distance of its own, not the one an anchor is matched within — the two are set side by
+side, the track's proposed. The photo's own stays unless the user takes
 another: it is still a measurement, and only the user can tell a stale fix from a detour the track missed — so nothing
 waits on it, and nothing replaces it but their answer. With no track at that time there is nothing to propose; the
 photo keeps its own, and the record says it was doubted. A position replaced is a position lost from the photo, so
@@ -1188,7 +1200,9 @@ geoplaced are in by-dest."* So a photo nothing places waits for that answer, and
 answer that serves a whole folder of such photos at once. Waiting is not enough on its own: what reaches the library
 is the photos as they are, and a photo can hold no position however its plan was decided — a write that never landed,
 a device's latitude 0 and longitude 0 read again. So finalize, which signs for the photos, and merge, which takes them
-into the library, look at what each photo holds, not at what was decided for it.
+into the library, look at what each photo is recorded to hold — the writes carried out on it and what prep
+read of it — not at what was decided for it; and at the record, not the photo, so that neither needs the tool that
+reads one ({need}`RAT-refusal_for_what_is_needed`).
 :::
 
 :::{rat} An answer given for one photo outranks the tracks and the fallback, and stays
@@ -1310,7 +1324,7 @@ where the folder says it was not. Asked again, it costs one answer.
 :::
 
 
-## 17. The corrected time
+## The corrected time
 
 :::{rat} Only a time geotag wrote is marked as corrected
 :id: RAT-only_corrected_time_marked
@@ -1351,7 +1365,7 @@ beside a time stay as they are: a clock offset is a whole number of seconds, so 
 :::
 
 
-## 18. Renames
+## Renames
 
 :::{rat} Geotag finishes the spelling prep could not
 :id: RAT-geotag_finishes_extension_spelling
@@ -1395,7 +1409,7 @@ The true order is kept where it can be read: in the metadata, each time with its
 :::
 
 
-## 19. The executable plan
+## The executable plan
 
 :::{rat} Half a position is a wrong one
 :id: RAT-position_whole
@@ -1423,7 +1437,7 @@ question already settled, or leave the later photos an offset nobody checked.
 :::
 
 
-## 20. Execution
+## Execution
 
 :::{rat} A crash leaves work, not damage
 :id: RAT-execution_resumable
@@ -1530,6 +1544,21 @@ made again for one torn before it ran ends in a finalize that needs no hand on t
 have run it, the torn copy is still a record finalize cannot read, and it stops.
 :::
 
+:::{rat} Prep after the execution is the loop, not a change of decision
+:id: RAT-prep_after_execute_is_the_loop
+:status: ruled
+:forced: no
+:follows_from: RAT-package_answers_later
+:justifies: RUL-finalize_passes_prep_after_execute
+
+Every other dependency of the plan is something a decision was made from: changed, the photos carry decisions that
+were never made from what now stands. The handoff is prep's account of the photos, and prep run after the execution
+writes into it what geotag itself did — the names it gave, the positions and times it wrote. That is the pipeline
+going round, and a finalize that refused on it would send the user to plan and execute again for a change the
+execution made. What must not pass unseen is a photo changed or added: finalize checks each photo against what the
+execution left, and records the handoff as it found it, for merge to hold the workspace to.
+:::
+
 :::{rat} Geotag's summary, too, records an execution
 :id: RAT-geotag_summary_records_an_execution
 :status: ruled
@@ -1546,7 +1575,7 @@ finalize and the next run read. An interrupted run reached no end to record: its
 finishes it writes the summary.
 :::
 
-## 21. Finalize
+## Finalize
 
 :::{rat} The package records what was done
 :id: RAT-package_records_what_was_done
@@ -1583,4 +1612,17 @@ no photo's metadata. Execution writes every photo's through that tool, and a pla
 stop without it. Refusing it because the metadata tool is not installed — on a machine the workspace was moved to
 for archiving, say — would stop the one step that packages work already done, for a tool nothing in it would run, and
 send the user to install something they do not need.
+:::
+
+:::{rat} What geotag did to a photo outlives the photo's stay
+:id: RAT-steps_outlive_the_photos_stay
+:status: ruled
+:forced: no
+:follows_from: RAT-retention_serves_the_log
+:justifies: RUL-finalize_keeps_steps_of_photo_gone
+
+Finalize builds each photo's geotag steps from the photos it finds in photos by destination. In a merge begun, a photo
+merge already placed is no longer there; finalize run again would write a log holding prep's steps of it alone, and the
+log merge seals would tell nothing of the time and position geotag gave it. What geotag did was done, wherever the
+photo has gone since: the log finalize replaces holds those steps, and the new one keeps them.
 :::

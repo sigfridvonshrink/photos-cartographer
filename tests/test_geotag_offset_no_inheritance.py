@@ -123,6 +123,23 @@ def test_the_day_s_offset_is_the_camera_s_wherever_its_photos_were_sorted(tmp_pa
     assert _cell(art, f"{BYDEST}/Castle")["effective_time_anchor"] == {"offset_seconds": -7200, "source": "same_day_accepted"}
 
 
+@pytest.mark.spec("RUL-offset_shared_within_day", "BLD-offset_shared_within_day",
+                  test="TST-geotag_offset_no_inheritance-positions_on_no_track_take_the_day_s_offset")
+def test_positions_on_no_track_take_the_day_s_offset(tmp_path):
+    """The castle's photos hold positions of their own, but none lies on a track and none records a fix's time: the
+    camera's GPS gives no offset there, and the castle takes the one it gave that day in the museum, as photos with no
+    position do."""
+    wf = _wf(tmp_path)
+    files = PARENT_FRAMES + [_file(f"{BYDEST}/Castle/c.arw", f"{BYDEST}/Castle", gps=(-33.9, 18.4),
+                                   naive="2024:07:03 17:00:00"),
+                             _file(f"{BYDEST}/Castle/d.arw", f"{BYDEST}/Castle", gps=(-33.8, 18.5),
+                                   naive="2024:07:03 17:30:00")]
+    castle = _cell(_build(wf, files, _gpx(TRACK))[0], f"{BYDEST}/Castle")
+    assert castle["proposal"]["proposal_source"] == "same_day_elsewhere"
+    assert castle["proposal"]["shared_from"] == {"destination": f"{BYDEST}/Trip", "bucket": CAM}
+    assert castle["effective_time_anchor"] == {"offset_seconds": -7200, "source": "same_day_auto"}
+
+
 @pytest.mark.spec("RUL-acceptance_holds_for_its_proposal", "BLD-offset_acceptance",
                   test="TST-geotag_offset_no_inheritance-an_accepted_shared_offset_holds_within_the_tolerance")
 def test_an_accepted_offset_shared_within_the_day_holds_within_the_tolerance(tmp_path):

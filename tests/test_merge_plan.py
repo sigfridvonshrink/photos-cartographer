@@ -84,6 +84,23 @@ def test_enumerate_robust_to_postrename_handoff():
     assert e["library_target"] == "/lib/Trip/2024-07-03--14-12-21.arw"
 
 
+@pytest.mark.parametrize("after_rename", [False, True], ids=["handoff_before_rename", "handoff_after_rename"])
+@pytest.mark.spec("RUL-shared_fingerprint_each_merged", "BLD-merge_target",
+                  test="TST-merge_plan-enumerate_joins_photos_sharing_a_fingerprint_each_to_its_own_rename")
+def test_enumerate_joins_photos_sharing_a_fingerprint_each_to_its_own_rename(after_rename):
+    """The same picture sorted into two destinations, one fingerprint F, each renamed by geotag to a name of its own:
+    each handoff record is joined to its own rename by its path — the one the rename was planned on, or, where prep ran
+    after geotag's execute, the one it gave — never to the other's by their shared fingerprint."""
+    renames = [dict(_rename("F", "x.jpg"), relative_path="6-photos-by-dest/Paris/IMG_1.jpg"),
+               dict(_rename("F", "y.jpg"), relative_path="6-photos-by-dest/Louvre/IMG_1.jpg")]
+    names = ("x.jpg", "y.jpg") if after_rename else ("IMG_1.jpg", "IMG_1.jpg")
+    wf, cp = _wf([_ho(f"6-photos-by-dest/Paris/{names[0]}", "F"), _ho(f"6-photos-by-dest/Louvre/{names[1]}", "F")],
+                 renames)
+    got = {e["by_dest_relpath"]: e["library_target"] for e in wf.enumerate_finalized(cp, "/lib")}
+    assert got == {"6-photos-by-dest/Paris/x.jpg": "/lib/Paris/x.jpg",
+                   "6-photos-by-dest/Louvre/y.jpg": "/lib/Louvre/y.jpg"}
+
+
 @pytest.mark.spec("RUL-library_mirrors_destinations", test="TST-merge_plan-enumerate_unrenamed_file_keeps_its_name")
 def test_enumerate_unrenamed_file_keeps_its_name():
     wf, cp = _wf([_ho("6-photos-by-dest/Trip/keep.jpg", "A")], [])
@@ -161,7 +178,8 @@ def _build_ws(tmp_path, photos, library_files=()):
     (ctl / "photos-26-complete-log.json").write_text(json.dumps({"photos": {}}))
     (ctl / "photos-26-archive-manifest.json").write_text(json.dumps({"artifact_name": "m", "plan_id": "geotag-plan-1"}))
     _bd = ws / "6-photos-by-dest"          # finalize's record of each by-dest photo as geotag left it
-    (ctl / "photos-26-finalized-media.json").write_text(json.dumps({"media": {
+    (ctl / "photos-26-finalized-media.json").write_text(json.dumps({
+        "handoff_content_fingerprint": utils.handoff_content_fingerprint(handoff), "media": {
         os.path.relpath(os.path.join(r, n), ws): {"size": os.stat(os.path.join(r, n)).st_size,
                                                   "mtime_ns": os.stat(os.path.join(r, n)).st_mtime_ns}
         for r, _d, fs in os.walk(_bd) for n in fs}}))
@@ -301,6 +319,7 @@ def test_plan_two_incoming_case_variants_resolve_at_plan_time(tmp_path, monkeypa
 
 @pytest.mark.parametrize("variant_fp, disposition", [("X", "renamed_incoming"), ("A", "already_present")])
 @pytest.mark.spec("RUL-collision_by_content", "BLD-library_file_fingerprinted", "BLD-names_case_folded",
+                  "RUL-collision_same_content", "RUL-library_mirrors_destinations", "BLD-one_library_file_compared",
                   test="TST-merge_plan-a_case_variant_in_the_library_is_settled_by_content")
 def test_a_case_variant_in_the_library_is_settled_by_content(tmp_path, monkeypatch, variant_fp, disposition):
     """A library file whose name differs from the target's only in case takes the place on a case-insensitive
@@ -635,6 +654,40 @@ def test_a_new_fingerprint_not_one_to_one_is_left_unmerged(tmp_path, monkeypatch
     if not blocked:
         assert by_name["a"]["engine_mapping"]["now"]["content_fingerprint"] == "A2"
         assert by_name["b"]["disposition"] == "placed_new" and "engine_mapping" not in by_name["b"]
+
+
+@pytest.mark.parametrize("now, blocked", [
+    ({"a": "F2", "b": "F2"}, set()),                   # prep's one value moved, whole, to one new value: merged
+    ({"a": "F", "b": "F2"}, {"b"}),                    # one value split in two: the photo that moved stays
+    ({"a": "F2", "b": "F3"}, {"a", "b"}),              # split, both moved apart
+    ({"a": "F2", "b": "F2", "c": "F2"}, {"a", "b", "c"}),   # moved together onto a photo prep told apart
+])
+@pytest.mark.spec("RUL-shared_value_moved_together_merged", "RUL-merge_changed_fingerprint_unmerged",
+                  "BLD-changed_fingerprint_mapped",
+                  test="TST-merge_plan-photos_prep_held_as_one_value_moving_together_are_merged")
+def test_photos_prep_held_as_one_value_moving_together_are_merged(tmp_path, monkeypatch, now, blocked):
+    """Two photos in photos by destination prep held under one fingerprint F, taken again under another ImageMagick:
+    where both read as one new value no other photo holds, the mapping is one value to one and each is merged under
+    it; where F splits in two, the photo whose value moved stays, and where their new value is also that of a photo
+    prep told apart from them, all three stay — each with its reason."""
+    photos = [{"fp": "F", "dest": "Paris", "final_name": "a.jpg"}, {"fp": "F", "dest": "Louvre", "final_name": "b.jpg"}]
+    if "c" in now:
+        photos.append({"fp": "C", "dest": "Trip", "final_name": "c.jpg"})
+    ws, lib, fp = _build_ws(tmp_path, photos)
+    for p in photos:
+        fp[str(ws / "6-photos-by-dest" / p["dest"] / p["final_name"])] = now[p["final_name"][0]]
+    _patch_fp(monkeypatch, fp)
+    monkeypatch.setattr(merge, "get_imagemagick_version", lambda: "newer")
+    merge._run_locked_workflow("plan", str(ws))
+    plan = _plan_of(ws)
+    by_name = {os.path.basename(f["by_dest_source"])[0]: f for f in _files(plan)}
+    assert {n for n, f in by_name.items() if f["disposition"] == "blocked"} == blocked, plan["blockers"]
+    assert len(plan["blockers"]) == len(blocked)
+    assert all("ImageMagick newer" in by_name[n]["blocked_reason"] for n in blocked)
+    if not blocked:
+        for n in ("a", "b"):
+            assert by_name[n]["disposition"] == "placed_new" and by_name[n]["content_fingerprint"] == "F"
+            assert by_name[n]["engine_mapping"]["now"]["content_fingerprint"] == "F2"
 
 
 @pytest.mark.spec("RUL-merge_changed_fingerprint_unmerged", "RUL-merge_merges_changed_fingerprint", "BLD-changed_fingerprint_mapped",

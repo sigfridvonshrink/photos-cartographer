@@ -708,8 +708,8 @@ def test_own_leftover_cleared_where_the_journal_shows_the_write_begun(tmp_path, 
     assert photo.read_bytes() == b"rewritten" and os.listdir(tmp_path) == ["x.jpg"]
 
 
-@pytest.mark.spec("RUL-other_write_leftover_holds_photo", "RUL-write_leftovers_by_dest_warned", "BLD-own_leftover_cleared",
-                  "RUL-geotag_clears_own_leftover",
+@pytest.mark.spec("RUL-other_write_leftover_holds_photo", "RUL-write_leftover_in_by_dest_left", "BLD-own_leftover_cleared",
+                  "RUL-geotag_clears_own_leftover", "RUL-other_write_leftover_named",
                   test="TST-geotag_execution-another_leftover_holds_its_photo_back")
 def test_another_leftover_holds_its_photo_back(tmp_path, monkeypatch):
     """A leftover beside a photo whose write the journal does not show begun is not geotag's to remove — it may be the
@@ -962,6 +962,7 @@ def test_rename_target_occupied_at_execute_blocks(tmp_path, monkeypatch):
 
 
 @pytest.mark.spec("RUL-geotag_extension_lowercase", "BLD-case_rename_via", "RUL-target_free_at_execute",
+                  "RUL-case_rename_rests_under_own_name",
                   test="TST-geotag_execution-a_change_of_case_alone_goes_by_a_temporary_name")
 def test_a_change_of_case_alone_goes_by_a_temporary_name(tmp_path, monkeypatch):
     """`X.JPG` to `X.jpg`: on a filesystem that ignores case the new name is the photo's own, which a no-clobber move

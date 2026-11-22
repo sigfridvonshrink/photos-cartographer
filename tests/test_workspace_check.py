@@ -166,7 +166,7 @@ def test_a_culled_photo_passes_and_is_named_in_the_log(tmp_path, monkeypatch):
     assert sorted(c["path"] for c in named) == gone and {c["kind"] for c in named} == {"deleted"}
     assert all(c["content_fingerprint"].startswith("sig-") for c in named)
     rc, said, _ = _prep(monkeypatch, ws, "plan")
-    assert rc == 0 and "deleted" not in said, said
+    assert rc == 0 and not any(g in said for g in gone), said      # told once, not again
 
 
 @pytest.mark.parametrize("folder, kind", [
@@ -651,7 +651,7 @@ def test_a_configuration_deleted_after_the_first_run_stops_prep(tmp_path, monkey
     assert (ws / "0-sources" / "b.jpg").exists()
 
 
-@pytest.mark.spec("RUL-maintenance_unchecked", "RUL-quarantine_changed_only_by_prune", "BLD-workspace_record",
+@pytest.mark.spec("RUL-maintenance_unchecked", "RUL-prune_removals_no_difference", "BLD-workspace_record",
                   test="TST-workspace_check-maintenance_commands_do_not_check")
 def test_maintenance_commands_do_not_check(tmp_path, monkeypatch):
     """Pruning the quarantine, setting up the library and the editor run whatever the files show; what a prune
@@ -684,7 +684,7 @@ def test_maintenance_commands_do_not_check(tmp_path, monkeypatch):
     assert rc == 0 and stop is None, said
 
 
-@pytest.mark.spec("RUL-quarantine_changed_only_by_prune", "BLD-workspace_record",
+@pytest.mark.spec("RUL-prune_removals_no_difference", "BLD-workspace_record",
                   test="TST-workspace_check-a_prune_cut_short_is_no_change")
 def test_a_prune_cut_short_is_no_change(tmp_path, monkeypatch):
     """A prune whose removal of a run folder stops midway — the duplicate gone, its manifest left — takes what it

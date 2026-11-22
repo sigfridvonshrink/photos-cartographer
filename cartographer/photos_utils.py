@@ -1186,8 +1186,9 @@ def write_versioned_json(path: str, obj: dict):
 
     A no-op guard: if the existing file is already byte-identical to what we'd write, nothing is backed
     up or rewritten (sha, None) — so an unchanged re-run (e.g. geotag regenerating identical
-    decisions) never accumulates redundant backups. A plan with a fresh plan_id differs every run, so
-    re-planning still always preserves the prior plan."""
+    decisions) never accumulates redundant backups. Prep's plan, which names the run that made it,
+    is never byte-identical to an earlier one: prep compares what the plan says before calling this
+    (BLD-prep_replan_unchanged)."""
     new_text = json.dumps(obj, indent=2, sort_keys=True)
     if os.path.exists(path):
         try:
@@ -1347,7 +1348,7 @@ def max_suffix(root: str, names) -> int:
             hi = max(hi, int(m.group(1)))
     return hi
 
-# Library-merge archival re-seal (RUL-merge_reseals). On a successful
+# Library-merge archival re-seal (RUL-merge_repackages). On a successful
 # merge, the package gains merge's own artifacts; merge re-bundles by recomputing every present
 # artifact's SHA-256 into its OWN photos-35-archive-manifest.json, which supersedes geotag's
 # photos-26 manifest (parallel to the photos-15→25→35 log chain). It reads each artifact and never
@@ -1836,7 +1837,7 @@ def recognise_interrupted_work(ws: str, record_id, record: dict, current: dict):
 def forget_in_workspace_record(ws: str, prefixes) -> None:
     """Take out of the record every file under each folder in `prefixes` (workspace-relative) that is no longer on disk
     — what a quarantine prune removed, all of the folder or, cut short, part of it — so the next check does not take it
-    for a change (RUL-quarantine_changed_only_by_prune). No record, no-op."""
+    for a change (RUL-prune_removals_no_difference). No record, no-op."""
     if read_workspace_record(ws)[0] is None:
         return
     conn = sqlite3.connect(db_path(ws))

@@ -304,7 +304,8 @@ def test_an_interrupted_guard_write_leaves_no_damaged_guard(tmp_path, monkeypatc
 
 # --- root-file block (initialized) -------------------------------------------
 
-@pytest.mark.spec("RUL-top_level_only_managed", test="TST-lifecycle-loose_root_file_blocks_initialized")
+@pytest.mark.spec("RUL-top_level_only_managed", "RUL-misplaced_entry_blocks",
+                  test="TST-lifecycle-loose_root_file_blocks_initialized")
 def test_loose_root_file_blocks_initialized(tmp_path, monkeypatch):
     _install(monkeypatch)
     ws = _initialized(tmp_path)
@@ -322,7 +323,8 @@ def test_nonmanaged_root_dir_blocks_initialized(tmp_path, monkeypatch):
     assert any("Misplaced entry at workspace root" in b and "MyDump" in b for b in plan.blockers), plan.blockers
 
 
-@pytest.mark.spec("RUL-top_level_only_managed", test="TST-lifecycle-named_pipe_at_root_blocks_initialized")
+@pytest.mark.spec("RUL-top_level_only_managed", "RUL-misplaced_entry_blocks",
+                  test="TST-lifecycle-named_pipe_at_root_blocks_initialized")
 def test_named_pipe_at_root_blocks_initialized(tmp_path, monkeypatch):
     """A top-level entry of any other kind — a named pipe — is misplaced like a file or a folder."""
     _install(monkeypatch)
@@ -674,13 +676,16 @@ def test_a_folder_lost_between_plan_and_execute_is_not_recreated(tmp_path, monke
 
 @pytest.mark.spec("RUL-more_dumps_until_merge", test="TST-lifecycle-new_dump_after_successful_geotag_is_organized")
 def test_new_dump_after_successful_geotag_is_organized(tmp_path, monkeypatch):
-    """A dump arriving after geotag executed and finalized is prep's again: the loop resumes from prep."""
+    """A dump arriving after geotag executed and finalized, and a merge begun — one execution of it ended partial — is
+    prep's again: the loop resumes from prep."""
     _install(monkeypatch)
     ws = _initialized(tmp_path)
     ctl = ws / ".photos-ingest"
     (ctl / "photos-25-execution-summary.json").write_text('{"status": "success"}')
     (ctl / "photos-26-complete-log.json").write_text('{"photos": {}}')
     (ctl / "photos-26-archive-manifest.json").write_text('{"artifact_name": "m"}')
+    (ctl / "photos-30-merge-plan.json").write_text('{"plan_id": "m1", "destinations": {}}')
+    (ctl / "photos-31-merge-summary.json").write_text('{"merge_plan_id": "m1", "status": "partial"}')
     (ws / "6-photos-by-dest" / "Trip").mkdir()
     (ws / "6-photos-by-dest" / "Trip" / "2023-01-02--03-04-05.jpg").write_bytes(b"geotagged")
     (ws / "0-sources" / "b.jpg").write_bytes(b"later")

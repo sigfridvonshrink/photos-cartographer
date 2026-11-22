@@ -1,9 +1,9 @@
 # Prep — why
 
 **Not normative.** Each item here is the reasoning behind the [intent](../intent/prep.md) or [build](../build/prep.md)
-items it `justifies`, under the same section numbers. Where the two differ, the intent wins and this is stale.
+items it `justifies`. Where the two differ, the intent wins and this is stale.
 
-## 1. What prep does, and what it leaves alone
+## What prep does, and what it leaves alone
 
 :::{rat} Prep has no evidence for a time or a place
 :id: RAT-prep_has_no_evidence
@@ -41,7 +41,7 @@ so they are neither lost nor scattered, not because the pipeline means to correc
 own, out of the sort.
 :::
 
-## 2. The workspace's first run, and the strays
+## The workspace's first run, and the strays
 
 :::{rat} The first gesture bootstraps the workspace
 :id: RAT-bootstrap_once
@@ -102,11 +102,11 @@ A stray is a file cartographer does not understand — a document, a thumbnail a
 video, a file of a format the lists do not name. Recorded beside the media,
 it would make cartographer answer for what it cannot reason about; parked whole, it waits for the user to keep or clear
 it, and clearing it is a change the user accepts once, by its code. Moving it is a change like any other, planned and
-journaled, so the plan names it, where it was and where it goes, and that plan is kept with the workspace's records; it
+journalled, so the plan names it, where it was and where it goes, and that plan is kept with the workspace's records; it
 is named nowhere it would be taken for a photo.
 :::
 
-## 5. What prep refuses to work on
+## What prep refuses to work on
 
 :::{rat} Photos and videos go separate ways
 :id: RAT-bands_never_mix
@@ -170,7 +170,7 @@ choice — to list the extension and plan again — with the user; the warning b
 :::
 
 
-## 6. The prep pipeline
+## The prep pipeline
 
 :::{rat} A dump's folders say where it came from
 :id: RAT-dump_folders_kept
@@ -194,8 +194,8 @@ in the plan.
 
 A file outside the inbox was filed by an earlier run or moved there by the user. Moving it again on a later run would
 undo either for nothing and churn the names the user and later phases know it by. Only these move it: a copy of it found
-to be better filed, its own recorded time no longer matching its day or gone, a time given at last to one set apart
-for having none, and its RAW culled when it is the JPEG set aside beside it.
+to be better filed, a dated file lying outside its own day's folder or whose time is gone, a time given at last to one
+set apart for having none, and its RAW culled when it is the JPEG set aside beside it.
 :::
 
 :::{rat} A day of photos is one folder
@@ -203,11 +203,13 @@ for having none, and its RAW culled when it is the JPEG set aside beside it.
 :status: ruled
 :forced: no
 :follows_from: RAT-piggyback_on_the_destination_sort, CHC-local_folder_library
-:justifies: RUL-by_date_in_day_folder
+:justifies: RUL-by_date_in_day_folder, RUL-by_date_moved_to_day_folder
 
 The user sorts photos by date into destinations, and a day is the unit they think in: a day's folder holds what was
-shot that day and nothing else. A file's day comes from its recorded time, so a file whose time changed — corrected by
-the user — belongs to another day, and one whose time is gone belongs to no day at all.
+shot that day and nothing else. A file's day comes from its recorded time, so a file moved by hand out of its day's
+folder is put back in it, and one whose time is gone belongs to no day at all. A file whose time the user corrected no
+longer carries its time as its name, and stops prep as misnamed ({need}`RUL-misnamed_file_stops_prep`) until the user
+names it so; named, it goes to its new day.
 :::
 
 :::{rat} Photos wait by date for the user's sort
@@ -226,10 +228,10 @@ one day sit together, ready to be moved as a block. The timestamp name keeps tha
 :status: ruled
 :forced: yes
 :follows_from: RAT-day_folder, RAT-prep_has_no_evidence
-:justifies: RUL-untimed_to_missing_metadata
+:justifies: RUL-untimed_to_missing_metadata, RUL-by_date_untimed_to_missing_metadata
 
-Prep cannot invent a time, and a file with none has no day to be filed under: it waits apart, flat, until the user
-gives it one. Its untimed name keeps the name it came with, the user's only way to tell which file it was.
+Prep cannot invent a time, and a file with none — one that came so, or one of photos by date whose time is gone — has
+no day to be filed under: it waits apart, flat, until the user gives it one. Its untimed name keeps the name it came with, the user's only way to tell which file it was.
 :::
 
 :::{rat} A stray is the user's, untouched
@@ -349,14 +351,14 @@ same on every run.
 :follows_from: RAT-idempotent_reruns
 :justifies: RUL-database_matches_files
 
-The next run reuses the database's fingerprints and metadata for every file whose path, size and time are unchanged
-and whose fingerprint was taken the way this build takes it. A row
+The next run reuses the database's fingerprints and metadata for every file whose path, size and time are unchanged,
+whose fingerprint was taken the way this build takes it and whose metadata was read the way it is read now. A row
 left stale or pointing at a file that is gone would be reused for what it no longer describes; refreshing and pruning at
 each execution keeps reuse safe.
 :::
 
 
-## 8. Content fingerprinting and cache reuse
+## Content fingerprinting and cache reuse
 
 :::{rat} Size and time are the cheap sign of change
 :id: RAT-size_time_sign_change
@@ -409,7 +411,7 @@ workspace is the remedy.
 :::
 
 
-## 9. Files the user moves, and the plan memo
+## Files the user moves, and the plan memo
 
 :::{rat} Sorting costs no reading
 :id: RAT-sort_costs_no_reading
@@ -496,7 +498,7 @@ broken, prep plans the same.
 :::
 
 
-## 10. Duplicates and failures beside photos by destination
+## Duplicates and failures beside photos by destination
 
 :::{rat} A failure says nothing of the content
 :id: RAT-failure_says_nothing
@@ -508,7 +510,9 @@ broken, prep plans the same.
 A fingerprint that could not be taken tells nothing of what the file holds: two failures are not two copies, and a
 failure is no copy of anything. Outside photos by destination, every file's place depends on knowing whether it is a
 copy, so prep stops and names it rather than file it blind. A file in photos by destination is the user's, never set
-aside; its failure decides nothing there.
+aside; its failure decides nothing there, and prep hands it on. Geotag, which follows each photo by its fingerprint,
+stops on it instead ({need}`RUL-unfingerprinted_photo_stops_geotag`), and prep takes it again at every run until one
+is taken.
 :::
 
 :::{rat} A failure may be the machine's
@@ -562,7 +566,7 @@ dedup against what they dumped would find it wrong. Counted apart by why each we
 :::
 
 
-## 11. The metadata prep keeps for geotag
+## The metadata prep keeps for geotag
 
 :::{rat} One read serves both phases
 :id: RAT-one_read_serves_both
@@ -615,7 +619,7 @@ and infers nothing: inference is geotag's, made with evidence prep lacks.
 :::
 
 
-## 12. Plan, dry run, execution
+## Plan, dry run, execution
 
 :::{rat} The plan is of the workspace it saw
 :id: RAT-plan_saw_the_workspace
@@ -633,7 +637,7 @@ that is already known.
 :id: RAT-dry_run_for_looking
 :status: ruled
 :forced: yes
-:justifies: RUL-prep_dry_run_changes_nothing, RUL-dry_run_changes_nothing
+:justifies: RUL-dry_run_changes_nothing
 :follows_from: RAT-no_mutation_outside_plan, RAT-dry_run_reads_the_saved_plan
 
 A dry run lets the user see what execution would do before it does it. Changing anything would make it a partial
@@ -672,7 +676,7 @@ leave it truncated — the evidence lost at the one moment it is needed, and the
 :justifies: RUL-emptied_folders_removed, RUL-folder_removed_only_as_planned
 
 Moving files out leaves their folders empty, and the inbox must end empty for the next dump; a day emptied by the sort
-should not linger. Removing a folder is a change to the workspace like any other, so it is planned and journaled; and
+should not linger. Removing a folder is a change to the workspace like any other, so it is planned and journalled; and
 only an empty one goes, so nothing a folder holds — even what arrived unplanned — is ever lost with it.
 :::
 
@@ -689,7 +693,7 @@ plan made for a workspace that no longer stands. The journal records what happen
 :::
 
 
-## 13. The quarantine
+## The quarantine
 
 :::{rat} The reason is written down first
 :id: RAT-reason_first
@@ -710,7 +714,7 @@ run sets it aside again under a new record — the old one at worst a record of 
 :follows_from: RAT-reason_first, RAT-no_automatic_deletion
 :justifies: RUL-unreadable_manifest_kept
 
-A quarantine record found unreadable may still be read by hand, so it is set aside, kept, and a new one begun. Where
+A quarantine manifest found unreadable may still be read by hand, so it is set aside, kept, and a new one begun. Where
 it cannot even be set aside, a new one written in its place would be the end of it: the files already quarantined
 would lie there with nothing saying why. Stopping keeps the record and the file not yet moved; the user mends the
 folder, and the next run quarantines it again.
@@ -773,12 +777,13 @@ later one never writes over an earlier's.
 :follows_from: RAT-recoverable_core
 :justifies: RUL-prune_age_at_least_one_day
 
-Pruning is the only place cartographer deletes for good. An age of zero or less selects every run's quarantine, which is
-what `--all` exists to say out loud. An age is counted in whole days, so one under a day is zero.
+Pruning is the only place cartographer deletes for good. An age of zero or less would select every run's quarantine; the
+prune asks for that by a choice of its own, said out loud, never slipped in as an age. An age is counted in whole days,
+so one under a day is zero.
 :::
 
 
-## 14. The handoff and prep's log
+## The handoff and prep's log
 
 :::{rat} A record speaks for a finished run
 :id: RAT-record_of_a_finished_run
@@ -810,11 +815,13 @@ left out on purpose.
 :status: ruled
 :forced: yes
 :follows_from: RAT-idempotent_reruns, RAT-handoff_by_content
-:justifies: RUL-handoff_deterministic
+:justifies: RUL-handoff_deterministic, RUL-handoff_read_back
 
 Geotag's work depends on the handoff and is made stale when it changes. A run that changed nothing must therefore leave
 its content as it was; the run's own identity and diagnostics, which differ every time, are kept apart, so that only a
-real change — a file filed, sorted or changed — restales geotag.
+real change — a file filed, sorted or changed — restales geotag. Geotag checks the handoff by that content's
+fingerprint, so a handoff that, read back, gave another would never pass: prep reads what it wrote, and fails its own
+run rather than hand such a one on.
 :::
 
 :::{rat} The log adds no authority
@@ -824,8 +831,8 @@ real change — a file filed, sorted or changed — restales geotag.
 :follows_from: RAT-consolidated_log, RAT-one_source_per_fact
 :justifies: RUL-prep_log_derived, RUL-prep_log_records_set_aside
 
-The log is for reading, not deciding: it gathers what prep's own records already say into one account per photo. Made
-from them alone, it can be checked against them and never contradicts them; and a set-aside copy appears beside the
+The log is for reading, not deciding: it gathers what prep's own records already say, and the changes by hand its
+checks found, into one account per photo. Made from them alone, it can be checked against them and never contradicts them; and a set-aside copy appears beside the
 photo it copies, so the account of that photo is whole.
 :::
 
@@ -883,7 +890,7 @@ retaken; a different file at the path is a new photo, and the removed one's entr
 :::
 
 
-## 15. Concurrency, determinism, and what a run shows
+## Concurrency, determinism, and what a run shows
 
 :::{rat} Speed is the machine's, the plan is the workspace's
 :id: RAT-speed_is_the_machines
@@ -922,7 +929,7 @@ not match, a file touched — are invisible until counted. Counting them by reas
 and that an unexpected cause is one.
 :::
 
-## 16. What prep reports
+## What prep reports
 
 :::{rat} The reviewer sees what was touched
 :id: RAT-reviewer_sees_what_was_touched

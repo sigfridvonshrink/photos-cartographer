@@ -26,6 +26,10 @@
     verified through the rules that carry it out;
   - a link against the levels' direction: an intent item naming a build item; a rationale named by any link but
     `follows_from` (a rationale is never binding); a `follows_from` from anything but a rationale;
+  - an exception stated by anything but a rule, or to anything but a rule: a build item that departs from a rule is
+    realising an exception the intent has yet to state;
+  - a rule no build item realises: every rule keeps a build item;
+  - a word the corpus has retired, listed in `retired-terms.txt` with the one that replaced it;
   - a fact or a choice nothing follows from;
   - a rationale marked `forced: yes` whose `follows_from` chain reaches no fact or choice;
   - an item stating more than one SHALL: an item carries one obligation, so a second is an item of its own;
@@ -180,6 +184,8 @@ def _links_hold(app, env):
                     bad.append(f"{need['id']} ({link}) names build item {target_id}: intent never depends on the build")
                 if target["type"] == "rat" and link != "follows_from":
                     bad.append(f"{need['id']} ({link}) names rationale {target_id}: a rationale is never binding")
+                if link == "excepts" and (need["type"] != "rul" or target["type"] not in ("rul", "inv")):
+                    bad.append(f"{need['id']} excepts {target_id}: only a rule states an exception, and to a rule")
                 if link == "follows_from" and need["type"] != "rat":
                     bad.append(f"{need['id']} follows from {target_id}: only a rationale follows from anything")
     followed = {t for need in view.values() for t in need.get("follows_from") or []}
@@ -262,10 +268,54 @@ def _rules_justified(app, env):
         LOG.warning(line, type="corpus", subtype="rationale")
 
 
+def _rules_realised(app, env):
+    """Every rule keeps a build item: one whose `realises` names it."""
+    from sphinx_needs.data import SphinxNeedsData
+    view = SphinxNeedsData(env).get_needs_view()
+    realised = {t for need in view.values() if need["type"] == "bld" for t in need.get("realises") or []}
+    for need_id in sorted(n["id"] for n in view.values() if n["type"] == "rul" and n["id"] not in realised):
+        LOG.warning(f"{need_id}: no build item realises it", type="corpus", subtype="realised")
+
+
+def _no_retired_terms(app, env):
+    """`retired-terms.txt` lists, one to a line, a word or phrase the corpus no longer uses, then ` -> ` and the one
+    that replaced it. None appears in the corpus's prose, whatever its case; an id, a file's name or a field's, set
+    in backticks or holding no space, is not prose."""
+    import glob
+    import re
+    path = os.path.join(app.srcdir, "retired-terms.txt")
+    if not os.path.exists(path):
+        return
+    terms = []
+    for line in open(path, encoding="utf-8"):
+        line = line.strip()
+        if line and not line.startswith("#"):
+            old, _, new = line.partition("->")
+            terms.append((old.strip(), new.strip()))
+    for src in sorted(glob.glob(os.path.join(app.srcdir, "*", "*.md"))):
+        if os.sep + GENERATED + os.sep in src:
+            continue
+        rel = os.path.relpath(src, app.srcdir)
+        # A paragraph at a time, its lines joined: a phrase broken across two lines is still the phrase.
+        number, start, paragraph = 0, 0, []
+        for number, line in enumerate(list(open(src, encoding="utf-8")) + ["\n"], 1):
+            if line.strip() and not line.startswith(":"):
+                start = start or number
+                paragraph.append(line.strip())
+                continue
+            prose = re.sub(r"`[^`]*`", "", " ".join(paragraph))
+            for old, new in terms:
+                if paragraph and re.search(r"(?<![\w-])" + re.escape(old) + r"(?![\w-])", prose, re.I):
+                    LOG.warning(f"{rel}:{start}: \"{old}\" is retired: say \"{new}\"", type="corpus", subtype="terms")
+            start, paragraph = 0, []
+
+
 def setup(app):
     app.connect("builder-inited", _write_tests_page)
     app.connect("env-check-consistency", _required_are_verified)
     app.connect("env-check-consistency", _links_hold)
     app.connect("env-check-consistency", _items_well_formed)
     app.connect("env-check-consistency", _rules_justified)
+    app.connect("env-check-consistency", _rules_realised)
+    app.connect("env-check-consistency", _no_retired_terms)
     return {"parallel_read_safe": False, "parallel_write_safe": True}

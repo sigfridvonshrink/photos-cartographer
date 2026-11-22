@@ -482,7 +482,8 @@ class PlanValidator:
             _missing = missing_managed_folders(current_workspace)
             if _missing:
                 raise ValueError("Workspace is non-conforming: missing managed folder(s): "
-                                 f"{', '.join(_missing)}; prep will not recreate them.")
+                                 f"{', '.join(_missing)}. Restore them — an empty folder of that name will do — "
+                                 "and run `prep plan` again; prep will not recreate them.")
 
         # The earlier log, which execute's log is merged onto, must be readable now as it was at planning
         # (RUL-unreadable_prep_log_stops): refused before any change, never read as empty at the end.
@@ -1346,6 +1347,15 @@ class JournalWriter:
             _atomic_write_text(self.journal_path, self.journal.to_json())
 
 
+# How a blocker for a link begins. A plan holding one is not saved, and nothing is written after it
+# (RUL-link_block_produces_nothing).
+LINK_BLOCKER = "Forbidden symlink detected:"
+
+
+def _link_blockers(blockers):
+    return [b for b in blockers if b.startswith(LINK_BLOCKER)]
+
+
 class _PlanState:
     """Mutable carrier for plan()'s op-building cluster — the shared state threaded across the
     op-building steps. Its fields ALIAS plan()'s locals (same objects) during the incremental
@@ -1401,7 +1411,7 @@ class WorkspacePrepWorkflow:
         for dd in dir_names:
             p = os.path.join(root, dd)
             if os.path.islink(p):
-                blockers.append(f"Forbidden symlink detected: {os.path.relpath(p, self.workspace_root)}")
+                blockers.append(f"{LINK_BLOCKER} {os.path.relpath(p, self.workspace_root)}")
 
     def _file_datetime(self, f):
         """The file's recorded time (shared `recorded_time`: the first of DateTimeOriginal, CreateDate,
@@ -1454,7 +1464,7 @@ class WorkspacePrepWorkflow:
                     p = os.path.join(r, fn)
                     rel = os.path.relpath(p, ws)
                     if os.path.islink(p):
-                        blockers.append(f"Forbidden symlink detected: {rel}")
+                        blockers.append(f"{LINK_BLOCKER} {rel}")
                     elif is_track_file(fn):
                         _track_blocker(rel)
                     else:
@@ -1814,7 +1824,7 @@ class WorkspacePrepWorkflow:
             # would let os.walk traverse the link's external target and inventory (and plan a move
             # for) files outside the workspace — a pipeline escape the spec forbids.
             if os.path.islink(path):
-                blockers.append(f"Forbidden symlink detected: {f}")
+                blockers.append(f"{LINK_BLOCKER} {f}")
                 continue
             is_dir = os.path.isdir(path)
             # Control/skip dirs (.photos-ingest*, .git, any dotdir), the strays tree, and the
@@ -1841,7 +1851,7 @@ class WorkspacePrepWorkflow:
                         fpath = os.path.join(root, fname)
                         rel_path = os.path.relpath(fpath, self.workspace_root)
                         if os.path.islink(fpath):
-                            blockers.append(f"Forbidden symlink detected: {rel_path}")
+                            blockers.append(f"{LINK_BLOCKER} {rel_path}")
                         else:
                             files.append(rel_path)
             else:
@@ -1854,7 +1864,7 @@ class WorkspacePrepWorkflow:
             # A managed folder that is itself a symlink would let os.walk traverse its external
             # target (the same escape as a root dump symlink) — block it before walking.
             if os.path.islink(folder_path):
-                blockers.append(f"Forbidden symlink detected: {d}")
+                blockers.append(f"{LINK_BLOCKER} {d}")
                 continue
             if os.path.isdir(folder_path):
                 for root, _dirs, filenames in os.walk(folder_path):
@@ -1882,7 +1892,7 @@ class WorkspacePrepWorkflow:
                             path = os.path.join(root, fname)
                             rel_path = os.path.relpath(path, self.workspace_root)
                             if os.path.islink(path):
-                                blockers.append(f"Forbidden symlink detected: {rel_path}")
+                                blockers.append(f"{LINK_BLOCKER} {rel_path}")
                             else:
                                 files.append(rel_path)
         # A track file is never media (RUL-track_files_block_prep): anywhere prep inventories it, the plan is
@@ -2017,6 +2027,11 @@ class WorkspacePrepWorkflow:
             # applicable, never a blocker (RUL-inbox_non_media_never_blocks).
             meta = {"extraction_status": "not_applicable"}
             result["metadata_plan_status"] = "not_applicable"
+        elif parent_folder in failed_metadata_folders and md_fresh:
+            # Its folder's read failed, but prep keeps a record of its metadata still valid: that record is reused,
+            # as for a file missing from its batch's result, and it blocks nothing (RUL-metadata_failure_blocks).
+            meta = None
+            result["metadata_plan_status"] = "reused_from_cache"
         elif parent_folder in failed_metadata_folders:
             meta = {}
             meta["extraction_status"] = "extraction_failed"
@@ -3041,7 +3056,8 @@ class WorkspacePrepWorkflow:
             worker_results, metadata_plan_status, blockers, warnings, unpersisted_prior_plan, memo_paths)
 
         # Remember what this run decoded, so a re-plan before execute does not pay for it again.
-        rehash_summary["memo_rows"] = self._save_plan_memo(all_db_files)
+        # Not where a link blocks: nothing is written after one (RUL-link_block_produces_nothing).
+        rehash_summary["memo_rows"] = 0 if _link_blockers(blockers) else self._save_plan_memo(all_db_files)
 
         self._check_band_and_stray_media(all_db_files, blockers, warnings)
 
@@ -3182,6 +3198,43 @@ def _removable_folder(rel, ws):
     return os.path.isdir(p) and not os.path.islink(p)
 
 
+def _plan_substance(plan: dict):
+    """What a prep plan would do and what it rests on, without what names or describes the run that made it
+    (BLD-prep_replan_unchanged): its plan id is taken out wherever it appears (the quarantine and strays paths carry
+    it), with its creation time, its operations' ids and its summary — the counts of what the run read and reused.
+    Of each database effect only the action and the path are kept: the row a run would write says when and how that
+    run read the file, which a run reading it from the memo says otherwise of the same file."""
+    plan_id = plan.get("plan_id")
+    if not isinstance(plan_id, str) or not plan_id:
+        return None
+    plan = json.loads(json.dumps(plan, sort_keys=True).replace(plan_id, "<plan>"))
+    plan.pop("created_at", None)
+    plan.pop("summary", None)
+    for op in plan.get("operations") or []:
+        if not isinstance(op, dict):
+            continue
+        op.pop("operation_id", None)
+        op["database_effects_after_verification"] = [
+            {"action": fx.get("action"), "relative_path": fx.get("relative_path") or (fx.get("data") or {}).get("relative_path")}
+            for fx in op.get("database_effects_after_verification") or [] if isinstance(fx, dict)]
+    return plan
+
+
+def _replan_unchanged(plan_file, plan: dict) -> bool:
+    """True iff the plan saved at `plan_file` says what `plan` says (RUL-unchanged_replan_writes_nothing,
+    BLD-prep_replan_unchanged). An unreadable saved plan is not the same. A kept plan an execution began under is
+    executed again under its id, its earlier journal set aside first (BLD-history_kept)."""
+    try:
+        with open(plan_file) as f:
+            saved = json.load(f)
+    except (OSError, ValueError):
+        return False
+    if not isinstance(saved, dict):
+        return False
+    was = _plan_substance(saved)
+    return was is not None and was == _plan_substance(plan)
+
+
 def _parse_plan_id_time(plan_id: str):
     """The quarantine <plan_id> dir name starts with the run's UTC timestamp."""
     ts = plan_id.split('-', 1)[0]
@@ -3311,7 +3364,7 @@ def prune_quarantine(workspace_root, plan_ids=None, older_than_days=None, do_del
             try:
                 shutil.rmtree(safe)
             finally:
-                # What prune removes is no change to the next check (RUL-quarantine_changed_only_by_prune): out of the
+                # What prune removes is no change to the next check (RUL-prune_removals_no_difference): out of the
                 # record too, each file gone, a removal cut short midway too. A sealed workspace is checked no more,
                 # and its database is left as merge sealed it.
                 from .photos_utils import QUARANTINE_DIR, is_sealed
@@ -3544,7 +3597,7 @@ def _shape_blockers(workspace_root) -> list:
         load_config(workspace_root)             # the folders are named by the workspace's configuration
     except Exception:
         return []
-    out = [f"Forbidden symlink detected: {f}" for f in top_level_links(workspace_root)]
+    out = [f"{LINK_BLOCKER} {f}" for f in top_level_links(workspace_root)]
     missing = missing_managed_folders(workspace_root)
     if missing:
         out.append("Workspace is non-conforming: missing managed folder(s): "
@@ -3687,15 +3740,36 @@ def _run_locked(args, workspace_root, reporter):
         reporter.log(f"Quarantine footprint: {_qf.get('total_files', 0)} files, "
                      f"{_qf.get('total_bytes', 0)} bytes across {_qf.get('plan_id_dirs', 0)} plan(s).")
 
+        # The plan's summary, with each plan as at the end of its execution (RUL-prep_run_summarised).
+        from .reporting import report_lines
+        for _line in report_lines(plan.summary.get("report") or {}, plan.summary, planned=True):
+            reporter.log(_line, stream="stdout")
+
+        # A link stops the plan here: no plan is saved, the saved one left as it was, and nothing is written after
+        # it — not the zone table's answer either (RUL-link_block_produces_nothing).
+        _links = _link_blockers(plan.blockers)
+        if _links:
+            reporter.error(f"\nNo plan was saved — {len(_links)} link(s) in the workspace, which prep never follows:")
+            for b in plan.blockers:
+                reporter.error(f"  - {b}")
+            emit_next_step(reporter, "remove the link(s) above — put the files themselves in the inbox if they "
+                                     "are wanted — then re-run `prep plan`.")
+            sys.exit(2)
+
         # Auto-save to the canonical control-dir path; a prior plan is backed up under an
         # incremental -NNN suffix (never clobbered), and we tell the operator both locations so
         # the plan can be reviewed without hunting for it.
         from .photos_utils import prep_plan_path, write_versioned_json
         pp = prep_plan_path(workspace_root)
-        _sha, _bak = write_versioned_json(pp, asdict(plan))
-        reporter.log(f"Plan saved to {pp}", stream="stdout")
-        if _bak:
-            reporter.log(f"  Previous plan backed up to {_bak}", stream="stdout")
+        if _replan_unchanged(pp, asdict(plan)):
+            # The saved plan says the same: kept, nothing written or set aside (RUL-unchanged_replan_writes_nothing).
+            # Its id stays the plan's, for its journal and its quarantine.
+            reporter.log(f"Plan unchanged — the saved plan is kept at {pp}", stream="stdout")
+        else:
+            _sha, _bak = write_versioned_json(pp, asdict(plan))
+            reporter.log(f"Plan saved to {pp}", stream="stdout")
+            if _bak:
+                reporter.log(f"  Previous plan backed up to {_bak}", stream="stdout")
         from .photos_utils import settle_zone_table
         settle_zone_table(workspace_root, _zone_answer, reporter)
 
@@ -3756,17 +3830,9 @@ def _run_locked(args, workspace_root, reporter):
                 reporter.log(f"    - {w}", stream="stdout")
             if len(plan.warnings) > 20:
                 reporter.log(f"    … and {len(plan.warnings) - 20} more", stream="stdout")
-        if plan.blockers:
-            reporter.log(f"  BLOCKERS: {len(plan.blockers)} — execute will refuse:", stream="stdout")
-            for b in plan.blockers[:20]:
-                reporter.log(f"    - {b}", stream="stdout")
-            if len(plan.blockers) > 20:
-                reporter.log(f"    … and {len(plan.blockers) - 20} more", stream="stdout")
+        # A plan holding a blocker never reaches here: the preflight above refuses it, naming each.
         reporter.log(f"  Full plan: {pp}", stream="stdout")
-        if plan.blockers:
-            emit_next_step(reporter, "fix the blocker(s) shown above, then re-run `prep plan`.")
-        else:
-            emit_next_step(reporter, "`prep execute` to apply the plan.")
+        emit_next_step(reporter, "`prep execute` to apply the plan.")
 
     elif args.command == "execute":
         from .photos_utils import prep_plan_path, PREP_PLAN_ARTIFACT

@@ -250,7 +250,7 @@ def _proximity_grid(pts, pt_max, seg_max):
 
 
 _REL = "\x00rel\x00"            # stands for the file's path in a parse's warnings: a parse is of bytes, wherever they lie
-GPX_PARSE_VERSION = "gpx-parse-v3"   # bump when the parse below changes what it yields: a track file kept under
+GPX_PARSE_VERSION = "gpx-parse-v4"   # bump when the parse below changes what it yields: a track file kept under
                                      # another version is read and parsed again, as a new entry of the catalogue
 
 # Every instant there is, in seconds: the window of an index built without one.
@@ -358,6 +358,35 @@ def _epoch(iso):
     return datetime.fromisoformat(iso).timestamp()
 
 
+# A track point's time as GPX writes it, an xsd:dateTime (BLD-track_time_parser): a date, `T`, a time, a fraction of a
+# second of any number of digits, and a zone — `Z` or ±hh:mm — which a time may lack, though geotag then cannot use it.
+_TRACK_TIME = re.compile(r"([0-9]{4})-([0-9]{2})-([0-9]{2})T([0-9]{2}):([0-9]{2}):([0-9]{2})(?:\.([0-9]+))?"
+                         r"(?:([Zz])|([+-])([0-9]{2}):([0-9]{2}))?")
+
+
+def _parse_track_time(text):
+    """The instant a track point's `<time>` states, as an aware datetime, or None where it states no zone
+    (RUL-track_time_never_guessed). A fraction of a second of any number of digits is cut to microseconds, never
+    rounded, so a time never moves forward; `24:00:00` is the next day's midnight. ValueError where `text` is no
+    xsd:dateTime, or names no real instant — whatever another ISO 8601 reader might take (BLD-track_time_parser)."""
+    m = _TRACK_TIME.fullmatch(text)
+    if m is None:
+        raise ValueError(f"not an xsd:dateTime: {text!r}")
+    year, month, day, hour, minute, second, frac, utc, sign, off_h, off_m = m.groups()
+    if utc is None and sign is None:
+        return None
+    if int(off_m or 0) > 59 or int(off_h or 0) * 60 + int(off_m or 0) > 14 * 60:     # xsd:dateTime's bounds
+        raise ValueError(f"zone offset out of range: {text!r}")
+    zone = timezone.utc if utc else timezone((1 if sign == "+" else -1)
+                                             * timedelta(hours=int(off_h), minutes=int(off_m)))
+    micro = int((frac or "")[:6].ljust(6, "0"))
+    end_of_day = (hour, minute, second) == ("24", "00", "00") and not micro
+    if end_of_day:
+        hour = "00"
+    dt = datetime(int(year), int(month), int(day), int(hour), int(minute), int(second), micro, zone)
+    return dt + timedelta(days=1) if end_of_day else dt
+
+
 class GPXIndex:
     """The track points geotag decides by — those in its window (BLD-track_window) — and their fingerprint.
 
@@ -445,7 +474,7 @@ class GPXIndex:
     def build(self, coordinator=None, window=None, keep=True, read=True):
         """Index the points in `window` (a list of (start, end) whole seconds; None: every point). `keep` False
         leaves the record as it was: execute checks the tracks, planning keeps them. `read` False reads nothing
-        under gpx_root — the points are those the record keeps (finalize, RUL-sealing_needs_no_tracks)."""
+        under gpx_root — the points are those the record keeps (finalize, RUL-finalize_needs_no_tracks)."""
         self.window = window_union(window) if window is not None else list(ALL_TIME)
         self.points, self.warnings, self.file_sha, self.unreadable, self.unlisted = [], [], {}, [], []
         self.told = []
@@ -742,13 +771,10 @@ class GPXIndex:
                     warnings.append(f"Out-of-range coordinate in {_REL} at trkpt {idx}")
                     idx += 1
                     continue
-                ts = time_elem.text.strip()
-                # xsd:dateTime: fractional seconds are optional (Garmin writes `...:SS.000Z`), and a
-                # `Z` suffix is spelled out as +00:00 so fromisoformat takes it on every Python 3.
-                if ts[-1:] in ("Z", "z"):
-                    ts = ts[:-1] + "+00:00"
-                dt = datetime.fromisoformat(ts)
-                if dt.tzinfo is None:
+                # xsd:dateTime, read the same on every Python: fractional seconds optional (Garmin writes
+                # `...:SS.000Z`), of any number of digits.
+                dt = _parse_track_time(time_elem.text.strip())
+                if dt is None:
                     warnings.append(f"GPX time without timezone in {_REL} at trkpt {idx}")
                     idx += 1
                     continue
@@ -1876,7 +1902,7 @@ def place_gps(target_utc, gpx, cfg, why=None):
 
 
 def _valid_coord(lat, lon):
-    """True iff (lat, lon) is a numeric coordinate in range (RUL-checked_positions_and_times)."""
+    """True iff (lat, lon) is a numeric coordinate in range (RUL-checked_positions)."""
     return (isinstance(lat, (int, float)) and not isinstance(lat, bool) and -90 <= lat <= 90
             and isinstance(lon, (int, float)) and not isinstance(lon, bool) and -180 <= lon <= 180)
 
@@ -1893,7 +1919,7 @@ def classify_gps(file, resolved_utc, gpx, cfg, effective_fallback, file_decision
     the user (RUL-unplaced_photo_waits), never left without a position. A photo's own
     position gives way only to a position the user set for it, where `replace_own` says its review item is of an own
     position its clock offset contradicts (RUL-own_position_replaced_on_answer).
-    Authored coordinates are assumed already range-validated by the caller (RUL-checked_positions_and_times)."""
+    Authored coordinates are assumed already range-validated by the caller (RUL-checked_positions)."""
     fd = file_decision or {}
     mlat, mlon = fd.get("manual_lat", ""), fd.get("manual_lon", "")
     manual = mlat not in (None, "") and mlon not in (None, "")
@@ -2658,13 +2684,15 @@ def _gps_and_rename_steps(ops, native):
     return steps
 
 
-def build_complete_log(prep_photos, files, resolved_rows, time_artifact, plan, earlier_passes=()):
+def build_complete_log(prep_photos, files, resolved_rows, time_artifact, plan, earlier_passes=(), previous=None):
     """photos-26-complete-log.json's `photos` (BLD-phase_logs): a deep copy of prep's per-photo, content-
     fingerprint-keyed journeys with each calibrated photo's `phase:"geotag"` steps APPENDED — a
     strict superset of the prep log, derived from photos-21 / the resolved-UTC cache / photos-24.
     `earlier_passes` — [(plan, confirmed operation ids)], oldest first — are the geotag
     passes executed before the current plan's: their steps come first, so a photo written in an
-    earlier pass keeps the record of it however later passes went. Deterministic, fingerprint-keyed.
+    earlier pass keeps the record of it however later passes went. `previous` — the `photos` of the complete log
+    this one replaces — gives a photo no longer in by-dest (merged, or taken out by hand) the steps geotag recorded
+    of it while it was there (RUL-finalize_keeps_steps_of_photo_gone). Deterministic, fingerprint-keyed.
     The prep file itself is never edited."""
     photos = json.loads(json.dumps(prep_photos or {}))            # deep copy; never touch the prep file
     row_by_rel = {r["relative_path"]: r for r in resolved_rows}
@@ -2759,6 +2787,18 @@ def build_complete_log(prep_photos, files, resolved_rows, time_artifact, plan, e
         renamed = [s["to"] for s in steps if s.get("phase") == "geotag" and s.get("action") == "final_rename"]
         if renamed:
             entry["geotag_path"] = os.path.join(os.path.dirname(rel), renamed[-1])
+
+    # A photo of prep's log no longer in by-dest gets no step above: geotag's steps of it in the log this one replaces
+    # follow prep's journey as they did there, and each field prep's entry lacks is added — nothing of prep's changed
+    # (BLD-log_copy_checked).
+    for fp, old in sorted((previous or {}).items()):
+        entry = photos.get(fp)
+        if entry is None or fp in in_model or fp in aside or not isinstance(old, dict):
+            continue
+        kept_steps = [s for s in old.get("journey") or [] if isinstance(s, dict) and s.get("phase") == "geotag"]
+        if kept_steps:
+            photos[fp] = json.loads(json.dumps({**old, **entry,
+                                                "journey": (entry.get("journey") or []) + kept_steps}))
     return photos
 
 

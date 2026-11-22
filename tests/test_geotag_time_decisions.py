@@ -139,7 +139,8 @@ def test_rerun_preserves_decisions_and_completes(tmp_path, monkeypatch):
 
 @pytest.mark.spec("RUL-geotag_rerunnable", test="TST-geotag_time_decisions-rerun_after_success_admitted_until_sealed")
 def test_rerun_after_success_admitted_until_sealed(tmp_path, monkeypatch):
-    """A successful execution and a finalize leave geotag re-runnable; only merge's seal stops it."""
+    """A successful execution and a finalize leave geotag re-runnable, and so does a merge begun — one execution of it
+    ended partial; only merge's seal stops it."""
     ws = _ws(tmp_path, files=[_hfile("6-photos-by-dest/Brussels/a.jpg")],
              device_groups={"fixed_clock_cameras": [CAM], "phones": []}, default_tz="Europe/Brussels")
     ctl = ws / ".photos-ingest"
@@ -148,6 +149,9 @@ def test_rerun_after_success_admitted_until_sealed(tmp_path, monkeypatch):
     (ctl / "photos-26-archive-manifest.json").write_text('{"artifact_name": "m"}')
     assert _run(monkeypatch, ws) == 0
     first = _artifact(ws)
+    assert _run(monkeypatch, ws) == 0 and _artifact(ws) == first
+    (ctl / "photos-30-merge-plan.json").write_text('{"plan_id": "m1", "destinations": {}}')
+    (ctl / "photos-31-merge-summary.json").write_text('{"merge_plan_id": "m1", "status": "partial"}')
     assert _run(monkeypatch, ws) == 0 and _artifact(ws) == first
     (ctl / "photos-00-sealed.json").write_text('{"sealed": true, "merged_run_id": "r1"}')
     (ctl / cal.TIME_DECISIONS_ARTIFACT).unlink()

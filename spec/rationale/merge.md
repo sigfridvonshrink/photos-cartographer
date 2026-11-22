@@ -1,9 +1,9 @@
 # Merge — why
 
 **Not normative.** Each item here is the reasoning behind the [intent](../intent/merge.md) or [build](../build/merge.md)
-items it `justifies`, under the same section numbers. Where the two differ, the intent wins and this is stale.
+items it `justifies`. Where the two differ, the intent wins and this is stale.
 
-## 1. Scope and boundary
+## Scope and boundary
 
 :::{rat} One version on both sides of a comparison
 :id: RAT-one_version_per_comparison
@@ -14,9 +14,10 @@ items it `justifies`, under the same section numbers. Where the two differ, the 
 
 Merge compares prep's fingerprint of a photo with one it takes now of the library file in its way. Taken by two
 versions of ImageMagick, two fingerprints of the same pixels may differ: the photo would be called new and placed again,
-renamed, beside itself — a duplicate in the library, which merge must never make. Taken again under the version now in
-use, prep's fingerprint is confirmed and the comparison holds. A photo whose fingerprint did change is compared by its
-new value, which is the one the library's files are fingerprinted under ({need}`RAT-changed_fingerprint_mapped`).
+renamed, beside itself — a duplicate in the library, the very thing comparing by content is there to prevent. Taken
+again under the version now in use, prep's fingerprint is confirmed and the comparison holds. A photo whose fingerprint
+did change is compared by its new value, which is the one the library's files are fingerprinted under
+({need}`RAT-changed_fingerprint_mapped`).
 :::
 
 :::{rat} The archive outlives any one ImageMagick
@@ -41,7 +42,22 @@ mapping can settle which photo a value names, and those photos wait in photos by
 cannot prove.
 :::
 
-## 2. Preconditions
+:::{rat} One value moved whole to one value is still one to one
+:id: RAT-shared_value_moved_whole
+:status: ruled
+:forced: no
+:follows_from: RAT-changed_fingerprint_mapped, RAT-shared_fingerprint_two_photos
+:justifies: RUL-shared_value_moved_together_merged
+
+Photos prep held under one value are, to prep and to every record keyed by that value, one picture — the same picture
+the user sorted into more than one destination. Where every one of them reads as one new value under the new version,
+and no other photo holds it, the mapping between values is still one to one: the old value to the new, and back. What
+the one-to-one test guards against is two pictures prep told apart collapsing into one value, or one value splitting in
+two, so that a record keyed by a value would come to name another picture; neither happens here. Held back, each such
+photo would wait in photos by destination for a reason no record shows, as long as that version is in use.
+:::
+
+## Preconditions
 
 :::{rat} The workspace may have been touched since geotag
 :id: RAT-touched_since_geotag
@@ -75,11 +91,12 @@ merges that ran.
 :status: ruled
 :forced: yes
 :follows_from: RAT-decoded_pixel_identity, RAT-library_is_evidence_of_move
-:justifies: RUL-imagemagick_absent_stops_merge
+:justifies: RUL-image_engine_absent_stops_merge
 
 A place merge finds taken is settled by fingerprinting the file there, and a photo gone from the workspace counts as
-merged only once its place is fingerprinted again. Without ImageMagick no fingerprint can be taken: every collision
-would block, no photo already moved could be confirmed, and a merge left half done could not be finished. Run so, it
+merged only once its place is read again — by the digest of the bytes merge placed there, else by its fingerprint.
+Without ImageMagick no fingerprint can be taken: every collision would block, a photo already moved whose place no
+digest vouches for could not be confirmed, and a merge left half done might never be finished. Run so, it
 would turn a merge that could be whole into a partial one; stopped, it changes nothing until the tool is back.
 :::
 
@@ -118,7 +135,7 @@ the library is not merge's alone — digiKam writes its thumbnails and sidecars 
 (2026-11-16): *"I think a safety margin is needed. Configurable, too, default say 5% on top of by-dest size?"*
 :::
 
-## 4. Destination-to-library mapping
+## Destination-to-library mapping
 
 :::{rat} The destination tree is the library's organisation
 :id: RAT-destination_tree_is_the_library
@@ -134,7 +151,22 @@ make differently. Kept the same, a photo's place in the library is the place the
 every run, which is what lets an interrupted merge find its own work.
 :::
 
-## 5. Idempotency, resume, and non-destructiveness
+:::{rat} The same picture in two destinations is two photos
+:id: RAT-shared_fingerprint_two_photos
+:status: ruled
+:forced: yes
+:follows_from: RAT-destination_tree_is_the_library, RAT-library_is_evidence_of_move
+:justifies: RUL-shared_fingerprint_each_merged
+
+The user may sort one picture into two destinations on purpose — a view of the Louvre belongs under Paris and under the
+Louvre — and prep, which leaves photos by destination as the user sorted it, keeps both. They share a fingerprint, but
+each has its own place in the workspace, its own name from geotag and its own place in the library. A record of one
+says nothing of where the other is: taken one for the other, a copy would be given the other's name, a copy deleted
+from the library would be carried on the record of the one still there, and the workspace would seal with that photo
+in neither place, its merge log naming one copy twice and the other never.
+:::
+
+## Idempotency, resume, and non-destructiveness
 
 :::{rat} A partial merge is never a dead end
 :id: RAT-partial_merge_no_dead_end
@@ -143,10 +175,54 @@ every run, which is what lets an interrupted merge find its own work.
 :follows_from: RAT-recoverable_core, RAT-idempotent_reruns
 :justifies: RUL-merge_replan_any_time
 
-A partial merge leaves the cause of its blockers for the user to fix — a library file that could not be read, a photo
-changed — and some fixes change what the plan must say. Until the seal, nothing merge has done is final, and its
+A partial merge leaves the cause of each blocked photo for the user to fix — a library file that could not be read, a
+photo changed — and some fixes change what the plan must say. Until the seal, nothing merge has done is final, and its
 records describe what happened rather than gate what may happen next; refusing to re-plan would leave the user with a
 plan that can no longer finish and no way to make one that can.
+:::
+
+:::{rat} Prep and geotag stay open in a merge begun
+:id: RAT-merge_begun_stays_open
+:status: ruled
+:forced: yes
+:follows_from: RAT-partial_merge_no_dead_end, RAT-loop_is_steady_state
+:justifies: RUL-geotag_rerunnable, RUL-more_dumps_until_merge
+
+Some fixes for a photo a partial merge blocked are prep's or geotag's: a photo changed since finalize, a position to
+give, a photo to rename and record again. Refusing prep and geotag once merge had moved a photo would strand every
+such photo in photos by destination, with nothing the user could do but start over; only the seal, after which the
+workspace holds nothing more to merge, closes the loop.
+:::
+
+:::{rat} A photo merge placed stays the workspace's
+:id: RAT-placed_photo_stays_the_workspaces
+:status: ruled
+:forced: yes
+:follows_from: RAT-merge_begun_stays_open, RAT-library_is_evidence_of_move
+:justifies: RUL-replan_carries_every_placed
+
+Prep and geotag, run again in a merge begun, see only what is still in photos by destination; finalize then records
+only those, and a photo merge already placed would drop out of the plan that seals — neither carried nor blocked —
+leaving the sealed record with no place for a photo the workspace put in the library. The sealed record must say where
+every photo of the workspace went, and a photo merge placed is the workspace's whatever geotag was run on afterwards:
+so a fresh plan takes it from the earlier plan that placed it, its place checked again like that of any photo carried
+forward.
+:::
+
+:::{rat} A move is known by more than its record
+:id: RAT-unrecorded_move_known_by_its_traces
+:status: ruled
+:forced: no
+:follows_from: RAT-placed_photo_stays_the_workspaces, RAT-library_is_evidence_of_move
+:justifies: RUL-unjournalled_move_carried, RUL-unrecorded_place_needs_photo_gone, RUL-unexecuted_plan_placed_nothing
+
+A move is recorded just after it is made, so an execution killed between the two leaves a photo in the library that no
+record says it placed; were prep and geotag then run again, the photo would be in no finalized set either, and the
+sealed record would miss it. The place holding the picture is not proof enough alone: a photo already in the library
+was there before any execution, so a plan never executed proves nothing by it; and a photo renamed or sorted elsewhere
+since is still in the workspace under a path no earlier plan knows, to be merged as itself. With an execution of the
+plan begun, the place it gave the photo holding it, and the photo nowhere the workspace could still hold it, the move
+is taken as made.
 :::
 
 :::{rat} The library is the evidence of a move
@@ -160,8 +236,8 @@ The journal is written after a move, so a crash or a Ctrl-C can leave a photo in
 the library is the user's, so a photo a journal entry vouches for may since have been moved or replaced there. Either
 way the journal and the library disagree, and only the library says where the photo is. Trusting the journal would
 block forever a photo safely placed, or seal a workspace whose merge log names a library file that no longer holds the
-photo — a record the user would rely on to find it. Fingerprinting the place again settles it, and costs a read only on
-a resume.
+photo — a record the user would rely on to find it. Reading the place again settles it — by the digest of the bytes
+merge placed there, where merge recorded one, else by its fingerprint — and costs a read only on a resume.
 :::
 
 :::{rat} A placed file is known by its bytes, which no ImageMagick reads differently
@@ -193,6 +269,20 @@ empty is written over by the run's first confirmation, and what it held is gone.
 repair or restore, and has lost nothing.
 :::
 
+:::{rat} A photo the user moved into this library is in it
+:id: RAT-moved_into_this_library
+:status: ruled
+:forced: no
+:follows_from: RAT-merged_means_in_this_library, RAT-library_is_evidence_of_move
+:justifies: RUL-earlier_place_moved_to_this_library
+
+A photo left in a library the setting has since been pointed away from blocks, and there are two ways on: point the
+setting back, or move the photo to its place in the library now named. The second is the user's own move of a photo
+merge had placed and checked. Found there, the photo itself, it is in the library the seal will name — which is all
+that counting it merged ever meant — and a plan that still blocked it would leave moving it back as the only way to
+finish.
+:::
+
 :::{rat} Another library's photos are not in this one
 :id: RAT-merged_means_in_this_library
 :status: ruled
@@ -204,7 +294,7 @@ The seal says the workspace's photos are in the library it names. A photo placed
 :::
 
 
-## 6. User-visible outputs and the merge summary
+## User-visible outputs and the merge summary
 
 :::{rat} The run's end decides what to do next
 :id: RAT-merge_outcome_decides_next
@@ -239,7 +329,7 @@ what it confirmed, and the run that finishes it writes the summary.
 :status: ruled
 :forced: no
 :follows_from: RAT-remainder_worklist, RAT-workspace_not_recycled
-:justifies: RUL-merge_run_reported
+:justifies: RUL-merge_run_reported, RUL-merge_reports_left_with_why, RUL-merge_reports_sealed
 
 Merge is the step that puts photos where the user will look for them, and the one that ends the workspace. Its report
 is the moment the user learns whether the batch is in, which photos are not and what to fix — without opening the

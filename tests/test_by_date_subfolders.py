@@ -115,7 +115,7 @@ def test_same_day_collides_other_day_does_not(tmp_path, monkeypatch):
     }, dests
 
 
-@pytest.mark.spec("RUL-by_date_in_day_folder",
+@pytest.mark.spec("RUL-by_date_in_day_folder", "RUL-by_date_moved_to_day_folder",
                   test="TST-by_date_subfolders-existing_flat_file_is_migrated_into_day_folder")
 def test_existing_flat_file_is_migrated_into_day_folder(tmp_path, monkeypatch):
     _mock(monkeypatch, lambda f: "2023:07:04 14:30:05")

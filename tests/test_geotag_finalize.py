@@ -391,7 +391,7 @@ def test_finalize_records_each_photo_as_left(tmp_path, monkeypatch):
 def test_finalize_archives_the_whole_control_directory(tmp_path, monkeypatch):
     """The package is the whole control directory but its transient files — the drift record and every
     journal among it — listed with their hashes in the manifest and archived, manifest included, into
-    the control directory itself."""
+    the control directory itself; an earlier package lying there is not in it."""
     import hashlib
     import tarfile
     ws, ctl = _ready_ws(tmp_path, monkeypatch)
@@ -400,6 +400,7 @@ def test_finalize_archives_the_whole_control_directory(tmp_path, monkeypatch):
     (ctl / "photos-00-plan-memo.db").write_bytes(b"scratch")
     (ctl / "photos-15-prep-ingest.db").write_bytes(b"prep's database image")
     (ctl / "photos-00-workspace-guard").write_text('{"initialized": true, "initialized_by_run": "prep-init-1"}')
+    (ctl / "photos-26-archive-001.tar.gz").write_bytes(b"an earlier package")
     assert _run(monkeypatch, ws, "finalize") == 0
     manifest = json.load(open(ctl / "photos-26-archive-manifest.json"))
     assert manifest["workspace_id"] == "prep-init-1"              # the identity a renamed folder keeps
@@ -409,6 +410,7 @@ def test_finalize_archives_the_whole_control_directory(tmp_path, monkeypatch):
     assert any(n.startswith("journal-") for n in listed)
     assert not any(n.endswith(".lock") or n.startswith(".tmp-") for n in listed)
     assert "photos-00-plan-memo.db" not in listed and "photos-26-archive-manifest.json" not in listed
+    assert not any(n.endswith(".tar.gz") for n in listed)          # an earlier package is not nested in this one
     with tarfile.open(ctl / "photos-26-archive.tar.gz") as tar:
         archived = {m.name: tar.extractfile(m).read() for m in tar.getmembers()}
     assert set(archived) == {rec["path"] for rec in manifest["contents"].values()} | {
@@ -478,7 +480,8 @@ def test_finalize_sealed_workspace_blocks(tmp_path, monkeypatch):
     assert _run(monkeypatch, ws, "finalize") == 2                        # sealed -> preflight blocks
 
 
-@pytest.mark.spec("RUL-unchecked_counts_as_changed", "BLD-prep_log_checked", test="TST-geotag_finalize-finalize_refuses_a_prep_log_the_handoff_does_not_vouch_for")
+@pytest.mark.spec("RUL-unchecked_counts_as_changed", "BLD-prep_log_checked", "RUL-finalize_on_vouched_log",
+                  test="TST-geotag_finalize-finalize_refuses_a_prep_log_the_handoff_does_not_vouch_for")
 @pytest.mark.parametrize("damage", ["changed", "missing"])
 def test_finalize_refuses_a_prep_log_the_handoff_does_not_vouch_for(tmp_path, monkeypatch, capsys, damage):
     """Finalize copies prep's log only as the handoff records it, by hash: a log changed since — or gone,
@@ -1143,7 +1146,7 @@ def test_execute_marks_the_tracks_it_times_photos_by(tmp_path, monkeypatch):
                             "USING (track_id) GROUP BY f.track_id") == [(1, 2)]
 
 
-@pytest.mark.spec("RUL-gone_track_not_used", "RUL-sealing_needs_no_tracks", "BLD-withdrawn_track_points",
+@pytest.mark.spec("RUL-gone_track_not_used", "RUL-finalize_needs_no_tracks", "BLD-withdrawn_track_points",
                   test="TST-geotag_finalize-a_used_track_changed_seals_on_its_current_points")
 def test_a_used_track_changed_since_execute_seals_on_its_current_points(tmp_path, monkeypatch):
     """The track the executed plan rests on is changed — a point of another year added — and catalogued again as a plan
@@ -1165,7 +1168,7 @@ def test_a_used_track_changed_since_execute_seals_on_its_current_points(tmp_path
     assert (ctl / "photos-26-archive.tar.gz").exists()
 
 
-@pytest.mark.spec("RUL-sealing_needs_no_tracks", "RUL-finalize_requires_plan_still_holds", "BLD-track_window",
+@pytest.mark.spec("RUL-finalize_needs_no_tracks", "RUL-finalize_requires_plan_still_holds", "BLD-track_window",
                   test="TST-geotag_finalize-finalize_seals_without_the_tracks_folder")
 def test_finalize_seals_without_the_tracks_folder(tmp_path, monkeypatch):
     """Finalize seals what the workspace keeps: with the tracks folder gone after execute it packages all the same,
@@ -1236,3 +1239,78 @@ def test_tracks_that_cannot_be_listed_stop_plan_and_execute(tmp_path, monkeypatc
     finally:
         os.chmod(gpx, 0o755)
     assert (ctl / "photos-24-executable-plan.json").read_bytes() == plan
+
+
+@pytest.mark.spec("RUL-finalize_passes_prep_after_execute", "RUL-merge_refuses_changed_since_finalize",
+                  "BLD-finalize_preconditions", "BLD-finalized_media",
+                  test="TST-geotag_finalize-prep_run_after_execute_does_not_stop_finalize")
+def test_prep_run_after_execute_does_not_stop_finalize(tmp_path, monkeypatch):
+    """Prep run between geotag's execute and finalize writes the handoff again under the names geotag gave: it is no
+    longer the handoff the plan was made from. Finalize passes all the same, and records the handoff as it found it —
+    the one merge holds the workspace to."""
+    ws, ctl = _ready_ws(tmp_path, monkeypatch)
+    _to_executed(monkeypatch, ws, ctl)
+    plan = json.load(open(ctl / "photos-24-executable-plan.json"))
+    pinned = plan["depends_on"]["handoff"]["content_fingerprint"]
+    renamed = {op["relative_path"]: os.path.join(os.path.dirname(op["relative_path"]), op["to"])
+               for d in plan["destinations"].values() for op in d["operations"] if op["type"] == "rename_no_clobber"}
+    assert renamed
+    handoff = json.load(open(ctl / "photos-11-handoff.json"))
+    for f in handoff["files"]:                                       # as prep records them: under geotag's names
+        f["relative_path"] = renamed.get(f["relative_path"], f["relative_path"])
+    (ctl / "photos-11-handoff.json").write_text(json.dumps(handoff))
+    now = utils.handoff_content_fingerprint(handoff)
+    assert now != pinned                                             # no longer the handoff the plan was made from
+    assert _run(monkeypatch, ws, "finalize") == 0
+    assert json.load(open(ctl / "photos-26-finalized-media.json"))["handoff_content_fingerprint"] == now
+
+
+@pytest.mark.spec("RUL-finalize_keeps_steps_of_photo_gone", "BLD-finalize_keeps_steps_of_gone",
+                  test="TST-geotag_finalize-finalize_run_again_keeps_the_steps_of_a_photo_since_gone")
+def test_finalize_run_again_keeps_the_steps_of_a_photo_since_gone(tmp_path, monkeypatch):
+    """Prep's log holds a photo no longer in photos by destination — as one merge placed is — and the complete log in
+    place holds geotag's steps of it, from when it was there. Finalize run again writes a log that keeps the entry
+    whole — prep's steps, geotag's after them, and where geotag left it — sets the earlier log aside, and makes the
+    entries of the photos still there afresh."""
+    ws, ctl = _ready_ws(tmp_path, monkeypatch)
+    prep_step = {"phase": "prep", "action": "organized", "run": "prep-1"}
+    log = json.load(open(ctl / "photos-15-prep-log.json"))
+    log["photos"]["GONE"] = {"content_fingerprint": "GONE", "prep_path": f"{BYDEST}/T/gone.arw", "journey": [prep_step]}
+    (ctl / "photos-15-prep-log.json").write_text(json.dumps(log))
+    ho = json.load(open(ctl / "photos-11-handoff.json"))
+    ho["depends_on"]["prep_log"]["sha256"] = utils.sha256_file(str(ctl / "photos-15-prep-log.json"))
+    (ctl / "photos-11-handoff.json").write_text(json.dumps(ho))
+    _to_executed(monkeypatch, ws, ctl)
+    assert _run(monkeypatch, ws, "finalize") == 0
+    first = json.load(open(ctl / "photos-26-complete-log.json"))
+    assert first["photos"]["GONE"]["journey"] == [prep_step]             # nothing of geotag's known of it yet
+    geotag_step = {"phase": "geotag", "action": "resolved_utc", "value": "2024-07-03T12:00:00Z", "run": "cal-1"}
+    first["photos"]["GONE"].update(journey=[prep_step, geotag_step], geotag_path=f"{BYDEST}/T/gone-final.arw")
+    (ctl / "photos-26-complete-log.json").write_text(json.dumps(first))
+    assert _run(monkeypatch, ws, "finalize") == 0
+    second = json.load(open(ctl / "photos-26-complete-log.json"))["photos"]
+    assert second["GONE"] == {"content_fingerprint": "GONE", "prep_path": f"{BYDEST}/T/gone.arw",
+                              "geotag_path": f"{BYDEST}/T/gone-final.arw", "journey": [prep_step, geotag_step]}
+    assert json.load(open(ctl / "photos-26-complete-log-001.json")) == first
+    assert {fp: e for fp, e in second.items() if fp != "GONE"} == \
+           {fp: e for fp, e in first["photos"].items() if fp != "GONE"}
+
+
+@pytest.mark.spec("RUL-finalize_keeps_steps_of_photo_gone", "BLD-finalize_keeps_steps_of_gone", "BLD-log_copy_checked",
+                  test="TST-geotag_finalize-geotags_steps_of_a_photo_gone_follow_preps_journey_as_it_now_stands")
+def test_geotags_steps_of_a_photo_gone_follow_preps_journey_as_it_now_stands():
+    """Geotag's steps of a photo gone from photos by destination, taken from the earlier log, follow prep's journey as
+    it now stands — also where prep has since recorded more of the photo — and nothing of prep's entry is changed; an
+    entry of the earlier log that prep's log does not hold is not brought back."""
+    from cartographer._geotag_calc import build_complete_log
+    p1, p2 = {"phase": "prep", "action": "organized"}, {"phase": "prep", "action": "raw_culled"}
+    g = {"phase": "geotag", "action": "resolved_utc", "value": "2024-07-03T12:00:00Z"}
+    prep = {"KEPT": {"content_fingerprint": "KEPT", "journey": [p1]},
+            "MOVED_ON": {"content_fingerprint": "MOVED_ON", "journey": [p1, p2]}}
+    previous = {"KEPT": {"content_fingerprint": "KEPT", "geotag_path": "x", "journey": [p1, g]},
+                "MOVED_ON": {"content_fingerprint": "MOVED_ON", "journey": [p1, g]},
+                "UNKNOWN": {"content_fingerprint": "UNKNOWN", "journey": [g]}}
+    photos = build_complete_log(prep, [], [], {}, {"plan_id": "p", "destinations": {}}, previous=previous)
+    assert photos == {"KEPT": {"content_fingerprint": "KEPT", "geotag_path": "x", "journey": [p1, g]},
+                      "MOVED_ON": {"content_fingerprint": "MOVED_ON", "journey": [p1, p2, g]}}
+    assert prep["MOVED_ON"]["journey"] == [p1, p2]

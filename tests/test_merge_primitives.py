@@ -319,9 +319,9 @@ def test_a_temporary_copy_bears_a_name_no_photo_bears(tmp_path, monkeypatch):
     assert sorted(os.listdir(place)) == sorted(photos + [resident])               # and no copy is left behind
 
 
-# --- Archive re-seal (RUL-merge_reseals) ---------------------------------------
+# --- Archive re-seal (RUL-merge_repackages) ---------------------------------------
 
-@pytest.mark.spec("RUL-phase_writes_own_records", "RUL-reseal_rederives_nothing", test="TST-merge_primitives-reseal_writes_own_manifest_and_never_touches_the_25")
+@pytest.mark.spec("RUL-phase_writes_own_records", "RUL-repackage_rederives_nothing", test="TST-merge_primitives-reseal_writes_own_manifest_and_never_touches_the_25")
 def test_reseal_writes_own_manifest_and_never_touches_the_25(tmp_path):
     ws = tmp_path / "ws"
     cd = utils.ensure_control_dir(str(ws))

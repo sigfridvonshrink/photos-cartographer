@@ -2,6 +2,130 @@
 
 *What was decided and why, newest first. A record: never corrected forward. Per-commit detail is `git log`.*
 
+## 2026-11-21 — the corpus read against itself: seventeen contradictions ruled
+
+The corpus was read without the code, a reader to each phase and one to the shared contract, for rules that cannot
+both hold. Seventeen pairs were put to the owner with a side suggested for each, and ruled as suggested. Nearly all were one shape: a rule
+stated without exception, and its exception stated elsewhere and never linked. Each general rule now names what it
+leaves aside, and the rule that states the exception links it with `excepts`.
+
+- **A move whose recording fails stands.** Moving the file back would be a second change no plan records. A rule of
+  its own, with its reason, beside the rule that a failed operation leaves its file as it was.
+- **A library place found holding the photo is the photo already there**, at execute as at planning: the rule that a
+  taken name blocks, and the rule that execution re-derives nothing, both say so. The exception was declared by a
+  build item; it is now the intent's.
+- **Finalize records the acceptance it is given**, as a dry run and a plan do.
+- **The tracks are a dependency by what of them a decision reaches**, not by every byte under the root.
+- **A file prep's own plan files on, or moves to missing metadata, is not misnamed**; one moved there takes its
+  untimed name.
+- **A duplicate in the first dump is set aside from where it lies**, not moved to the inbox first.
+- **Finalize and merge judge a photo's position by the record** — the writes carried out and prep's reading — so
+  that neither needs the metadata tool.
+- **Prep run between execute and finalize no longer stops merge.** Finalize passed over the rewritten handoff and
+  merge then refused it, holding the handoff to the plan's pin. Finalize now records the handoff as it found it, in
+  `photos-26-finalized-media.json`, and merge holds the workspace to that. The one change of behaviour.
+- **No timezone passes down from or through a country of several.**
+- **A run refused for want of a required snapshot writes its summary**; geotag's rule says so as merge's did.
+- **Merge refuses a photo finalize did not record or one changed since**; a photo gone is for its plan to account for.
+- **A fingerprint a move carried, geotag left or the memo keeps is not taken afresh**, and metadata is reused across a
+  recorded move.
+- **A database image is left untouched by a run that stops before capturing a new one**; what fails after leaves the
+  new image. *Sealed* is defined by the mark, not by success.
+- **The control records' place, the quarantine and a top-level version-control directory are not quarantined** as
+  hidden entries of a first dump.
+- **Prep's own dry-run rule is gone**: it said less than the shared one it refined.
+- **An unchanged re-plan of prep writes nothing.** The rule said so of every phase; prep's plan named its run, so no
+  two were ever the same and every re-plan set a copy aside. Prep now compares what the plan says — its operations,
+  blockers, preconditions, inventory and dependencies — and keeps the saved plan where that is the same. A kept plan
+  an execution had begun under is executed again under its id, the earlier journal set aside as it already was for a
+  plan executed twice. The second change of behaviour.
+
+The same reading found the build stating things the intent did not. No build item now declares an exception to an
+intent rule: a rename of case alone, resting between its two moves under a name of the tool's own, and geotag's
+clearing of its own interrupted write, are exceptions the intent states. A photo the user moved to its place in the
+library now named is carried forward — the owner: *"add intent rule"* — where before only the build said so. The
+distance at which an own position counts as contradicted is the configuration's own, not the anchor's; and three checks
+of the configuration have rules: a filename format that varies with the time, one that ends in nothing shaped like a
+suffix, and the development subfolders' names.
+
+One word now means one thing. Remaking the package at merge is *repackaging*; *seal* is left to the mark merge
+writes. *Hash* is a digest of exact bytes and *fingerprint* a media file's identity, in prose as in the definitions —
+the fields named `*_fingerprint` that hold a hash keep their names. photos-22 is the *drift check*; the decoder is the
+*image engine*; a quarantine's evidence file is its *manifest*; a phase's copy of the database is its *image*, and the
+database a record, not a cache. A *true time*, a *folder fallback* and a *blocked photo* — one photo merge's plan holds
+back while it places the rest, against a blocker that stops a command — are defined. Three rules and a rationale took
+the new words into their ids.
+
+Reasons that had fallen behind their rules were brought up to them: why no offset comes down the folders, now that a
+camera's day is shared across destinations; when a file comes in already carrying the untimed mark; that merge does
+remove one copy unasked, the workspace's, of a photo the library holds; that a library place is confirmed by the
+bytes merge placed. The headings lost their numbers, which the three levels had never shared.
+
+Every rule now has a build item, as the owner ruled when the leaner corpus was weighed. Sixty-three rules had none:
+twelve were realised by an item that did not name them, and fifty-one took forty new items, each written from the code
+by a reader that changed nothing, and stating only what it found there. Three invariants keep none — each is carried
+by its rules.
+
+Three checks hold what was put right, each failing the build: an exception stated by anything but a rule; a rule no
+build item realises; a retired word, from a list kept beside the corpus.
+
+Writing the build items showed four rules the code met only in part, and the owner ruled each for the rule:
+`prep plan` prints its summary — *"print at plan"* — where it had only saved it; a merge that does not end whole says
+the workspace is not sealed — *"print it"*; every stop on a missing managed folder tells the user to restore it,
+prep execute's and `init-library`'s now too — *"add it"*; and a link below the top level stops `prep plan` before
+anything is saved — *"stop before saving"* — no plan, no memo, no zone-table answer, where a blocked plan had been
+written.
+
+The review's smaller findings were then worked through, a reader to each document set changing only its own files.
+Links were made to bear their relation: a rule that upholds an invariant says `upholds`, one that states an exception
+says `excepts` and is named by the rule it excepts, a `refines` that narrowed nothing was repointed or dropped where
+another reason reached the rule. Enumerations stated twice were made one from the code — prep's stage order, a plan's
+contents, the exit statuses, merge's plan fields — and the handoff's file record got a build item of its own. The
+order every command checks in is said once: the filesystem, the lock, the seal, one filesystem, the shape, the
+workspace. `anti`, the mark of a rule that forbids, was set on every rule that does and taken off those that only
+oblige. The check for retired words reads a paragraph at a time, a phrase broken across two lines being still the
+phrase. Prep's dry run lost a listing of blockers that no plan could reach.
+
+What the readers could not settle was put to the owner in one list, each with a side suggested, and ruled *"All as
+suggested"*.
+
+- **Photos sharing a fingerprint are each merged on their own.** The same picture sorted into two destinations stays
+  twice in photos by destination — prep's duplicates stop at its door — and merge knew a photo by its fingerprint
+  alone: one copy took the other's final name, one was carried forward on the other's record, and a copy deleted from
+  the library by hand still counted as merged, the workspace sealing over a photo in neither place. Merge now joins a
+  photo to its rename by its path, by fingerprint only where it is the one photo of that value, and carries a photo
+  forward only on a record of its own path and fingerprint; the log names each copy's place.
+- **Held as one value, moved together to one value, they merge** under a changed image engine, where each had been
+  blocked for a reason that was false. A value that splits in two blocks, which it had not.
+- **A merge begun is a state.** From the first photo moved until the seal, prep and geotag stay allowed — a blocked
+  photo may need them — and a fresh merge plan carries every photo an earlier plan placed, whether or not the
+  finalized set still lists it. Before, prep and geotag run again left those photos out of the next plan, and the
+  workspace sealed with no word of where they had gone. Such a photo is only ever checked in the library: nothing at
+  its old path in the workspace is its.
+- **A failed read of a folder's metadata does not block a file whose record is still valid.**
+- **A track point's time is read whatever its precision, on every Python**: the tool reads the form itself, a
+  fraction of any length cut to microseconds. A time not in that form is passed over, as one unreadable was. A lowercase
+  `z` is read, `24:00:00` is the next day's midnight, and an offset of minutes above 59 or past fourteen hours is
+  refused; each point passed over is reported with its file and index, as before.
+- **An offset is shared, or taken from what the photos record, where the camera's own GPS gives none** — positions on
+  no track measure nothing of the clock.
+- **The package leaves out an earlier package; a library file under the photo's name in another case, holding it, is
+  the photo already there; finalize and merge stop on a prep log the handoff does not vouch for** — each already so,
+  now a rule's.
+- **Twelve rules were split out** of nine that carried more than one obligation, **seven ids renamed** to what their
+  items now say, and a merge rule moved from geotag's intent to merge's. A definition carries no obligation, so no
+  build item `realises` one: each that did now `uses` it.
+
+Three things the building first left open were then closed. **A move an execution was killed before recording is
+carried all the same**: where prep and geotag were then run before any new merge plan, the photo was in the library
+but out of the sealed record. Merge's journal is now written before the first move, so a later plan knows an execution
+of the plan began; with that, the place the plan gave the photo holding it, and no finalized photo carrying its
+fingerprint under a path no earlier plan knows — a photo renamed or sorted elsewhere since, still to be merged as
+itself — the move is taken as made. A plan no execution began placed nothing. **Finalize, run again, keeps geotag's
+steps of a photo no longer in photos by destination**, from the log it replaces; merge no longer looks for them in the
+logs set aside. **The merge log's `library_path`, and the fingerprint map's `from` and `library_path`, are always
+lists** — they were a string for one photo and a list for several sharing a fingerprint.
+
 ## 2026-11-17 — a leaner corpus measured, and dropped (BACKLOG 57)
 
 The corpus is about three quarters the size of the code by words, and the owner asked whether that was overdoing it.

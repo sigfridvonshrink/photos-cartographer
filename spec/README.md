@@ -33,7 +33,7 @@ no tool, file or database; [`rationale/`](rationale/) — why, the justification
 [`build/`](build/) — how this build meets the intent. Each item has an id, a status (`seed` until ruled) and typed
 links, and states one obligation, in one SHALL — a second obligation is an item of its own, refining the first; every
 rule and invariant has a reason, a rationale that justifies it or the item it refines (the few still without one are
-listed in [`unjustified.txt`](unjustified.txt), a list that only shrinks); the tests are items too, from their `@pytest.mark.spec(..., test="TST-...")` marks. `tools/spec-build` renders
+listed in [`unjustified.txt`](unjustified.txt), a list that only shrinks); every rule is realised by a build item; the tests are items too, from their `@pytest.mark.spec(..., test="TST-...")` marks. `tools/spec-build` renders
 it and fails on any warning; `spec/needs.json` is its committed export. The user guide's roots and what they force are
 [`rationale/philosophy.md`](rationale/philosophy.md) — facts (`FCT`) and choices (`CHC`) nothing follows from, and the
 rationale that follows from them. Read the shared contract first for the cross-phase facts, then prep, geotag and merge
@@ -41,7 +41,8 @@ in pipeline order.
 
 Three conventions hold across the corpus. `uses` names the definition — or the rule or build item whose mechanism the
 text relies on — that an item relies on; it is not a refinement. A child rule stating an exception to another links it
-with `excepts`, not `refines`. A folder named in `build/` by its
+with `excepts`, not `refines` — a rule only, never a build item, and the rule it excepts names it in its text. A word
+the corpus has given up for another is listed in [`retired-terms.txt`](retired-terms.txt), and the build fails on it. A folder named in `build/` by its
 default name (`6-photos-by-dest`, `1-strays`, …) stands for the folder of that role, whatever the configuration names it
 (`RUL-folder_names_not_roles`).
 

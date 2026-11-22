@@ -41,7 +41,7 @@ def _ctl(ws):
 
 
 def _make(tmp_path, *, guard=True, config=True, library_in_config=True, bless_lib=True,
-          handoff=True, handoff_current=True, cal_plan=True, cal_summary=True,
+          handoff=True, handoff_current=True, plan_pin_current=True, cal_plan=True, cal_summary=True,
           summary_status="success", prep_log=True, complete_log=True, archive_manifest=True, finalized_media=True,
           bydest=("6-photos-by-dest/Trip/a.jpg",), sources_files=(),
           fingerprint_method=utils.FINGERPRINT_ALGORITHM_VERSION, held=None):
@@ -88,7 +88,7 @@ def _make(tmp_path, *, guard=True, config=True, library_in_config=True, bless_li
         cfg["merge"]["library_root"] = str(lib) if library_in_config else ""
         (ctl / "photos-00-config.json").write_text(json.dumps(cfg))
     if cal_plan:
-        pinned = fp if handoff_current else ("stale-" + fp)
+        pinned = fp if plan_pin_current else ("earlier-" + fp)
         plan = {"status": "ready", "plan_id": "geotag-plan-1",
                 "depends_on": {"handoff": {"dependency_type": "handoff_content",
                                            "artifact_name": "photos-11-handoff.json",
@@ -102,7 +102,8 @@ def _make(tmp_path, *, guard=True, config=True, library_in_config=True, bless_li
         (ctl / "photos-26-archive-manifest.json").write_text(
             json.dumps({"artifact_name": "photos-26-archive-manifest.json", "plan_id": "geotag-plan-1"}))
     if finalized_media:
-        (ctl / "photos-26-finalized-media.json").write_text(json.dumps({"media": {
+        (ctl / "photos-26-finalized-media.json").write_text(json.dumps({
+            "handoff_content_fingerprint": fp if handoff_current else ("stale-" + fp), "media": {
             rel: {"size": os.stat(ws / rel).st_size, "mtime_ns": os.stat(ws / rel).st_mtime_ns}
             for rel in bydest}}))
     return ws, lib
@@ -166,7 +167,7 @@ def test_clean_workspace_passes(tmp_path):
 
 @pytest.mark.parametrize("command", ["plan", "dry-run", "execute"])
 @pytest.mark.parametrize("present", [(), ("identify",), ("magick",)])
-@pytest.mark.spec("RUL-imagemagick_absent_stops_merge", "BLD-merge_preflight",
+@pytest.mark.spec("RUL-image_engine_absent_stops_merge", "BLD-merge_preflight",
                   test="TST-merge_preflight-imagemagick_absent_stops_merge")
 def test_imagemagick_absent_stops_merge(tmp_path, monkeypatch, capsys, command, present):
     """With neither `magick` nor the older `identify` on the PATH, merge's plan, dry run and execute stop (exit 2) as
@@ -245,7 +246,8 @@ def test_missing_managed_folder_block_tells_to_restore_and_run_again(tmp_path):
     assert "Restore the 0-6 structure" in block[0] and "before merging" in block[0], block[0]
 
 
-@pytest.mark.spec("RUL-top_level_only_managed", test="TST-merge_preflight-loose_root_file_blocks")
+@pytest.mark.spec("RUL-top_level_only_managed", "RUL-misplaced_entry_blocks",
+                  test="TST-merge_preflight-loose_root_file_blocks")
 def test_loose_root_file_blocks(tmp_path):
     ws, _ = _make(tmp_path)
     (ws / "stray.txt").write_text("loose")
@@ -270,7 +272,8 @@ def test_root_hidden_file_allowed(tmp_path):
     assert not any("Misplaced entry" in b for b in blockers), blockers
 
 
-@pytest.mark.spec("RUL-top_level_only_managed", test="TST-merge_preflight-every_misplaced_root_entry_named")
+@pytest.mark.spec("RUL-top_level_only_managed", "RUL-misplaced_entry_blocks",
+                  test="TST-merge_preflight-every_misplaced_root_entry_named")
 def test_every_misplaced_root_entry_named(tmp_path):
     """Any other top-level entry blocks, whatever its kind — a named pipe too — and the block names
     every one, not only the first."""
@@ -407,6 +410,16 @@ def test_stale_finalized_record_blocks(tmp_path):
     assert any("re-run geotag and re-finalize" in b.lower() for b in blockers), blockers
 
 
+@pytest.mark.spec("RUL-finalize_passes_prep_after_execute", "RUL-merge_refuses_changed_since_finalize",
+                  "BLD-merge_preflight", test="TST-merge_preflight-a_handoff_prep_wrote_before_finalize_passes")
+def test_a_handoff_prep_wrote_before_finalize_passes(tmp_path):
+    """Prep ran between geotag's execute and finalize: the handoff is no longer the one the plan was made from, and
+    is the one finalize recorded. Merge holds it to finalize's record, and passes."""
+    ws, _ = _make(tmp_path, plan_pin_current=False)
+    blockers, _, _ = _pf(ws)
+    assert blockers == [], blockers
+
+
 @pytest.mark.spec("RUL-dependencies_validated_before_deriving",
                   test="TST-merge_preflight-a_stale_finalized_record_is_refused_before_any_plan_is_made")
 def test_a_stale_finalized_record_is_refused_before_any_plan_is_made(tmp_path):
@@ -469,7 +482,7 @@ def test_a_refresh_describing_only_a_prep_run_does_not_block_merge(tmp_path):
 
 
 @pytest.mark.parametrize("touch", ["edited", "removed", "unvouched"])
-@pytest.mark.spec("BLD-prep_log_checked", "RUL-merge_takes_finalized_current", "RUL-unchecked_counts_as_changed",
+@pytest.mark.spec("BLD-prep_log_checked", "RUL-merge_takes_finalized_current", "RUL-unchecked_counts_as_changed", "RUL-merge_on_vouched_log",
                   test="TST-merge_preflight-a_prep_log_the_handoff_does_not_vouch_for_blocks")
 def test_a_prep_log_the_handoff_does_not_vouch_for_blocks(tmp_path, touch):
     """Prep's log touched after finalize — edited, removed, or a handoff recording no hash of it — stops merge,
