@@ -104,7 +104,9 @@ suggested"*.
   its old path in the workspace is its.
 - **A failed read of a folder's metadata does not block a file whose record is still valid.**
 - **A track point's time is read whatever its precision, on every Python**: the tool reads the form itself, a
-  fraction of any length cut to microseconds. A time not in that form is passed over, as one unreadable was.
+  fraction of any length cut to microseconds. A time not in that form is passed over, as one unreadable was. A lowercase
+  `z` is read, `24:00:00` is the next day's midnight, and an offset of minutes above 59 or past fourteen hours is
+  refused; each point passed over is reported with its file and index, as before.
 - **An offset is shared, or taken from what the photos record, where the camera's own GPS gives none** — positions on
   no track measure nothing of the clock.
 - **The package leaves out an earlier package; a library file under the photo's name in another case, holding it, is

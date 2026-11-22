@@ -555,7 +555,11 @@ A track's points become positions and clock offsets; a time read an hour wrong, 
 photos and correct cameras by that hour, and look like evidence. Recorders write the same instant in several valid
 forms, so each is read as the instant it is; one stating no zone could be any of them and is not used. Skipping a
 point silently would let a track whose every point was rejected pass for an empty one, and the user would never learn
-why the photos it should have placed were not.
+why the photos it should have placed were not. A form whose meaning is certain is read though the standard for a
+track's times does not strictly allow it — a lowercase `z` — and the end of a day written as `24:00:00` is the midnight
+it names; an offset no zone can have is no slip of form but a time that cannot be trusted, and its point is skipped.
+No recorder is likely to write such a point, so one found may be the sign of a deeper fault in the file: the more
+reason to tell the user of it.
 :::
 
 :::{rat} A track is where one device was

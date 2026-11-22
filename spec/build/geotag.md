@@ -252,7 +252,7 @@ the first `GPX_WARNINGS_SHOWN`, with the number of the rest. A point keeps the i
 
 A track point's `<time>` SHALL be parsed by `_parse_track_time` as an `xsd:dateTime` alone — `YYYY-MM-DDThh:mm:ss`, a
 fraction of a second of any number of digits cut, never rounded, to microseconds, and a zone `Z`, `z` or `±hh:mm` of
-minutes below 60, `24:00:00` taken as the next day's midnight — a time of that form with no zone skipped as naive
+minutes below 60 and no more than 14 hours in all, `24:00:00` taken as the next day's midnight — a time of that form with no zone skipped as naive
 ({need}`BLD-track_points`), and any other text, an ISO 8601 form beside `xsd:dateTime` (a space for the `T`, the basic
 format, a week date, a time without seconds) included, skipped as unparseable, on every Python; a change to what the
 parse yields bumps `GPX_PARSE_VERSION`, so a track file catalogued under the old one is parsed again.

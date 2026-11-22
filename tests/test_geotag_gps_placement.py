@@ -426,10 +426,11 @@ def test_track_times_are_read_with_the_zone_they_state(tmp_path):
     """Each zone form xsd:dateTime has — `Z`, a positive and a negative offset, `-00:00` — is the instant it states;
     `24:00:00` is the next day's midnight."""
     times = ["2024-07-03T12:00:00Z", "2024-07-03T12:00:00z", "2024-07-03T14:00:00+02:00",
-             "2024-07-03T06:30:00-05:30", "2024-07-03T12:00:00-00:00", "2024-07-02T24:00:00+12:00"]
+             "2024-07-03T06:30:00-05:30", "2024-07-03T12:00:00-00:00", "2024-07-02T24:00:00+12:00",
+             "2024-07-04T02:00:00+14:00"]
     read, warnings = _track_times(tmp_path, times)
     assert warnings == []
-    assert [read[i] for i in range(5)] == [_utc(12, 0, 0)] * 5
+    assert [read[i] for i in (0, 1, 2, 3, 4, 6)] == [_utc(12, 0, 0)] * 6
     assert read[5] == _utc(0, 0, 0) - timedelta(hours=12)
 
 
@@ -446,6 +447,8 @@ def test_a_time_not_xsd_datetime_or_with_no_zone_is_skipped(tmp_path):
              "2024-07-03T12:00Z",              # no seconds
              "2024-07-03T12:00:00+0200",       # an offset with no colon
              "2024-07-03T12:00:00+02:99",      # minutes of the offset out of range
+             "2024-07-03T12:00:00+14:01",      # an offset past the fourteen hours xsd:dateTime allows
+             "2024-07-03T12:00:00-15:00",
              "2024-07-03T12:00:00.Z",          # a point with no fraction
              "2024-07-03T24:00:01Z",           # past the end of the day
              "2024-07-03T12:00:00Z"]           # the one readable

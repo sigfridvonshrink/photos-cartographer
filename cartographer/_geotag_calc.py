@@ -375,8 +375,8 @@ def _parse_track_time(text):
     year, month, day, hour, minute, second, frac, utc, sign, off_h, off_m = m.groups()
     if utc is None and sign is None:
         return None
-    if int(off_m or 0) > 59:
-        raise ValueError(f"zone offset minutes out of range: {text!r}")
+    if int(off_m or 0) > 59 or int(off_h or 0) * 60 + int(off_m or 0) > 14 * 60:     # xsd:dateTime's bounds
+        raise ValueError(f"zone offset out of range: {text!r}")
     zone = timezone.utc if utc else timezone((1 if sign == "+" else -1)
                                              * timedelta(hours=int(off_h), minutes=int(off_m)))
     micro = int((frac or "")[:6].ljust(6, "0"))
