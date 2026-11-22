@@ -1263,3 +1263,54 @@ def test_prep_run_after_execute_does_not_stop_finalize(tmp_path, monkeypatch):
     assert now != pinned                                             # no longer the handoff the plan was made from
     assert _run(monkeypatch, ws, "finalize") == 0
     assert json.load(open(ctl / "photos-26-finalized-media.json"))["handoff_content_fingerprint"] == now
+
+
+@pytest.mark.spec("RUL-finalize_keeps_steps_of_photo_gone", "BLD-finalize_keeps_steps_of_gone",
+                  test="TST-geotag_finalize-finalize_run_again_keeps_the_steps_of_a_photo_since_gone")
+def test_finalize_run_again_keeps_the_steps_of_a_photo_since_gone(tmp_path, monkeypatch):
+    """Prep's log holds a photo no longer in photos by destination — as one merge placed is — and the complete log in
+    place holds geotag's steps of it, from when it was there. Finalize run again writes a log that keeps the entry
+    whole — prep's steps, geotag's after them, and where geotag left it — sets the earlier log aside, and makes the
+    entries of the photos still there afresh."""
+    ws, ctl = _ready_ws(tmp_path, monkeypatch)
+    prep_step = {"phase": "prep", "action": "organized", "run": "prep-1"}
+    log = json.load(open(ctl / "photos-15-prep-log.json"))
+    log["photos"]["GONE"] = {"content_fingerprint": "GONE", "prep_path": f"{BYDEST}/T/gone.arw", "journey": [prep_step]}
+    (ctl / "photos-15-prep-log.json").write_text(json.dumps(log))
+    ho = json.load(open(ctl / "photos-11-handoff.json"))
+    ho["depends_on"]["prep_log"]["sha256"] = utils.sha256_file(str(ctl / "photos-15-prep-log.json"))
+    (ctl / "photos-11-handoff.json").write_text(json.dumps(ho))
+    _to_executed(monkeypatch, ws, ctl)
+    assert _run(monkeypatch, ws, "finalize") == 0
+    first = json.load(open(ctl / "photos-26-complete-log.json"))
+    assert first["photos"]["GONE"]["journey"] == [prep_step]             # nothing of geotag's known of it yet
+    geotag_step = {"phase": "geotag", "action": "resolved_utc", "value": "2024-07-03T12:00:00Z", "run": "cal-1"}
+    first["photos"]["GONE"].update(journey=[prep_step, geotag_step], geotag_path=f"{BYDEST}/T/gone-final.arw")
+    (ctl / "photos-26-complete-log.json").write_text(json.dumps(first))
+    assert _run(monkeypatch, ws, "finalize") == 0
+    second = json.load(open(ctl / "photos-26-complete-log.json"))["photos"]
+    assert second["GONE"] == {"content_fingerprint": "GONE", "prep_path": f"{BYDEST}/T/gone.arw",
+                              "geotag_path": f"{BYDEST}/T/gone-final.arw", "journey": [prep_step, geotag_step]}
+    assert json.load(open(ctl / "photos-26-complete-log-001.json")) == first
+    assert {fp: e for fp, e in second.items() if fp != "GONE"} == \
+           {fp: e for fp, e in first["photos"].items() if fp != "GONE"}
+
+
+@pytest.mark.spec("RUL-finalize_keeps_steps_of_photo_gone", "BLD-finalize_keeps_steps_of_gone", "BLD-log_copy_checked",
+                  test="TST-geotag_finalize-geotags_steps_of_a_photo_gone_follow_preps_journey_as_it_now_stands")
+def test_geotags_steps_of_a_photo_gone_follow_preps_journey_as_it_now_stands():
+    """Geotag's steps of a photo gone from photos by destination, taken from the earlier log, follow prep's journey as
+    it now stands — also where prep has since recorded more of the photo — and nothing of prep's entry is changed; an
+    entry of the earlier log that prep's log does not hold is not brought back."""
+    from cartographer._geotag_calc import build_complete_log
+    p1, p2 = {"phase": "prep", "action": "organized"}, {"phase": "prep", "action": "raw_culled"}
+    g = {"phase": "geotag", "action": "resolved_utc", "value": "2024-07-03T12:00:00Z"}
+    prep = {"KEPT": {"content_fingerprint": "KEPT", "journey": [p1]},
+            "MOVED_ON": {"content_fingerprint": "MOVED_ON", "journey": [p1, p2]}}
+    previous = {"KEPT": {"content_fingerprint": "KEPT", "geotag_path": "x", "journey": [p1, g]},
+                "MOVED_ON": {"content_fingerprint": "MOVED_ON", "journey": [p1, g]},
+                "UNKNOWN": {"content_fingerprint": "UNKNOWN", "journey": [g]}}
+    photos = build_complete_log(prep, [], [], {}, {"plan_id": "p", "destinations": {}}, previous=previous)
+    assert photos == {"KEPT": {"content_fingerprint": "KEPT", "geotag_path": "x", "journey": [p1, g]},
+                      "MOVED_ON": {"content_fingerprint": "MOVED_ON", "journey": [p1, p2, g]}}
+    assert prep["MOVED_ON"]["journey"] == [p1, p2]

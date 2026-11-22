@@ -3791,8 +3791,16 @@ class GeotagWorkflow:
             cache.close()
         time_artifact = json.load(open(time_decisions_path(ws)))
         prep_photos = (json.load(open(prep_log_path(ws))) or {}).get("photos", {}) or {}
+        # The log this one replaces, for the steps of a photo since gone from by-dest; one that cannot be read gives
+        # none.
+        try:
+            with open(complete_log_path(ws)) as f:
+                previous = (json.load(f) or {}).get("photos")
+        except (OSError, ValueError, AttributeError):
+            previous = None
         photos = build_complete_log(prep_photos, files, rows, time_artifact, plan,
-                                    earlier_passes=self._earlier_passes(plan.get("plan_id")))
+                                    earlier_passes=self._earlier_passes(plan.get("plan_id")),
+                                    previous=previous if isinstance(previous, dict) else None)
         not_carried = entries_not_carried(prep_photos, photos)
         if not_carried:
             # a defect, not a state of the workspace: the copy would misstate prep's record (BLD-log_copy_checked)

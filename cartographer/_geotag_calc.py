@@ -2684,13 +2684,15 @@ def _gps_and_rename_steps(ops, native):
     return steps
 
 
-def build_complete_log(prep_photos, files, resolved_rows, time_artifact, plan, earlier_passes=()):
+def build_complete_log(prep_photos, files, resolved_rows, time_artifact, plan, earlier_passes=(), previous=None):
     """photos-26-complete-log.json's `photos` (BLD-phase_logs): a deep copy of prep's per-photo, content-
     fingerprint-keyed journeys with each calibrated photo's `phase:"geotag"` steps APPENDED — a
     strict superset of the prep log, derived from photos-21 / the resolved-UTC cache / photos-24.
     `earlier_passes` — [(plan, confirmed operation ids)], oldest first — are the geotag
     passes executed before the current plan's: their steps come first, so a photo written in an
-    earlier pass keeps the record of it however later passes went. Deterministic, fingerprint-keyed.
+    earlier pass keeps the record of it however later passes went. `previous` — the `photos` of the complete log
+    this one replaces — gives a photo no longer in by-dest (merged, or taken out by hand) the steps geotag recorded
+    of it while it was there (RUL-finalize_keeps_steps_of_photo_gone). Deterministic, fingerprint-keyed.
     The prep file itself is never edited."""
     photos = json.loads(json.dumps(prep_photos or {}))            # deep copy; never touch the prep file
     row_by_rel = {r["relative_path"]: r for r in resolved_rows}
@@ -2785,6 +2787,18 @@ def build_complete_log(prep_photos, files, resolved_rows, time_artifact, plan, e
         renamed = [s["to"] for s in steps if s.get("phase") == "geotag" and s.get("action") == "final_rename"]
         if renamed:
             entry["geotag_path"] = os.path.join(os.path.dirname(rel), renamed[-1])
+
+    # A photo of prep's log no longer in by-dest gets no step above: geotag's steps of it in the log this one replaces
+    # follow prep's journey as they did there, and each field prep's entry lacks is added — nothing of prep's changed
+    # (BLD-log_copy_checked).
+    for fp, old in sorted((previous or {}).items()):
+        entry = photos.get(fp)
+        if entry is None or fp in in_model or fp in aside or not isinstance(old, dict):
+            continue
+        kept_steps = [s for s in old.get("journey") or [] if isinstance(s, dict) and s.get("phase") == "geotag"]
+        if kept_steps:
+            photos[fp] = json.loads(json.dumps({**old, **entry,
+                                                "journey": (entry.get("journey") or []) + kept_steps}))
     return photos
 
 

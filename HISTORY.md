@@ -114,11 +114,15 @@ suggested"*.
   items now say, and a merge rule moved from geotag's intent to merge's. A definition carries no obligation, so no
   build item `realises` one: each that did now `uses` it.
 
-Two things the building left open. A photo placed by a merge that crashed before journalling it, where prep and
-geotag are then run before any new merge plan, is in the library but out of the sealed record: only a placing the
-journal confirms, or a later plan carried, counts as placed outside the finalized set. And where finalize, run again,
-drops the geotag steps of a photo no longer there, merge takes them from the complete log finalize set aside — the
-better place to keep them is finalize itself.
+Three things the building first left open were then closed. **A move an execution was killed before recording is
+carried all the same**: where prep and geotag were then run before any new merge plan, the photo was in the library
+but out of the sealed record. Merge's journal is now written before the first move, so a later plan knows an execution
+of the plan began; with that, the place the plan gave the photo holding it, and no finalized photo carrying its
+fingerprint under a path no earlier plan knows — a photo renamed or sorted elsewhere since, still to be merged as
+itself — the move is taken as made. A plan no execution began placed nothing. **Finalize, run again, keeps geotag's
+steps of a photo no longer in photos by destination**, from the log it replaces; merge no longer looks for them in the
+logs set aside. **The merge log's `library_path`, and the fingerprint map's `from` and `library_path`, are always
+lists** — they were a string for one photo and a list for several sharing a fingerprint.
 
 ## 2026-11-17 — a leaner corpus measured, and dropped (BACKLOG 57)
 

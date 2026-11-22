@@ -354,6 +354,45 @@ A fresh plan SHALL carry forward every photo an earlier merge plan of the worksp
 not the workspace's latest finalize recorded it.
 :::
 
+:::{rul} A move an execution was stopped before recording is carried all the same
+:id: RUL-unjournalled_move_carried
+:status: ruled
+:criticality: high
+:verify: required
+:refines: RUL-replan_carries_every_placed
+:uses: DEF-merge, DEF-library, DEF-finalize
+
+A fresh plan SHALL carry forward a photo the workspace's latest finalize did not record that an earlier merge execution
+moved into the library and was stopped before recording — one that may still be in the workspace
+({need}`RUL-unrecorded_place_needs_photo_gone`) aside.
+:::
+
+:::{rul} A place no execution recorded is not counted while the photo may still be in the workspace
+:id: RUL-unrecorded_place_needs_photo_gone
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+:excepts: RUL-unjournalled_move_carried
+:uses: DEF-merge, DEF-fingerprint, DEF-finalize
+
+A fresh plan SHALL NOT count as placed, on a place no merge execution recorded, a photo whose fingerprint the latest
+finalize recorded under a path no earlier merge plan knows.
+:::
+
+:::{rul} A plan no execution began placed nothing
+:id: RUL-unexecuted_plan_placed_nothing
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+:refines: RUL-replan_carries_every_placed
+:uses: DEF-merge, DEF-finalize
+
+A fresh plan SHALL NOT count as placed a photo the workspace's latest finalize did not record that only merge plans no
+execution began hold.
+:::
+
 :::{rul} An earlier place is confirmed by the bytes placed there
 :id: RUL-placed_bytes_confirm_place
 :status: ruled

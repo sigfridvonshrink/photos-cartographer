@@ -1609,3 +1609,16 @@ stop without it. Refusing it because the metadata tool is not installed — on a
 for archiving, say — would stop the one step that packages work already done, for a tool nothing in it would run, and
 send the user to install something they do not need.
 :::
+
+:::{rat} What geotag did to a photo outlives the photo's stay
+:id: RAT-steps_outlive_the_photos_stay
+:status: ruled
+:forced: no
+:follows_from: RAT-retention_serves_the_log
+:justifies: RUL-finalize_keeps_steps_of_photo_gone
+
+Finalize builds each photo's geotag steps from the photos it finds in photos by destination. In a merge begun, a photo
+merge already placed is no longer there; finalize run again would write a log holding prep's steps of it alone, and the
+log merge seals would tell nothing of the time and position geotag gave it. What geotag did was done, wherever the
+photo has gone since: the log finalize replaces holds those steps, and the new one keeps them.
+:::

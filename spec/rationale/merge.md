@@ -209,6 +209,22 @@ so a fresh plan takes it from the earlier plan that placed it, its place checked
 forward.
 :::
 
+:::{rat} A move is known by more than its record
+:id: RAT-unrecorded_move_known_by_its_traces
+:status: ruled
+:forced: no
+:follows_from: RAT-placed_photo_stays_the_workspaces, RAT-library_is_evidence_of_move
+:justifies: RUL-unjournalled_move_carried, RUL-unrecorded_place_needs_photo_gone, RUL-unexecuted_plan_placed_nothing
+
+A move is recorded just after it is made, so an execution killed between the two leaves a photo in the library that no
+record says it placed; were prep and geotag then run again, the photo would be in no finalized set either, and the
+sealed record would miss it. The place holding the picture is not proof enough alone: a photo already in the library
+was there before any execution, so a plan never executed proves nothing by it; and a photo renamed or sorted elsewhere
+since is still in the workspace under a path no earlier plan knows, to be merged as itself. With an execution of the
+plan begun, the place it gave the photo holding it, and the photo nowhere the workspace could still hold it, the move
+is taken as made.
+:::
+
 :::{rat} The library is the evidence of a move
 :id: RAT-library_is_evidence_of_move
 :status: ruled

@@ -44,9 +44,9 @@ and when a later plan carries it forward and its place holds other bytes than th
 
 A whole merge SHALL write `photos-35-fingerprint-map.json` — `artifact_type` `fingerprint_map`, its `artifact_name`,
 `schema_version` 1, and under `photos`, keyed by its new value, each photo merged with an `engine_mapping`: that
-mapping's `was` and `now`, its by-dest path as `from` and its `library_path` — photos merged under one mapping
-({need}`RUL-shared_value_moved_together_merged`) the mapping once, `from` and `library_path` each a list of theirs, in
-the order of their paths in the workspace; geotag's records,
+mapping's `was` and `now`, and `from` and `library_path`, each a list — its by-dest path and its place in the
+library, or, for photos merged under one mapping ({need}`RUL-shared_value_moved_together_merged`), the mapping once
+with theirs, in the order of their paths in the workspace; geotag's records,
 the log copied forward, are left keyed by the old value, and none is rewritten.
 :::
 
@@ -158,18 +158,19 @@ or `operations` (a journal), or is not in the shape of {need}`BLD-merge_record_s
 :::{bld} A fresh plan carries the photos earlier plans placed that the finalized set no longer lists
 :id: BLD-merge_placed_outside_finalized
 :status: ruled
-:realises: RUL-replan_carries_every_placed, RUL-replan_blocks_unaccounted, RUL-shared_fingerprint_each_merged
-:uses: BLD-merge_carry_forward, BLD-placed_bytes_journalled, BLD-merge_log_steps
+:realises: RUL-replan_carries_every_placed, RUL-replan_blocks_unaccounted, RUL-shared_fingerprint_each_merged, RUL-unjournalled_move_carried, RUL-unrecorded_place_needs_photo_gone, RUL-unexecuted_plan_placed_nothing
+:uses: BLD-merge_carry_forward, BLD-placed_bytes_journalled, BLD-merge_journal_resume
 
 Merge's `build_merge_plan` SHALL add, under the destination its latest record sits in, each photo — a path in the
 workspace and a content fingerprint — of which an earlier plan (`_earlier_moves`) holds a record not blocked and the
 finalized set (`enumerate_finalized`) no entry, where it was placed — a record of it carried forward
-(`carried_from_plan`), or one its plan's journal confirms (`operations`); carried forward or blocked as
-{need}`BLD-merge_carry_forward` gives a finalized photo, with
+(`carried_from_plan`), or one its plan's journal confirms (`operations`), or, with neither, one of a plan whose journal
+exists — an execute of it began ({need}`BLD-merge_journal_resume`) — whose place, inside the library the plan names,
+holds it (`_holds`), provided no entry of the finalized set carries its fingerprint under a path no earlier plan holds a
+record of; carried forward or blocked as {need}`BLD-merge_carry_forward` gives a finalized photo, with
 `outside_finalized_set`. Its execute (`_place_file`) checks only that its place holds it (`_holds`), moving, removing and
-journalling nothing in the workspace; and the merge log (`_build_merge_log`) continues its entry from the newest
-`photos-26-complete-log-NNN.json` whose entry of its fingerprint begins with the whole journey of the current one,
-adding that entry's later steps and the fields the current one lacks, before its merge step.
+journalling nothing in the workspace; its entry of the merge log is the complete log's, which finalize keeps whole
+({need}`BLD-finalize_keeps_steps_of_gone`).
 :::
 
 :::{bld} Merge's plan reads no earlier run as a gate

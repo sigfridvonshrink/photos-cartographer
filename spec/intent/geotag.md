@@ -3185,6 +3185,18 @@ earlier run wrote as it was.
 
 ## Finalize
 
+:::{rul} Finalize run again keeps the steps of a photo since gone
+:id: RUL-finalize_keeps_steps_of_photo_gone
+:status: ruled
+:criticality: med
+:verify: required
+:refines: RUL-history_retained
+:uses: DEF-finalize, DEF-transformation_log, DEF-managed_folders
+
+A finalize run again SHALL keep, in the log it writes, every step geotag recorded of a photo no longer in photos by
+destination.
+:::
+
 :::{rul} Finalize packages only an execution that succeeded
 :id: RUL-finalize_requires_success
 :status: ruled

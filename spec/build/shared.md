@@ -1153,6 +1153,19 @@ finalize copies it to `photos-26-complete-log.json` and appends each photo's geo
 ({need}`BLD-geotag_log_steps`); merge copies that to `photos-35-merge-log.json` and appends its own.
 :::
 
+:::{bld} Finalize keeps the steps of a photo no longer in photos by destination
+:id: BLD-finalize_keeps_steps_of_gone
+:status: ruled
+:realises: RUL-finalize_keeps_steps_of_photo_gone
+:uses: BLD-phase_logs, BLD-geotag_records_versioned
+
+Finalize's `build_complete_log` SHALL continue the entry of each photo of prep's log that is not in photos by destination
+— a photo merge placed, or one taken out by hand — from the `photos-26-complete-log.json` it is about to set aside
+(`previous`): the steps of `phase` `geotag` that log's entry of the fingerprint holds appended to prep's journey, and
+each field prep's entry lacks added, nothing of prep's changed; a log that cannot be read gives nothing, and stays among
+the copies set aside.
+:::
+
 :::{bld} A copied log carries the earlier one unchanged
 :id: BLD-log_copy_checked
 :status: ruled
@@ -1276,7 +1289,7 @@ each file it lists keyed by its path in the control directory, with its path in 
 Each log SHALL be pretty-printed JSON with sorted keys, every step naming its `run`, its `photos` keyed by the content fingerprint
 (`content_fingerprint`), each entry carrying where each phase left the photo — `prep_path`, written by prep and updated
 by every prep run; `geotag_path`, by finalize, its by-dest folder under the name its last final rename gave it;
-`library_path`, by merge — and a `journey` of steps, each step naming its `phase` and `action`, a move or rename its
+`library_path`, by merge, a list — and a `journey` of steps, each step naming its `phase` and `action`, a move or rename its
 `from` and `to` — merge's placement its `from` and `library_path` ({need}`BLD-merge_log_steps`), the first step's
 `from` being the photo's path in the dump — and, where a decision caused it, a
 `because` naming the decision exactly: a clock offset its `photos-21` cell, with its day where the camera's photos there
@@ -1316,8 +1329,8 @@ Merge SHALL append to the `journey` of each photo it placed or found already in 
 `merge`; its `run`, the merge plan that placed it — the earlier one for a photo a re-plan carried forward
 ({need}`BLD-merge_carry_forward`); `action` `placed`, or `already_present`; `from`, its path in photos by destination;
 `library_path`, its place in the library; and `renamed_for_library`, whether it took a name of its own there — setting
-the entry's `library_path` to the same place, or, where photos sharing the entry's fingerprint were each merged, to the
-list of their places, sorted, each step naming its own.
+the entry's `library_path` to a list, sorted: that place, or, where photos sharing the entry's fingerprint were each
+merged, the place of each, each step naming its own.
 :::
 
 :::{bld} The journals and the decisions each execution used are kept
@@ -1514,7 +1527,8 @@ photo where it holds other content — the plan's alternative name used only whe
 :realises: RUL-merge_resumable, RUL-resume_rechecks_library, RUL-resume_blocks_missing
 :uses: BLD-placed_bytes_journalled
 
-The journal — one per plan, `journal-<plan id>.json`, a later execute of the same plan carrying the earlier's
+The journal — one per plan, `journal-<plan id>.json`, written by each execute before its first move, so that it exists
+from when an execute of the plan began, a later execute of the same plan carrying the earlier's
 confirmations into it and writing it again whole with each of its own, `updated_at` that execute's start — SHALL record
 each confirmed photo, a re-run taking a place already holding the planned content, fingerprinted again, as done, and
 removing the workspace copy if it remains; a photo whose workspace copy is gone counts as done only once its place is

@@ -7,7 +7,7 @@ This pipeline mutates irreplaceable originals, so coverage is tracked on **two a
    build by `tools/spec-build`. Line/branch can't tell you whether a *must-refuse / no-clobber /
    leaves-untouched* obligation is actually asserted; this can.
 
-Figures below are a snapshot; regenerate with the commands shown. The suite has **2348 tests**.
+Figures below are a snapshot; regenerate with the commands shown. The suite has **2352 tests**.
 
 ## Line / branch coverage
 
@@ -20,14 +20,14 @@ same plan/validate/execute core the phases provide, neither of which writes meta
 | prep (`photos_1_prep`) | 95.4% | 90.9% |
 | prep models (`_prep_models`) | 100.0% | 100.0% |
 | geotag (`photos_2_geotag`) | 96.5% | 93.8% |
-| geotag calc (`_geotag_calc`) | 97.7% | 95.0% |
-| merge (`photos_3_merge`) | 95.0% | 94.6% |
+| geotag calc (`_geotag_calc`) | 97.7% | 94.9% |
+| merge (`photos_3_merge`) | 95.0% | 95.1% |
 | shared (`photos_utils`) | 92.8% | 91.1% |
 | reporting (`reporting`) | 94.7% | 81.8% |
 | cli | 91.2% | 83.3% |
 | console server | 69.7% | 61.9% |
 | editor server | 85.5% | 87.6% |
-| **Total** | **93.8%** | **91.3%** |
+| **Total** | **93.9%** | **91.4%** |
 
 Regenerate (branch coverage; report scoped to the production code via `.coveragerc`):
 
@@ -39,9 +39,9 @@ tools/coverage          # bootstraps a local .venv, runs the suite, writes htmlc
 
 The specification is one corpus of typed items (`spec/`; see `spec/README.md`; published at
 [sigfridvonshrink.github.io/photos-cartographer](https://sigfridvonshrink.github.io/photos-cartographer/), its tests at
-[`_generated/tests.html`](https://sigfridvonshrink.github.io/photos-cartographer/_generated/tests.html)): 791 rules and invariants, 387
-rationales, 351 build items, 47 definitions, the philosophy's 3 facts and 4 choices — and the 1323 tests that name the
-items they verify, made items of the corpus from their `@pytest.mark.spec(…, test="TST-…")` marks. All 1583 items are
+[`_generated/tests.html`](https://sigfridvonshrink.github.io/photos-cartographer/_generated/tests.html)): 795 rules and invariants, 389
+rationales, 352 build items, 47 definitions, the philosophy's 3 facts and 4 choices — and the 1327 tests that name the
+items they verify, made items of the corpus from their `@pytest.mark.spec(…, test="TST-…")` marks. All 1590 items are
 ruled.
 
 | Rules and invariants | Count |
